@@ -54,6 +54,8 @@ import dev.citali.lunartune.ui.screens.settings.AiIntegrationSettings
 import dev.citali.lunartune.ui.screens.settings.AodCustomizedScreen
 import dev.citali.lunartune.ui.screens.settings.AppearanceSettings
 import dev.citali.lunartune.ui.screens.settings.BackupAndRestore
+import dev.citali.lunartune.ui.screens.settings.AppLockScreen
+import dev.citali.lunartune.ui.screens.settings.PinSetupScreen
 import dev.citali.lunartune.ui.screens.settings.ChangelogScreen
 import dev.citali.lunartune.ui.screens.settings.ChiperSettings
 import dev.citali.lunartune.ui.screens.settings.ContentSettings
@@ -425,6 +427,12 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/privacy") {
         PrivacySettings(navController)
+    }
+    composable("settings/app_lock") {
+        AppLockScreen(navController)
+    }
+    composable("settings/pin_setup") {
+        PinSetupScreen(navController)
     }
     composable("settings/backup_restore") {
         BackupAndRestore(navController)

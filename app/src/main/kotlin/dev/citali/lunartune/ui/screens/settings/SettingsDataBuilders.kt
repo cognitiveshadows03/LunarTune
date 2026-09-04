@@ -274,7 +274,7 @@ fun buildSettingsGroups(
             title = stringResource(R.string.settings_behavior_title),
             subtitle = stringResource(R.string.settings_behavior_subtitle),
             accentColor = MaterialTheme.colorScheme.primary,
-            keywords = listOf("behavior", "privacy", "swipe", "gesture", "history", "cache", "data", "screenshot", "haptic", "vibrate"),
+            keywords = listOf("behavior", "privacy", "swipe", "gesture", "history", "cache", "data", "screenshot", "haptic", "vibrate", "lock", "pin", "biometric", "security"),
             onClick = { navController.navigate("settings/privacy") },
             children = listOf(
                 SettingsChild("Pause listen history", "pause_listen_history", listOf("pause listen", "stop history", "private listening")) { SearchResultSwitch(PauseListenHistoryKey, false) },
@@ -286,6 +286,8 @@ fun buildSettingsGroups(
                 SettingsChild("Disable screenshot", "disable_screenshot", listOf("screenshot", "screen capture", "privacy", "no screenshot")) { SearchResultSwitch(DisableScreenshotKey, false) },
                 SettingsChild("Network metered", "network_metered", listOf("metered", "mobile data", "cellular", "data saver")) { SearchResultSwitch(NetworkMeteredKey, false) },
                 SettingsChild("Show tags in library", "show_tags_in_library", listOf("tags", "library tags", "show tags")),
+                SettingsChild("App lock", "app_lock", listOf("app lock", "lock", "pin", "security", "privacy", "unlock")),
+                SettingsChild("Biometric lock", "biometric_lock", listOf("biometric", "fingerprint", "face unlock", "screen lock", "unlock")),
             ),
         )
     val integration =

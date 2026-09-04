@@ -1136,5 +1136,31 @@
     <string name="navigation_bar_corner_radius">Corner radius</string>
     <string name="navigation_bar_corner_radius_desc">Roundedness of the bar corners (dp)</string>
     <string name="navigation_bar_reset_dimensions">Reset dimensions to default</string>
+    <!-- App lock -->
+    <string name="security">Security</string>
+    <string name="app_lock">App lock</string>
+    <string name="app_lock_desc">Require a PIN or your screen lock to open the app</string>
+    <string name="lock_your_music">Lock your music</string>
+    <string name="lock_music_desc">Keep your library private by adding an extra layer of security</string>
+    <string name="ways_to_lock">Ways to lock</string>
+    <string name="same_as_screen_lock">Same as screen lock</string>
+    <string name="same_as_screen_lock_desc">Fingerprint, face or the PIN you unlock your phone with</string>
+    <string name="custom_pin">Custom PIN</string>
+    <string name="no_lock">No lock</string>
+    <string name="enter_pin">Enter PIN</string>
+    <string name="create_pin">Create a PIN</string>
+    <string name="confirm_pin">Confirm your PIN</string>
+    <string name="wrong_pin_try_again">Wrong PIN, try again</string>
+    <string name="pin_length">PIN length</string>
+    <string name="pin_length_desc">Changing this clears your current PIN</string>
+    <string name="pin_digits">%1$d digits</string>
+    <string name="change_pin">Change PIN</string>
+    <string name="unlock_with_fingerprint">Unlock with fingerprint</string>
+    <string name="unlock_with_fingerprint_desc">Skip typing the PIN when your fingerprint is available. The PIN stays as a backup.</string>
+    <string name="fingerprint_unavailable">Set up a screen lock on your device first</string>
+    <string name="app_lock_important">Important</string>
+    <string name="app_lock_pin_warning">If you forget your PIN, the only way back in is clearing the app data. There is no recovery option.</string>
+    <string name="change_lock_title">Change lock method?</string>
+    <string name="change_lock_message">Your current PIN will be removed.</string>
+    <string name="action_unlock">Unlock</string>
 </resources>
-

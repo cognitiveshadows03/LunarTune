@@ -984,6 +984,24 @@ const val NAVIGATION_BAR_LABEL_SPACING_DEFAULT = 4f
 val NavigationBarCornerRadiusKey = floatPreferencesKey("navigationBarCornerRadius")
 const val NAVIGATION_BAR_CORNER_RADIUS_DEFAULT = 28f
 
+// App lock
+val AppLockEnabledKey = booleanPreferencesKey("appLockEnabled")
+val AppLockTypeKey = stringPreferencesKey("appLockType")
+val AppLockPinHashKey = stringPreferencesKey("appLockPinHash")
+val AppLockPinLengthKey = stringPreferencesKey("appLockPinLength")
+val AppLockBiometricUnlockKey = booleanPreferencesKey("appLockBiometricUnlock")
+
+enum class AppLockType {
+    NONE,
+    PIN,
+    BIOMETRIC,
+}
+
+enum class AppLockPinLength(val digits: Int) {
+    FOUR(4),
+    SIX(6),
+}
+
 enum class UpdateChannel {
     STABLE,
     CANARY,

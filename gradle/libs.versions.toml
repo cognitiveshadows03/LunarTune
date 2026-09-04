@@ -20,6 +20,8 @@ coroutinesGuava = "1.11.0"
 materialiconsextended = "1.7.8"
 concurrentFutures = "1.3.0"
 activity = "1.13.0"
+biometric = "1.1.0"
+fragment = "1.8.9"
 navigation = "2.9.8"
 hiltNavigation = "1.4.0"
 datastore = "1.2.1"
@@ -71,6 +73,8 @@ compose-reorderable = { module = "sh.calvin.reorderable:reorderable", version.re
 squigglyslider = { module = "me.saket.squigglyslider:squigglyslider", version.ref = "squigglyslider" }
 
 viewmodel = { module = "androidx.lifecycle:lifecycle-viewmodel-ktx", version.ref = "lifecycle" }
+biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+fragment = { module = "androidx.fragment:fragment-ktx", version.ref = "fragment" }
 viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 

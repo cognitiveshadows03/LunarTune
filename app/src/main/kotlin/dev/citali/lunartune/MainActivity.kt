@@ -25,7 +25,7 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.MimeTypeMap
 import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.annotation.DrawableRes
@@ -159,7 +159,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.preferences.core.edit
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC
@@ -194,6 +197,11 @@ import dev.citali.lunartune.constants.AppLanguageKey
 import dev.citali.lunartune.constants.UseSystemLanguageKey
 import dev.citali.lunartune.constants.CustomFontUriKey
 import dev.citali.lunartune.constants.CustomThemeColorKey
+import dev.citali.lunartune.constants.AppLockBiometricUnlockKey
+import dev.citali.lunartune.constants.AppLockEnabledKey
+import dev.citali.lunartune.constants.AppLockPinHashKey
+import dev.citali.lunartune.constants.AppLockType
+import dev.citali.lunartune.constants.AppLockTypeKey
 import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DefaultOpenTabKey
 import dev.citali.lunartune.constants.DisableAnimationsKey
@@ -261,6 +269,7 @@ import dev.citali.lunartune.playback.queues.LocalAlbumRadio
 import dev.citali.lunartune.playback.queues.Queue
 import dev.citali.lunartune.playback.queues.YouTubeAlbumRadio
 import dev.citali.lunartune.playback.queues.YouTubeQueue
+import dev.citali.lunartune.ui.component.AppLockGate
 import dev.citali.lunartune.ui.component.BottomSheetMenu
 import dev.citali.lunartune.ui.component.BottomSheetPage
 import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
@@ -324,7 +333,7 @@ import kotlin.time.Duration.Companion.days
 
 @Suppress("DEPRECATION", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     @Inject
     lateinit var database: MusicDatabase
 
@@ -2506,6 +2515,53 @@ class MainActivity : ComponentActivity() {
                             openSearch()
                         }
                     }
+                }
+                val appLockEnabled by rememberPreference(AppLockEnabledKey, defaultValue = false)
+                val appLockType by rememberEnumPreference(AppLockTypeKey, defaultValue = AppLockType.NONE)
+                val appLockPinHash by rememberPreference(AppLockPinHashKey, defaultValue = "")
+                val appLockBiometricUnlock by rememberPreference(AppLockBiometricUnlockKey, defaultValue = false)
+
+                val appLockActive =
+                    appLockEnabled &&
+                        (
+                            appLockType == AppLockType.BIOMETRIC ||
+                                (appLockType == AppLockType.PIN && appLockPinHash.isNotBlank())
+                        )
+                var isLocked by rememberSaveable { mutableStateOf(appLockActive) }
+                var unlockedOnce by rememberSaveable { mutableStateOf(false) }
+
+                LaunchedEffect(appLockActive) {
+                    if (!appLockActive) {
+                        isLocked = false
+                    } else if (!isLocked && !unlockedOnce) {
+                        // Covers the case where the cached preference had not been read
+                        // when the first frame was composed. Turning the lock on from the
+                        // settings does not lock the session that is already open.
+                        isLocked = true
+                    }
+                }
+
+                DisposableEffect(appLockActive) {
+                    val observer =
+                        object : DefaultLifecycleObserver {
+                            override fun onStop(owner: LifecycleOwner) {
+                                if (appLockActive) isLocked = true
+                            }
+                        }
+                    ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
+                    onDispose { ProcessLifecycleOwner.get().lifecycle.removeObserver(observer) }
+                }
+
+                if (isLocked && appLockActive) {
+                    AppLockGate(
+                        lockType = appLockType,
+                        pinHash = appLockPinHash,
+                        biometricUnlock = appLockBiometricUnlock,
+                        onUnlocked = {
+                            isLocked = false
+                            unlockedOnce = true
+                        },
+                    )
                 }
             }
         }
