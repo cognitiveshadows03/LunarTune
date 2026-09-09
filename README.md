@@ -29,7 +29,7 @@
     <img src="https://img.shields.io/badge/Language-Kotlin-7f52ff?style=for-the-badge&logo=kotlin&color=6366f1&labelColor=1e1e2e" alt="Kotlin Language" />
     <img src="https://img.shields.io/badge/Toolkit-Jetpack_Compose-4285f4?style=for-the-badge&logo=jetpack-compose&color=6366f1&labelColor=1e1e2e" alt="Jetpack Compose Toolkit" />
     <img src="https://img.shields.io/badge/Design-Material_3-000000?style=for-the-badge&logo=material-design&color=6366f1&labelColor=1e1e2e" alt="Material Design 3" />
-    <a href="https://www.virustotal.com/gui/file/176bea37aff02a606d04ff0a61478fabdb0bd079f9e97319645452af420e5d84/detection/f-176bea37aff02a606d04ff0a61478fabdb0bd079f9e97319645452af420e5d84-1778840479" target="_blank"><img src="https://img.shields.io/badge/VirusTotal-SAFE-green?style=for-the-badge&logo=virustotal&logoColor=white&labelColor=1e1e2e&color=5865F2" alt="VirusTotal" /></a>
+    <a href="https://www.virustotal.com/gui/file/1385eba76b03cd9b6bc141fcfd1e57b67d9f3d7b466982b15d8bfe546483debf" target="_blank"><img src="https://img.shields.io/badge/VirusTotal-Clean-5865F2?style=for-the-badge&logo=virustotal&logoColor=white&labelColor=1e1e2e" alt="VirusTotal scan of the latest release" /></a>
     <a href="https://t.me/LunarTuneGC"><img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram" /></a>
   </div>
   
@@ -154,6 +154,29 @@
 </table>
 
 </div>
+
+---
+
+## 🔐 Verify your download
+
+Every release APK is signed with the same LunarTune key. If an APK was repackaged by someone else, the signature check below fails — even if a virus scanner says it is clean.
+
+**Signing certificate (SHA-256):**
+
+```
+37:3D:CE:20:61:AC:1F:8A:37:FE:7B:AD:51:D2:27:C3:9D:75:01:B1:36:BA:AC:69:DA:F4:CE:B5:97:1A:BD:A9
+```
+
+- **On your phone:** install [AppVerifier](https://github.com/soupslurpr/AppVerifier) (open source), pick LunarTune and compare the SHA-256 of the signing certificate with the fingerprint above.
+- **On a computer:** with the Android SDK build-tools installed, run
+  ```
+  apksigner verify --print-certs app-gms-mobile-arm64-release.apk
+  ```
+  and check that `Signer #1 certificate SHA-256 digest` matches the fingerprint above (without the colons).
+- **File checksums:** each release page lists the SHA-256 of every APK under *Assets* (the *Digest* next to each file). `sha256sum <file>.apk` on your side must print the same value.
+- **Virus scan:** the VirusTotal badge at the top links to the scan of the latest release. VirusTotal reports are per file, so its hash must match the APK you downloaded.
+
+> Only download LunarTune from [GitHub Releases](https://github.com/cognitiveshadows03/LunarTune/releases) or the [Telegram channel](https://t.me/LunarTuneGC). Android refuses to update an app when the signing key changes, so an APK that does not match this certificate will not install over an existing LunarTune.
 
 ---
 
