@@ -54,15 +54,15 @@
 
 <div align="center">
 
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_1.jpg" alt="Browse" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_2.jpg" alt="Live Lyrics" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_3.jpg" alt="Theme Customization" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_4.jpg" alt="Live Statistics" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_5.jpg" alt="Artist" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_6.jpg" alt="Album" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_7.jpg" alt="Player" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_8.jpg" alt="Settings" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_9.jpg" alt="Settings" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_1.jpg" alt="Home" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_2.jpg" alt="Player" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_3.jpg" alt="Live Lyrics" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_4.jpg" alt="Library" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_5.jpg" alt="Search" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_6.jpg" alt="Listening Stats" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_7.jpg" alt="Artist" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_8.jpg" alt="Album" width="30%" />
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_9.jpg" alt="Year in Music" width="30%" />
 
 </div>
 
