@@ -95,6 +95,20 @@ fun Modifier.fadingEdge(
     bottom = vertical,
 )
 
+/**
+ * Opacity profile of a [smoothFadingEdge], from fully visible (0) to fully faded (1). Shared so
+ * other fades can match it exactly.
+ */
+val SmoothFadingEdgeStops: Array<Pair<Float, Color>> =
+    arrayOf(
+        0.0f to Color.Black,
+        0.15f to Color.Black.copy(alpha = 0.9f),
+        0.3f to Color.Black.copy(alpha = 0.7f),
+        0.5f to Color.Black.copy(alpha = 0.4f),
+        0.7f to Color.Black.copy(alpha = 0.15f),
+        1.0f to Color.Transparent,
+    )
+
 fun Modifier.smoothFadingEdge(
     top: Dp? = null,
     bottom: Dp? = null,
@@ -126,15 +140,7 @@ fun Modifier.smoothFadingEdge(
             drawRect(
                 brush =
                     Brush.verticalGradient(
-                        colorStops =
-                            arrayOf(
-                                0.0f to Color.Black,
-                                0.15f to Color.Black.copy(alpha = 0.9f),
-                                0.3f to Color.Black.copy(alpha = 0.7f),
-                                0.5f to Color.Black.copy(alpha = 0.4f),
-                                0.7f to Color.Black.copy(alpha = 0.15f),
-                                1.0f to Color.Transparent,
-                            ),
+                        *SmoothFadingEdgeStops,
                         startY = size.height - bottomPx,
                         endY = size.height,
                     ),

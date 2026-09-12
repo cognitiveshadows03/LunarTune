@@ -93,6 +93,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -162,6 +163,12 @@ private const val MANUAL_SCROLL_TIMEOUT_MS = 3000L
 /** Sentinel entry prepended so auto-scroll has headroom above the first line. */
 private val HEAD_LYRICS_ENTRY = LyricsEntry(time = 0L, text = "")
 
+/** How far down the pane the focused line sits. */
+private const val LYRICS_FOCUS_HEIGHT_RATIO = 0.35f
+
+/** Height of the fade drawn over the top and bottom of the V2 list. */
+internal val LyricsV2EdgeFade = 80.dp
+
 private fun isRtlText(text: String): Boolean {
     for (ch in text) {
         when (Character.getDirectionality(ch)) {
@@ -184,6 +191,11 @@ private fun isRtlText(text: String): Boolean {
 // Main Composable
 // ──────────────────────────────────────────────────────────────────────
 
+/**
+ * @param focusAnchorHeight Pane height the focused line is positioned against; defaults to the
+ * pane's own height. The lyrics page passes the height the pane has while the player controls are
+ * shown, so the line does not move when they hide or come back.
+ */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LyricsV2(
@@ -192,11 +204,21 @@ fun LyricsV2(
     modifier: Modifier = Modifier,
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
+    focusAnchorHeight: Dp? = null,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
     val context = LocalContext.current
     val density = LocalDensity.current
+    val focusAnchorHeightPx =
+        remember(density, focusAnchorHeight) {
+            focusAnchorHeight?.let { with(density) { (it - LyricsPaneBottomPadding).coerceAtLeast(0.dp).roundToPx() } }
+        }
+    // Where the focused line is scrolled to, measured from the top of the list.
+    val focusOffsetPx: (viewportHeight: Int) -> Int =
+        remember(focusAnchorHeightPx) {
+            { viewportHeight -> ((focusAnchorHeightPx ?: viewportHeight) * LYRICS_FOCUS_HEIGHT_RATIO).toInt() }
+        }
     val scope = rememberCoroutineScope()
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
@@ -398,8 +420,7 @@ fun LyricsV2(
         if (currentLineIndex < 0 || currentLineIndex >= entriesWithWords.size) return@LaunchedEffect
 
         val visibleInfo = listState.layoutInfo
-        val viewportHeight = visibleInfo.viewportSize.height
-        val targetOffset = (viewportHeight * 0.35f).toInt() // Center bias at 35% from top
+        val targetOffset = focusOffsetPx(visibleInfo.viewportSize.height)
 
         val distance = abs(currentLineIndex - (listState.firstVisibleItemIndex))
         if (distance > 15) {
@@ -447,7 +468,7 @@ fun LyricsV2(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(bottom = 12.dp),
+                .padding(bottom = LyricsPaneBottomPadding),
     ) {
         if (lyrics == LYRICS_NOT_FOUND) {
             Box(
@@ -494,7 +515,7 @@ fun LyricsV2(
                 Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection)
-                    .smoothFadingEdge(vertical = 80.dp)
+                    .smoothFadingEdge(vertical = LyricsV2EdgeFade)
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
@@ -944,10 +965,9 @@ fun LyricsV2(
                 onClick = {
                     isManualScrolling = false
                     scope.launch {
-                        val viewportHeight = listState.layoutInfo.viewportSize.height
                         listState.animateScrollToItem(
                             index = currentLineIndex,
-                            scrollOffset = -(viewportHeight * 0.35f).toInt(),
+                            scrollOffset = -focusOffsetPx(listState.layoutInfo.viewportSize.height),
                         )
                     }
                 },

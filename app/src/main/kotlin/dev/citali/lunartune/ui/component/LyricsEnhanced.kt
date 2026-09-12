@@ -88,6 +88,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -161,6 +162,20 @@ private const val SMOOTH_PLAYBACK_DRIFT_CORRECTION = 0.55f
 private const val LYRIC_FOCUS_SCROLL_DURATION_MS = 520
 private const val MIN_KARAOKE_SYLLABLE_DURATION_MS = 1
 
+/** How far down the pane the focused line sits. */
+private const val LYRICS_FOCUS_HEIGHT_RATIO = 0.38f
+
+/** Space both lyrics panes keep below their list; the lyrics page relies on it matching. */
+internal val LyricsPaneBottomPadding = 12.dp
+
+/** Height of the fade the lyrics library draws over the bottom of the Enhanced list. */
+internal val LyricsEnhancedBottomFade = 100.dp
+
+/**
+ * @param focusAnchorHeight Pane height the focused line is positioned against; defaults to the
+ * pane's own height. The lyrics page passes the height the pane has while the player controls are
+ * shown, so the line does not move when they hide or come back.
+ */
 @Composable
 fun LyricsEnhanced(
     sliderPositionProvider: () -> Long?,
@@ -168,6 +183,7 @@ fun LyricsEnhanced(
     modifier: Modifier = Modifier,
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
+    focusAnchorHeight: Dp? = null,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -629,7 +645,7 @@ fun LyricsEnhanced(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(bottom = 12.dp),
+                .padding(bottom = LyricsPaneBottomPadding),
     ) {
         when {
             lyrics == LYRICS_NOT_FOUND -> {
@@ -702,7 +718,11 @@ fun LyricsEnhanced(
                             .fillMaxSize()
                             .nestedScroll(nestedScrollConnection),
                 ) {
-                    val lyricsViewportOffset = remember(maxHeight) { maxHeight * 0.38f }
+                    val lyricsViewportOffset =
+                        remember(maxHeight, focusAnchorHeight) {
+                            val focusHeight = focusAnchorHeight?.let { it - LyricsPaneBottomPadding } ?: maxHeight
+                            focusHeight.coerceAtLeast(0.dp) * LYRICS_FOCUS_HEIGHT_RATIO
+                        }
 
                     key(lyricsSessionKey, syncedLyricsRenderVersion) {
                         KaraokeLyricsView(

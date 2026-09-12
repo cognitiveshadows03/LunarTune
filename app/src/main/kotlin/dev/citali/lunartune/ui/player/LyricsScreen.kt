@@ -12,14 +12,10 @@ package dev.citali.lunartune.ui.player
 import android.content.res.Configuration
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,6 +52,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -69,14 +66,22 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -87,7 +92,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.core.tween
@@ -109,7 +117,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.floor
 import dev.citali.lunartune.LocalDatabase
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
@@ -133,9 +143,13 @@ import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.LyricsEnhanced
+import dev.citali.lunartune.ui.component.LyricsEnhancedBottomFade
+import dev.citali.lunartune.ui.component.LyricsPaneBottomPadding
 import dev.citali.lunartune.ui.component.LyricsV2
+import dev.citali.lunartune.ui.component.LyricsV2EdgeFade
 import dev.citali.lunartune.ui.component.PlayerSliderTrack
 import dev.citali.lunartune.ui.menu.LyricsMenu
+import dev.citali.lunartune.ui.utils.SmoothFadingEdgeStops
 import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import dev.citali.lunartune.utils.LyricsArtBlurCache
 import dev.citali.lunartune.utils.makeTimeString
@@ -154,19 +168,23 @@ private val AppleMusicFallbackGradient =
 private const val LYRICS_CONTROLS_AUTO_HIDE_DELAY_MS = 5_000L
 
 /**
- * Timing for the controls leaving and returning. The opacity always runs ahead of the height:
- * on the way out the controls are gone before the lyrics have taken much of their space, and on
- * the way back the space opens first and the controls then fade into it — so neither direction
- * ever shows a clipped edge, only a soft fade while the lyrics settle. Fresh specs per call
- * because the animation apis keep the type open (Float for opacity, IntSize for height).
+ * Timing for the controls leaving and returning. The controls only ever fade — their layout size
+ * is never animated. Resizing the lyrics pane frame by frame made the lyrics list re-measure and
+ * re-anchor its focused line on every one of those frames, which is heavy enough on weaker phones
+ * to swallow the whole fade (most visibly while an instrumental section keeps the breathing dots
+ * redrawing). Instead the pane changes size in a single step and a soft edge sweeps across the
+ * space the controls give up or take back; see [LyricsWithControls]. The opacity still runs
+ * ahead of the edge on the way out (the edge sets off once the controls have started to thin) and
+ * behind it on the way back, so the hand-off reads as one motion in both directions.
  */
 private val ControlsFadeEasing = CubicBezierEasing(0.4f, 0f, 0.2f, 1f)
-private val ControlsLayoutEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private val LyricsEdgeEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 private const val CONTROLS_FADE_OUT_MS = 300
-private const val CONTROLS_COLLAPSE_MS = 520
+private const val LYRICS_REVEAL_MS = 520
+private const val LYRICS_REVEAL_DELAY_MS = 120
 private const val CONTROLS_FADE_IN_MS = 450
 private const val CONTROLS_FADE_IN_DELAY_MS = 60
-private const val CONTROLS_EXPAND_MS = 320
+private const val LYRICS_COVER_MS = 320
 
 private fun controlsFadeOutSpec() = tween<Float>(durationMillis = CONTROLS_FADE_OUT_MS, easing = ControlsFadeEasing)
 
@@ -177,9 +195,39 @@ private fun controlsFadeInSpec() =
         easing = ControlsFadeEasing,
     )
 
-private fun <T> controlsCollapseSpec() = tween<T>(durationMillis = CONTROLS_COLLAPSE_MS, easing = ControlsLayoutEasing)
+private fun lyricsRevealSpec() =
+    tween<Float>(
+        durationMillis = LYRICS_REVEAL_MS,
+        delayMillis = LYRICS_REVEAL_DELAY_MS,
+        easing = LyricsEdgeEasing,
+    )
 
-private fun <T> controlsExpandSpec() = tween<T>(durationMillis = CONTROLS_EXPAND_MS, easing = ControlsLayoutEasing)
+private fun lyricsCoverSpec() = tween<Float>(durationMillis = LYRICS_COVER_MS, easing = LyricsEdgeEasing)
+
+/**
+ * How a lyrics pane fades out at its bottom: the fade's height and its opacity profile from fully
+ * visible (0) to gone (1). The moving edge in [LyricsWithControls] copies the pane's own fade
+ * exactly, so swapping one for the other is invisible: the Enhanced list fades linearly over its
+ * last 100 dp (fixed inside the lyrics library), the V2 list over its last 80 dp with the profile
+ * of `smoothFadingEdge`.
+ */
+@Immutable
+private class LyricsPaneEdge(
+    val fade: Dp,
+    val stops: Array<Pair<Float, Color>>,
+)
+
+private val LyricsEnhancedPaneEdge =
+    LyricsPaneEdge(
+        fade = LyricsEnhancedBottomFade,
+        stops = arrayOf(0f to Color.Black, 1f to Color.Transparent),
+    )
+
+private val LyricsV2PaneEdge =
+    LyricsPaneEdge(
+        fade = LyricsV2EdgeFade,
+        stops = SmoothFadingEdgeStops,
+    )
 
 @Suppress("UNUSED_PARAMETER")
 @Composable
@@ -551,72 +599,66 @@ fun LyricsScreen(
                     }
                 }
             } else {
-                AppleMusicLyricsPane(
-                    lyricsMode = lyricsMode,
-                    foregroundColor = foregroundColor,
-                    sliderPositionProvider = { sliderPosition },
-                    lyricsSyncOffset = lyricsSyncOffset,
+                LyricsWithControls(
+                    controlsVisible = controlsVisible,
+                    paneEdge = if (lyricsMode == LyricsMode.V2) LyricsV2PaneEdge else LyricsEnhancedPaneEdge,
                     modifier =
                         Modifier
                             .weight(1f)
                             .fillMaxWidth(),
+                    lyrics = { focusAnchorHeight ->
+                        AppleMusicLyricsPane(
+                            lyricsMode = lyricsMode,
+                            foregroundColor = foregroundColor,
+                            sliderPositionProvider = { sliderPosition },
+                            lyricsSyncOffset = lyricsSyncOffset,
+                            focusAnchorHeight = focusAnchorHeight,
+                        )
+                    },
+                    controls = {
+                        AppleMusicControls(
+                            positionProvider = { positionState.longValue },
+                            durationProvider = { durationState.longValue },
+                            sliderPosition = sliderPosition,
+                            isPlaying = isPlaying,
+                            isLoading = isLoading,
+                            volume = deviceMusicVolumeController.volumeFraction,
+                            onPositionChange = { sliderPosition = it },
+                            onPositionChangeFinished = {
+                                sliderPosition?.let {
+                                    player.seekTo(it)
+                                    positionState.longValue = it
+                                }
+                                sliderPosition = null
+                                revealControls()
+                            },
+                            onVolumeChange = {
+                                revealControls()
+                                onVolumeChange(it)
+                            },
+                            onPreviousClick = {
+                                hapticClick()
+                                revealControls()
+                                playerConnection.seekToPrevious()
+                            },
+                            onPlayPauseClick = {
+                                hapticClick()
+                                revealControls()
+                                player.togglePlayPause()
+                            },
+                            onNextClick = {
+                                hapticClick()
+                                revealControls()
+                                playerConnection.seekToNext()
+                            },
+                            foregroundColor = foregroundColor,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 40.dp),
+                        )
+                    },
                 )
-
-                // The controls fade in place while the lyrics pane above grows into the space
-                // they leave — the same soft hand-off Apple Music does — and come back the
-                // same way. The lyrics list re-anchors its focused line as the pane resizes.
-                AnimatedVisibility(
-                    visible = controlsVisible,
-                    enter =
-                        fadeIn(controlsFadeInSpec()) +
-                            expandVertically(controlsExpandSpec(), expandFrom = Alignment.Bottom),
-                    exit =
-                        fadeOut(controlsFadeOutSpec()) +
-                            shrinkVertically(controlsCollapseSpec(), shrinkTowards = Alignment.Bottom),
-                    label = "lyricsPlayerControls",
-                ) {
-                    AppleMusicControls(
-                        positionProvider = { positionState.longValue },
-                        durationProvider = { durationState.longValue },
-                        sliderPosition = sliderPosition,
-                        isPlaying = isPlaying,
-                        isLoading = isLoading,
-                        volume = deviceMusicVolumeController.volumeFraction,
-                        onPositionChange = { sliderPosition = it },
-                        onPositionChangeFinished = {
-                            sliderPosition?.let {
-                                player.seekTo(it)
-                                positionState.longValue = it
-                            }
-                            sliderPosition = null
-                            revealControls()
-                        },
-                        onVolumeChange = {
-                            revealControls()
-                            onVolumeChange(it)
-                        },
-                        onPreviousClick = {
-                            hapticClick()
-                            revealControls()
-                            playerConnection.seekToPrevious()
-                        },
-                        onPlayPauseClick = {
-                            hapticClick()
-                            revealControls()
-                            player.togglePlayPause()
-                        },
-                        onNextClick = {
-                            hapticClick()
-                            revealControls()
-                            playerConnection.seekToNext()
-                        },
-                        foregroundColor = foregroundColor,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 40.dp),
-                    )
-                }
             }
         }
     }
@@ -1151,6 +1193,7 @@ private fun AppleMusicLyricsPane(
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
+    focusAnchorHeight: Dp? = null,
 ) {
     LyricsContent(
         lyricsMode = lyricsMode,
@@ -1161,7 +1204,162 @@ private fun AppleMusicLyricsPane(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp),
         textColor = foregroundColor,
+        focusAnchorHeight = focusAnchorHeight,
     )
+}
+
+private enum class LyricsWithControlsSlot { Lyrics, Controls }
+
+/** Measured geometry shared between the measure pass and the edge drawing; deliberately not state. */
+private class LyricsWithControlsGeometry {
+    var controlsHeightPx = 0
+}
+
+/**
+ * Portrait arrangement of the lyrics pane with the player controls beneath it.
+ *
+ * The controls only fade; their layout size is never animated. When they hide, the pane is handed
+ * the full height in one step and a soft edge — shaped like the pane's own bottom fade — sweeps
+ * down over the freshly exposed lines, so the lyrics appear to flow into the space while the
+ * controls dissolve above them. Showing the controls runs the sequence backwards: they fade in over
+ * the lyrics while the edge sweeps back up, and the pane gives the space back only once the edge
+ * rests where the pane's own fade will be, which makes that step invisible. Every frame in between
+ * is alpha and draw work; the lyrics list is measured once per transition instead of once per
+ * frame, which is what let the breathing dots of an instrumental section turn the old
+ * shrink-and-fade into a stutter and an instant cut on slower phones.
+ *
+ * The pane keeps positioning its current line against the height it has while the controls are
+ * shown (the `focusAnchorHeight` handed to [lyrics]), so the line stays exactly where it is in both
+ * directions and the extra room only ever shows more of the upcoming lines.
+ *
+ * Controls on their way out stop taking touches and leave the composition once faded, so the lines
+ * that now occupy their space can be scrolled and tapped like any others.
+ */
+@Composable
+private fun LyricsWithControls(
+    controlsVisible: Boolean,
+    paneEdge: LyricsPaneEdge,
+    modifier: Modifier = Modifier,
+    lyrics: @Composable (focusAnchorHeight: Dp?) -> Unit,
+    controls: @Composable () -> Unit,
+) {
+    val controlsAlpha = remember { Animatable(if (controlsVisible) 1f else 0f) }
+    // 0f while the controls own the bottom of the layout, 1f once the lyrics have all of it.
+    val lyricsReveal = remember { Animatable(if (controlsVisible) 0f else 1f) }
+    var controlsComposed by remember { mutableStateOf(controlsVisible) }
+    var controlsHoldSpace by remember { mutableStateOf(controlsVisible) }
+    val geometry = remember { LyricsWithControlsGeometry() }
+    val revealLayerPaint = remember { Paint() }
+
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            controlsComposed = true
+            if (controlsAlpha.value < 1f) launch { controlsAlpha.animateTo(1f, controlsFadeInSpec()) }
+            if (lyricsReveal.value > 0f) lyricsReveal.animateTo(0f, lyricsCoverSpec())
+            controlsHoldSpace = true
+        } else {
+            controlsHoldSpace = false
+            if (lyricsReveal.value < 1f) launch { lyricsReveal.animateTo(1f, lyricsRevealSpec()) }
+            if (controlsAlpha.value > 0f) controlsAlpha.animateTo(0f, controlsFadeOutSpec())
+            controlsComposed = false
+        }
+    }
+
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val controlsPlaceable =
+            if (controlsComposed) {
+                subcompose(LyricsWithControlsSlot.Controls) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .graphicsLayer { alpha = controlsAlpha.value }
+                                .blockPointerInput(enabled = !controlsVisible),
+                    ) {
+                        controls()
+                    }
+                }.first().measure(constraints.copy(minHeight = 0))
+            } else {
+                null
+            }
+        // Remembered while the controls are gone: the edge still has to finish its sweep and the
+        // pane keeps anchoring its current line as if they were there.
+        controlsPlaceable?.let { geometry.controlsHeightPx = it.height }
+        val controlsHeightPx = geometry.controlsHeightPx
+
+        val reservedHeight = if (controlsHoldSpace) controlsHeightPx else 0
+        val lyricsConstraints: Constraints
+        val focusAnchorHeight: Dp?
+        if (constraints.hasBoundedHeight) {
+            val lyricsHeight = (constraints.maxHeight - reservedHeight).coerceAtLeast(0)
+            lyricsConstraints = constraints.copy(minHeight = lyricsHeight, maxHeight = lyricsHeight)
+            focusAnchorHeight = (constraints.maxHeight - controlsHeightPx).coerceAtLeast(0).toDp()
+        } else {
+            lyricsConstraints = constraints.copy(minHeight = 0)
+            focusAnchorHeight = null
+        }
+        val lyricsPlaceable =
+            subcompose(LyricsWithControlsSlot.Lyrics) {
+                Box(
+                    modifier =
+                        Modifier.drawWithContent {
+                            val reveal = lyricsReveal.value
+                            val edgeControlsHeightPx = geometry.controlsHeightPx
+                            if (controlsHoldSpace || edgeControlsHeightPx <= 0 || reveal >= 1f) {
+                                drawContent()
+                                return@drawWithContent
+                            }
+                            val fadePx = paneEdge.fade.toPx()
+                            val bottomPaddingPx = LyricsPaneBottomPadding.toPx()
+                            // Where the pane's list ended while the controls held the space, and
+                            // where the edge has to get to before it stops touching anything the
+                            // pane draws.
+                            val restingEdgeY = size.height - edgeControlsHeightPx - bottomPaddingPx
+                            val clearedEdgeY = size.height - bottomPaddingPx + fadePx
+                            val edgeY = restingEdgeY + (clearedEdgeY - restingEdgeY) * reveal
+                            // Only the strip the edge travels through goes through a layer;
+                            // everything above it is drawn as is.
+                            val stripTop = floor(restingEdgeY - fadePx).coerceAtLeast(0f)
+                            clipRect(bottom = stripTop) {
+                                this@drawWithContent.drawContent()
+                            }
+                            clipRect(top = stripTop) {
+                                drawIntoCanvas { canvas ->
+                                    canvas.saveLayer(Rect(0f, stripTop, size.width, size.height), revealLayerPaint)
+                                    // Nothing below the edge is drawn at all; above it the fade
+                                    // is applied as a DstIn mask.
+                                    clipRect(bottom = edgeY) {
+                                        this@drawWithContent.drawContent()
+                                    }
+                                    drawRect(
+                                        brush =
+                                            Brush.verticalGradient(
+                                                *paneEdge.stops,
+                                                startY = edgeY - fadePx,
+                                                endY = edgeY,
+                                            ),
+                                        blendMode = BlendMode.DstIn,
+                                    )
+                                    canvas.restore()
+                                }
+                            }
+                        },
+                ) {
+                    lyrics(focusAnchorHeight)
+                }
+            }.first().measure(lyricsConstraints)
+
+        val width = constraints.constrainWidth(maxOf(lyricsPlaceable.width, controlsPlaceable?.width ?: 0))
+        val height =
+            if (constraints.hasBoundedHeight) {
+                constraints.maxHeight
+            } else {
+                constraints.constrainHeight(lyricsPlaceable.height + reservedHeight)
+            }
+        layout(width, height) {
+            lyricsPlaceable.place(0, 0)
+            controlsPlaceable?.let { it.place(0, height - it.height) }
+        }
+    }
 }
 
 @Composable
@@ -1378,6 +1576,7 @@ private fun LyricsContent(
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
+    focusAnchorHeight: Dp? = null,
 ) {
     when (lyricsMode) {
         LyricsMode.V2 -> {
@@ -1386,6 +1585,7 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
+                focusAnchorHeight = focusAnchorHeight,
             )
         }
 
@@ -1395,6 +1595,7 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
+                focusAnchorHeight = focusAnchorHeight,
             )
         }
     }
