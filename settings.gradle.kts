@@ -46,6 +46,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "LunarTune"
 include(":app")
+include(":desktop")
 include(":core")
 include(":lyrics:kugou")
 include(":lyrics:lrclib")

@@ -1,0 +1,38 @@
+name: Build Windows Desktop
+
+on:
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "gradle/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/desktop-windows.yml"
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+      - "gradle/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/desktop-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Windows installers
+        run: .\gradlew.bat :desktop:packageExe :desktop:packageMsi --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lunartune-windows-installers
+          path: |
+            desktop/build/compose/binaries/main/exe/*.exe
+            desktop/build/compose/binaries/main/msi/*.msi
