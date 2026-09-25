@@ -412,8 +412,10 @@ fun Bitmap.extractThemeColor(): Color {
  * most different from the primary and tertiary the one most different from both — hue first, then
  * saturation and value, the same weights [extractGradientColors] uses — and each must own at
  * least ~2% of the image, so a stray-pixel accent can't theme the app. Neutral is the muted
- * swatch, falling back to dominant. On near-monochrome images the seeds converge and
- * [paletteStyleFor] drops those roles to neutral/monochrome by itself.
+ * swatch, falling back to dominant. Secondary and tertiary keep their extracted hue but are
+ * muted to decorative saturation — Material You keeps its accents quiet the same way, and
+ * full-strength distinct seeds turned surfaces into a rainbow. On near-monochrome images the
+ * seeds converge and [paletteStyleFor] drops those roles to neutral/monochrome by itself.
  */
 fun Bitmap.extractThemeSeedPalette(): ThemeSeedPalette {
     val palette =
@@ -437,8 +439,8 @@ fun Bitmap.extractThemeSeedPalette(): ThemeSeedPalette {
             ?.toComposeColor()
             ?: against.last()
 
-    val secondary = distinctPick(listOf(primary))
-    val tertiary = distinctPick(listOf(primary, secondary))
+    val secondary = distinctPick(listOf(primary)).muted(SecondarySeedSaturation)
+    val tertiary = distinctPick(listOf(primary, secondary)).muted(TertiarySeedSaturation)
     val neutral =
         palette.mutedSwatch?.rgb?.toComposeColor()
             ?: palette.dominantSwatch?.rgb?.toComposeColor()
@@ -473,6 +475,18 @@ private fun Palette.Swatch.hsvDistanceTo(otherRgb: Int): Float {
     val satDiff = abs(hsv[1] - otherHsv[1])
     val valueDiff = abs(hsv[2] - otherHsv[2])
     return hueDiff * 0.65f + satDiff * 0.2f + valueDiff * 0.15f
+}
+
+/** Saturation kept on the extracted accent seeds: secondary whispers, tertiary speaks softly. */
+private const val SecondarySeedSaturation = 0.35f
+private const val TertiarySeedSaturation = 0.5f
+
+/** This color with its HSV saturation scaled by [factor]; hue and value untouched. */
+private fun Color.muted(factor: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(toArgb(), hsv)
+    hsv[1] = (hsv[1] * factor).coerceIn(0f, 1f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 fun Bitmap.extractGradientColors(): List<Color> {
