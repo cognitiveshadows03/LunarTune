@@ -707,18 +707,7 @@ private fun NavBarPreview(
                         start = if (isFloating) 16.dp else 0.dp,
                         end = if (isFloating) 16.dp else 0.dp,
                     ).fillMaxWidth(if (isFloating) widthFraction.coerceIn(0.5f, 1f) else 1f)
-                    .height(resolvedBarHeight)
-                    .then(
-                        if (isFrosted) {
-                            Modifier.hazeBlur(
-                                input = HazeInput.Sources(previewHazeState),
-                                style = previewFrostedStyle,
-                                performanceMode = HazePerformanceMode.Performance,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
+                    .height(resolvedBarHeight),
             shape = shape,
             color = if (isFrosted || isOutlined) Color.Transparent else barColor,
             tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
@@ -737,10 +726,19 @@ private fun NavBarPreview(
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isFrosted) {
+                    // Same clipped frost layer as the real bar: the blur has no
+                    // shape parameter, so without this its square corners would
+                    // poke outside the pill outline in the preview too.
                     Box(
                         modifier =
                             Modifier
                                 .matchParentSize()
+                                .clip(shape)
+                                .hazeBlur(
+                                    input = HazeInput.Sources(previewHazeState),
+                                    style = previewFrostedStyle,
+                                    performanceMode = HazePerformanceMode.Performance,
+                                )
                                 .background(
                                     baseColor.copy(alpha = dim),
                                 ),
