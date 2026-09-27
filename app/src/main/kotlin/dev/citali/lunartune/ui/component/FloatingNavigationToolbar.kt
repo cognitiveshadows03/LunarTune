@@ -270,18 +270,7 @@ fun FloatingNavigationToolbar(
                 Modifier
                     .widthIn(max = if (isFloating) FloatingNavigationBarMaxWidth else NavigationBarMaxWidth)
                     .fillMaxWidth(if (isFloating) navBarWidthFraction.coerceIn(0.5f, 1f) else 1f)
-                    .height(resolvedBarHeight)
-                    .then(
-                        if (isFrosted && !staticFrost && hazeState != null && frostedStyle != null) {
-                            Modifier.hazeBlur(
-                                input = HazeInput.Sources(hazeState),
-                                style = frostedStyle,
-                                performanceMode = HazePerformanceMode.Performance,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
+                    .height(resolvedBarHeight),
             shape = navigationShape,
             color = if (isFrosted || isOutlined) Color.Transparent else navigationContainerColor,
             tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
@@ -304,10 +293,26 @@ fun FloatingNavigationToolbar(
             // Pre-Android 12 the veil IS the frosted look (no live blur there).
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isFrosted) {
+                    // The live blur and the dim veil both draw rectangles, so they
+                    // share this clipped layer: without the clip their square
+                    // corners poke outside the pill outline. The blur lives here
+                    // instead of on the Surface so the clip can't eat the shadow.
                     Box(
                         modifier =
                             Modifier
                                 .matchParentSize()
+                                .clip(navigationShape)
+                                .then(
+                                    if (!staticFrost && hazeState != null && frostedStyle != null) {
+                                        Modifier.hazeBlur(
+                                            input = HazeInput.Sources(hazeState),
+                                            style = frostedStyle,
+                                            performanceMode = HazePerformanceMode.Performance,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
+                                )
                                 .background(
                                     frostedScrimBase.copy(alpha = frostedDim.coerceIn(0f, 0.9f)),
                                 ),
