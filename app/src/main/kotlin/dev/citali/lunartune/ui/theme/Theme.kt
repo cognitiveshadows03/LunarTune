@@ -401,78 +401,16 @@ fun Bitmap.extractThemeColor(): Color {
             .maximumColorCount(16)
             .generate()
 
-    return palette.themePrimarySwatch()?.rgb?.toComposeColor() ?: DefaultThemeColor
-}
+    val swatch =
+        palette.vibrantSwatch
+            ?: palette.dominantSwatch
+            ?: palette.mutedSwatch
+            ?: palette.lightVibrantSwatch
+            ?: palette.darkVibrantSwatch
+            ?: palette.lightMutedSwatch
+            ?: palette.darkMutedSwatch
 
-/**
- * Full theme seed palette from this bitmap: the primary plus the image's actual secondary,
- * tertiary and neutral colours, for callers that theme more than one role from an image.
- *
- * The primary is [extractThemeColor]'s pick, so the two never disagree. Secondary is the swatch
- * most different from the primary and tertiary the one most different from both — hue first, then
- * saturation and value, the same weights [extractGradientColors] uses — and each must own at
- * least ~2% of the image, so a stray-pixel accent can't theme the app. Neutral is the muted
- * swatch, falling back to dominant. On near-monochrome images the seeds converge and
- * [paletteStyleFor] drops those roles to neutral/monochrome by itself.
- */
-fun Bitmap.extractThemeSeedPalette(): ThemeSeedPalette {
-    val palette =
-        Palette
-            .from(this)
-            .maximumColorCount(24)
-            .generate()
-
-    val primary = palette.themePrimarySwatch()?.rgb?.toComposeColor() ?: DefaultThemeColor
-    val swatches = palette.swatches.filter { it.population > 0 }
-    val totalPopulation = swatches.sumOf { it.population }.coerceAtLeast(1)
-    val pool =
-        swatches
-            .filter { it.population.toFloat() / totalPopulation >= 0.02f }
-            .ifEmpty { swatches }
-
-    fun distinctPick(against: List<Color>): Color =
-        pool
-            .maxByOrNull { swatch -> against.minOf { seed -> swatch.hsvDistanceTo(seed.toArgb()) } }
-            ?.rgb
-            ?.toComposeColor()
-            ?: against.last()
-
-    val secondary = distinctPick(listOf(primary))
-    val tertiary = distinctPick(listOf(primary, secondary))
-    val neutral =
-        palette.mutedSwatch?.rgb?.toComposeColor()
-            ?: palette.dominantSwatch?.rgb?.toComposeColor()
-            ?: primary
-
-    return ThemeSeedPalette(
-        primary = primary,
-        secondary = secondary,
-        tertiary = tertiary,
-        neutral = neutral,
-    )
-}
-
-/** Primary pick shared by [extractThemeColor] and [extractThemeSeedPalette]. */
-private fun Palette.themePrimarySwatch(): Palette.Swatch? =
-    vibrantSwatch
-        ?: dominantSwatch
-        ?: mutedSwatch
-        ?: lightVibrantSwatch
-        ?: darkVibrantSwatch
-        ?: lightMutedSwatch
-        ?: darkMutedSwatch
-
-/** How different this swatch reads from [otherRgb]: hue first, then saturation and value. */
-private fun Palette.Swatch.hsvDistanceTo(otherRgb: Int): Float {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(rgb, hsv)
-    val otherHsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(otherRgb, otherHsv)
-    val hueDiffRaw = abs(hsv[0] - otherHsv[0])
-    val hueDiff = min(hueDiffRaw, 360f - hueDiffRaw) / 180f
-    val satDiff = abs(hsv[1] - otherHsv[1])
-    val valueDiff = abs(hsv[2] - otherHsv[2])
-    return hueDiff * 0.65f + satDiff * 0.2f + valueDiff * 0.15f
+    return swatch?.rgb?.toComposeColor() ?: DefaultThemeColor
 }
 
 fun Bitmap.extractGradientColors(): List<Color> {
@@ -515,10 +453,7 @@ fun Bitmap.extractGradientColors(): List<Color> {
         .sortedByDescending { it.luminance() }
 }
 
-fun extractWallpaperThemeColor(context: Context): Color? =
-    extractWallpaperThemeSeedPalette(context)?.primary
-
-fun extractWallpaperThemeSeedPalette(context: Context): ThemeSeedPalette? {
+fun extractWallpaperThemeColor(context: Context): Color? {
     return try {
         val wallpaperManager = WallpaperManager.getInstance(context)
         val drawable = wallpaperManager.drawable ?: return null
@@ -537,7 +472,7 @@ fun extractWallpaperThemeSeedPalette(context: Context): ThemeSeedPalette? {
                 drawable.draw(canvas)
                 bmp
             }
-        bitmap.extractThemeSeedPalette()
+        bitmap.extractThemeColor()
     } catch (e: Exception) {
         null
     }
@@ -559,18 +494,6 @@ val ColorSaver =
 
         override fun SaverScope.save(value: Color): Int = value.toArgb()
     }
-
-/**
- * Saver for a [ThemeSeedPalette] held in memory (the dynamic artwork/wallpaper palette): the same
- * base64 payload [ThemeSeedPaletteCodec] stores in preferences, so the palette survives rotation
- * and process death. Null — "no dynamic palette", i.e. system dynamic or a custom theme — is
- * stored as an empty string and round-trips back to null.
- */
-val ThemeSeedPaletteSaver: Saver<ThemeSeedPalette?, String> =
-    Saver(
-        save = { palette -> palette?.let { ThemeSeedPaletteCodec.encodeForPreference(it) } ?: "" },
-        restore = { saved -> saved.ifEmpty { null }?.let { ThemeSeedPaletteCodec.decodeFromPreference(it) } },
-    )
 
 @Serializable
 data class ThemeExportV1(
