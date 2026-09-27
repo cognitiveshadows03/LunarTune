@@ -419,83 +419,94 @@ jobs:
         id: changelog_range
         shell: bash
         run: |
+          # Empty from_ref means "whole history": covers the first release from a
+          # rewritten history, where no v-tag is reachable from main.
           LAST_TAG="$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || true)"
-          if [ -n "$LAST_TAG" ]; then
-            FROM_REF="$LAST_TAG"
-            echo "has_previous_tag=true" >> "$GITHUB_OUTPUT"
-          else
-            FROM_REF="$(git rev-list --max-parents=0 HEAD | tail -n 1)"
-            echo "has_previous_tag=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          echo "from_ref=$FROM_REF" >> "$GITHUB_OUTPUT"
+          echo "from_ref=$LAST_TAG" >> "$GITHUB_OUTPUT"
           echo "to_ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Build Changelog
-        if: steps.changelog_range.outputs.has_previous_tag == 'true'
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v6
-        with:
-          mode: "COMMIT"
-          fromTag: ${{ steps.changelog_range.outputs.from_ref }}
-          toTag: ${{ steps.changelog_range.outputs.to_ref }}
-          outputFile: generated_changelog.md
-          configurationJson: |
-            {
-              "template": "# Changelog\n\n#{{CHANGELOG}}\n\n<details>\n<summary>Other changes</summary>\n\n#{{UNCATEGORIZED}}\n</details>\n",
-              "pr_template": "- #{{TITLE}} — by @#{{AUTHOR}}",
-              "categories": [
-                { "title": "## Features", "labels": ["feat", "feature"] },
-                { "title": "## Fixes", "labels": ["fix", "bug"] },
-                { "title": "## Performance", "labels": ["perf"] },
-                { "title": "## Refactors", "labels": ["refactor"] },
-                { "title": "## Documentation", "labels": ["docs"] },
-                { "title": "## Build / CI", "labels": ["build", "ci"] }
-              ],
-              "label_extractor": [
-                {
-                  "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\\([\\w\\-\\.]+\\))?(!)?:\\s+.*$",
-                  "on_property": "title",
-                  "target": "$1"
-                }
-              ]
-            }
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FROM_REF: ${{ steps.changelog_range.outputs.from_ref }}
+          TO_REF: ${{ steps.changelog_range.outputs.to_ref }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          CATEGORIES = [
+              ("## Features", ("feat",)),
+              ("## Fixes", ("fix",)),
+              ("## Performance", ("perf",)),
+              ("## Refactors", ("refactor",)),
+              ("## Documentation", ("docs",)),
+              ("## Build / CI", ("build", "ci")),
+          ]
+          PREFIX = re.compile(r"^([a-z]+)(?:\([^)]*\))?(!)?:\s+")
+
+          from_ref = os.environ["FROM_REF"]
+          to_ref = os.environ["TO_REF"]
+          revision = f"{from_ref}..{to_ref}" if from_ref else to_ref
+          # Merge commits excluded: they only restate PR numbers, while the feature
+          # commits they carry are listed individually with hashes below.
+          out = subprocess.run(
+              ["git", "log", "--no-merges", "--pretty=format:%h%x00%s", revision],
+              check=True, capture_output=True, text=True,
+          ).stdout
+
+          buckets: dict[str, list[str]] = {title: [] for title, _ in CATEGORIES}
+          uncategorized: list[str] = []
+          for line in out.splitlines():
+              sha, _, subject = line.partition("\x00")
+              # Skip merge-titled commits even if history rewriting left them
+              # without a second parent (--no-merges only filters true merges).
+              if not sha or not subject or subject.startswith("Merge "):
+                  continue
+              entry = f"- {subject} ({sha})"
+              match = PREFIX.match(subject)
+              label = match.group(1) if match else ""
+              for title, prefixes in CATEGORIES:
+                  if label in prefixes:
+                      buckets[title].append(entry)
+                      break
+              else:
+                  uncategorized.append(entry)
+
+          parts = ["# Changelog", ""]
+          for title, _ in CATEGORIES:
+              if buckets[title]:
+                  parts += [title, ""] + buckets[title] + [""]
+          if uncategorized:
+              parts += ["<details>", "<summary>Other changes</summary>", ""] + uncategorized + ["", "</details>", ""]
+
+          highlights = Path(".github/release-highlights.md")
+          if highlights.is_file():
+              parts = ["## Highlights", "", highlights.read_text(encoding="utf-8").strip(), ""] + parts
+
+          Path("generated_changelog.md").write_text("\n".join(parts).rstrip() + "\n", encoding="utf-8")
+          total = sum(len(v) for v in buckets.values()) + len(uncategorized)
+          print(f"changelog entries: {total}")
+          PY
 
       - name: Create Release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
           RELEASE_VERSION: ${{ needs.check-version.outputs.new_version }}
           RELEASE_SHA: ${{ github.sha }}
-          HAS_PREVIOUS_TAG: ${{ steps.changelog_range.outputs.has_previous_tag }}
         run: |
           set -euo pipefail
           MOBILE_UNIVERSAL_APK=$(find downloaded_artifacts/app-gms-mobile-universal-release -name "*.apk" | head -n 1)
           mapfile -t OTHER_APKS < <(find downloaded_artifacts -path "*/app-*-release/*.apk" ! -path "*/app-gms-mobile-universal-release/*" | sort)
 
           python3 - <<'PY'
-          import os
           from pathlib import Path
 
           limit = 120_000
-          has_previous = os.environ.get("HAS_PREVIOUS_TAG") == "true"
-          generated = Path("generated_changelog.md")
-          if has_previous and generated.is_file():
-              notes = generated.read_text(encoding="utf-8")
-          else:
-              notes = """# LunarTune 5.0.0
-
-          First stable LunarTune release.
-
-          - Playback and download pipeline
-          - Last.fm via official API keys
-          - Dolby / Dirac equalizer presets
-          - Settings search limited to LunarTune
-          - Updates open the GitHub release page
-
-          See the repository history for the full commit list.
-          """
+          notes = Path("generated_changelog.md").read_text(encoding="utf-8")
           if len(notes) > limit:
               notes = notes[:limit].rstrip() + "\n\n…truncated. Full history is in git.\n"
           Path("release_notes.md").write_text(notes, encoding="utf-8")
