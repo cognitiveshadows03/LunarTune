@@ -56,14 +56,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import dev.citali.lunartune.ui.experimental.ExperimentalCategoryChips
-import dev.citali.lunartune.ui.experimental.ExperimentalHomeBackdrop
-import dev.citali.lunartune.ui.experimental.ExperimentalQuickPicksSection
-import dev.citali.lunartune.ui.experimental.ExperimentalRemoteChartsSection
-import dev.citali.lunartune.ui.experimental.ExperimentalSectionHeader
-import dev.citali.lunartune.ui.experimental.ExperimentalSpeedDialSection
-import dev.citali.lunartune.ui.experimental.ExperimentalUiEnabledKey
-import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
@@ -297,29 +289,24 @@ private fun HomeContent(
         uiState
             .takeIf { it.quickPicksMode == QuickPicks.QUICK_PICKS }
             ?.remoteQuickPicks
-    val (experimentalUi) = rememberPreference(ExperimentalUiEnabledKey, defaultValue = false)
     Box(modifier = modifier.fillMaxSize()) {
         if (uiState.showTonalBackdrop) {
-            if (experimentalUi) {
-                ExperimentalHomeBackdrop(modifier = Modifier.align(Alignment.TopCenter))
-            } else {
-                Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(430.dp)
-                        .align(Alignment.TopCenter)
-                        .drawWithCache {
-                            val brush =
-                                Brush.verticalGradient(
-                                    0f to tonalStart.copy(alpha = 0.30f),
-                                    0.42f to tonalMiddle.copy(alpha = 0.14f),
-                                    1f to Color.Transparent,
-                                )
-                            onDrawBehind { drawRect(brush) }
-                        },
-                )
-            }
+            Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(430.dp)
+                    .align(Alignment.TopCenter)
+                    .drawWithCache {
+                        val brush =
+                            Brush.verticalGradient(
+                                0f to tonalStart.copy(alpha = 0.30f),
+                                0.42f to tonalMiddle.copy(alpha = 0.14f),
+                                1f to Color.Transparent,
+                            )
+                        onDrawBehind { drawRect(brush) }
+                    },
+            )
         }
 
         ExpressivePullToRefreshBox(
@@ -354,19 +341,11 @@ private fun HomeContent(
                             key = "home_category_chips",
                             contentType = "category_chips",
                         ) {
-                            if (experimentalUi) {
-                                ExperimentalCategoryChips(
-                                    chips = uiState.homePage?.chips.orEmpty(),
-                                    selectedChip = uiState.selectedChip,
-                                    onChipSelected = { onAction(HomeAction.SelectChip(it)) },
-                                )
-                            } else {
-                                HomeCategoryChips(
-                                    chips = uiState.homePage?.chips.orEmpty(),
-                                    selectedChip = uiState.selectedChip,
-                                    onChipSelected = { onAction(HomeAction.SelectChip(it)) },
-                                )
-                            }
+                            HomeCategoryChips(
+                                chips = uiState.homePage?.chips.orEmpty(),
+                                selectedChip = uiState.selectedChip,
+                                onChipSelected = { onAction(HomeAction.SelectChip(it)) },
+                            )
                         }
                     }
 
@@ -419,43 +398,24 @@ private fun HomeContent(
                                 key = "home_remote_quick_picks_header",
                                 contentType = "section_header",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSectionHeader(
-                                        title = stringResource(R.string.quick_picks),
-                                        kicker = "FOR YOU",
-                                    )
-                                } else {
-                                    HomeSectionHeader(
-                                        title = stringResource(R.string.quick_picks),
-                                    )
-                                }
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.quick_picks),
+                                )
                             }
                             item(
                                 key = "home_remote_quick_picks",
                                 contentType = "quick_picks",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalRemoteChartsSection(
-                                        section = remoteQuickPicks,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                    )
-                                } else {
-                                    RemoteQuickPicksSection(
-                                        section = remoteQuickPicks,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        displayMode = uiState.quickPicksDisplayMode,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                    )
-                                }
+                                RemoteQuickPicksSection(
+                                    section = remoteQuickPicks,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    displayMode = uiState.quickPicksDisplayMode,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                )
                             }
                         } else if (
                             uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
@@ -465,43 +425,24 @@ private fun HomeContent(
                                 key = "home_quick_picks_header",
                                 contentType = "section_header",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSectionHeader(
-                                        title = stringResource(R.string.quick_picks),
-                                        kicker = "TOP 10",
-                                    )
-                                } else {
-                                    HomeSectionHeader(
-                                        title = stringResource(R.string.quick_picks),
-                                    )
-                                }
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.quick_picks),
+                                )
                             }
                             item(
                                 key = "home_quick_picks",
                                 contentType = "quick_picks",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalQuickPicksSection(
-                                        quickPicks = uiState.quickPicks,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                    )
-                                } else {
-                                    QuickPicksSection(
-                                        quickPicks = uiState.quickPicks,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        displayMode = uiState.quickPicksDisplayMode,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                    )
-                                }
+                                QuickPicksSection(
+                                    quickPicks = uiState.quickPicks,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    displayMode = uiState.quickPicksDisplayMode,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                )
                             }
                         }
 
@@ -511,44 +452,24 @@ private fun HomeContent(
                                 key = "home_speed_dial_header",
                                 contentType = "section_header",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSectionHeader(
-                                        title = stringResource(R.string.speed_dial),
-                                        kicker = "PINNED",
-                                    )
-                                } else {
-                                    HomeSectionHeader(
-                                        title = stringResource(R.string.speed_dial),
-                                    )
-                                }
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.speed_dial),
+                                )
                             }
                             item(
                                 key = "home_speed_dial",
                                 contentType = "speed_dial",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSpeedDialSection(
-                                        speedDialItems = uiState.speedDialItems,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                        scope = scope,
-                                    )
-                                } else {
-                                    SpeedDialSection(
-                                        speedDialItems = uiState.speedDialItems,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                        scope = scope,
-                                    )
-                                }
+                                SpeedDialSection(
+                                    speedDialItems = uiState.speedDialItems,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                    scope = scope,
+                                )
                             }
                         }
 
@@ -558,16 +479,9 @@ private fun HomeContent(
                                 key = "home_keep_listening_header",
                                 contentType = "section_header",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSectionHeader(
-                                        title = stringResource(R.string.keep_listening),
-                                        kicker = "RESUME",
-                                    )
-                                } else {
-                                    HomeSectionHeader(
-                                        title = stringResource(R.string.keep_listening),
-                                    )
-                                }
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.keep_listening),
+                                )
                             }
                             item(
                                 key = "home_keep_listening",
@@ -618,16 +532,9 @@ private fun HomeContent(
                                 key = "home_forgotten_favorites_header",
                                 contentType = "section_header",
                             ) {
-                                if (experimentalUi) {
-                                    ExperimentalSectionHeader(
-                                        title = stringResource(R.string.forgotten_favorites),
-                                        kicker = "REDISCOVER",
-                                    )
-                                } else {
-                                    HomeSectionHeader(
-                                        title = stringResource(R.string.forgotten_favorites),
-                                    )
-                                }
+                                HomeSectionHeader(
+                                    title = stringResource(R.string.forgotten_favorites),
+                                )
                             }
                             item(
                                 key = "home_forgotten_favorites",

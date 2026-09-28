@@ -5,7 +5,7 @@
  * Do not remove or alter this notice. - Per GPL-3.0 Section 4 & Section 5
  */
 
-package dev.citali.lunartune.ui.experimental
+package dev.citali.lunartune.ui.component
 
 import android.os.SystemClock
 import android.view.ViewConfiguration
@@ -56,7 +56,7 @@ import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.theme.LunarMotion
 
 /**
- * "Orbit dock": the experimental navbar.
+ * "Orbit dock": the capsule navbar style.
  *
  * Structure ported from LastWave-native's MainShell FloatingNavBar/FloatingNavItem
  * (github.com/Clash-Projects/LastWave-native): 32dp dock, 48dp pill items,
@@ -66,7 +66,7 @@ import dev.citali.lunartune.ui.theme.LunarMotion
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ExperimentalNavigationDock(
+fun CapsuleNavigationBar(
     items: List<Screens>,
     modifier: Modifier = Modifier,
     isSelected: (Screens) -> Boolean,

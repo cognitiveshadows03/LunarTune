@@ -199,6 +199,8 @@ fun NavigationBarSettings(navController: NavController) {
                                     stringResource(R.string.navigation_bar_style_frosted)
                                 NavigationBarStyle.OUTLINED ->
                                     stringResource(R.string.navigation_bar_style_outlined)
+                                NavigationBarStyle.CAPSULE ->
+                                    stringResource(R.string.navigation_bar_style_capsule)
                             }
                         },
                     )

@@ -21,8 +21,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
-import dev.citali.lunartune.ui.experimental.ExperimentalNavigationDock
-import dev.citali.lunartune.ui.experimental.ExperimentalUiEnabledKey
 import dev.citali.lunartune.ui.screens.settings.MotionBarKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.withTimeoutOrNull
@@ -122,10 +120,9 @@ fun FloatingNavigationToolbar(
     onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
 ) {
-    val (experimentalUi) = rememberPreference(ExperimentalUiEnabledKey, defaultValue = false)
     val (motionBar) = rememberPreference(MotionBarKey, defaultValue = false)
-    if (experimentalUi) {
-        ExperimentalNavigationDock(
+    if (style == NavigationBarStyle.CAPSULE) {
+        CapsuleNavigationBar(
             items = items,
             modifier = modifier,
             isSelected = isSelected,

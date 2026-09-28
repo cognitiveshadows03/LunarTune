@@ -973,6 +973,7 @@ enum class NavigationBarStyle {
     FLOATING,
     FROSTED,
     OUTLINED,
+    CAPSULE,
 }
 
 val NavigationBarStyleKey = stringPreferencesKey("navigationBarStyle")

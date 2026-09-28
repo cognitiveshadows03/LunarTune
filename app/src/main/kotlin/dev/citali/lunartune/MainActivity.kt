@@ -1073,7 +1073,8 @@ class MainActivity : FragmentActivity() {
                         defaultValue = NAVIGATION_BAR_HEIGHT_DEFAULT,
                     )
                     val isFloatingNavBar =
-                        navigationBarStyle == NavigationBarStyle.FLOATING || isFrostedNavBar || isOutlinedNavBar
+                        navigationBarStyle == NavigationBarStyle.FLOATING || isFrostedNavBar || isOutlinedNavBar ||
+                            navigationBarStyle == NavigationBarStyle.CAPSULE
                     val floatingBarsBottomPadding =
                         if (isFloatingNavBar) FloatingNavigationBarBottomPadding else NavigationBarBottomPadding
                     val navBarHorizontalPadding =

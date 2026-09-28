@@ -1154,6 +1154,7 @@
     <string name="frosted_bg_glow">Background glow</string>
     <string name="frosted_bg_glow_desc">Background items behind the bar glow and blur more as this rises</string>
     <string name="navigation_bar_style_outlined">Outlined</string>
+    <string name="navigation_bar_style_capsule">Capsule</string>
     <string name="navigation_bar_settings_title">Navigation bar</string>
     <string name="navigation_bar_settings_subtitle">Style, labels, and dimensions</string>
     <string name="hide_navigation_bar_labels">Hide labels in navigation bar</string>
