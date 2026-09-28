@@ -72,7 +72,6 @@ import dev.citali.lunartune.ui.utils.displayArtworkUrl
 import kotlin.math.abs
 import kotlin.math.min
 import moe.rukamori.archivetune.innertube.models.SongItem
-import moe.rukamori.archivetune.innertube.models.WatchEndpoint
 import moe.rukamori.archivetune.innertube.pages.HomePage
 
 private const val ExperimentalChartSize = 10
@@ -416,10 +415,7 @@ fun ExperimentalRemoteChartsSection(
                         playerConnection.player.togglePlayPause()
                     } else {
                         playerConnection.playQueue(
-                            YouTubeQueue(
-                                endpoint = song.endpoint ?: WatchEndpoint(videoId = song.id),
-                                preloadItem = song.toMediaMetadata(),
-                            ),
+                            YouTubeQueue.radio(song.toMediaMetadata()),
                         )
                     }
                 },

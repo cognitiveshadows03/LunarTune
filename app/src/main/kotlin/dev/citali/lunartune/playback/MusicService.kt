@@ -3996,9 +3996,17 @@ class MusicService :
             }
             var initialStatus =
                 withContext(Dispatchers.IO) {
-                    queue
-                        .getInitialStatus()
-                        .filterPlaybackContent(hideExplicit, hideVideo)
+                    try {
+                        queue
+                            .getInitialStatus()
+                            .filterPlaybackContent(hideExplicit, hideVideo)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.e(e, "playQueue: failed to load queue, keeping preload item only")
+                        reportException(e)
+                        throw e
+                    }
                 }
             if (!autoLoadMoreEnabled && queue.shouldExpandToFullQueueWhenAutoLoadMoreDisabled() && queue.hasNextPage()) {
                 val expandedItems = initialStatus.items.toMutableList()
@@ -4151,12 +4159,20 @@ class MusicService :
                 )
             val initialStatus =
                 withContext(Dispatchers.IO) {
-                    radioQueue
-                        .getInitialStatus()
-                        .filterPlaybackContent(
-                            hideExplicit = dataStore.get(HideExplicitKey, false),
-                            hideVideo = dataStore.get(HideVideoKey, false),
-                        )
+                    try {
+                        radioQueue
+                            .getInitialStatus()
+                            .filterPlaybackContent(
+                                hideExplicit = dataStore.get(HideExplicitKey, false),
+                                hideVideo = dataStore.get(HideVideoKey, false),
+                            )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.e(e, "startRadioSeamlessly: radio fetch failed")
+                        reportException(e)
+                        throw e
+                    }
                 }
 
             if (initialStatus.title != null) {
