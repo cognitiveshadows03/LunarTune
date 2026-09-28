@@ -800,6 +800,18 @@ object YTPlayerUtils {
                 )
             }
 
+            Timber.tag(logTag).i(
+                "All InnerTube clients failed for %s, trying NewPipe fallback resolver",
+                videoId,
+            )
+            val fallbackResult = NewPipeStreamResolver.resolve(videoId, audioQuality)
+            if (fallbackResult.isSuccess) return@runCatching fallbackResult.getOrThrow()
+            Timber.tag(logTag).w(
+                fallbackResult.exceptionOrNull(),
+                "NewPipe fallback resolver also failed for %s",
+                videoId,
+            )
+
             throw lastError ?: IllegalStateException("Failed to resolve download stream for $videoId")
         }
 
