@@ -93,6 +93,7 @@ import dev.citali.lunartune.constants.ShowLibraryCardLikedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
 import dev.citali.lunartune.constants.ShowLibraryCardMyTopKey
 import dev.citali.lunartune.constants.ShowLibraryCardOfflineKey
+import dev.citali.lunartune.constants.ShowLibraryCardWatermarksKey
 import dev.citali.lunartune.constants.ShowSpotifyPlaylistsKey
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.playback.queues.ListQueue
@@ -1186,6 +1187,7 @@ private fun MostPlayedAlbumSpotlightCard(
     onShuffle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val (showWatermarks) = rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
     val primaryColor = MaterialTheme.colorScheme.primary
     val isDark =
         MaterialTheme.colorScheme.surface.let {
@@ -1221,12 +1223,14 @@ private fun MostPlayedAlbumSpotlightCard(
                 .background(backgroundBrush)
                 .clickable(onClick = onOpenAlbum),
     ) {
-        CardWatermarkIcon(
-            iconRes = R.drawable.star,
-            color = primaryColor,
-            size = 164.dp,
-            endBleed = 46.dp,
-        )
+        if (showWatermarks) {
+            CardWatermarkIcon(
+                iconRes = R.drawable.star,
+                color = primaryColor,
+                size = 164.dp,
+                endBleed = 46.dp,
+            )
+        }
 
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -1378,6 +1382,7 @@ fun ShortcutCard(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val (showWatermarks) = rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1.0f,
@@ -1422,12 +1427,14 @@ fun ShortcutCard(
                     onClick = onClick,
                 ),
     ) {
-        CardWatermarkIcon(
-            iconRes = iconRes,
-            color = iconColor,
-            size = 116.dp,
-            endBleed = 28.dp,
-        )
+        if (showWatermarks) {
+            CardWatermarkIcon(
+                iconRes = iconRes,
+                color = iconColor,
+                size = 116.dp,
+                endBleed = 28.dp,
+            )
+        }
 
         Column(
             modifier = Modifier.padding(12.dp),

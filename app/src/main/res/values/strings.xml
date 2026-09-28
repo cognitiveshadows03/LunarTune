@@ -108,6 +108,8 @@
     <string name="liked_songs">Liked songs</string>
     <string name="library_shortcut_cards">Library cards</string>
     <string name="library_shortcut_cards_desc">Choose which shortcut cards show on the Library tab</string>
+    <string name="library_card_watermarks">Card watermarks</string>
+    <string name="library_card_watermarks_desc">Show large background icons on library cards</string>
     <string name="downloaded_songs">Downloaded songs</string>
     <string name="playlist_is_empty">The playlist is empty</string>
     <string name="remove_download_playlist_confirm">Do you really want to remove all \"%s\" playlist songs from the Downloaded Songs storage?</string>

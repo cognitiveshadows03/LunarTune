@@ -119,6 +119,7 @@ import dev.citali.lunartune.constants.ShowLibraryCardLikedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
 import dev.citali.lunartune.constants.ShowLibraryCardMyTopKey
 import dev.citali.lunartune.constants.ShowLibraryCardOfflineKey
+import dev.citali.lunartune.constants.ShowLibraryCardWatermarksKey
 import dev.citali.lunartune.constants.ShowPlayerVolumeBarKey
 import dev.citali.lunartune.constants.ShowTagsInLibraryKey
 import dev.citali.lunartune.constants.SliderStyle
@@ -302,6 +303,8 @@ fun AppearanceSettings(navController: NavController) {
         rememberPreference(ShowLibraryCardLocalKey, defaultValue = true)
     val (showLibraryCardMyTop, onShowLibraryCardMyTopChange) =
         rememberPreference(ShowLibraryCardMyTopKey, defaultValue = true)
+    val (showLibraryCardWatermarks, onShowLibraryCardWatermarksChange) =
+        rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
     val (showHomeCategoryChips, onShowHomeCategoryChipsChange) =
         rememberPreference(
             ShowHomeCategoryChipsKey,
@@ -1091,6 +1094,15 @@ fun AppearanceSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.trending_up), null) },
                         checked = showLibraryCardMyTop,
                         onCheckedChange = onShowLibraryCardMyTopChange,
+                    )
+                }
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.library_card_watermarks)) },
+                        description = stringResource(R.string.library_card_watermarks_desc),
+                        icon = { Icon(painterResource(R.drawable.image), null) },
+                        checked = showLibraryCardWatermarks,
+                        onCheckedChange = onShowLibraryCardWatermarksChange,
                     )
                 }
             }

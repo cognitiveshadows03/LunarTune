@@ -362,6 +362,7 @@ val ShowLibraryCardOfflineKey = booleanPreferencesKey("showLibraryCardOffline")
 val ShowLibraryCardCachedKey = booleanPreferencesKey("showLibraryCardCached")
 val ShowLibraryCardLocalKey = booleanPreferencesKey("showLibraryCardLocal")
 val ShowLibraryCardMyTopKey = booleanPreferencesKey("showLibraryCardMyTop")
+val ShowLibraryCardWatermarksKey = booleanPreferencesKey("showLibraryCardWatermarks")
 
 val EqualizerEnabledKey = booleanPreferencesKey("equalizerEnabled")
 val EqualizerControlModeKey = stringPreferencesKey("equalizerControlMode")
