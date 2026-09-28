@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -43,6 +44,9 @@ import moe.rukamori.archivetune.innertube.models.AlbumItem
 import moe.rukamori.archivetune.innertube.models.ArtistItem
 import moe.rukamori.archivetune.innertube.models.PlaylistItem
 import moe.rukamori.archivetune.innertube.models.SongItem
+import moe.rukamori.archivetune.innertube.models.distinctByPlaylistEntry
+import moe.rukamori.archivetune.innertube.pages.PlaylistContinuationPage
+import moe.rukamori.archivetune.innertube.pages.PlaylistPage
 import moe.rukamori.archivetune.innertube.utils.completed
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 import dev.citali.lunartune.models.toMediaMetadata
@@ -67,6 +71,9 @@ class SyncUtils
         private val syncMutex = Mutex()
         private val playlistSyncMutex = Mutex()
         private val dbWriteSemaphore = Semaphore(2)
+        private val likedSyncMaxPages = 500
+        private val likedSyncContinuationAttempts = 3
+        private val likedSyncContinuationRetryMs = 1_000L
 
         init {
             syncScope.launch {
@@ -269,6 +276,74 @@ class SyncUtils
             }
         }
 
+        private data class LikedPlaylistFetch(
+            val songs: List<SongItem>,
+            val headerTotal: Int?,
+            val complete: Boolean,
+        )
+
+        /**
+         * Follows the Liked playlist continuations with per-page retries, instead of
+         * core's completed(), so a truncated fetch is DETECTED rather than silently
+         * mistaken for the whole library: upserts still apply to whatever arrived, but
+         * authoritative stale-removal must only run when [LikedPlaylistFetch.complete].
+         */
+        private suspend fun fetchCompleteLikedPlaylist(firstPage: PlaylistPage): LikedPlaylistFetch {
+            val songs = firstPage.songs.orEmpty().toMutableList()
+            val headerTotal = firstPage.playlist.songCountText?.filter(Char::isDigit)?.toIntOrNull()
+            var continuation =
+                firstPage.songsContinuation.takeUnless { it.isNullOrBlank() }
+                    ?: firstPage.continuation.takeUnless { it.isNullOrBlank() }
+            val seenContinuations = mutableSetOf<String>()
+            var consecutiveEmpty = 0
+            var complete = true
+            var pages = 1
+            while (continuation != null && pages < likedSyncMaxPages) {
+                if (!seenContinuations.add(continuation)) {
+                    continuation = null
+                    break
+                }
+                val page = fetchLikedContinuationPage(continuation)
+                pages++
+                if (page == null) {
+                    complete = false
+                    break
+                }
+                if (page.songs.isEmpty()) {
+                    consecutiveEmpty++
+                    if (consecutiveEmpty >= 2) {
+                        continuation = null
+                        break
+                    }
+                } else {
+                    consecutiveEmpty = 0
+                    songs += page.songs
+                }
+                continuation = page.continuation.takeUnless { it.isNullOrBlank() }
+            }
+            if (continuation != null) complete = false
+            return LikedPlaylistFetch(
+                songs = songs.distinctByPlaylistEntry(),
+                headerTotal = headerTotal,
+                complete = complete,
+            )
+        }
+
+        private suspend fun fetchLikedContinuationPage(continuation: String): PlaylistContinuationPage? {
+            repeat(likedSyncContinuationAttempts) { attempt ->
+                if (attempt > 0) delay(likedSyncContinuationRetryMs * attempt)
+                val page =
+                    runCatching {
+                        YouTube.playlistContinuation(continuation, "LM").getOrNull()
+                    }.getOrNull()
+                if (page != null) return page
+            }
+            Timber.w(
+                "syncLikedSongs: continuation fetch failed after $likedSyncContinuationAttempts attempts",
+            )
+            return null
+        }
+
         suspend fun syncLikedSongs(authoritative: Boolean = false) =
             coroutineScope {
                 if (!isLoggedIn()) {
@@ -280,18 +355,35 @@ class SyncUtils
                     return@coroutineScope
                 }
                 val gen = syncGeneration.get()
-                YouTube
-                    .playlist("LM")
-                    .completed()
-                    .onSuccess { page ->
+                runCatching {
+                    fetchCompleteLikedPlaylist(YouTube.playlist("LM").getOrThrow())
+                }.onSuccess { fetch ->
                         if (!isSyncStillEnabled(gen)) return@onSuccess
-                        val remoteSongs = page.songs.orEmpty()
+                        val remoteSongs = fetch.songs
+                        Timber.i(
+                            "syncLikedSongs: remote headerTotal=${fetch.headerTotal} " +
+                                "mapped=${remoteSongs.size} complete=${fetch.complete}",
+                        )
+                        fetch.headerTotal?.let { headerTotal ->
+                            val unmapped = headerTotal - remoteSongs.size
+                            if (unmapped > 0) {
+                                Timber.w(
+                                    "syncLikedSongs: $unmapped remote entries unmappable " +
+                                        "(likely unavailable/deleted songs still counted by YouTube Music)",
+                                )
+                            }
+                        }
                         if (remoteSongs.isEmpty() && !authoritative) {
                             Timber.w("syncLikedSongs: Remote playlist is empty")
                             return@onSuccess
                         }
                         val remoteIds = remoteSongs.map { it.id }.toSet()
-                        if (authoritative) {
+                        if (authoritative && !fetch.complete) {
+                            Timber.w(
+                                "syncLikedSongs: skipping authoritative stale-removal after truncated fetch",
+                            )
+                        }
+                        if (authoritative && fetch.complete) {
                             val localLikedSongs = database.likedSongsByNameAsc().first()
                             if (!isSyncStillEnabled(gen)) return@onSuccess
                             val staleLikedSongs =
@@ -311,7 +403,6 @@ class SyncUtils
                         val baseTimestamp = LocalDateTime.now()
                         val failedUpserts = AtomicInteger(0)
 
-                        Timber.i("syncLikedSongs: remote mapped songs=${remoteSongs.size}")
                         val upsertJobs =
                             remoteSongs.mapIndexed { index, song ->
                                 val timestamp = likedSongTimestamp(baseTimestamp, index)
@@ -348,7 +439,8 @@ class SyncUtils
                         val localLikedCount = database.likedSongsByNameAsc().first().size
                         Timber.i(
                             "syncLikedSongs: done remote=${remoteSongs.size} " +
-                                "localLiked=$localLikedCount failedUpserts=${failedUpserts.get()}",
+                                "localLiked=$localLikedCount failedUpserts=${failedUpserts.get()} " +
+                                "complete=${fetch.complete}",
                         )
                         if (localLikedCount < remoteSongs.size) {
                             Timber.w(

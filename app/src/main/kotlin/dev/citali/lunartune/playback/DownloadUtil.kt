@@ -516,9 +516,10 @@ class DownloadUtil
             private const val MAX_AUTO_RETRY_ATTEMPTS = 3
             private const val AUTO_RETRY_COOLDOWN_MS = 3_000L
             private const val DOWNLOAD_RESOLVE_TIMEOUT_MS = 120_000L
-            // One call stays open per prefetched file, so the per-read timeout must stay
-            // well above slow-tail reads; liveness is governed by the fetch deadline.
-            private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 300L
+            // Silence beyond this is a dead connection, not a slow tail: throttled
+            // connections still deliver bursts well within it. Fail fast so the retry
+            // resumes the missing tail instead of wedging a download slot for minutes.
+            private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 60L
             private const val DOWNLOAD_PROGRESS_REFRESH_INTERVAL_MS = 1_000L
             private const val DOWNLOAD_CONNECTION_KEEP_ALIVE_MINUTES = 10L
             // 4 MB batches saturate local storage writes; 16 MB x 12 parallel (4nx3b
