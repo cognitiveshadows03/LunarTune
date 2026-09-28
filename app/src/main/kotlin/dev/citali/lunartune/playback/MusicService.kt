@@ -1221,10 +1221,11 @@ class MusicService :
             val volume = (prefs[PlayerVolumeKey] ?: 1f).coerceIn(0f, 1f)
             val offload = prefs[AudioOffload] ?: false
             val crossfadePrefEnabled = prefs[CrossfadeEnabledKey] ?: false
+            val eqEnabled = prefs[EqualizerEnabledKey] ?: false
             withContext(Dispatchers.Main) {
                 player.repeatMode = repeatMode
                 playerVolume.value = volume
-                updateAudioOffload(offload && !crossfadePrefEnabled)
+                updateAudioOffload(offload && !crossfadePrefEnabled && !eqEnabled)
             }
         }
 
@@ -1345,12 +1346,16 @@ class MusicService :
         combine(
             dataStore.data.map { it[AudioOffload] ?: false },
             dataStore.data.map { it[CrossfadeEnabledKey] ?: false },
-        ) { offloadEnabled, crossfadeEnabled ->
-            offloadEnabled to crossfadeEnabled
+            dataStore.data.map { it[EqualizerEnabledKey] ?: false },
+        ) { offloadEnabled, crossfadeEnabled, eqEnabled ->
+            Triple(offloadEnabled, crossfadeEnabled, eqEnabled)
         }.distinctUntilChanged()
-            .collectLatest(scope) { (offloadEnabled, crossfadeEnabled) ->
-                val effectiveOffload = offloadEnabled && !crossfadeEnabled
+            .collectLatest(scope) { (offloadEnabled, crossfadeEnabled, eqEnabled) ->
+                // Audio effects cannot attach to offloaded sessions, so the in-app
+                // equalizer takes precedence over offload (same as crossfade).
+                val effectiveOffload = offloadEnabled && !crossfadeEnabled && !eqEnabled
                 updateAudioOffload(effectiveOffload)
+                reconcileAudioEffectSession()
                 if (effectiveOffload) {
                     val skipSilenceEnabled = dataStore.get(SkipSilenceKey, false)
                     if (skipSilenceEnabled) {
