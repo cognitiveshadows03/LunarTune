@@ -16,7 +16,6 @@ import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.glance.GlanceId
-import androidx.glance.appwidget.AppWidgetGlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -172,7 +171,7 @@ internal class MusicServiceWidgetUpdater(
     private suspend fun findInstalledTargets(targets: List<WidgetTarget>): List<InstalledWidgetTarget> =
         targets.mapNotNull { target ->
             val glanceIds = widgetManager.getGlanceIds(target.widgetClass)
-            healOrphanedWidget(target, glanceIds)
+            healOrphanedWidget(target)
             glanceIds.takeIf { ids -> ids.isNotEmpty() }?.let { ids -> InstalledWidgetTarget(target, ids) }
         }
 
@@ -181,15 +180,24 @@ internal class MusicServiceWidgetUpdater(
      * (stale placements from before a reinstall, data clear or update). Without this the
      * updater silently skips them and they sit on the stale placeholder forever.
      */
-    private fun healOrphanedWidget(target: WidgetTarget, glanceIds: List<GlanceId>) {
+    private suspend fun healOrphanedWidget(target: WidgetTarget) {
         val installedIds =
             runCatching {
                 val manager = AppWidgetManager.getInstance(service)
                 manager.getAppWidgetIds(ComponentName(service, target.receiverClass))
             }.getOrDefault(intArrayOf())
         if (installedIds.isEmpty()) return
-        val knownIds = glanceIds.filterIsInstance<AppWidgetGlanceId>().map { it.appWidgetId }.toSet()
-        val orphanIds = installedIds.filter { it !in knownIds }.toIntArray()
+        val orphanIds =
+            installedIds.filter { id ->
+                try {
+                    widgetManager.getGlanceIdBy(id)
+                    false
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Exception) {
+                    true
+                }
+            }.toIntArray()
         if (orphanIds.isEmpty()) return
         runCatching {
             service.sendBroadcast(
