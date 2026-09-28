@@ -9,6 +9,7 @@ package dev.citali.lunartune.utils
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
@@ -46,6 +48,7 @@ import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 import dev.citali.lunartune.models.toMediaMetadata
 import timber.log.Timber
 import java.time.LocalDateTime
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -306,30 +309,52 @@ class SyncUtils
                             }
                         }
                         val baseTimestamp = LocalDateTime.now()
+                        val failedUpserts = AtomicInteger(0)
 
-                        remoteSongs.forEachIndexed { index, song ->
-                            val timestamp = likedSongTimestamp(baseTimestamp, index)
-                            launch {
-                                if (!isSyncStillEnabled(gen)) return@launch
-                                dbWriteSemaphore.withPermit {
-                                    if (!isSyncStillEnabled(gen)) return@withPermit
-                                    val dbSong = database.song(song.id).firstOrNull()
-                                    val mediaMetadata = song.toMediaMetadata()
-                                    database.withTransaction {
-                                        if (!isSyncStillEnabled(gen)) return@withTransaction
-                                        if (dbSong == null) {
-                                            insert(mediaMetadata) { it.copy(liked = true, likedDate = timestamp) }
-                                        } else {
-                                            update(dbSong, mediaMetadata)
-                                            if (!dbSong.song.liked || dbSong.song.likedDate == null) {
-                                                getSongByIdBlocking(song.id)?.song?.let { refreshedSong ->
-                                                    update(refreshedSong.copy(liked = true, likedDate = timestamp))
+                        Timber.i("syncLikedSongs: remote mapped songs=${remoteSongs.size}")
+                        val upsertJobs =
+                            remoteSongs.mapIndexed { index, song ->
+                                val timestamp = likedSongTimestamp(baseTimestamp, index)
+                                launch {
+                                    try {
+                                        if (!isSyncStillEnabled(gen)) return@launch
+                                        dbWriteSemaphore.withPermit {
+                                            if (!isSyncStillEnabled(gen)) return@withPermit
+                                            val dbSong = database.song(song.id).firstOrNull()
+                                            val mediaMetadata = song.toMediaMetadata()
+                                            database.withTransaction {
+                                                if (!isSyncStillEnabled(gen)) return@withTransaction
+                                                if (dbSong == null) {
+                                                    insert(mediaMetadata) { it.copy(liked = true, likedDate = timestamp) }
+                                                } else {
+                                                    update(dbSong, mediaMetadata)
+                                                    if (!dbSong.song.liked || dbSong.song.likedDate == null) {
+                                                        getSongByIdBlocking(song.id)?.song?.let { refreshedSong ->
+                                                            update(refreshedSong.copy(liked = true, likedDate = timestamp))
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
+                                    } catch (e: CancellationException) {
+                                        throw e
+                                    } catch (e: Exception) {
+                                        failedUpserts.incrementAndGet()
+                                        Timber.w(e, "syncLikedSongs: failed to upsert ${song.id}")
                                     }
                                 }
                             }
+                        upsertJobs.joinAll()
+                        val localLikedCount = database.likedSongsByNameAsc().first().size
+                        Timber.i(
+                            "syncLikedSongs: done remote=${remoteSongs.size} " +
+                                "localLiked=$localLikedCount failedUpserts=${failedUpserts.get()}",
+                        )
+                        if (localLikedCount < remoteSongs.size) {
+                            Timber.w(
+                                "syncLikedSongs: local liked count ($localLikedCount) is below " +
+                                    "remote mapped count (${remoteSongs.size})",
+                            )
                         }
                     }.onFailure { e ->
                         Timber.e(e, "syncLikedSongs: Failed to sync liked songs")
