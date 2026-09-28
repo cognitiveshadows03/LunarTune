@@ -88,6 +88,8 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.LibraryFilter
+import dev.citali.lunartune.constants.HideExplicitKey
+import dev.citali.lunartune.constants.HideVideoKey
 import dev.citali.lunartune.constants.ShowLibraryCardCachedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLikedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
@@ -132,7 +134,11 @@ fun LibraryMixScreen(
         }
     val database = LocalDatabase.current
 
-    val likedSongsCount by database.likedSongsCount().collectAsState(initial = 0)
+    val (hideVideo) = rememberPreference(HideVideoKey, defaultValue = false)
+    val (hideExplicit) = rememberPreference(HideExplicitKey, defaultValue = false)
+    val likedSongsCount by database
+        .likedSongsVisibleCount(hideVideo, hideExplicit)
+        .collectAsState(initial = 0)
     val recentSongs by database.recentSongs(15).collectAsState(initial = emptyList())
     val topSize by viewModel.topValue.collectAsStateWithLifecycle(initialValue = "50")
     val myTopTitle = stringResource(R.string.my_top)

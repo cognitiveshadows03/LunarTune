@@ -306,8 +306,25 @@ interface DatabaseDao {
     fun likedSongsByPlayTimeAscNoVideo(): Flow<List<Song>>
 
     @Transaction
-    @Query("SELECT COUNT(1) FROM song WHERE liked")
-    fun likedSongsCount(): Flow<Int>
+    /**
+     * Count of liked songs exactly as shown in the Liked auto-playlist: honors the
+     * hide-videos / hide-explicit filters and always excludes songs from blocked
+     * artists, mirroring [likedSongs] + filterExplicit membership.
+     */
+    @Query(
+        """
+        SELECT COUNT(1) FROM song
+        WHERE liked
+        AND (:hideVideo = 0 OR isMusicVideo = 0)
+        AND (:hideExplicit = 0 OR explicit = 0)
+        AND NOT EXISTS (
+            SELECT 1 FROM song_artist_map
+            JOIN artist ON artist.id = song_artist_map.artistId
+            WHERE song_artist_map.songId = song.id AND artist.blockedAt IS NOT NULL
+        )
+        """,
+    )
+    fun likedSongsVisibleCount(hideVideo: Boolean, hideExplicit: Boolean): Flow<Int>
 
     @Transaction
     @Query("SELECT song.* FROM song JOIN song_album_map ON song.id = song_album_map.songId WHERE song_album_map.albumId = :albumId")
