@@ -176,7 +176,9 @@ class PrefetchDataSource(
                     response.code,
                     response.message.ifEmpty { null },
                     null,
+                    response.headers.toMultimap(),
                     dataSpec,
+                    ByteArray(0),
                 )
             }
             val body = response.body ?: throw IOException("Empty response body for ${dataSpec.uri.host}")
