@@ -9,6 +9,7 @@ package dev.citali.lunartune.playback
 
 import android.content.Context
 import android.net.ConnectivityManager
+import android.os.SystemClock
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import androidx.media3.database.DatabaseProvider
@@ -50,6 +51,7 @@ import dev.citali.lunartune.di.DownloadCache
 import dev.citali.lunartune.di.PlayerCache
 import moe.rukamori.archivetune.innertube.YouTube
 import dev.citali.lunartune.utils.AuthScopedCacheValue
+import dev.citali.lunartune.utils.NewPipeStreamResolver
 import dev.citali.lunartune.utils.StreamClientUtils
 import dev.citali.lunartune.utils.YTPlayerUtils
 import dev.citali.lunartune.utils.enumPreference
@@ -163,6 +165,7 @@ class DownloadUtil
                     }?.let {
                         return@Factory dataSpec.withUri(it.url.toUri())
                     }
+                val resolveStartMs = SystemClock.elapsedRealtime()
                 val playbackData =
                     try {
                         runBlocking(Dispatchers.IO) {
@@ -185,6 +188,12 @@ class DownloadUtil
                             timeout,
                         )
                     }
+                Timber.i(
+                    "Resolved download stream for %s in %dms (quality=%s)",
+                    mediaId,
+                    SystemClock.elapsedRealtime() - resolveStartMs,
+                    requestedAudioQuality.name,
+                )
                 persistPlaybackMetadata(mediaId, playbackData)
 
                 val streamUrl = playbackData.streamUrl
@@ -233,6 +242,14 @@ class DownloadUtil
                         ) {
                             if (finalException != null || download.state == Download.STATE_FAILED) {
                                 sessionFailedSongIds.add(download.request.id)
+                                Timber.w(
+                                    finalException,
+                                    "Download %s failed (state=%d failureReason=%d stopReason=%d)",
+                                    download.request.id,
+                                    download.state,
+                                    download.failureReason,
+                                    download.stopReason,
+                                )
                                 songUrlCache.keys.removeIf { it.startsWith("${download.request.id}:") }
                                 YTPlayerUtils.invalidateCachedStreamUrls(download.request.id)
                             }
@@ -371,16 +388,41 @@ class DownloadUtil
         private fun invalidateResolvedStreamUrl(url: String) {
             songUrlCache.entries.forEach { (cacheKey, cached) ->
                 if (cached.url == url && songUrlCache.remove(cacheKey, cached)) {
-                    YTPlayerUtils.invalidateCachedStreamUrls(cacheKey.substringBeforeLast(':'))
+                    val songId = cacheKey.substringBeforeLast(':')
+                    YTPlayerUtils.invalidateCachedStreamUrls(songId)
+                    // The URL itself was rejected at fetch time (403/404/410/416), so a
+                    // fresh resolve would mint the same shape again: serve this song from
+                    // InnerTube for the rest of the session instead of 403-looping.
+                    NewPipeStreamResolver.bypassForSession(songId)
                 }
             }
         }
 
         private fun Download.toProgressSnapshot(): Download {
+            // ExoPlayer only sees bytes during the local serve phase, so merge the live
+            // prefetch counters in: without this every download sits at 0% + 0 B/s
+            // until the whole file lands. Monotonic: never moves backwards.
+            var mergedBytes = bytesDownloaded.coerceAtLeast(0L)
+            var mergedPercent = percentDownloaded.takeIf { it >= 0f } ?: 0f
+            if (state == Download.STATE_DOWNLOADING) {
+                PrefetchDataSource.prefetchSample(request.id)?.let { sample ->
+                    if (sample.bytesWrittenAbsolute > mergedBytes) {
+                        mergedBytes = sample.bytesWrittenAbsolute
+                    }
+                    val total = sample.totalBytes
+                    if (total != null && total > 0) {
+                        mergedPercent =
+                            maxOf(
+                                mergedPercent,
+                                (sample.bytesWrittenAbsolute * 100f / total).coerceIn(0f, 100f),
+                            )
+                    }
+                }
+            }
             val progressSnapshot =
                 DownloadProgress().apply {
-                    bytesDownloaded = this@toProgressSnapshot.bytesDownloaded
-                    percentDownloaded = this@toProgressSnapshot.percentDownloaded
+                    bytesDownloaded = mergedBytes
+                    percentDownloaded = mergedPercent
                 }
             return Download(
                 request,

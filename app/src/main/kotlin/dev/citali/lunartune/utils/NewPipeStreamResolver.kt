@@ -17,6 +17,8 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import timber.log.Timber
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Primary download resolver backed by NewPipe Extractor.
@@ -30,6 +32,22 @@ internal object NewPipeStreamResolver {
     private const val TAG = "NewPipeFallback"
     private const val DEFAULT_STREAM_EXPIRY_SECONDS = 21_000
     private const val EXPIRY_SAFETY_MARGIN_SECONDS = 120L
+    private val bypassVideoIds =
+        Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
+
+    /**
+     * Skip NewPipe for this video for the rest of the session. Called when a resolved
+     * URL is rejected at fetch time (403/404/410/416): re-resolving through NewPipe
+     * would mint the same rejected shape, so InnerTube serves the retries.
+     */
+    fun bypassForSession(videoId: String) {
+        if (bypassVideoIds.add(videoId)) {
+            Timber.tag(TAG).w(
+                "Bypassing NewPipe for %s after fetch failure; InnerTube will serve it",
+                videoId,
+            )
+        }
+    }
 
     suspend fun resolve(
         videoId: String,
@@ -38,6 +56,11 @@ internal object NewPipeStreamResolver {
         runCatching {
             if (!NewPipeBootstrap.ensureInitialized()) {
                 throw IllegalStateException("NewPipe Extractor is unavailable")
+            }
+            if (videoId in bypassVideoIds) {
+                throw IllegalStateException(
+                    "NewPipe bypassed for $videoId after a fetch failure; using InnerTube",
+                )
             }
             withContext(Dispatchers.IO) {
                 val extractor =

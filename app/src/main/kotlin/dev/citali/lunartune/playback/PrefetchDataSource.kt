@@ -22,6 +22,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.UUID
 
 /**
@@ -69,10 +70,15 @@ class PrefetchDataSource(
         override fun createDataSource(): PrefetchDataSource = PrefetchDataSource(httpClient, tempDir)
     }
 
+    /** Latest fetch progress per song id (dataSpec.key), so the UI can show live
+     * progress during the prefetch phase instead of a stuck 0%. Absolute file bytes. */
+    data class PrefetchSample(val bytesWrittenAbsolute: Long, val totalBytes: Long?)
+
     private val fileDataSource = FileDataSource()
     private var tempFile: File? = null
     private var fileUri: Uri? = null
     private var bytesRemaining: Long = 0
+    private var openKey: String? = null
 
     @Throws(IOException::class)
     override fun open(dataSpec: DataSpec): Long {
@@ -89,6 +95,7 @@ class PrefetchDataSource(
             tempFile = temp
             val uri = Uri.fromFile(temp)
             fileUri = uri
+            openKey = dataSpec.key
             // The temp file holds exactly the requested range, so serve it from offset 0
             // even when the original request was a resumed range.
             val served = fileDataSource.open(DataSpec(uri, 0, fetchedBytes, dataSpec.key))
@@ -99,6 +106,7 @@ class PrefetchDataSource(
         } finally {
             if (!success) {
                 runCatching { temp.delete() }
+                dataSpec.key?.let(prefetchSamples::remove)
             }
         }
     }
@@ -125,6 +133,8 @@ class PrefetchDataSource(
     @Throws(IOException::class)
     override fun close() {
         fileUri = null
+        openKey?.let(prefetchSamples::remove)
+        openKey = null
         runCatching { fileDataSource.close() }
         tempFile?.let { temp ->
             tempFile = null
@@ -190,6 +200,20 @@ class PrefetchDataSource(
                     rangeHonored = rangeHonored,
                     position = position,
                 )
+            val bodyLength = body.contentLength()
+            val progressTotalBytes =
+                response.header("Content-Range")?.let(::parseContentRangeTotal)
+                    ?: bodyLength.takeIf { it >= 0 }
+            val progressKey = dataSpec.key
+            if (progressKey != null) {
+                prefetchSamples[progressKey] = PrefetchSample(position, progressTotalBytes)
+                Timber.i(
+                    "Prefetch start key=%s position=%d total=%s",
+                    progressKey,
+                    position,
+                    progressTotalBytes?.toString() ?: "unknown",
+                )
+            }
             // A server that ignores Range answers 200 with the full file: skip the bytes
             // that precede the requested range instead of serving the wrong window.
             var bytesToSkip = if (rangeRequested && !rangeHonored && position > 0) position else 0L
@@ -218,6 +242,10 @@ class PrefetchDataSource(
                         if (chunkLength > 0) {
                             output.write(buffer, chunkOffset, chunkLength)
                             written += chunkLength
+                            if (progressKey != null) {
+                                prefetchSamples[progressKey] =
+                                    PrefetchSample(position + written, progressTotalBytes)
+                            }
                         }
                     }
                     output.flush()
@@ -229,7 +257,14 @@ class PrefetchDataSource(
             if (expectedBytes != C.LENGTH_UNSET.toLong() && written != expectedBytes) {
                 throw IOException("Short prefetch: got $written of $expectedBytes bytes; retry will resume the tail")
             }
-            Timber.d("Prefetched %d bytes (resume=%b) for %s", written, position > 0, dataSpec.key)
+            val prefetchElapsedMs = SystemClock.elapsedRealtime() - startMs
+            Timber.i(
+                "Prefetched %d bytes (resume=%b) for %s in %dms",
+                written,
+                position > 0,
+                dataSpec.key,
+                prefetchElapsedMs,
+            )
             return written
         }
     }
@@ -262,7 +297,18 @@ class PrefetchDataSource(
         return if (first != null && last != null && last >= first) last - first + 1 else null
     }
 
+    /** Parses the `/total` of `bytes <first>-<last>/<total|*>`, or null when absent/starred. */
+    private fun parseContentRangeTotal(contentRange: String): Long? {
+        val slash = contentRange.indexOf('/')
+        if (!contentRange.startsWith("bytes ") || slash < 0) return null
+        return contentRange.substring(slash + 1).toLongOrNull()?.takeIf { it >= 0 }
+    }
+
     companion object {
+        private val prefetchSamples = ConcurrentHashMap<String, PrefetchSample>()
+
+        fun prefetchSample(key: String?): PrefetchSample? = key?.let(prefetchSamples::get)
+
         private const val TEMP_DIR_NAME = "dl_prefetch"
         private const val TEMP_FILE_PREFIX = "fetch_"
         private const val COPY_BUFFER_SIZE = 256 * 1024
