@@ -16,6 +16,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -78,7 +79,10 @@ import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -89,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -155,6 +160,10 @@ fun MusicRecognitionScreen(
         remember(viewModel) { { query: String -> viewModel.onTrackSearchRequested(query) } }
     val onOpenUri =
         remember(viewModel) { { uri: String -> viewModel.onExternalUriRequested(uri) } }
+    val onDeleteHistory =
+        remember(viewModel) {
+            { stableKeys: Set<String> -> viewModel.onHistoryItemsDeleteRequested(stableKeys) }
+        }
 
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -217,6 +226,7 @@ fun MusicRecognitionScreen(
             onQueryChange = onHistoryQueryChange,
             onSearch = onSearch,
             onOpenUri = onOpenUri,
+            onDeleteHistory = onDeleteHistory,
         )
     }
 
@@ -1020,8 +1030,26 @@ private fun RecognitionHistoryBottomSheet(
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onOpenUri: (String) -> Unit,
+    onDeleteHistory: (Set<String>) -> Unit,
 ) {
     val clearQuery = remember(onQueryChange) { { onQueryChange("") } }
+    val hapticFeedback = LocalHapticFeedback.current
+    var selectedKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val visibleKeys =
+        remember(state.filteredItems) {
+            state.filteredItems.items.map { it.stableKey }.toSet()
+        }
+    if (selectedKeys.any { it !in visibleKeys }) {
+        selectedKeys = selectedKeys.filter(visibleKeys::contains)
+    }
+    val selectionCount = selectedKeys.size
+    val clearSelection =
+        remember {
+            { selectedKeys = emptyList() }
+        }
+    BackHandler(enabled = selectionCount > 0) {
+        clearSelection()
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1052,17 +1080,38 @@ private fun RecognitionHistoryBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.music_recognition_history),
+                        text =
+                            if (selectionCount > 0) {
+                                pluralStringResource(R.plurals.n_selected, selectionCount, selectionCount)
+                            } else {
+                                stringResource(R.string.music_recognition_history)
+                            },
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    IconButton(onClick = onDismiss) {
+                    if (selectionCount > 0) {
+                        IconButton(
+                            onClick = {
+                                onDeleteHistory(selectedKeys.toSet())
+                                clearSelection()
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.delete),
+                                contentDescription = stringResource(R.string.delete),
+                            )
+                        }
+                    }
+                    IconButton(onClick = if (selectionCount > 0) clearSelection else onDismiss) {
                         Icon(
                             painter = painterResource(R.drawable.close),
-                            contentDescription = stringResource(R.string.close),
+                            contentDescription =
+                                stringResource(
+                                    if (selectionCount > 0) R.string.clear else R.string.close,
+                                ),
                         )
                     }
                 }
@@ -1128,6 +1177,17 @@ private fun RecognitionHistoryBottomSheet(
                     else -> {
                         RecognitionHistoryList(
                             history = state.filteredItems,
+                            selectedKeys = selectedKeys,
+                            onToggleSelection = { key ->
+                                selectedKeys =
+                                    if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+                            },
+                            onStartSelection = { key ->
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (key !in selectedKeys) {
+                                    selectedKeys = selectedKeys + key
+                                }
+                            },
                             onSearch = onSearch,
                             onOpenUri = onOpenUri,
                         )
@@ -1141,9 +1201,13 @@ private fun RecognitionHistoryBottomSheet(
 @Composable
 private fun RecognitionHistoryList(
     history: RecognitionHistoryUiModel,
+    selectedKeys: List<String>,
+    onToggleSelection: (String) -> Unit,
+    onStartSelection: (String) -> Unit,
     onSearch: (String) -> Unit,
     onOpenUri: (String) -> Unit,
 ) {
+    val isSelectionMode = selectedKeys.isNotEmpty()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 24.dp),
@@ -1158,6 +1222,10 @@ private fun RecognitionHistoryList(
                 item = item,
                 index = index,
                 count = history.items.size,
+                isSelected = item.stableKey in selectedKeys,
+                isSelectionMode = isSelectionMode,
+                onToggleSelection = onToggleSelection,
+                onStartSelection = onStartSelection,
                 onSearch = onSearch,
                 onOpenUri = onOpenUri,
             )
@@ -1170,17 +1238,27 @@ private fun RecognitionHistoryListItem(
     item: RecognitionHistoryItemUiModel,
     index: Int,
     count: Int,
+    isSelected: Boolean,
+    isSelectionMode: Boolean,
+    onToggleSelection: (String) -> Unit,
+    onStartSelection: (String) -> Unit,
     onSearch: (String) -> Unit,
     onOpenUri: (String) -> Unit,
 ) {
     val searchAction = remember(item.searchQuery, onSearch) { { onSearch(item.searchQuery) } }
+    val toggleAction =
+        remember(item.stableKey, onToggleSelection) { { onToggleSelection(item.stableKey) } }
+    val startSelectionAction =
+        remember(item.stableKey, onStartSelection) { { onStartSelection(item.stableKey) } }
     val shazamUrl = item.shazamUrl
     val openShazamAction: () -> Unit =
         remember(shazamUrl, onOpenUri) {
             { shazamUrl?.let(onOpenUri) }
         }
     SegmentedListItem(
-        onClick = searchAction,
+        selected = isSelected,
+        onClick = if (isSelectionMode) toggleAction else searchAction,
+        onLongClick = startSelectionAction,
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
         modifier = Modifier.fillMaxWidth(),
         colors =

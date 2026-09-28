@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import dev.citali.lunartune.musicrecognition.DeleteRecognitionHistoryUseCase
 import dev.citali.lunartune.musicrecognition.FilterRecognitionHistoryUseCase
 import dev.citali.lunartune.musicrecognition.MusicRecognitionAutoStartRequestKey
 import dev.citali.lunartune.musicrecognition.MusicRecognitionException
@@ -153,6 +154,7 @@ class MusicRecognitionViewModel
         private val filterRecognitionHistory: FilterRecognitionHistoryUseCase,
         private val recognizeMusic: RecognizeMusicUseCase,
         private val setBackgroundRecognitionEnabled: SetBackgroundRecognitionEnabledUseCase,
+        private val deleteRecognitionHistory: DeleteRecognitionHistoryUseCase,
     ) : ViewModel() {
         private val emptyHistory = RecognitionHistoryUiModel(emptyList())
         private val _screenState =
@@ -307,6 +309,18 @@ class MusicRecognitionViewModel
 
         fun onHistoryQueryChanged(query: String) {
             _historyQuery.value = query
+        }
+
+        fun onHistoryItemsDeleteRequested(stableKeys: Set<String>) {
+            if (stableKeys.isEmpty()) return
+            viewModelScope.launch {
+                runCatching {
+                    deleteRecognitionHistory(stableKeys)
+                }.onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    Timber.e(throwable, "Failed to delete music recognition history")
+                }
+            }
         }
 
         fun onTrackSearchRequested(query: String) {

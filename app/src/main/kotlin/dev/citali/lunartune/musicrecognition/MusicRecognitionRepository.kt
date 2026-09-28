@@ -179,6 +179,17 @@ class MusicRecognitionRepository
                 }
             }
         }
+
+        suspend fun deleteFromHistory(stableKeys: Set<String>) {
+            if (stableKeys.isEmpty()) return
+            withContext(Dispatchers.IO) {
+                context.dataStore.edit { preferences ->
+                    val current = decodeHistory(preferences[MusicRecognitionHistoryJsonKey])
+                    preferences[MusicRecognitionHistoryJsonKey] =
+                        HistoryJson.encodeToString(current.filterNot { it.stableKey in stableKeys })
+                }
+            }
+        }
     }
 
 private suspend fun captureSamples(
