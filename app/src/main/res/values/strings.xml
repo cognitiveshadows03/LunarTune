@@ -1238,4 +1238,17 @@
     <string name="motion_lists_desc">FAB, banners and swipe snap-back springs</string>
     <string name="motion_micro">Micro motion</string>
     <string name="motion_micro_desc">Chevrons, search morph and spinner bounces</string>
+    <string name="motion_lab_title">Motion Lab</string>
+    <string name="motion_preset">Feel preset</string>
+    <string name="motion_preset_snappy">Snappy</string>
+    <string name="motion_preset_balanced">Balanced</string>
+    <string name="motion_preset_buttery">Buttery</string>
+    <string name="motion_preset_reduced">Reduced</string>
+    <string name="motion_preset_custom">Custom</string>
+    <string name="motion_speed">Speed</string>
+    <string name="motion_speed_desc">How fast animations run</string>
+    <string name="motion_bounce">Bounciness</string>
+    <string name="motion_bounce_desc">Spring overshoot and playfulness</string>
+    <string name="motion_preview">Live preview</string>
+    <string name="motion_preview_hint">Tap the track to feel the current settings</string>
 </resources>
