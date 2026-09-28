@@ -1,0 +1,44 @@
+name: Notify GitHub events
+
+# Mirrors repo activity (stars, forks, issues, comments, PRs, workflow results)
+# into the Telegram logs topic, styled like ArchiveTune's notifier bot.
+
+on:
+  watch:
+  fork:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, closed, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["Build APKs", "Build Pull Request", "Build Windows Desktop", "Bump to new version", "Comment when commit references issue", "Kotlin Header"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Send event to Telegram
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Post event to logs topic
+        # Fork PRs run without secrets, so skip those instead of failing their checks.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: python ./.github/workflows/notify_github_event.py
+        env:
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TOPIC_ID: ${{ secrets.TELEGRAM_TOPIC_LOGS || secrets.TELEGRAM_TOPIC_ID }}
