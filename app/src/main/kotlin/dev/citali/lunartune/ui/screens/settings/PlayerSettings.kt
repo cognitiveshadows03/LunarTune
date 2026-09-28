@@ -39,9 +39,12 @@ import dev.citali.lunartune.constants.AudioQualityKey
 import dev.citali.lunartune.constants.AutoDownloadOnLikeKey
 import dev.citali.lunartune.constants.AutoSkipNextOnErrorKey
 import dev.citali.lunartune.constants.AutoStartOnBluetoothKey
+import dev.citali.lunartune.constants.CrossfadeCurve
+import dev.citali.lunartune.constants.CrossfadeCurveKey
 import dev.citali.lunartune.constants.CrossfadeDurationKey
 import dev.citali.lunartune.constants.CrossfadeEnabledKey
 import dev.citali.lunartune.constants.CrossfadeGaplessKey
+import dev.citali.lunartune.constants.CrossfadeManualSkipKey
 import dev.citali.lunartune.constants.DeviceMutePlaybackRecoveryVolumeKey
 import dev.citali.lunartune.constants.ExternalDownloaderEnabledKey
 import dev.citali.lunartune.constants.ExternalDownloaderPackageKey
@@ -57,6 +60,7 @@ import dev.citali.lunartune.constants.SkipSilenceKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
 import dev.citali.lunartune.constants.WakelockKey
 import dev.citali.lunartune.ui.component.ArtistSeparatorsDialog
+import dev.citali.lunartune.ui.component.CrossfadeCurvePreview
 import dev.citali.lunartune.ui.component.CrossfadeSliderPreference
 import dev.citali.lunartune.ui.component.EnumListPreference
 import dev.citali.lunartune.ui.component.IconButton
@@ -173,6 +177,16 @@ fun PlayerSettings(navController: NavController) {
         rememberPreference(
             CrossfadeGaplessKey,
             defaultValue = true,
+        )
+    val (crossfadeManualSkip, onCrossfadeManualSkipChange) =
+        rememberPreference(
+            CrossfadeManualSkipKey,
+            defaultValue = false,
+        )
+    val (crossfadeCurve, onCrossfadeCurveChange) =
+        rememberEnumPreference(
+            CrossfadeCurveKey,
+            defaultValue = CrossfadeCurve.EQUAL_POWER,
         )
 
     val (artistSeparators, onArtistSeparatorsChange) =
@@ -352,6 +366,46 @@ fun PlayerSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.fast_forward), null) },
                         checked = crossfadeGapless,
                         onCheckedChange = onCrossfadeGaplessChange,
+                        isEnabled = crossfadeEnabled,
+                    )
+                }
+
+                item {
+                    EnumListPreference(
+                        title = { Text(stringResource(R.string.crossfade_curve_title)) },
+                        icon = { Icon(painterResource(R.drawable.animation), null) },
+                        selectedValue = crossfadeCurve,
+                        onValueSelected = onCrossfadeCurveChange,
+                        valueText = {
+                            when (it) {
+                                CrossfadeCurve.EQUAL_POWER ->
+                                    stringResource(R.string.crossfade_curve_entry_equal_power)
+                                CrossfadeCurve.EASE_OUT_QUAD ->
+                                    stringResource(R.string.crossfade_curve_entry_ease_out_quad)
+                                CrossfadeCurve.EASE_OUT_CUBIC ->
+                                    stringResource(R.string.crossfade_curve_entry_ease_out_cubic)
+                                CrossfadeCurve.SMOOTHSTEP ->
+                                    stringResource(R.string.crossfade_curve_entry_smoothstep)
+                            }
+                        },
+                        isEnabled = crossfadeEnabled,
+                    )
+                }
+
+                item {
+                    CrossfadeCurvePreview(
+                        curve = crossfadeCurve,
+                        durationSeconds = crossfadeDurationSeconds,
+                    )
+                }
+
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.crossfade_manual_skip_title)) },
+                        description = stringResource(R.string.crossfade_manual_skip_description),
+                        icon = { Icon(painterResource(R.drawable.fast_forward), null) },
+                        checked = crossfadeManualSkip,
+                        onCheckedChange = onCrossfadeManualSkipChange,
                         isEnabled = crossfadeEnabled,
                     )
                 }

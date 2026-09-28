@@ -300,9 +300,13 @@ fun Thumbnail(
         }
 
         if (currentItem > currentMediaIndex && canSkipNext) {
-            playerConnection.player.seekToNext()
+            if (!playerConnection.service.manualSeekToIndexWithCrossfade(playerConnection.player.nextMediaItemIndex)) {
+                playerConnection.player.seekToNext()
+            }
         } else if (currentItem < currentMediaIndex && canSkipPrevious) {
-            playerConnection.player.seekToPreviousMediaItem()
+            if (!playerConnection.service.manualSeekToIndexWithCrossfade(playerConnection.player.previousMediaItemIndex)) {
+                playerConnection.player.seekToPreviousMediaItem()
+            }
         }
     }
 

@@ -243,7 +243,7 @@ fun SwipeableMiniPlayerBox(
                                                         android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
                                                     )
                                                 }
-                                                playerConnection.player.seekToNext()
+                                                playerConnection.seekToNext()
                                             }
                                         }
 

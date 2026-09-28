@@ -364,6 +364,7 @@ class PlayerConnection(
             service.requestTogetherControl(dev.citali.lunartune.together.ControlAction.SkipNext)
             return
         }
+        if (service.manualSeekToIndexWithCrossfade(player.nextMediaItemIndex)) return
         player.seekToNext()
         player.prepare()
         player.playWhenReady = true
@@ -375,6 +376,7 @@ class PlayerConnection(
             service.requestTogetherControl(dev.citali.lunartune.together.ControlAction.SkipPrevious)
             return
         }
+        if (service.manualSeekToIndexWithCrossfade(player.previousMediaItemIndex)) return
         player.seekToPrevious()
         player.prepare()
         player.playWhenReady = true

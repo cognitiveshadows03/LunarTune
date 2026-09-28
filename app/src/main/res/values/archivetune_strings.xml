@@ -496,6 +496,15 @@
     <string name="audio_crossfade_seconds">%1$s s</string>
     <string name="crossfade_gapless_title">Skip gapless albums</string>
     <string name="crossfade_gapless_description">Do not crossfade consecutive songs from the same album.</string>
+    <string name="crossfade_manual_skip_title">Crossfade on manual skip</string>
+    <string name="crossfade_manual_skip_description">Also crossfade when you press next/previous, instead of only at the end of a track</string>
+    <string name="crossfade_curve_title">Crossfade curve</string>
+    <string name="crossfade_curve_entry_equal_power">Equal power</string>
+    <string name="crossfade_curve_entry_ease_out_quad">Ease out (quad)</string>
+    <string name="crossfade_curve_entry_ease_out_cubic">Ease out (cubic)</string>
+    <string name="crossfade_curve_entry_smoothstep">Smoothstep</string>
+    <string name="crossfade_curve_preview_outgoing">Outgoing</string>
+    <string name="crossfade_curve_preview_incoming">Incoming</string>
     <string name="player_stream_client">Playback client</string>
     <string name="player_stream_client_desc">Choose stream clients and fallback order</string>
     <string name="stream_sources_title">Stream sources</string>

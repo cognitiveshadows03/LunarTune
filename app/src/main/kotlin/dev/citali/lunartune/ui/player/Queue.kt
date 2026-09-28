@@ -1113,10 +1113,13 @@ fun Queue(
                                                                         ),
                                                                     )
                                                                 } else {
-                                                                    playerConnection.player.seekToDefaultPosition(
-                                                                        window.firstPeriodIndex,
-                                                                    )
-                                                                    playerConnection.player.playWhenReady = true
+                                                                    val tappedIndex = window.firstPeriodIndex
+                                                                    if (!playerConnection.service.manualSeekToIndexWithCrossfade(tappedIndex)) {
+                                                                        playerConnection.player.seekToDefaultPosition(
+                                                                            tappedIndex,
+                                                                        )
+                                                                        playerConnection.player.playWhenReady = true
+                                                                    }
                                                                 }
                                                             }
                                                         }

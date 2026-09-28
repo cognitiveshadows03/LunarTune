@@ -132,6 +132,7 @@ import dev.citali.lunartune.constants.AodModeEnabledKey
 import dev.citali.lunartune.cast.CastMediaItemResolver
 import dev.citali.lunartune.cast.CastPlaybackRepository
 import dev.citali.lunartune.cast.CastPlaybackRepositoryLocator
+import dev.citali.lunartune.cast.CastScreenState
 import dev.citali.lunartune.constants.AudioNormalizationKey
 import dev.citali.lunartune.constants.AudioOffload
 import dev.citali.lunartune.constants.AudioQuality
@@ -140,9 +141,12 @@ import dev.citali.lunartune.constants.AutoDownloadOnLikeKey
 import dev.citali.lunartune.constants.AutoLoadMoreKey
 import dev.citali.lunartune.constants.AutoSkipNextOnErrorKey
 import dev.citali.lunartune.constants.AutoStartOnBluetoothKey
+import dev.citali.lunartune.constants.CrossfadeCurve
+import dev.citali.lunartune.constants.CrossfadeCurveKey
 import dev.citali.lunartune.constants.CrossfadeDurationKey
 import dev.citali.lunartune.constants.CrossfadeEnabledKey
 import dev.citali.lunartune.constants.CrossfadeGaplessKey
+import dev.citali.lunartune.constants.CrossfadeManualSkipKey
 import dev.citali.lunartune.constants.DeviceMutePlaybackRecoveryVolumeKey
 import dev.citali.lunartune.constants.DiscordShowWhenPausedKey
 import dev.citali.lunartune.constants.DiscordTokenKey
@@ -212,6 +216,7 @@ import dev.citali.lunartune.extensions.metadata
 import dev.citali.lunartune.extensions.move
 import dev.citali.lunartune.extensions.setOffloadEnabled
 import dev.citali.lunartune.extensions.toContinuationQueue
+import dev.citali.lunartune.extensions.toEnum
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.extensions.toPersistQueue
 import dev.citali.lunartune.extensions.toQueue
@@ -509,6 +514,8 @@ class MusicService :
     private var crossfadeEnabled = false
     private var crossfadeDurationMs = 0L
     private var crossfadeGapless = false
+    private var crossfadeManualSkip = false
+    private var crossfadeCurve: CrossfadeCurve = CrossfadeCurve.EQUAL_POWER
     private var crossfadeTriggerJob: Job? = null
     private var crossfadeJob: Job? = null
     private var secondaryCrossfadePlayer: ExoPlayer? = null
@@ -537,6 +544,8 @@ class MusicService :
         val enabled: Boolean,
         val durationSeconds: Float,
         val gapless: Boolean,
+        val curve: CrossfadeCurve,
+        val manualSkip: Boolean,
     )
 
     private data class DiscordSyncRequest(
@@ -1369,10 +1378,14 @@ class MusicService :
             val enabled = prefs[CrossfadeEnabledKey] ?: false
             val durationSeconds = prefs[CrossfadeDurationKey] ?: 5f
             val gapless = prefs[CrossfadeGaplessKey] ?: true
+            val curve = prefs[CrossfadeCurveKey].toEnum(CrossfadeCurve.EQUAL_POWER)
+            val manualSkip = prefs[CrossfadeManualSkipKey] ?: false
             CrossfadeConfig(
                 enabled = enabled && togetherState is dev.citali.lunartune.together.TogetherSessionState.Idle,
                 durationSeconds = durationSeconds,
                 gapless = gapless,
+                curve = curve,
+                manualSkip = manualSkip,
             )
         }.distinctUntilChanged()
             .collectLatest(scope) { config ->
@@ -1385,6 +1398,8 @@ class MusicService :
                         .roundToLong()
                         .coerceAtLeast(0L)
                 crossfadeGapless = config.gapless
+                crossfadeCurve = config.curve
+                crossfadeManualSkip = config.manualSkip
                 if (crossfadeEnabled && crossfadeDurationMs > 0L) {
                     scheduleCrossfade()
                 } else {
@@ -2572,9 +2587,10 @@ class MusicService :
         outgoingPlayer: ExoPlayer,
         incomingPlayer: ExoPlayer,
     ) {
-        val gains = equalPowerGains(progress)
-        outgoingPlayer.volume = (outgoingBaseVolume * gains.outgoing).coerceIn(0f, maxSafeGainFactor)
-        incomingPlayer.volume = (incomingBaseVolume * gains.incoming).coerceIn(0f, maxSafeGainFactor)
+        val outgoingGain = crossfadeCurve.fadeOut(progress)
+        val incomingGain = crossfadeCurve.fadeIn(progress)
+        outgoingPlayer.volume = (outgoingBaseVolume * outgoingGain).coerceIn(0f, maxSafeGainFactor)
+        incomingPlayer.volume = (incomingBaseVolume * incomingGain).coerceIn(0f, maxSafeGainFactor)
     }
 
     fun pauseFromSleepTimer() {
@@ -2596,6 +2612,11 @@ class MusicService :
 
         if (isCrossfading) return
         if (!player.playWhenReady || sleepTimer.pauseWhenSongEnd) {
+            localPlayer.pauseAtEndOfMediaItems = false
+            releaseSecondaryCrossfadePlayer()
+            return
+        }
+        if (isCastingForCrossfade()) {
             localPlayer.pauseAtEndOfMediaItems = false
             releaseSecondaryCrossfadePlayer()
             return
@@ -2632,6 +2653,10 @@ class MusicService :
                         return@launch
                     }
                     if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) {
+                        return@launch
+                    }
+                    if (isCastingForCrossfade()) {
+                        releaseSecondaryCrossfadePlayer()
                         return@launch
                     }
 
@@ -2691,6 +2716,43 @@ class MusicService :
         return crossfadeDurationMs
             .coerceAtLeast(MIN_CROSSFADE_DURATION_MS)
             .coerceAtMost(maxDuration)
+    }
+
+    /**
+     * Whether playback is currently routed to a Cast device. Crossfade renders the incoming
+     * track on a local secondary player, so it must stay out of the way while casting.
+     */
+    private fun isCastingForCrossfade(): Boolean {
+        if (!::castPlaybackRepository.isInitialized) return false
+        val screenState = castPlaybackRepository.screenState.value
+        return screenState is CastScreenState.Success && screenState.uiState.isConnected
+    }
+
+    /**
+     * Starts a crossfade to [targetIndex] for an explicit user skip (next/previous buttons,
+     * widget actions, queue taps). Returns true when a fade actually started and the caller
+     * must skip its normal instant seek.
+     */
+    fun manualSeekToIndexWithCrossfade(targetIndex: Int): Boolean {
+        if (!crossfadeEnabled || !crossfadeManualSkip) return false
+        if (!::player.isInitialized) return false
+        if (isCrossfading || crossfadeHandoffInProgress) return false
+        if (sleepTimer.pauseWhenSongEnd) return false
+        if (isCastingForCrossfade()) return false
+        if (targetIndex == C.INDEX_UNSET || targetIndex !in 0 until player.mediaItemCount) return false
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex !in 0 until player.mediaItemCount || targetIndex == currentIndex) return false
+        if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return false
+        val duration = player.duration
+        val fadeMs = effectiveCrossfadeDuration(duration) ?: return false
+        if (duration != C.TIME_UNSET && duration - player.currentPosition < MIN_CROSSFADE_DURATION_MS) return false
+        val currentItem = player.getMediaItemAt(currentIndex)
+        val targetItem = player.getMediaItemAt(targetIndex)
+        if (crossfadeGapless && isGaplessAlbumTransition(currentItem, targetItem)) return false
+        val target = CrossfadeTarget(index = targetIndex, mediaId = targetItem.mediaId)
+        prepareSecondaryCrossfadePlayer(target) ?: return false
+        startCrossfade(target, fadeMs)
+        return true
     }
 
     private fun isGaplessAlbumTransition(
@@ -2842,6 +2904,10 @@ class MusicService :
                         if (player.currentMediaItem?.mediaId != outgoingMediaId) {
                             cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
                             scheduleCrossfade()
+                            return@launch
+                        }
+                        if (isCastingForCrossfade()) {
+                            abortCrossfadeAndResumePrimary("cast_started")
                             return@launch
                         }
 
@@ -8757,18 +8823,22 @@ class MusicService :
             }
 
             "dev.citali.lunartune.WIDGET_SKIP_NEXT" -> {
-                if (player.hasNextMediaItem()) {
-                    player.seekToNext()
-                    player.prepare()
-                    player.play()
+                if (!manualSeekToIndexWithCrossfade(player.nextMediaItemIndex)) {
+                    if (player.hasNextMediaItem()) {
+                        player.seekToNext()
+                        player.prepare()
+                        player.play()
+                    }
                 }
             }
 
             "dev.citali.lunartune.WIDGET_SKIP_PREV" -> {
-                if (player.hasPreviousMediaItem()) {
-                    player.seekToPrevious()
-                    player.prepare()
-                    player.play()
+                if (!manualSeekToIndexWithCrossfade(player.previousMediaItemIndex)) {
+                    if (player.hasPreviousMediaItem()) {
+                        player.seekToPrevious()
+                        player.prepare()
+                        player.play()
+                    }
                 }
             }
         }
