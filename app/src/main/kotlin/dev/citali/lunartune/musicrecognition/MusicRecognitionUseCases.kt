@@ -158,5 +158,15 @@ class IsBackgroundRecognitionEnabledUseCase
                 repository.isBackgroundRecognitionEnabled()
     }
 
+class DeleteRecognitionHistoryUseCase
+    @Inject
+    constructor(
+        private val repository: MusicRecognitionRepository,
+    ) {
+        suspend operator fun invoke(stableKeys: Set<String>) {
+            repository.deleteFromHistory(stableKeys)
+        }
+    }
+
 private const val GMS_DISTRIBUTION = "gms"
 private val isBackgroundRecognitionAvailable = BuildConfig.DISTRIBUTION == GMS_DISTRIBUTION
