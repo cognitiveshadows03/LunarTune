@@ -7,14 +7,19 @@
 
 package dev.citali.lunartune.playback
 
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.glance.GlanceId
+import androidx.glance.appwidget.AppWidgetGlanceId
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.media3.common.Player
@@ -36,15 +41,23 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.extensions.SilentHandler
 import dev.citali.lunartune.utils.reportException
 import dev.citali.lunartune.widget.AlbumArtWidget
+import dev.citali.lunartune.widget.AlbumArtWidgetReceiver
 import dev.citali.lunartune.widget.ListeningInsightsWidget
+import dev.citali.lunartune.widget.ListeningInsightsWidgetReceiver
 import dev.citali.lunartune.widget.LoadWidgetInsightsUseCase
 import dev.citali.lunartune.widget.MusicWidget
 import dev.citali.lunartune.widget.MusicWidgetKeys
+import dev.citali.lunartune.widget.MusicWidgetReceiver
 import dev.citali.lunartune.widget.NowPlayingCardWidget
+import dev.citali.lunartune.widget.NowPlayingCardWidgetReceiver
 import dev.citali.lunartune.widget.PlaybackCapsuleWidget
+import dev.citali.lunartune.widget.PlaybackCapsuleWidgetReceiver
 import dev.citali.lunartune.widget.PlaybackCommandWidget
+import dev.citali.lunartune.widget.PlaybackCommandWidgetReceiver
 import dev.citali.lunartune.widget.PlaybackDeckWidget
+import dev.citali.lunartune.widget.PlaybackDeckWidgetReceiver
 import dev.citali.lunartune.widget.PlaybackSpotlightWidget
+import dev.citali.lunartune.widget.PlaybackSpotlightWidgetReceiver
 import dev.citali.lunartune.widget.WidgetInsightsSnapshot
 import dev.citali.lunartune.widget.toWidgetPreferenceValue
 import java.io.File
@@ -106,7 +119,11 @@ internal class MusicServiceWidgetUpdater(
             )
 
         installedTargets.forEach { target ->
-            updateWidget(target, snapshot)
+            runCatching { updateWidget(target, snapshot) }
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    reportException(error)
+                }
         }
     }
 
@@ -115,13 +132,18 @@ internal class MusicServiceWidgetUpdater(
         progress: Float,
     ) {
         installedTargets.forEach { installedTarget ->
-            installedTarget.ids.forEach { id ->
-                updateAppWidgetState(service, PreferencesGlanceStateDefinition, id) { prefs ->
-                    prefs.toMutableWidgetPreferences().apply {
-                        this[MusicWidgetKeys.PLAYBACK_POSITION] = progress
+            runCatching {
+                installedTarget.ids.forEach { id ->
+                    updateAppWidgetState(service, PreferencesGlanceStateDefinition, id) { prefs ->
+                        prefs.toMutableWidgetPreferences().apply {
+                            this[MusicWidgetKeys.PLAYBACK_POSITION] = progress
+                        }
                     }
+                    installedTarget.target.widget.update(service, id)
                 }
-                installedTarget.target.widget.update(service, id)
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                reportException(error)
             }
         }
     }
@@ -149,11 +171,35 @@ internal class MusicServiceWidgetUpdater(
 
     private suspend fun findInstalledTargets(targets: List<WidgetTarget>): List<InstalledWidgetTarget> =
         targets.mapNotNull { target ->
-            widgetManager
-                .getGlanceIds(target.widgetClass)
-                .takeIf { ids -> ids.isNotEmpty() }
-                ?.let { ids -> InstalledWidgetTarget(target, ids) }
+            val glanceIds = widgetManager.getGlanceIds(target.widgetClass)
+            healOrphanedWidget(target, glanceIds)
+            glanceIds.takeIf { ids -> ids.isNotEmpty() }?.let { ids -> InstalledWidgetTarget(target, ids) }
         }
+
+    /**
+     * Re-registers widget instances the launcher still shows but Glance no longer tracks
+     * (stale placements from before a reinstall, data clear or update). Without this the
+     * updater silently skips them and they sit on the stale placeholder forever.
+     */
+    private fun healOrphanedWidget(target: WidgetTarget, glanceIds: List<GlanceId>) {
+        val installedIds =
+            runCatching {
+                val manager = AppWidgetManager.getInstance(service)
+                manager.getAppWidgetIds(ComponentName(service, target.receiverClass))
+            }.getOrDefault(intArrayOf())
+        if (installedIds.isEmpty()) return
+        val knownIds = glanceIds.filterIsInstance<AppWidgetGlanceId>().map { it.appWidgetId }.toSet()
+        val orphanIds = installedIds.filter { it !in knownIds }.toIntArray()
+        if (orphanIds.isEmpty()) return
+        runCatching {
+            service.sendBroadcast(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
+                    component = ComponentName(service, target.receiverClass)
+                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, orphanIds)
+                },
+            )
+        }
+    }
 
     private fun Preferences.toMutableWidgetPreferences(): MutablePreferences =
         mutablePreferencesOf().also { mutable ->
@@ -320,6 +366,7 @@ internal class MusicServiceWidgetUpdater(
     private data class WidgetTarget(
         val widgetClass: Class<out GlanceAppWidget>,
         val widget: GlanceAppWidget,
+        val receiverClass: Class<out GlanceAppWidgetReceiver>,
         val requiresInsights: Boolean = false,
     )
 
@@ -333,28 +380,29 @@ internal class MusicServiceWidgetUpdater(
 
         val playbackWidgets =
             listOf(
-                WidgetTarget(MusicWidget::class.java, MusicWidget()),
-                WidgetTarget(NowPlayingCardWidget::class.java, NowPlayingCardWidget()),
-                WidgetTarget(PlaybackDeckWidget::class.java, PlaybackDeckWidget()),
-                WidgetTarget(AlbumArtWidget::class.java, AlbumArtWidget()),
-                WidgetTarget(PlaybackCapsuleWidget::class.java, PlaybackCapsuleWidget()),
-                WidgetTarget(PlaybackSpotlightWidget::class.java, PlaybackSpotlightWidget()),
-                WidgetTarget(PlaybackCommandWidget::class.java, PlaybackCommandWidget()),
+                WidgetTarget(MusicWidget::class.java, MusicWidget(), MusicWidgetReceiver::class.java),
+                WidgetTarget(NowPlayingCardWidget::class.java, NowPlayingCardWidget(), NowPlayingCardWidgetReceiver::class.java),
+                WidgetTarget(PlaybackDeckWidget::class.java, PlaybackDeckWidget(), PlaybackDeckWidgetReceiver::class.java),
+                WidgetTarget(AlbumArtWidget::class.java, AlbumArtWidget(), AlbumArtWidgetReceiver::class.java),
+                WidgetTarget(PlaybackCapsuleWidget::class.java, PlaybackCapsuleWidget(), PlaybackCapsuleWidgetReceiver::class.java),
+                WidgetTarget(PlaybackSpotlightWidget::class.java, PlaybackSpotlightWidget(), PlaybackSpotlightWidgetReceiver::class.java),
+                WidgetTarget(PlaybackCommandWidget::class.java, PlaybackCommandWidget(), PlaybackCommandWidgetReceiver::class.java),
                 WidgetTarget(
                     widgetClass = ListeningInsightsWidget::class.java,
                     widget = ListeningInsightsWidget(),
+                    receiverClass = ListeningInsightsWidgetReceiver::class.java,
                     requiresInsights = true,
                 ),
             )
 
         val progressWidgets =
             listOf(
-                WidgetTarget(MusicWidget::class.java, MusicWidget()),
-                WidgetTarget(NowPlayingCardWidget::class.java, NowPlayingCardWidget()),
-                WidgetTarget(PlaybackDeckWidget::class.java, PlaybackDeckWidget()),
-                WidgetTarget(PlaybackCapsuleWidget::class.java, PlaybackCapsuleWidget()),
-                WidgetTarget(PlaybackSpotlightWidget::class.java, PlaybackSpotlightWidget()),
-                WidgetTarget(PlaybackCommandWidget::class.java, PlaybackCommandWidget()),
+                WidgetTarget(MusicWidget::class.java, MusicWidget(), MusicWidgetReceiver::class.java),
+                WidgetTarget(NowPlayingCardWidget::class.java, NowPlayingCardWidget(), NowPlayingCardWidgetReceiver::class.java),
+                WidgetTarget(PlaybackDeckWidget::class.java, PlaybackDeckWidget(), PlaybackDeckWidgetReceiver::class.java),
+                WidgetTarget(PlaybackCapsuleWidget::class.java, PlaybackCapsuleWidget(), PlaybackCapsuleWidgetReceiver::class.java),
+                WidgetTarget(PlaybackSpotlightWidget::class.java, PlaybackSpotlightWidget(), PlaybackSpotlightWidgetReceiver::class.java),
+                WidgetTarget(PlaybackCommandWidget::class.java, PlaybackCommandWidget(), PlaybackCommandWidgetReceiver::class.java),
             )
     }
 }
