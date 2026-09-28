@@ -19,13 +19,12 @@ import org.schabi.newpipe.extractor.stream.DeliveryMethod
 import timber.log.Timber
 
 /**
- * Last-resort download resolver backed by NewPipe Extractor.
+ * Primary download resolver backed by NewPipe Extractor.
  *
- * The primary InnerTube pipeline cannot decipher signature-ciphered formats and does not
- * descramble YouTube's throttling parameter, so songs that only expose ciphered formats fail
- * downloads at 0%. NewPipe Extractor ships its own Java decipher and returns descrambled,
+ * NewPipe Extractor ships an upstream-maintained Java decipher and returns descrambled,
  * unthrottled progressive URLs, which are mapped onto [YTPlayerUtils.PlaybackData] so the
- * regular ExoPlayer download stack can consume them unchanged.
+ * regular ExoPlayer download stack can consume them unchanged. InnerTube remains the
+ * fallback, covering content that needs login context.
  */
 internal object NewPipeStreamResolver {
     private const val TAG = "NewPipeFallback"

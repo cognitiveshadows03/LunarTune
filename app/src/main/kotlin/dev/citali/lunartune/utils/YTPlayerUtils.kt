@@ -772,6 +772,17 @@ object YTPlayerUtils {
     ): Result<PlaybackData> =
         runCatching {
             Timber.tag(logTag).i("Fetching download response for videoId: $videoId, playlistId: $playlistId")
+
+            // NewPipe-first: upstream-maintained decipher with unthrottled URLs.
+            // Falls through to InnerTube (which carries login context) on failure.
+            val newPipeResult = NewPipeStreamResolver.resolve(videoId, audioQuality)
+            if (newPipeResult.isSuccess) return@runCatching newPipeResult.getOrThrow()
+            Timber.tag(logTag).w(
+                newPipeResult.exceptionOrNull(),
+                "NewPipe primary resolution failed for %s, falling back to InnerTube clients",
+                videoId,
+            )
+
             var lastError: Throwable? = null
 
             val downloadClients =
@@ -799,18 +810,6 @@ object YTPlayerUtils {
                     videoId,
                 )
             }
-
-            Timber.tag(logTag).i(
-                "All InnerTube clients failed for %s, trying NewPipe fallback resolver",
-                videoId,
-            )
-            val fallbackResult = NewPipeStreamResolver.resolve(videoId, audioQuality)
-            if (fallbackResult.isSuccess) return@runCatching fallbackResult.getOrThrow()
-            Timber.tag(logTag).w(
-                fallbackResult.exceptionOrNull(),
-                "NewPipe fallback resolver also failed for %s",
-                videoId,
-            )
 
             throw lastError ?: IllegalStateException("Failed to resolve download stream for $videoId")
         }

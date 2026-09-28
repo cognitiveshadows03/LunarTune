@@ -20,8 +20,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * OkHttp-backed [Downloader] for NewPipe Extractor. Only used by the download fallback path,
- * so it stays out of the way of normal playback and downloads.
+ * OkHttp-backed [Downloader] for NewPipe Extractor. Only used by the download resolution path,
+ * so it stays out of the way of normal playback.
  */
 internal class NewPipeDownloader : Downloader() {
     private val client: OkHttpClient =
@@ -75,7 +75,7 @@ internal class NewPipeDownloader : Downloader() {
 }
 
 /**
- * Initializes NewPipe Extractor exactly once, lazily on first fallback use.
+ * Initializes NewPipe Extractor exactly once, lazily on first download resolution.
  */
 internal object NewPipeBootstrap {
     private const val TAG = "NewPipeFallback"
