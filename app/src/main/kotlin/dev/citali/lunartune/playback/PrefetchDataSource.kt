@@ -159,10 +159,10 @@ class PrefetchDataSource(
         }
         // Identity encoding keeps Content-Length exact so short reads are detectable.
         requestBuilder.header("Accept-Encoding", "identity")
-        val rangeRequested = position > 0 || dataSpec.length != C.LENGTH_UNSET
+        val rangeRequested = position > 0 || dataSpec.length != C.LENGTH_UNSET.toLong()
         if (rangeRequested) {
             val rangeEnd =
-                if (dataSpec.length == C.LENGTH_UNSET) {
+                if (dataSpec.length == C.LENGTH_UNSET.toLong()) {
                     ""
                 } else {
                     (position + dataSpec.length - 1).toString()
@@ -226,7 +226,7 @@ class PrefetchDataSource(
             if (bytesToSkip > 0) {
                 throw IOException("Server ignored Range request and sent fewer than $position bytes")
             }
-            if (expectedBytes != C.LENGTH_UNSET && written != expectedBytes) {
+            if (expectedBytes != C.LENGTH_UNSET.toLong() && written != expectedBytes) {
                 throw IOException("Short prefetch: got $written of $expectedBytes bytes; retry will resume the tail")
             }
             Timber.d("Prefetched %d bytes (resume=%b) for %s", written, position > 0, dataSpec.key)
@@ -249,7 +249,7 @@ class PrefetchDataSource(
                     contentLength
                 }
             } else {
-                C.LENGTH_UNSET
+                C.LENGTH_UNSET.toLong()
             }
 
     /** Parses `bytes <first>-<last>/<total|*>` into `<last> - <first> + 1`, or null. */
