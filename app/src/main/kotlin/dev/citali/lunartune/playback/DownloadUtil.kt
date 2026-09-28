@@ -17,7 +17,6 @@ import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.offline.DefaultDownloadIndex
 import androidx.media3.exoplayer.offline.DefaultDownloaderFactory
 import androidx.media3.exoplayer.offline.Download
@@ -28,6 +27,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import dev.citali.lunartune.constants.AudioQuality
 import dev.citali.lunartune.constants.AudioQualityKey
 import dev.citali.lunartune.constants.PlayerStreamClient
@@ -57,6 +58,7 @@ import dev.citali.lunartune.utils.retryWithoutPlaybackLoginContext
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import timber.log.Timber
+import java.io.IOException
 import java.time.LocalDateTime
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
@@ -143,7 +145,9 @@ class DownloadUtil
 
         private val dataSourceFactory =
             ResolvingDataSource.Factory(
-                OkHttpDataSource.Factory(mediaOkHttpClient),
+                // Eager whole-file prefetch (4nx3b pattern on our OkHttp stack) instead of
+                // ExoPlayer's throttled read loop: full connection speed, then local serve.
+                PrefetchDataSource.Factory(context, mediaOkHttpClient),
             ) { dataSpec ->
                 val mediaId = dataSpec.key ?: error("No media id")
                 val lowDataModeActive = context.isLowDataModeActive()
@@ -160,17 +164,27 @@ class DownloadUtil
                         return@Factory dataSpec.withUri(it.url.toUri())
                     }
                 val playbackData =
-                    runBlocking(Dispatchers.IO) {
-                        context.retryWithoutPlaybackLoginContext {
-                            YTPlayerUtils.playerResponseForDownload(
-                                mediaId,
-                                audioQuality = requestedAudioQuality,
-                                connectivityManager = connectivityManager,
-                                networkMetered = lowDataModeActive,
-                                preferredStreamClient = preferredStreamClient,
-                            )
-                        }
-                    }.getOrThrow()
+                    try {
+                        runBlocking(Dispatchers.IO) {
+                            withTimeout(DOWNLOAD_RESOLVE_TIMEOUT_MS) {
+                                context.retryWithoutPlaybackLoginContext {
+                                    YTPlayerUtils.playerResponseForDownload(
+                                        mediaId,
+                                        audioQuality = requestedAudioQuality,
+                                        connectivityManager = connectivityManager,
+                                        networkMetered = lowDataModeActive,
+                                        preferredStreamClient = preferredStreamClient,
+                                    )
+                                }
+                            }
+                        }.getOrThrow()
+                    } catch (timeout: TimeoutCancellationException) {
+                        throw IOException(
+                            "Download stream resolution timed out after " +
+                                "${DOWNLOAD_RESOLVE_TIMEOUT_MS / 1000}s for $mediaId",
+                            timeout,
+                        )
+                    }
                 persistPlaybackMetadata(mediaId, playbackData)
 
                 val streamUrl = playbackData.streamUrl
@@ -199,7 +213,8 @@ class DownloadUtil
                         .setCacheWriteDataSinkFactory(
                             CacheDataSink.Factory()
                                 .setCache(downloadCache)
-                                .setBufferSize(DOWNLOAD_WRITE_BUFFER_SIZE),
+                                .setBufferSize(DOWNLOAD_WRITE_BUFFER_SIZE)
+                                .setFragmentSize(DOWNLOAD_FRAGMENT_SIZE),
                         ).setFlags(FLAG_IGNORE_CACHE_ON_ERROR),
                     downloadExecutor,
                 ),
@@ -452,16 +467,22 @@ class DownloadUtil
         }
 
         companion object {
-            private const val MAX_PARALLEL_DOWNLOADS = 8
-            private const val MAX_IDLE_DOWNLOAD_CONNECTIONS = 16
-            private const val MAX_DOWNLOAD_HTTP_REQUESTS = 12
-            private const val MAX_DOWNLOAD_HTTP_REQUESTS_PER_HOST = 8
+            private const val MAX_PARALLEL_DOWNLOADS = 12
+            private const val MAX_IDLE_DOWNLOAD_CONNECTIONS = 24
+            private const val MAX_DOWNLOAD_HTTP_REQUESTS = 32
+            private const val MAX_DOWNLOAD_HTTP_REQUESTS_PER_HOST = 16
             private const val MAX_AUTO_RETRY_ATTEMPTS = 3
             private const val AUTO_RETRY_COOLDOWN_MS = 3_000L
-            private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 90L
+            private const val DOWNLOAD_RESOLVE_TIMEOUT_MS = 120_000L
+            // One call stays open per prefetched file, so the per-read timeout must stay
+            // well above slow-tail reads; liveness is governed by the fetch deadline.
+            private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 300L
             private const val DOWNLOAD_PROGRESS_REFRESH_INTERVAL_MS = 1_000L
-            private const val DOWNLOAD_CONNECTION_KEEP_ALIVE_MINUTES = 5L
-            private const val DOWNLOAD_WRITE_BUFFER_SIZE = 512 * 1024
+            private const val DOWNLOAD_CONNECTION_KEEP_ALIVE_MINUTES = 10L
+            // 4 MB batches saturate local storage writes; 16 MB x 12 parallel (4nx3b
+            // verbatim) would transiently hold ~192 MB of heap on low-RAM devices.
+            private const val DOWNLOAD_WRITE_BUFFER_SIZE = 4 * 1024 * 1024
+            private const val DOWNLOAD_FRAGMENT_SIZE = 128L * 1024 * 1024
             private val STREAM_REFRESH_RESPONSE_CODES = setOf(403, 404, 410, 416)
         }
     }
