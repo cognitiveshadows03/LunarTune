@@ -10,9 +10,15 @@ def get_git_commit_info():
     commit_hash_short = subprocess.check_output(['git', 'log', '-1', '--pretty=format:%h']).decode('utf-8')
     return commit_author, commit_message, commit_hash, commit_hash_short
 
-# Telegram API credentials
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
+# Telegram API credentials (from https://my.telegram.org -> API development)
+api_id_raw = (os.getenv("API_ID") or "").strip()
+api_hash = (os.getenv("API_HASH") or "").strip()
+if not api_id_raw or not api_hash:
+    print("ERROR: API_ID/API_HASH is empty. Add the TELEGRAM_API_ID and TELEGRAM_API_HASH")
+    print("repo secrets (Settings -> Secrets and variables -> Actions). Get the values at")
+    print("https://my.telegram.org under API development (Log in -> API development tools).")
+    raise SystemExit(2)
+api_id = int(api_id_raw)
 bot_token = os.getenv("BOT_TOKEN")
 group_id = int(os.getenv("CHAT_ID"))
 

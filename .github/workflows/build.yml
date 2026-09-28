@@ -294,7 +294,6 @@ jobs:
           APK_PATH: app/build/outputs/apk/download/*.apk
         run: |
           python ./.github/workflows/deploy_artifacts.py
-        continue-on-error: true
 
   notifyTelegramLogs:
     name: Send GitHub logs to Telegram
