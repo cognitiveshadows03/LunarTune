@@ -22,6 +22,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +36,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AiApiKeyKey
 import dev.citali.lunartune.constants.AiApiValidationStatus
@@ -205,6 +209,9 @@ class LibrarySongsViewModel
         }
     }
 
+private const val LIBRARY_BACKFILL_MAX_ITEMS = 25
+private const val LIBRARY_BACKFILL_PARALLELISM = 4
+
 @HiltViewModel
 class LibraryArtistsViewModel
     @Inject
@@ -254,20 +261,32 @@ class LibraryArtistsViewModel
         init {
             viewModelScope.launch(Dispatchers.IO) {
                 allArtists.collect { artists ->
-                    artists
-                        .map { it.artist }
-                        .filter {
-                            it.thumbnailUrl == null || Duration.between(
-                                it.lastUpdateTime,
-                                LocalDateTime.now(),
-                            ) > Duration.ofDays(10)
-                        }.forEach { artist ->
-                            YouTube.artist(artist.id).onSuccess { artistPage ->
-                                database.query {
-                                    update(artist, artistPage)
+                    // Bounded backfill: cap each pass and fetch with limited parallelism so a
+                    // large stale library can't saturate the network and starve the UI.
+                    val staleArtists =
+                        artists
+                            .map { it.artist }
+                            .filter {
+                                it.thumbnailUrl == null || Duration.between(
+                                    it.lastUpdateTime,
+                                    LocalDateTime.now(),
+                                ) > Duration.ofDays(10)
+                            }.take(LIBRARY_BACKFILL_MAX_ITEMS)
+                    if (staleArtists.isEmpty()) return@collect
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(LIBRARY_BACKFILL_PARALLELISM)
+                        staleArtists.map { artist ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube.artist(artist.id).onSuccess { artistPage ->
+                                        database.query {
+                                            update(artist, artistPage)
+                                        }
+                                    }
                                 }
                             }
-                        }
+                        }.joinAll()
+                    }
                 }
             }
         }
@@ -376,25 +395,37 @@ class LibraryAlbumsViewModel
         init {
             viewModelScope.launch(Dispatchers.IO) {
                 allAlbums.collect { albums ->
-                    albums
-                        .filter {
-                            it.album.songCount == 0
-                        }.forEach { album ->
-                            YouTube
-                                .album(album.id)
-                                .onSuccess { albumPage ->
-                                    database.query {
-                                        update(album.album, albumPage, album.artists)
-                                    }
-                                }.onFailure {
-                                    reportException(it)
-                                    if (it.message?.contains("NOT_FOUND") == true) {
-                                        database.query {
-                                            delete(album.album)
+                    // Bounded backfill: cap each pass and fetch with limited parallelism so a
+                    // large stale library can't saturate the network and starve the UI.
+                    val staleAlbums =
+                        albums
+                            .filter {
+                                it.album.songCount == 0
+                            }.take(LIBRARY_BACKFILL_MAX_ITEMS)
+                    if (staleAlbums.isEmpty()) return@collect
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(LIBRARY_BACKFILL_PARALLELISM)
+                        staleAlbums.map { album ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube
+                                        .album(album.id)
+                                        .onSuccess { albumPage ->
+                                            database.query {
+                                                update(album.album, albumPage, album.artists)
+                                            }
+                                        }.onFailure {
+                                            reportException(it)
+                                            if (it.message?.contains("NOT_FOUND") == true) {
+                                                database.query {
+                                                    delete(album.album)
+                                                }
+                                            }
                                         }
-                                    }
                                 }
-                        }
+                            }
+                        }.joinAll()
+                    }
                 }
             }
         }

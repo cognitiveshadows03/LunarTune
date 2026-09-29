@@ -70,6 +70,7 @@ internal class MusicServiceWidgetUpdater(
     private val widgetManager = GlanceAppWidgetManager(service)
     private var stateJob: Job? = null
     private var progressJob: Job? = null
+    private var artJob: Job? = null
 
     fun update() {
         stateJob?.cancel()
@@ -103,20 +104,57 @@ internal class MusicServiceWidgetUpdater(
 
         val mediaItem = player.currentMediaItem
         val meta = mediaItem?.mediaMetadata
-        val artFile = meta?.artworkUri?.let { cacheAlbumArt(it) }
-        val dominantColor = artFile?.let { extractDominantColor(it) }
-        val snapshot =
+        val artworkUri = meta?.artworkUri
+        val songKey = mediaItem?.mediaId ?: meta?.title?.toString()
+
+        // Phase 1: push text + playback state immediately. Only already-cached art is
+        // attached here so a cold album-art fetch can never delay the first update.
+        val cachedArt = artworkUri?.let { peekCachedArt(it) }
+        pushSnapshot(
+            installedTargets,
             WidgetSnapshot(
                 title = meta?.title?.toString() ?: service.getString(R.string.no_track_playing),
                 artist = meta?.artist?.toString().orEmpty(),
                 isPlaying = player.isPlaying,
                 isAvailable = mediaItem != null,
                 playbackPosition = player.playbackProgress(),
-                artPath = artFile?.absolutePath,
-                dominantColor = dominantColor,
+                artPath = cachedArt?.absolutePath,
+                dominantColor = cachedArt?.let { extractDominantColor(it) },
                 insights = WidgetInsightsSnapshot.Empty,
-            )
+            ),
+        )
 
+        // Phase 2: fetch missing art in the background, then re-push with fresh player
+        // state — but only if the player is still on the same song, otherwise a newer
+        // pushState already owns the widget.
+        artJob?.cancel()
+        if (artworkUri == null || cachedArt != null) return
+        artJob =
+            scope.launch(SilentHandler) {
+                val artFile = cacheAlbumArt(artworkUri) ?: return@launch
+                val current = player.currentMediaItem
+                if ((current?.mediaId ?: current?.mediaMetadata?.title?.toString()) != songKey) return@launch
+                val freshMeta = current?.mediaMetadata
+                pushSnapshot(
+                    installedTargets,
+                    WidgetSnapshot(
+                        title = freshMeta?.title?.toString() ?: service.getString(R.string.no_track_playing),
+                        artist = freshMeta?.artist?.toString().orEmpty(),
+                        isPlaying = player.isPlaying,
+                        isAvailable = true,
+                        playbackPosition = player.playbackProgress(),
+                        artPath = artFile.absolutePath,
+                        dominantColor = extractDominantColor(artFile),
+                        insights = WidgetInsightsSnapshot.Empty,
+                    ),
+                )
+            }
+    }
+
+    private suspend fun pushSnapshot(
+        installedTargets: List<InstalledWidgetTarget>,
+        snapshot: WidgetSnapshot,
+    ) {
         installedTargets.forEach { target ->
             runCatching { updateWidget(target, snapshot) }
                 .onFailure { error ->
@@ -240,7 +278,9 @@ internal class MusicServiceWidgetUpdater(
             remove(MusicWidgetKeys.ART_PATH)
         }
 
-        val dominantColor = snapshot.dominantColor
+        // Keep the previous tint when the snapshot has none (phase-1 push before art
+        // arrives): a slightly stale tint beats flashing to the default every track.
+        val dominantColor = snapshot.dominantColor ?: this[MusicWidgetKeys.DOMINANT_COLOR]
         if (dominantColor != null) {
             this[MusicWidgetKeys.DOMINANT_COLOR] = dominantColor
         } else {
@@ -294,9 +334,16 @@ internal class MusicServiceWidgetUpdater(
             WidgetInsightsSnapshot.Empty
         }
 
+    private fun artCacheFile(uri: Uri): File =
+        File(service.cacheDir, "widget_art_${Integer.toHexString(uri.toString().hashCode())}.jpg")
+
+    /** Non-suspending cache probe for the phase-1 widget push: never touches the network. */
+    private fun peekCachedArt(uri: Uri): File? =
+        artCacheFile(uri).takeIf { it.isFile && it.length() > 0L }
+
     private suspend fun cacheAlbumArt(uri: Uri): File? =
         withContext(Dispatchers.IO) {
-            val dest = File(service.cacheDir, "widget_art_${Integer.toHexString(uri.toString().hashCode())}.jpg")
+            val dest = artCacheFile(uri)
             if (dest.isFile && dest.length() > 0L) return@withContext dest
 
             if (uri.scheme == "content" || uri.scheme == "file") {

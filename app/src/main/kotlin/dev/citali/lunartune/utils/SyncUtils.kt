@@ -563,21 +563,42 @@ class SyncUtils
                                 dbWriteSemaphore.withPermit {
                                     if (!isSyncStillEnabled(gen)) return@withPermit
                                     val dbAlbum = database.album(album.id).firstOrNull()
+                                    if (dbAlbum != null) {
+                                        // Already in library: refresh cheap metadata from the library
+                                        // entry and ensure the liked flag, without the expensive full
+                                        // album-page fetch below (that kept refresh() spinning for minutes).
+                                        val existing = dbAlbum.album
+                                        val metadataChanged =
+                                            existing.title != album.title ||
+                                                existing.thumbnailUrl != album.thumbnail ||
+                                                (album.year != null && existing.year != album.year) ||
+                                                existing.playlistId != album.playlistId
+                                        if (metadataChanged || existing.bookmarkedAt == null) {
+                                            database.update(
+                                                existing.copy(
+                                                    title = album.title,
+                                                    thumbnailUrl = album.thumbnail,
+                                                    year = album.year ?: existing.year,
+                                                    playlistId = album.playlistId,
+                                                    bookmarkedAt = existing.bookmarkedAt ?: LocalDateTime.now(),
+                                                    lastUpdateTime = LocalDateTime.now(),
+                                                ),
+                                            )
+                                        }
+                                        return@withPermit
+                                    }
+                                    // New album: the full page fetch is required to insert it with songs.
                                     YouTube
                                         .album(album.browseId)
                                         .onSuccess { albumPage ->
                                             if (!isSyncStillEnabled(gen)) return@onSuccess
-                                            if (dbAlbum == null) {
-                                                try {
-                                                    database.insert(albumPage)
-                                                    database.album(album.id).firstOrNull()?.let { newDbAlbum ->
-                                                        database.update(newDbAlbum.album.localToggleLike())
-                                                    }
-                                                } catch (e: Exception) {
-                                                    Timber.w("syncLikedAlbums: Failed to insert album ${album.id}", e)
+                                            try {
+                                                database.insert(albumPage)
+                                                database.album(album.id).firstOrNull()?.let { newDbAlbum ->
+                                                    database.update(newDbAlbum.album.localToggleLike())
                                                 }
-                                            } else if (dbAlbum.album.bookmarkedAt == null) {
-                                                database.update(dbAlbum.album.localToggleLike())
+                                            } catch (e: Exception) {
+                                                Timber.w("syncLikedAlbums: Failed to insert album ${album.id}", e)
                                             }
                                         }.onFailure { e ->
                                             Timber.w("syncLikedAlbums: Failed to fetch album ${album.id}", e)
