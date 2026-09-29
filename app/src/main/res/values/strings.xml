@@ -537,6 +537,11 @@
     <string name="dns_over_https_desc">Use DNS over HTTPS (DoH) to resolve hostnames</string>
     <string name="dns_provider">DNS Provider</string>
     <string name="dns_custom_url">Custom DNS DoH URL</string>
+    <string name="network_ip_version">Network IP version</string>
+    <string name="network_ip_version_desc">Force IPv4 or IPv6 for media downloads and streaming. If downloads are slow, try IPv4.</string>
+    <string name="ip_version_auto">Automatic</string>
+    <string name="ip_version_ipv4">Forced IPv4</string>
+    <string name="ip_version_ipv6">Forced IPv6</string>
     <string name="proxy_type">Proxy type</string>
     <string name="proxy_host">Proxy host (IP)</string>
     <string name="proxy_port">Proxy port</string>

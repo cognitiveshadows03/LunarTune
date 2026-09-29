@@ -257,6 +257,7 @@ import dev.citali.lunartune.utils.preference
 import dev.citali.lunartune.utils.enumPreference
 import dev.citali.lunartune.utils.get
 import dev.citali.lunartune.utils.getAsync
+import dev.citali.lunartune.utils.ipVersionDns
 import dev.citali.lunartune.utils.isLocalMediaId
 import dev.citali.lunartune.utils.isLowDataModeActive
 import dev.citali.lunartune.utils.reportException
@@ -395,6 +396,7 @@ class MusicService :
         OkHttpClient
             .Builder()
             .proxy(YouTube.streamOkHttpProxy)
+            .dns(ipVersionDns(this@MusicService))
             .followRedirects(true)
             .followSslRedirects(true)
             .connectTimeout(30, TimeUnit.SECONDS)

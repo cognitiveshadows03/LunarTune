@@ -398,6 +398,7 @@ fun buildSettingsGroups(
                 SettingsChild("DNS over HTTPS", "dns_over_https", listOf("dns", "dns over https", "doh", "encrypted dns", "secure dns")),
                 SettingsChild("DNS provider", "dns_provider", listOf("dns provider", "dns server", "dns resolver", "dns service")),
                 SettingsChild("DNS custom URL", "dns_custom_url", listOf("dns custom url", "custom dns", "dns endpoint", "dns url")),
+                SettingsChild("IP version", "ip_version", listOf("ip version", "ipv4", "ipv6", "ip", "internet protocol", "slow download", "download slow", "download speed")),
                 SettingsChild("IP rotation", "ip_rotation", listOf("ip rotation", "rotate ip", "ip pool", "ip cycling")),
                 SettingsChild("Enable tor", "enable_tor", listOf("tor", "onion", "anonymous", "onion routing", "tor network")),
                 SettingsChild("Download speed limit", "download_speed_limit", listOf("speed", "limit", "throttle", "bandwidth", "download speed", "download limit", "speed cap")),

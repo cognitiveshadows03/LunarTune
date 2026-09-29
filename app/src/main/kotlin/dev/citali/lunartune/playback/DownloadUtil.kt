@@ -55,6 +55,7 @@ import dev.citali.lunartune.utils.NewPipeStreamResolver
 import dev.citali.lunartune.utils.StreamClientUtils
 import dev.citali.lunartune.utils.YTPlayerUtils
 import dev.citali.lunartune.utils.enumPreference
+import dev.citali.lunartune.utils.ipVersionDns
 import dev.citali.lunartune.utils.isLowDataModeActive
 import dev.citali.lunartune.utils.retryWithoutPlaybackLoginContext
 import okhttp3.ConnectionPool
@@ -99,6 +100,7 @@ class DownloadUtil
             OkHttpClient
                 .Builder()
                 .proxy(YouTube.streamOkHttpProxy)
+                .dns(ipVersionDns(context))
                 .followRedirects(true)
                 .followSslRedirects(true)
                 .retryOnConnectionFailure(true)

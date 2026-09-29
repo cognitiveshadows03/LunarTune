@@ -220,6 +220,14 @@ val EnableDnsOverHttpsKey = booleanPreferencesKey("enableDnsOverHttps")
 val DnsOverHttpsProviderKey = stringPreferencesKey("dnsOverHttpsProvider")
 val StreamBypassProxyKey = booleanPreferencesKey("streamBypassProxy")
 val IpRotationEnabledKey = booleanPreferencesKey("ipRotationEnabled")
+val IpVersionKey = stringPreferencesKey("ipVersion")
+
+enum class IpVersion {
+    AUTO,
+    IPV4,
+    IPV6,
+}
+
 val YtmSyncKey = booleanPreferencesKey("ytmSync")
 val ForceSyncOnAccountSwitchKey = booleanPreferencesKey("forceSyncOnAccountSwitch")
 val SelectedYtmPlaylistsKey = stringPreferencesKey("ytm_selected_playlists")

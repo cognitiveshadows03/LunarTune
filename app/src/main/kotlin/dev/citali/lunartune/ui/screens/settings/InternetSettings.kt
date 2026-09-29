@@ -154,6 +154,7 @@ fun InternetSettings(navController: NavController) {
     val (proxyUsername, onProxyUsernameChange) = rememberPreference(key = ProxyUsernameKey, defaultValue = "")
     val (proxyPassword, onProxyPasswordChange) = rememberPreference(key = ProxyPasswordKey, defaultValue = "")
     val (streamBypassProxy, onStreamBypassProxyChange) = rememberPreference(key = StreamBypassProxyKey, defaultValue = false)
+    val (ipVersion, onIpVersionChange) = rememberEnumPreference(key = IpVersionKey, defaultValue = IpVersion.AUTO)
 
     val (ipRotationEnabled, onIpRotationEnabledChange) = rememberPreference(key = IpRotationEnabledKey, defaultValue = false)
     var loadingIpRotation by remember { mutableStateOf(false) }
@@ -229,6 +230,25 @@ fun InternetSettings(navController: NavController) {
                         title = { Text(stringResource(R.string.dns_custom_url)) },
                         value = customDnsUrl,
                         onValueChange = onCustomDnsUrlChange,
+                    )
+                }
+            }
+
+            PreferenceGroup(title = stringResource(R.string.network_ip_version)) {
+                item {
+                    EnumListPreference(
+                        title = { Text(stringResource(R.string.network_ip_version)) },
+                        description = stringResource(R.string.network_ip_version_desc),
+                        icon = { Icon(painterResource(R.drawable.language), null) },
+                        selectedValue = ipVersion,
+                        onValueSelected = onIpVersionChange,
+                        valueText = {
+                            when (it) {
+                                IpVersion.AUTO -> stringResource(R.string.ip_version_auto)
+                                IpVersion.IPV4 -> stringResource(R.string.ip_version_ipv4)
+                                IpVersion.IPV6 -> stringResource(R.string.ip_version_ipv6)
+                            }
+                        },
                     )
                 }
             }

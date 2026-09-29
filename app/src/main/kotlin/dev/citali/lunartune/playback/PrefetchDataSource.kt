@@ -169,16 +169,17 @@ class PrefetchDataSource(
         }
         // Identity encoding keeps Content-Length exact so short reads are detectable.
         requestBuilder.header("Accept-Encoding", "identity")
-        val rangeRequested = position > 0 || dataSpec.length != C.LENGTH_UNSET.toLong()
-        if (rangeRequested) {
-            val rangeEnd =
-                if (dataSpec.length == C.LENGTH_UNSET.toLong()) {
-                    ""
-                } else {
-                    (position + dataSpec.length - 1).toString()
-                }
-            requestBuilder.header("Range", "bytes=$position-$rangeEnd")
-        }
+        // Always fetch with an explicit Range, even for full-file downloads
+        // (bytes=0-): YouTube throttles plain progressive GETs, while any range
+        // request (this header, or vivi's equivalent &range= URL param) runs at
+        // full connection speed.
+        val rangeEnd =
+            if (dataSpec.length == C.LENGTH_UNSET.toLong()) {
+                ""
+            } else {
+                (position + dataSpec.length - 1).toString()
+            }
+        requestBuilder.header("Range", "bytes=$position-$rangeEnd")
 
         httpClient.newCall(requestBuilder.build()).execute().use { response ->
             if (!response.isSuccessful) {
@@ -216,7 +217,7 @@ class PrefetchDataSource(
             }
             // A server that ignores Range answers 200 with the full file: skip the bytes
             // that precede the requested range instead of serving the wrong window.
-            var bytesToSkip = if (rangeRequested && !rangeHonored && position > 0) position else 0L
+            var bytesToSkip = if (!rangeHonored && position > 0) position else 0L
             var written = 0L
             val startMs = SystemClock.elapsedRealtime()
             body.byteStream().use { input ->
