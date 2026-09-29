@@ -10,6 +10,7 @@ package dev.citali.lunartune.utils
 import android.content.Context
 import dev.citali.lunartune.constants.IpVersion
 import dev.citali.lunartune.constants.IpVersionKey
+import dev.citali.lunartune.extensions.toEnum
 import okhttp3.Dns
 import java.net.Inet4Address
 import java.net.Inet6Address
