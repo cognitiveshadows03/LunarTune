@@ -2112,7 +2112,6 @@ fun V8PlayerControlsContent(
     onSliderValueChange: (Long) -> Unit,
     onSliderValueChangeFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
-    onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
 ) {
@@ -2211,7 +2210,6 @@ fun V8PlayerControlsContent(
                 onToggleLike = onToggleLike,
                 onTitleClick = onTitleClick,
                 onArtistClick = onArtistClick,
-                onQueueClick = onQueueClick,
             )
 
             Spacer(Modifier.height(contentGap))
@@ -2280,7 +2278,6 @@ fun V8PlayerContent(
     onSliderValueChange: (Long) -> Unit,
     onSliderValueChangeFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
-    onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
 ) {
@@ -2355,7 +2352,6 @@ fun V8PlayerContent(
             onSliderValueChange = onSliderValueChange,
             onSliderValueChangeFinished = onSliderValueChangeFinished,
             onVolumeChange = onVolumeChange,
-            onQueueClick = onQueueClick,
             modifier = modifier,
         )
     } else {
@@ -2397,7 +2393,6 @@ fun V8PlayerContent(
             onSliderValueChange = onSliderValueChange,
             onSliderValueChangeFinished = onSliderValueChangeFinished,
             onVolumeChange = onVolumeChange,
-            onQueueClick = onQueueClick,
             modifier = modifier,
         )
     }
@@ -2433,7 +2428,6 @@ private fun V8PortraitContent(
     onSliderValueChange: (Long) -> Unit,
     onSliderValueChangeFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
-    onQueueClick: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -2524,7 +2518,6 @@ private fun V8PortraitContent(
                 onToggleLike = onToggleLike,
                 onTitleClick = onTitleClick,
                 onArtistClick = onArtistClick,
-                onQueueClick = onQueueClick,
             )
 
             Spacer(Modifier.height(controlsGap))
@@ -2599,7 +2592,6 @@ private fun V8LandscapeContent(
     onSliderValueChange: (Long) -> Unit,
     onSliderValueChangeFinished: () -> Unit,
     onVolumeChange: (Float) -> Unit,
-    onQueueClick: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -2655,7 +2647,6 @@ private fun V8LandscapeContent(
                     onToggleLike = onToggleLike,
                     onTitleClick = onTitleClick,
                     onArtistClick = onArtistClick,
-                    onQueueClick = onQueueClick,
                 )
 
                 Spacer(Modifier.height(18.dp))
@@ -2781,7 +2772,6 @@ private fun V8MetadataActions(
     onToggleLike: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
-    onQueueClick: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     Row(
@@ -2821,14 +2811,6 @@ private fun V8MetadataActions(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            V8ActionButton(
-                iconRes = R.drawable.queue_music,
-                contentDescription = stringResource(R.string.queue),
-                foreground = foreground,
-                containerColor = foreground.copy(alpha = 0.16f),
-                iconSize = 24.dp,
-                onClick = onQueueClick,
-            )
             V8ActionButton(
                 iconRes = R.drawable.more_vert,
                 contentDescription = stringResource(R.string.more_options),
