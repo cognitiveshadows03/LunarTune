@@ -267,7 +267,7 @@ fun LibraryMixScreen(
                                     LibraryShortcutSpec(
                                         title = likedTitle,
                                         countText = likedCount,
-                                        iconRes = R.drawable.favorite,
+                                        iconRes = R.drawable.favorite_border,
                                         containerColor = errorContainer,
                                         iconColor = errorColor,
                                         onClick = { navController.navigate("auto_playlist/liked") },
