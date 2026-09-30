@@ -13,6 +13,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -129,6 +130,7 @@ import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.PlayerSliderTrack
 import dev.citali.lunartune.ui.component.ResizableIconButton
 import dev.citali.lunartune.ui.menu.PlayerMenu
+import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.ui.theme.PlayerBackgroundColorUtils
 import dev.citali.lunartune.ui.theme.PlayerSliderColors
 import dev.citali.lunartune.ui.utils.ShowMediaInfo
@@ -2727,6 +2729,71 @@ private fun V8Header(
 }
 
 @Composable
+/**
+ * Identity of everything drawn inside the player artwork box.
+ *
+ * The whole artwork stack crossfades as one unit, so a song change that swaps
+ * only the canvas URL (or only the cover) still animates, instead of popping.
+ */
+private data class PlayerArtworkKey(
+    val artworkUrl: String?,
+    val canvasPrimaryUrl: String?,
+    val canvasFallbackUrl: String?,
+)
+
+/** Cover change duration, matched to the feel of the audio crossfade. */
+private const val ARTWORK_CROSSFADE_DURATION_MS = 450
+
+/**
+ * Album art plus the optional canvas video, crossfaded on song change.
+ *
+ * Previously the incoming cover replaced the outgoing one in a single frame,
+ * which read as a hard cut directly against a smooth audio crossfade. Keying
+ * on the artwork identity lets the outgoing cover stay on screen while the
+ * incoming one fades in over it.
+ *
+ * The box background lives outside the [Crossfade] on purpose, so the
+ * placeholder colour does not pulse during the transition. Canvas art is
+ * already muted, so the two briefly-overlapping video layers cannot bleed
+ * audio.
+ */
+@Composable
+private fun CrossfadingPlayerArtwork(
+    artworkUrl: String?,
+    canvasPrimaryUrl: String?,
+    canvasFallbackUrl: String?,
+    isPlaying: Boolean,
+) {
+    val key =
+        remember(artworkUrl, canvasPrimaryUrl, canvasFallbackUrl) {
+            PlayerArtworkKey(artworkUrl, canvasPrimaryUrl, canvasFallbackUrl)
+        }
+    Crossfade(
+        targetState = key,
+        modifier = Modifier.fillMaxSize(),
+        animationSpec = tween(durationMillis = ARTWORK_CROSSFADE_DURATION_MS, easing = LunarMotion.EmphasizedDecelerate),
+        label = "playerArtworkCrossfade",
+    ) { artwork ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = rememberOfflineArtworkImageRequest(artwork.artworkUrl),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (!artwork.canvasPrimaryUrl.isNullOrBlank() || !artwork.canvasFallbackUrl.isNullOrBlank()) {
+                CanvasArtworkPlayer(
+                    primaryUrl = artwork.canvasPrimaryUrl,
+                    fallbackUrl = artwork.canvasFallbackUrl,
+                    isPlaying = isPlaying,
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+    }
+}
+
 private fun V8Artwork(
     artworkUrl: String?,
     canvasPrimaryUrl: String?,
@@ -2734,7 +2801,6 @@ private fun V8Artwork(
     isPlaying: Boolean,
     size: androidx.compose.ui.unit.Dp,
 ) {
-    val artworkRequest = rememberOfflineArtworkImageRequest(artworkUrl)
     Box(
         modifier =
             Modifier
@@ -2742,22 +2808,12 @@ private fun V8Artwork(
                 .clip(RoundedCornerShape(8.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
     ) {
-        AsyncImage(
-            model = artworkRequest,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+        CrossfadingPlayerArtwork(
+            artworkUrl = artworkUrl,
+            canvasPrimaryUrl = canvasPrimaryUrl,
+            canvasFallbackUrl = canvasFallbackUrl,
+            isPlaying = isPlaying,
         )
-
-        if (!canvasPrimaryUrl.isNullOrBlank() || !canvasFallbackUrl.isNullOrBlank()) {
-            CanvasArtworkPlayer(
-                primaryUrl = canvasPrimaryUrl,
-                fallbackUrl = canvasFallbackUrl,
-                isPlaying = isPlaying,
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
     }
 }
 
@@ -3792,7 +3848,6 @@ private fun V9Artwork(
     modifier: Modifier = Modifier,
     size: Dp? = null,
 ) {
-    val artworkRequest = rememberOfflineArtworkImageRequest(artworkUrl)
     val baseModifier = if (size != null) Modifier.size(size) else Modifier
     Box(
         modifier =
@@ -3801,22 +3856,12 @@ private fun V9Artwork(
                 .clip(RoundedCornerShape(36.dp))
                 .background(placeholderColor),
     ) {
-        AsyncImage(
-            model = artworkRequest,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+        CrossfadingPlayerArtwork(
+            artworkUrl = artworkUrl,
+            canvasPrimaryUrl = canvasPrimaryUrl,
+            canvasFallbackUrl = canvasFallbackUrl,
+            isPlaying = isPlaying,
         )
-
-        if (!canvasPrimaryUrl.isNullOrBlank() || !canvasFallbackUrl.isNullOrBlank()) {
-            CanvasArtworkPlayer(
-                primaryUrl = canvasPrimaryUrl,
-                fallbackUrl = canvasFallbackUrl,
-                isPlaying = isPlaying,
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
     }
 }
 
