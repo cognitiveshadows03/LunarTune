@@ -83,6 +83,10 @@ class DownloadUtil
         @DownloadCache val downloadCache: Cache,
         @PlayerCache val playerCache: Cache,
     ) {
+        // A non-val constructor param is only in scope for initializers and
+        // member functions, so nested objects such as the download listener
+        // cannot capture it. Promoted to a property so they can.
+        private val appContext: Context = context
         private val connectivityManager = context.getSystemService<ConnectivityManager>()!!
         private val audioQuality by enumPreference(context, AudioQualityKey, AudioQuality.AUTO)
         private val preferredStreamClient by enumPreference(
@@ -350,14 +354,14 @@ class DownloadUtil
                 runCatching {
                     val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
                     if (artworkUrl.isNullOrBlank()) return@runCatching
-                    if (DownloadedArtwork.localFile(context, artworkUrl) != null) return@runCatching
+                    if (DownloadedArtwork.localFile(appContext, artworkUrl) != null) return@runCatching
                     val request = Request.Builder().url(artworkUrl).build()
                     mediaOkHttpClient.newCall(request).execute().use { response ->
                         if (!response.isSuccessful) return@use
                         val body = response.body ?: return@use
                         val bytes = DownloadedArtwork.readBounded(body.byteStream())
                             ?: return@use
-                        DownloadedArtwork.save(context, artworkUrl, bytes)
+                        DownloadedArtwork.save(appContext, artworkUrl, bytes)
                     }
                 }.onFailure { error ->
                     Timber.w(error, "Failed to persist album art for %s", songId)
@@ -370,7 +374,7 @@ class DownloadUtil
             downloadScope.launch {
                 runCatching {
                     val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
-                    DownloadedArtwork.delete(context, artworkUrl)
+                    DownloadedArtwork.delete(appContext, artworkUrl)
                 }.onFailure { error ->
                     Timber.w(error, "Failed to drop album art for %s", songId)
                 }
