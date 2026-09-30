@@ -2116,7 +2116,6 @@ fun V8PlayerControlsContent(
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
-    onQueueClick: () -> Unit,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2210,7 +2209,6 @@ fun V8PlayerControlsContent(
                 liked = currentSongLiked,
                 foreground = foreground,
                 onMenuClick = onMenuClick,
-                onQueueClick = onQueueClick,
                 onToggleLike = onToggleLike,
                 onTitleClick = onTitleClick,
                 onArtistClick = onArtistClick,
@@ -2284,7 +2282,6 @@ fun V8PlayerContent(
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
-    onQueueClick: () -> Unit,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2341,7 +2338,6 @@ fun V8PlayerContent(
             foreground = foreground,
             secondaryForeground = secondaryForeground,
             onMenuClick = onMenuClick,
-            onQueueClick = onQueueClick,
             onToggleLike = playerConnection::toggleLike,
             onTitleClick = onTitleClick,
             onArtistClick = onArtistClick,
@@ -2383,7 +2379,6 @@ fun V8PlayerContent(
             foreground = foreground,
             secondaryForeground = secondaryForeground,
             onMenuClick = onMenuClick,
-            onQueueClick = onQueueClick,
             onToggleLike = playerConnection::toggleLike,
             onTitleClick = onTitleClick,
             onArtistClick = onArtistClick,
@@ -2438,7 +2433,6 @@ private fun V8PortraitContent(
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
-    onQueueClick: () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val contentPadding = if (maxWidth < 380.dp) 22.dp else 24.dp
@@ -2523,7 +2517,6 @@ private fun V8PortraitContent(
                 liked = currentSongLiked,
                 foreground = foreground,
                 onMenuClick = onMenuClick,
-                onQueueClick = onQueueClick,
                 onToggleLike = onToggleLike,
                 onTitleClick = onTitleClick,
                 onArtistClick = onArtistClick,
@@ -2604,7 +2597,6 @@ private fun V8LandscapeContent(
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
-    onQueueClick: () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val horizontalPadding = 36.dp
@@ -2654,7 +2646,6 @@ private fun V8LandscapeContent(
                     liked = currentSongLiked,
                     foreground = foreground,
                     onMenuClick = onMenuClick,
-                    onQueueClick = onQueueClick,
                     onToggleLike = onToggleLike,
                     onTitleClick = onTitleClick,
                     onArtistClick = onArtistClick,
@@ -2837,7 +2828,6 @@ private fun V8MetadataActions(
     onToggleLike: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
-    onQueueClick: () -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
     Row(
@@ -2884,14 +2874,6 @@ private fun V8MetadataActions(
                 containerColor = foreground.copy(alpha = 0.16f),
                 iconSize = 24.dp,
                 onClick = onMenuClick,
-            )
-            V8ActionButton(
-                iconRes = R.drawable.queue_music,
-                contentDescription = stringResource(R.string.queue),
-                foreground = foreground,
-                containerColor = foreground.copy(alpha = 0.16f),
-                iconSize = 24.dp,
-                onClick = onQueueClick,
             )
             val likedColor = MaterialTheme.colorScheme.error
             val likeIconColor by animateColorAsState(
