@@ -186,11 +186,9 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
-import dev.citali.lunartune.constants.WallpaperExtractionFailedKey
 import dev.citali.lunartune.ui.screens.settings.TabTransitionKey
 import dev.citali.lunartune.ui.screens.settings.TabTransitionStyle
 import dev.citali.lunartune.ui.theme.LunarMotion
-import dev.citali.lunartune.ui.theme.extractWallpaperThemeColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -880,11 +878,7 @@ class MainActivity : FragmentActivity() {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                             themeColor = DefaultThemeColor
                         } else {
-                            val wallpaperColor = extractWallpaperThemeColor(this@MainActivity)
-                            themeColor = wallpaperColor ?: customThemeColor
-                            dataStore.edit { prefs ->
-                                prefs[WallpaperExtractionFailedKey] = wallpaperColor == null
-                            }
+                            themeColor = customThemeColor
                         }
                     }
                 }
