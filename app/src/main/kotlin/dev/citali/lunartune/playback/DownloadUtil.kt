@@ -52,6 +52,7 @@ import dev.citali.lunartune.di.PlayerCache
 import moe.rukamori.archivetune.innertube.YouTube
 import dev.citali.lunartune.utils.AuthScopedCacheValue
 import dev.citali.lunartune.utils.NewPipeStreamResolver
+import dev.citali.lunartune.utils.DownloadedArtwork
 import dev.citali.lunartune.utils.StreamClientUtils
 import dev.citali.lunartune.utils.YTPlayerUtils
 import dev.citali.lunartune.utils.enumPreference
@@ -60,6 +61,7 @@ import dev.citali.lunartune.utils.isLowDataModeActive
 import dev.citali.lunartune.utils.retryWithoutPlaybackLoginContext
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import timber.log.Timber
 import java.io.IOException
 import java.time.LocalDateTime
@@ -270,6 +272,7 @@ class DownloadUtil
                             downloadAttempts.remove(download.request.id)
                             autoRetriedSongIds.remove(download.request.id)
                             sessionFailedSongIds.remove(download.request.id)
+                            deleteDownloadedArtwork(download.request.id)
                             downloads.update { map -> map - download.request.id }
                         }
                     },
@@ -316,6 +319,7 @@ class DownloadUtil
                     downloadAttempts.remove(songId)
                     autoRetriedSongIds.remove(songId)
                     sessionFailedSongIds.remove(songId)
+                    cacheDownloadedArtwork(songId)
                 }
 
                 Download.STATE_DOWNLOADING -> {
@@ -324,6 +328,51 @@ class DownloadUtil
                     if (!autoRetriedSongIds.remove(songId)) {
                         downloadAttempts.remove(songId)
                     }
+                }
+            }
+        }
+
+        /**
+         * Persists the cover for a song whose audio just finished downloading.
+         *
+         * Best effort by design: the artwork is secondary to the audio, so a
+         * failure here is logged and dropped rather than retried or surfaced, and
+         * can never fail or roll back a download that already succeeded. Without
+         * it a downloaded song's cover exists only inside Coil's image cache, so
+         * it disappears when that cache is cleared or the device goes offline.
+         *
+         * Runs on [downloadScope] and uses the media client, which already routes
+         * googleusercontent/ytimg thumbnail hosts through the configured proxy
+         * and IP-version preference.
+         */
+        private fun cacheDownloadedArtwork(songId: String) {
+            downloadScope.launch {
+                runCatching {
+                    val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
+                    if (artworkUrl.isNullOrBlank()) return@runCatching
+                    if (DownloadedArtwork.localFile(context, artworkUrl) != null) return@runCatching
+                    val request = Request.Builder().url(artworkUrl).build()
+                    mediaOkHttpClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) return@use
+                        val body = response.body ?: return@use
+                        val bytes = DownloadedArtwork.readBounded(body.byteStream())
+                            ?: return@use
+                        DownloadedArtwork.save(context, artworkUrl, bytes)
+                    }
+                }.onFailure { error ->
+                    Timber.w(error, "Failed to persist album art for %s", songId)
+                }
+            }
+        }
+
+        /** Drops any stored cover for a song whose download was removed. */
+        private fun deleteDownloadedArtwork(songId: String) {
+            downloadScope.launch {
+                runCatching {
+                    val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
+                    DownloadedArtwork.delete(context, artworkUrl)
+                }.onFailure { error ->
+                    Timber.w(error, "Failed to drop album art for %s", songId)
                 }
             }
         }
