@@ -55,6 +55,7 @@ import dev.citali.lunartune.ui.screens.settings.AccountSettings
 import dev.citali.lunartune.ui.screens.settings.AiIntegrationSettings
 import dev.citali.lunartune.ui.screens.settings.AodCustomizedScreen
 import dev.citali.lunartune.ui.screens.settings.AppearanceSettings
+import dev.citali.lunartune.ui.screens.settings.IconScreen
 import dev.citali.lunartune.ui.screens.settings.BackupAndRestore
 import dev.citali.lunartune.ui.screens.settings.AppLockScreen
 import dev.citali.lunartune.ui.screens.settings.MotionSettings
@@ -412,6 +413,9 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/appearance") {
         AppearanceSettings(navController)
+    }
+    composable("settings/appearance/icon") {
+        IconScreen(navController)
     }
     composable("settings/appearance/navigation_bar") {
         NavigationBarSettings(navController)

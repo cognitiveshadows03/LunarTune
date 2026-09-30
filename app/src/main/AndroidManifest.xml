@@ -72,11 +72,7 @@
             android:launchMode="singleTask"
             android:theme="@style/Theme.LunarTune"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-
+            <!-- Launcher entry is provided by generated activity-aliases (see GenerateIconPackTask). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <action android:name="android.intent.action.MUSIC_PLAYER" />

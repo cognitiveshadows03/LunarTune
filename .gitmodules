@@ -7,3 +7,6 @@
 [submodule "morideobfuscator"]
 	path = morideobfuscator
 	url = https://github.com/rukamori/morideobfuscator.git
+[submodule "IconPack"]
+	path = IconPack
+	url = https://github.com/cognitiveshadows03/IconPack.git
