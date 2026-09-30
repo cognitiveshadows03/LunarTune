@@ -86,6 +86,16 @@ abstract class GenerateIconPackTask : DefaultTask() {
                 val githubAuthorUrl = entry.optionalString("GitHubAuthorUrl")
                 val backgroundMode = entry.optionalString("BackgroundMode")
                 val configuredBackgroundColor = entry.optionalString("BackgroundColor")
+                val adaptiveInset =
+                    entry.optionalString("AdaptiveInset").ifEmpty { DefaultAdaptiveInset }.let { raw ->
+                        val dp = raw.removeSuffix("dp").trim().toDoubleOrNull()
+                        if (dp == null || dp < 0.0 || dp > 36.0) {
+                            throw GradleException(
+                                "IconPack AdaptiveInset \"$raw\" for Id \"$id\" must be a number between 0 and 36 (dp).",
+                            )
+                        }
+                        "${dp}dp"
+                    }
 
                 if (id == DefaultIconId) {
                     throw GradleException("IconPack Id \"$DefaultIconId\" is reserved.")
@@ -101,10 +111,15 @@ abstract class GenerateIconPackTask : DefaultTask() {
 
                 val sourceFile = resolveSource(source)
                 val analysis = analyzeSvg(sourceFile)
+                val drawableName = "icon_pack_$hash"
+                val targetFile = File(resourcesDirectory, "drawable-nodpi/$drawableName.png")
+                targetFile.parentFile.mkdirs()
+                rasterizeSvg(sourceFile, targetFile)
+                val rasterEdge = targetFile.trimAndAnalyzeEdges()
                 val hasIntegratedBackground =
                     when (backgroundMode.lowercase()) {
                         "" -> {
-                            analysis.hasIntegratedBackground
+                            rasterEdge.opaqueEdges || analysis.hasIntegratedBackground
                         }
 
                         IntegratedBackgroundMode -> {
@@ -122,14 +137,11 @@ abstract class GenerateIconPackTask : DefaultTask() {
                             )
                         }
                     }
-                val drawableName = "icon_pack_$hash"
-                val targetFile = File(resourcesDirectory, "drawable-nodpi/$drawableName.png")
-                targetFile.parentFile.mkdirs()
-                rasterizeSvg(sourceFile, targetFile)
                 val backgroundColor =
                     if (configuredBackgroundColor.isEmpty()) {
                         if (hasIntegratedBackground) {
-                            targetFile.readOpaqueCornerColor()
+                            rasterEdge.edgeColor
+                                ?: targetFile.readOpaqueCornerColor()
                                 ?: analysis.recommendedBackgroundColor
                         } else {
                             analysis.recommendedBackgroundColor
@@ -153,6 +165,8 @@ abstract class GenerateIconPackTask : DefaultTask() {
                     "adaptiveIconResourceName" to drawableName,
                     "roundAdaptiveIconResourceName" to "${drawableName}_round",
                     "backgroundColor" to backgroundColor,
+                    "integratedBackground" to hasIntegratedBackground.toString(),
+                    "adaptiveInset" to adaptiveInset,
                     "aliasClassName" to "${applicationId.get()}.launcher.IconAlias$hash",
                 )
             }
@@ -167,6 +181,8 @@ abstract class GenerateIconPackTask : DefaultTask() {
                             "adaptiveIconResourceName",
                             "roundAdaptiveIconResourceName",
                             "backgroundColor",
+                            "integratedBackground",
+                            "adaptiveInset",
                         )
                 }
             writeText(JsonOutput.prettyPrint(JsonOutput.toJson(runtimeCatalog)) + System.lineSeparator())
@@ -471,17 +487,51 @@ abstract class GenerateIconPackTask : DefaultTask() {
             val foregroundName = "${drawableName}_foreground"
             val backgroundColor = entry.getValue("backgroundColor")
 
-            File(drawableDirectory, "$backgroundName.xml").writeText(
-                """
+            val integrated = entry.getValue("integratedBackground").toBoolean()
+            if (integrated) {
+                // Full-bleed adaptive icon: the artwork fills the whole 108dp background layer so the
+                // launcher mask (circle, squircle, teardrop...) crops the art itself, with no plate or
+                // ring around it. AdaptiveInset (metadata) shrinks the art if its edges get cropped too much.
+                File(drawableDirectory, "$backgroundName.xml").writeText(
+                    """
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="$AndroidNamespace">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="$backgroundColor" />
+        </shape>
+    </item>
+    <item
+        android:bottom="${entry.getValue("adaptiveInset")}"
+        android:drawable="@drawable/$drawableName"
+        android:left="${entry.getValue("adaptiveInset")}"
+        android:right="${entry.getValue("adaptiveInset")}"
+        android:top="${entry.getValue("adaptiveInset")}" />
+</layer-list>
+                    """.trimIndent() + System.lineSeparator(),
+                )
+                File(drawableDirectory, "$foregroundName.xml").writeText(
+                    """
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="$AndroidNamespace"
+    android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+</shape>
+                    """.trimIndent() + System.lineSeparator(),
+                )
+            } else {
+                // Transparent artwork: keep it inside the safe zone on a solid background.
+                File(drawableDirectory, "$backgroundName.xml").writeText(
+                    """
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="$AndroidNamespace"
     android:shape="rectangle">
     <solid android:color="$backgroundColor" />
 </shape>
-                """.trimIndent() + System.lineSeparator(),
-            )
-            File(drawableDirectory, "$foregroundName.xml").writeText(
-                """
+                    """.trimIndent() + System.lineSeparator(),
+                )
+                File(drawableDirectory, "$foregroundName.xml").writeText(
+                    """
 <?xml version="1.0" encoding="utf-8"?>
 <inset xmlns:android="$AndroidNamespace"
     android:drawable="@drawable/$drawableName"
@@ -489,8 +539,9 @@ abstract class GenerateIconPackTask : DefaultTask() {
     android:insetLeft="$AdaptiveIconForegroundInset"
     android:insetRight="$AdaptiveIconForegroundInset"
     android:insetTop="$AdaptiveIconForegroundInset" />
-                """.trimIndent() + System.lineSeparator(),
-            )
+                    """.trimIndent() + System.lineSeparator(),
+                )
+            }
 
             writeAdaptiveIconWrapper(
                 targetFile = File(resourcesDirectory, "mipmap-anydpi-v26/$resourceName.xml"),
@@ -599,6 +650,82 @@ ${aliases.prependIndent("        ")}
             .take(12)
             .joinToString(separator = "") { byte -> "%02x".format(byte) }
 
+    private data class RasterEdge(
+        val opaqueEdges: Boolean,
+        val edgeColor: String?,
+    )
+
+    /**
+     * Trims transparent padding around the artwork (re-centring it on a square canvas), then samples
+     * the outer edge. If most edge pixels are opaque the artwork carries its own background, so it
+     * can be used full-bleed in an adaptive icon, and the average edge colour fills any gaps.
+     */
+    private fun File.trimAndAnalyzeEdges(): RasterEdge {
+        val source = ImageIO.read(this) ?: return RasterEdge(false, null)
+        var minX = source.width
+        var minY = source.height
+        var maxX = -1
+        var maxY = -1
+        for (y in 0 until source.height) {
+            for (x in 0 until source.width) {
+                if ((source.getRGB(x, y) ushr AlphaChannelShift) > EdgeAlphaThreshold) {
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                }
+            }
+        }
+        if (maxX < 0) return RasterEdge(false, null)
+
+        val contentWidth = maxX - minX + 1
+        val contentHeight = maxY - minY + 1
+        val side = maxOf(contentWidth, contentHeight)
+        val trimmed =
+            if (side < source.width || side < source.height) {
+                val square = java.awt.image.BufferedImage(side, side, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+                val graphics = square.createGraphics()
+                graphics.drawImage(
+                    source.getSubimage(minX, minY, contentWidth, contentHeight),
+                    (side - contentWidth) / 2,
+                    (side - contentHeight) / 2,
+                    null,
+                )
+                graphics.dispose()
+                val scaled = java.awt.image.BufferedImage(IconRasterSize, IconRasterSize, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+                val scaledGraphics = scaled.createGraphics()
+                scaledGraphics.setRenderingHint(
+                    java.awt.RenderingHints.KEY_INTERPOLATION,
+                    java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC,
+                )
+                scaledGraphics.drawImage(square, 0, 0, IconRasterSize, IconRasterSize, null)
+                scaledGraphics.dispose()
+                ImageIO.write(scaled, "png", this)
+                scaled
+            } else {
+                source
+            }
+
+        val w = trimmed.width
+        val h = trimmed.height
+        val edgePixels = ArrayList<Int>((w + h) * 2)
+        for (x in 0 until w) {
+            edgePixels += trimmed.getRGB(x, EdgeSampleInset)
+            edgePixels += trimmed.getRGB(x, h - 1 - EdgeSampleInset)
+        }
+        for (y in 0 until h) {
+            edgePixels += trimmed.getRGB(EdgeSampleInset, y)
+            edgePixels += trimmed.getRGB(w - 1 - EdgeSampleInset, y)
+        }
+        val opaque = edgePixels.filter { color -> (color ushr AlphaChannelShift) == OpaqueAlpha }
+        val opaqueEdges = opaque.size >= edgePixels.size * OpaqueEdgeRatio
+        if (opaque.isEmpty()) return RasterEdge(false, null)
+        val red = opaque.sumOf { color -> color ushr RedChannelShift and ColorChannelMask } / opaque.size
+        val green = opaque.sumOf { color -> color ushr GreenChannelShift and ColorChannelMask } / opaque.size
+        val blue = opaque.sumOf { color -> color and ColorChannelMask } / opaque.size
+        return RasterEdge(opaqueEdges, "#FF%02X%02X%02X".format(red, green, blue))
+    }
+
     private fun File.readOpaqueCornerColor(): String? {
         val image =
             try {
@@ -694,6 +821,10 @@ ${aliases.prependIndent("        ")}
         const val ComplexArtworkPathThreshold = 32
         const val ComplexArtworkColorThreshold = 4
         const val IconRasterSize = 1024
+        const val DefaultAdaptiveInset = "12"
+        const val EdgeAlphaThreshold = 16
+        const val EdgeSampleInset = 2
+        const val OpaqueEdgeRatio = 0.75
         const val ViewBoxValueCount = 4
         const val FullCanvasCoordinateCount = 8
         const val FullCanvasToleranceRatio = 0.01
