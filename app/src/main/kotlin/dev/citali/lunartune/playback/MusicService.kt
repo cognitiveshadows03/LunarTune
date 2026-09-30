@@ -105,6 +105,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -522,8 +523,42 @@ class MusicService :
     private var crossfadeJob: Job? = null
     private var secondaryCrossfadePlayer: ExoPlayer? = null
     private var secondaryCrossfadeTarget: CrossfadeTarget? = null
-    private var isCrossfading = false
-    private var crossfadeHandoffInProgress = false
+    private val _isCrossfading = MutableStateFlow(false)
+    private val _crossfadeHandoffInProgress = MutableStateFlow(false)
+
+    /**
+     * Backed by a StateFlow but read and written as a plain Boolean everywhere
+     * in the service, so the observable state is added without rewriting the
+     * existing crossfade logic.
+     */
+    private var isCrossfading: Boolean
+        get() = _isCrossfading.value
+        set(value) {
+            _isCrossfading.value = value
+        }
+
+    private var crossfadeHandoffInProgress: Boolean
+        get() = _crossfadeHandoffInProgress.value
+        set(value) {
+            _crossfadeHandoffInProgress.value = value
+        }
+
+    /**
+     * Observable crossfade state, for the player UI.
+     *
+     * The UI uses these to avoid showing a buffering spinner during the
+     * handoff. That spinner is a false signal here: the incoming track is
+     * playing continuously on the secondary crossfade player, and the primary
+     * only reports STATE_BUFFERING because it is re-preparing the same cached
+     * track to take over. Surfacing that as "stopping" made an intentional,
+     * continuous transition look like a stall.
+     *
+     * Exposed as two flows rather than one combined flow so that no
+     * CoroutineScope is captured during property initialisation, which would
+     * make it depend on superclass field ordering.
+     */
+    val isCrossfadingFlow: StateFlow<Boolean> = _isCrossfading
+    val crossfadeHandoffFlow: StateFlow<Boolean> = _crossfadeHandoffInProgress
     private var crossfadeBaseVolume = 1f
     private var crossfadeIncomingBaseVolume = 1f
     private var crossfadeProgress = 0f

@@ -79,6 +79,20 @@ class PlayerConnection(
     private val _isPlaying = MutableStateFlow(player.isPlaying)
     val isPlaying = _isPlaying.asStateFlow()
     val playbackParameters = MutableStateFlow(player.playbackParameters)
+
+    /**
+     * True while an audio crossfade is fading or handing over to the primary
+     * player.
+     *
+     * The main player must not show a buffering spinner for this window: the
+     * incoming track keeps playing continuously on the secondary crossfade
+     * player, so the primary reporting STATE_BUFFERING is an implementation
+     * detail of the hand-off, not a stall the user is experiencing.
+     */
+    val crossfadeInProgress: StateFlow<Boolean> =
+        combine(service.isCrossfadingFlow, service.crossfadeHandoffFlow) { fading, handoff ->
+            fading || handoff
+        }.stateIn(scope, SharingStarted.Eagerly, false)
     val mediaMetadata = service.currentMediaMetadata
     val currentSong =
         mediaMetadata.flatMapLatest {

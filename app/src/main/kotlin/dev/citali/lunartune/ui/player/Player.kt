@@ -517,8 +517,13 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
-    // Track loading state: when buffering or when user is seeking
-    val isLoading = playbackState == STATE_BUFFERING || sliderPosition != null
+    // Track loading state: when buffering or when user is seeking.
+    // A crossfade hand-off is excluded: the incoming track keeps playing
+    // continuously on the secondary crossfade player, so the primary reporting
+    // STATE_BUFFERING there is the hand-over itself, not a stall worth showing.
+    val crossfadeInProgress by playerConnection.crossfadeInProgress.collectAsState()
+    val isLoading =
+        (playbackState == STATE_BUFFERING && !crossfadeInProgress) || sliderPosition != null
 
     var gradientColors by remember {
         mutableStateOf<List<Color>>(emptyList())
