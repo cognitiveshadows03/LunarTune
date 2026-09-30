@@ -186,6 +186,11 @@ abstract class GenerateIconPackTask : DefaultTask() {
             root
                 .listFiles { file -> file.isFile && file.extension.equals("svg", ignoreCase = true) }
                 .orEmpty()
+                .filter { file ->
+                    (file.length() <= MaxSvgSizeBytes).also { accepted ->
+                        if (!accepted) logger.warn("IconPack: skipping ${file.name} (larger than 700KB).")
+                    }
+                }
                 .sortedBy { file -> file.name.lowercase() }
         val availableNames = available.map { file -> file.name }.toSet()
 
@@ -677,6 +682,7 @@ ${aliases.prependIndent("        ")}
         const val SvgNamespace = "http://www.w3.org/2000/svg"
         const val CatalogAssetPath = "icon_pack/catalog.json"
         const val DefaultIconId = "default"
+        const val MaxSvgSizeBytes = 700L * 1024
         const val DefaultIconAuthor = "cognitiveshadows03"
         const val DefaultIconAuthorUrl = "https://github.com/cognitiveshadows03"
         const val IntegratedBackgroundMode = "integrated"
