@@ -38,6 +38,7 @@ import dev.citali.lunartune.db.entities.ArtistEntity
 import dev.citali.lunartune.db.entities.Playlist
 import dev.citali.lunartune.db.entities.PlaylistEntity
 import dev.citali.lunartune.db.entities.PlaylistSongMap
+import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongEntity
 import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.AlbumItem
@@ -49,6 +50,7 @@ import moe.rukamori.archivetune.innertube.pages.PlaylistContinuationPage
 import moe.rukamori.archivetune.innertube.pages.PlaylistPage
 import moe.rukamori.archivetune.innertube.utils.completed
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
+import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
 import timber.log.Timber
 import java.time.LocalDateTime
@@ -358,6 +360,55 @@ class SyncUtils
             return null
         }
 
+        /**
+         * True when persisting [mediaMetadata] over [existing] would leave the row
+         * exactly as it already is.
+         *
+         * Every refresh used to rewrite every remote song, and
+         * update(song, mediaMetadata) does not just touch the song row: it deletes
+         * the whole song/artist map and re-inserts it. With several hundred remote
+         * songs that made an unchanged library pay full write cost for identical
+         * data, which is what dominated refresh time. These are precisely the
+         * fields update() writes, so a true result means the write is a no-op.
+         */
+        private fun isAlreadyStored(existing: Song, mediaMetadata: MediaMetadata): Boolean {
+            val entity = existing.song
+            val expectedTitle =
+                if (entity.titleOverride) entity.title else mediaMetadata.title
+            return entity.title == expectedTitle &&
+                entity.duration == mediaMetadata.duration &&
+                entity.thumbnailUrl == mediaMetadata.thumbnailUrl &&
+                entity.albumId == mediaMetadata.album?.id &&
+                entity.albumName == mediaMetadata.album?.title &&
+                entity.explicit == mediaMetadata.explicit &&
+                entity.isMusicVideo == mediaMetadata.isMusicVideo &&
+                existing.artists.map { it.name }.toSet() ==
+                mediaMetadata.artists.map { it.name }.toSet()
+        }
+
+        /**
+         * Loads the rows for [ids] in one pass instead of one Flow query per song.
+         *
+         * Chunked because SQLite caps the bound parameters of a statement (999 on
+         * older Android), and a large library is well past that in a single IN list.
+         */
+        private suspend fun prefetchSongs(ids: Collection<String>): Map<String, Song> {
+            val found = HashMap<String, Song>(ids.size)
+            val chunkSize = 500
+            var chunk = ArrayList<String>(minOf(ids.size, chunkSize))
+            for (id in ids) {
+                chunk.add(id)
+                if (chunk.size == chunkSize) {
+                    database.getSongsByIds(chunk).forEach { found[it.id] = it }
+                    chunk = ArrayList(chunkSize)
+                }
+            }
+            if (chunk.isNotEmpty()) {
+                database.getSongsByIds(chunk).forEach { found[it.id] = it }
+            }
+            return found
+        }
+
         suspend fun syncLikedSongs(authoritative: Boolean = false) =
             coroutineScope {
                 if (!isLoggedIn()) {
@@ -451,23 +502,41 @@ class SyncUtils
                         val baseTimestamp = LocalDateTime.now()
                         val failedUpserts = AtomicInteger(0)
 
+                        // One bulk read replaces a per-song Flow query, and lets the
+                        // unchanged songs bail out before taking a write permit.
+                        val storedSongs = if (isSyncStillEnabled(gen)) {
+                            prefetchSongs(remoteIds)
+                        } else {
+                            emptyMap()
+                        }
+                        val skippedUnchanged = AtomicInteger(0)
+
                         val upsertJobs =
                             remoteSongs.mapIndexed { index, song ->
                                 val timestamp = likedSongTimestamp(baseTimestamp, index)
                                 launch {
                                     try {
                                         if (!isSyncStillEnabled(gen)) return@launch
+                                        val mediaMetadata = song.toMediaMetadata()
+                                        val dbSong = storedSongs[song.id]
+                                        if (dbSong != null &&
+                                            dbSong.song.liked &&
+                                            dbSong.song.likedDate != null &&
+                                            isAlreadyStored(dbSong, mediaMetadata)
+                                        ) {
+                                            skippedUnchanged.incrementAndGet()
+                                            return@launch
+                                        }
                                         dbWriteSemaphore.withPermit {
                                             if (!isSyncStillEnabled(gen)) return@withPermit
-                                            val dbSong = database.song(song.id).firstOrNull()
-                                            val mediaMetadata = song.toMediaMetadata()
+                                            val current = dbSong ?: database.song(song.id).firstOrNull()
                                             database.withTransaction {
                                                 if (!isSyncStillEnabled(gen)) return@withTransaction
-                                                if (dbSong == null) {
+                                                if (current == null) {
                                                     insert(mediaMetadata) { it.copy(liked = true, likedDate = timestamp) }
                                                 } else {
-                                                    update(dbSong, mediaMetadata)
-                                                    if (!dbSong.song.liked || dbSong.song.likedDate == null) {
+                                                    update(current, mediaMetadata)
+                                                    if (!current.song.liked || current.song.likedDate == null) {
                                                         getSongByIdBlocking(song.id)?.song?.let { refreshedSong ->
                                                             update(refreshedSong.copy(liked = true, likedDate = timestamp))
                                                         }
@@ -488,7 +557,7 @@ class SyncUtils
                         Timber.i(
                             "syncLikedSongs: done remote=${remoteSongs.size} " +
                                 "localLiked=$localLikedCount failedUpserts=${failedUpserts.get()} " +
-                                "complete=${fetch.complete}",
+                                "unchanged=${skippedUnchanged.get()} complete=${fetch.complete}",
                         )
                         if (localLikedCount < remoteSongs.size) {
                             Timber.w(
@@ -539,29 +608,49 @@ class SyncUtils
                             }
                         }
 
-                        remoteSongs.forEach { song ->
-                            launch {
-                                if (!isSyncStillEnabled(gen)) return@launch
-                                dbWriteSemaphore.withPermit {
-                                    if (!isSyncStillEnabled(gen)) return@withPermit
-                                    val dbSong = database.song(song.id).firstOrNull()
+                        val storedSongs = if (isSyncStillEnabled(gen)) {
+                            prefetchSongs(remoteIds)
+                        } else {
+                            emptyMap()
+                        }
+                        val skippedUnchanged = AtomicInteger(0)
+                        val upsertJobs =
+                            remoteSongs.map { song ->
+                                launch {
+                                    if (!isSyncStillEnabled(gen)) return@launch
                                     val mediaMetadata = song.toMediaMetadata()
-                                    database.withTransaction {
-                                        if (!isSyncStillEnabled(gen)) return@withTransaction
-                                        if (dbSong == null) {
-                                            insert(mediaMetadata) { it.toggleLibrary() }
-                                        } else {
-                                            update(dbSong, mediaMetadata)
-                                            if (dbSong.song.inLibrary == null) {
-                                                getSongByIdBlocking(song.id)?.song?.let { refreshedSong ->
-                                                    update(refreshedSong.toggleLibrary())
+                                    val dbSong = storedSongs[song.id]
+                                    if (dbSong != null &&
+                                        dbSong.song.inLibrary != null &&
+                                        isAlreadyStored(dbSong, mediaMetadata)
+                                    ) {
+                                        skippedUnchanged.incrementAndGet()
+                                        return@launch
+                                    }
+                                    dbWriteSemaphore.withPermit {
+                                        if (!isSyncStillEnabled(gen)) return@withPermit
+                                        val current = dbSong ?: database.song(song.id).firstOrNull()
+                                        database.withTransaction {
+                                            if (!isSyncStillEnabled(gen)) return@withTransaction
+                                            if (current == null) {
+                                                insert(mediaMetadata) { it.toggleLibrary() }
+                                            } else {
+                                                update(current, mediaMetadata)
+                                                if (current.song.inLibrary == null) {
+                                                    getSongByIdBlocking(song.id)?.song?.let { refreshedSong ->
+                                                        update(refreshedSong.toggleLibrary())
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        }
+                        upsertJobs.joinAll()
+                        Timber.i(
+                            "syncLibrarySongs: done remote=${remoteSongs.size} " +
+                                "unchanged=${skippedUnchanged.get()}",
+                        )
                     }.onFailure { e ->
                         Timber.e(e, "syncLibrarySongs: Failed to sync library songs")
                     }
