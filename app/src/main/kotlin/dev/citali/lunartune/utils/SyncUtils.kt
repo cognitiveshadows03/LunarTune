@@ -439,7 +439,7 @@ class SyncUtils
                             // Songs with no likedDate are kept - we know least about them.
                             val staleLikedSongs =
                                 localOnly
-                                    .sortedWith(compareBy(nullsLast<LocalDateTime?>()) { it.likedDate })
+                                    .sortedWith(compareBy(nullsLast<LocalDateTime>()) { it.likedDate })
                                     .take(removable)
                                     .map { it.copy(liked = false, likedDate = null) }
                             if (staleLikedSongs.isNotEmpty()) {
