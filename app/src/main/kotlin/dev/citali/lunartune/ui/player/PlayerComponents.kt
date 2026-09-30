@@ -2728,7 +2728,6 @@ private fun V8Header(
     }
 }
 
-@Composable
 /**
  * Identity of everything drawn inside the player artwork box.
  *
@@ -2794,6 +2793,7 @@ private fun CrossfadingPlayerArtwork(
     }
 }
 
+@Composable
 private fun V8Artwork(
     artworkUrl: String?,
     canvasPrimaryUrl: String?,
