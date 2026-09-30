@@ -1527,6 +1527,7 @@ fun BottomSheetPlayer(
                                     onSliderValueChange = onSliderValueChange,
                                     onSliderValueChangeFinished = onSliderValueChangeFinished,
                                     onVolumeChange = onPlayerVolumeChange,
+                                    onQueueClick = openQueue,
                                     landscape = true,
                                 )
                             }
@@ -1576,6 +1577,7 @@ fun BottomSheetPlayer(
                                 onSliderValueChange = onSliderValueChange,
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
+                                onQueueClick = openQueue,
                                 landscape = true,
                                 modifier =
                                     Modifier
@@ -1834,6 +1836,7 @@ fun BottomSheetPlayer(
                                     onSliderValueChange = onSliderValueChange,
                                     onSliderValueChangeFinished = onSliderValueChangeFinished,
                                     onVolumeChange = onPlayerVolumeChange,
+                                    onQueueClick = openQueue,
                                 )
                             }
 
@@ -1882,6 +1885,7 @@ fun BottomSheetPlayer(
                                 onSliderValueChange = onSliderValueChange,
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
+                                onQueueClick = openQueue,
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
