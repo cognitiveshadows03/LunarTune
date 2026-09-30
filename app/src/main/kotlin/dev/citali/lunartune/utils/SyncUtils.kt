@@ -283,6 +283,20 @@ class SyncUtils
         )
 
         /**
+         * YouTube Music renders the Liked header count as plain digits ("643"), but
+         * switches to compact form once the library is large ("1.2K"). Stripping
+         * digits out of a compact form yields a plausible-looking but wrong number
+         * ("12"), which would understate the blind spot, so anything containing a
+         * letter is reported as unknown instead of guessed.
+         */
+        private fun parseSongCountText(raw: String): Int? =
+            if (raw.any(Char::isLetter)) {
+                null
+            } else {
+                raw.filter(Char::isDigit).toIntOrNull()
+            }
+
+        /**
          * Follows the Liked playlist continuations with per-page retries, instead of
          * core's completed(), so a truncated fetch is DETECTED rather than silently
          * mistaken for the whole library: upserts still apply to whatever arrived, but
@@ -290,7 +304,7 @@ class SyncUtils
          */
         private suspend fun fetchCompleteLikedPlaylist(firstPage: PlaylistPage): LikedPlaylistFetch {
             val songs = firstPage.songs.orEmpty().toMutableList()
-            val headerTotal = firstPage.playlist.songCountText?.filter(Char::isDigit)?.toIntOrNull()
+            val headerTotal = firstPage.playlist.songCountText?.let(::parseSongCountText)
             var continuation =
                 firstPage.songsContinuation.takeUnless { it.isNullOrBlank() }
                     ?: firstPage.continuation.takeUnless { it.isNullOrBlank() }
@@ -378,22 +392,56 @@ class SyncUtils
                             return@onSuccess
                         }
                         val remoteIds = remoteSongs.map { it.id }.toSet()
+                        // YouTube Music keeps counting entries it will not hand back as
+                        // playable items (deleted, private or region-blocked videos). Those
+                        // entries still count towards the header total but never reach
+                        // remoteIds, so a locally liked song sitting in that blind spot is
+                        // indistinguishable from a song the user genuinely unliked.
+                        //
+                        // Treating "absent from remoteIds" as proof of an unlike is what
+                        // silently deleted songs nobody removed. The size of that blind
+                        // spot bounds how much absence is still trustworthy, so removal is
+                        // capped at the provable surplus: at most (localOnly - blindSpot)
+                        // songs can be shown to have been unliked. A header total we
+                        // cannot read gives no bound at all, so removal is skipped.
+                        val blindSpot = fetch.headerTotal?.let { (it - remoteSongs.size).coerceAtLeast(0) }
                         if (authoritative && !fetch.complete) {
                             Timber.w(
                                 "syncLikedSongs: skipping authoritative stale-removal after truncated fetch",
                             )
-                        }
-                        if (authoritative && fetch.complete) {
+                        } else if (authoritative && blindSpot == null) {
+                            Timber.w(
+                                "syncLikedSongs: skipping authoritative stale-removal - " +
+                                    "remote header count is unreadable, absence proves nothing",
+                            )
+                        } else if (authoritative) {
+                            // Reached only when blindSpot != null; bind it to a non-null
+                            // local so the arithmetic below stays Int.
+                            val blind = blindSpot ?: 0
                             val localLikedSongs = database.likedSongsByNameAsc().first()
                             if (!isSyncStillEnabled(gen)) return@onSuccess
-                            val staleLikedSongs =
+                            val localOnly =
                                 localLikedSongs
                                     .asSequence()
                                     .map { it.song }
                                     .filterNot { it.isLocal }
                                     .filterNot { it.id in remoteIds }
-                                    .map { it.copy(liked = false, likedDate = null) }
                                     .toList()
+                            val removable = (localOnly.size - blind).coerceAtLeast(0)
+                            if (localOnly.isNotEmpty()) {
+                                Timber.i(
+                                    "syncLikedSongs: localOnly=${localOnly.size} " +
+                                        "blindSpot=$blind removable=$removable",
+                                )
+                            }
+                            // Oldest like first: when a song's true state is unknowable,
+                            // the one liked longest ago is the most likely genuine unlike.
+                            // Songs with no likedDate are kept - we know least about them.
+                            val staleLikedSongs =
+                                localOnly
+                                    .sortedWith(compareBy(nullsLast<LocalDateTime?>()) { it.likedDate })
+                                    .take(removable)
+                                    .map { it.copy(liked = false, likedDate = null) }
                             if (staleLikedSongs.isNotEmpty()) {
                                 database.withTransaction {
                                     staleLikedSongs.forEach { update(it) }
