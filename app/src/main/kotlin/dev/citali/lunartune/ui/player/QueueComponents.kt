@@ -1387,15 +1387,17 @@ fun QueueCollapsedContentAppleMusic(
     onDeviceClick: () -> Unit,
     device: ActiveOutputDevice,
     modifier: Modifier = Modifier,
+    lyricsOpenProvider: () -> Boolean = { false },
 ) {
     val tint = textBackgroundColor.copy(alpha = 0.7f)
+    val lyricsOpen = lyricsOpenProvider()
     Row(
         horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 4.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp)
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
                 .padding(
                     bottom =
@@ -1404,20 +1406,37 @@ fun QueueCollapsedContentAppleMusic(
                 ),
     ) {
         @Composable
-        fun plain(onClick: () -> Unit, content: @Composable () -> Unit) {
+        fun plain(onClick: () -> Unit, active: Boolean = false, content: @Composable () -> Unit) {
+            // iOS style: the active button gets a soft translucent pill behind a filled glyph.
+            val bg by androidx.compose.animation.animateColorAsState(
+                if (active) Color.White.copy(alpha = 0.2f) else Color.Transparent,
+                label = "amButtonBg",
+            )
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick),
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(bg)
+                        .clickable(onClick = onClick),
             ) { content() }
         }
-        plain(onShowLyrics) {
-            Icon(painterResource(R.drawable.lyrics), null, tint = tint, modifier = Modifier.size(24.dp))
+        plain(onShowLyrics, active = lyricsOpen) {
+            androidx.compose.animation.Crossfade(lyricsOpen, label = "amLyricsIcon") { open ->
+                Icon(
+                    painterResource(if (open) R.drawable.am_quote_bubble_fill else R.drawable.am_quote_bubble),
+                    null,
+                    tint = if (open) Color.White else tint,
+                    modifier = Modifier.size(25.dp),
+                )
+            }
         }
         plain(onDeviceClick) {
-            Icon(device.type.imageVector, device.name, tint = tint, modifier = Modifier.size(24.dp))
+            Icon(painterResource(R.drawable.am_airplay_audio), device.name, tint = tint, modifier = Modifier.size(25.dp))
         }
         plain(onExpandQueue) {
-            Icon(painterResource(R.drawable.queue_music), null, tint = tint, modifier = Modifier.size(24.dp))
+            Icon(painterResource(R.drawable.am_list_bullet), null, tint = tint, modifier = Modifier.size(25.dp))
         }
     }
 }

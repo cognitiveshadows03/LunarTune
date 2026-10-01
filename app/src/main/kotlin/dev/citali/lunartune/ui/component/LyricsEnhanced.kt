@@ -185,6 +185,8 @@ fun LyricsEnhanced(
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
     focusAnchorHeight: Dp? = null,
+    /** Always pull the active line to the focus point (Apple Music style), not only when it drifts out of view. */
+    alwaysFocusActiveLine: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -508,7 +510,7 @@ fun LyricsEnhanced(
                 listState.scrollLyricIntoFocus(
                     index = index,
                     animateToNearbyItem = !forceNextScroll,
-                    force = forceNextScroll,
+                    force = forceNextScroll || alwaysFocusActiveLine,
                     alignByItemCenter = isTtmlFormat,
                 )
                 forceNextScroll = false

@@ -145,6 +145,7 @@ fun Queue(
     textButtonColor: Color,
     iconButtonColor: Color,
     onShowLyrics: () -> Unit = {},
+    lyricsOpenProvider: () -> Boolean = { false },
     pureBlack: Boolean,
 ) {
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
@@ -657,6 +658,7 @@ fun Queue(
                             textBackgroundColor = TextBackgroundColor,
                             onExpandQueue = openQueue,
                             onShowLyrics = onShowLyrics,
+                            lyricsOpenProvider = lyricsOpenProvider,
                             onDeviceClick = { SystemMediaControlResolver.openMediaOutputSwitcher(context) },
                             device = audioDevice,
                         )

@@ -905,7 +905,7 @@ fun BottomSheetPlayer(
             0.dp
         } else if (playerDesignStyle == PlayerDesignStyle.V10) {
             // Apple Music style: just the 44dp icon row, slightly closer to the gesture bar.
-            52.dp - 4.dp
+            52.dp + 8.dp
         } else if (playerDesignStyle == PlayerDesignStyle.V9) {
             88.dp +
                 (if (showCodecOnPlayer) 24.dp else 0.dp) +
@@ -2027,6 +2027,7 @@ fun BottomSheetPlayer(
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
+            lyricsOpenProvider = { isLyricsScreenVisible },
             onShowLyrics = {
                 isLyricsScreenVisible =
                     if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
