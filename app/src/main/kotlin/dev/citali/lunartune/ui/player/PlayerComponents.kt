@@ -33,6 +33,7 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.layout
 import dev.citali.lunartune.ui.component.LyricsEnhanced
@@ -4665,10 +4666,17 @@ private fun AppleMusicPortraitContent(
     )
     val collapseProvider = androidx.compose.runtime.rememberUpdatedState(collapse)
     val p: () -> Float = { collapseProvider.value }
+    // The status bar is hidden in this style, so fall back to the display cutout to clear the
+    // camera hole / notch.
     val statusTop =
-        androidx.compose.foundation.layout.WindowInsets.statusBars
-            .asPaddingValues()
-            .calculateTopPadding()
+        maxOf(
+            androidx.compose.foundation.layout.WindowInsets.statusBars
+                .asPaddingValues()
+                .calculateTopPadding(),
+            androidx.compose.foundation.layout.WindowInsets.displayCutout
+                .asPaddingValues()
+                .calculateTopPadding(),
+        )
     val thumb = 56.dp
     val thumbStart = AppleMusicGutter
     val thumbTop = 16.dp
@@ -4848,12 +4856,16 @@ private fun AppleMusicPortraitContent(
                                 sliderPositionProvider = { provider.value },
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 modifier = Modifier.fillMaxSize(),
+                                // Always on the dark blurred backdrop, so ignore light theme colours.
+                                textColorOverride = Color.White,
                             )
                         LyricsMode.ENHANCED ->
                             LyricsEnhanced(
                                 sliderPositionProvider = { provider.value },
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 modifier = Modifier.fillMaxSize(),
+                                // Always on the dark blurred backdrop, so ignore light theme colours.
+                                textColorOverride = Color.White,
                             )
                     }
                 }

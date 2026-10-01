@@ -1395,11 +1395,11 @@ fun QueueCollapsedContentAppleMusic(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 0.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 4.dp)
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
                 .padding(
                     bottom =
-                        (WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - 12.dp)
+                        (WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - 4.dp)
                             .coerceAtLeast(0.dp),
                 ),
     ) {

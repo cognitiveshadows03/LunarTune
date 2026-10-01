@@ -904,8 +904,8 @@ fun BottomSheetPlayer(
         if (playerDesignStyle == PlayerDesignStyle.V5) {
             0.dp
         } else if (playerDesignStyle == PlayerDesignStyle.V10) {
-            // Apple Music style: just the 44dp icon row, tucked closer to the gesture bar.
-            48.dp - 12.dp
+            // Apple Music style: just the 44dp icon row, slightly closer to the gesture bar.
+            52.dp - 4.dp
         } else if (playerDesignStyle == PlayerDesignStyle.V9) {
             88.dp +
                 (if (showCodecOnPlayer) 24.dp else 0.dp) +
@@ -2099,7 +2099,16 @@ private fun MikoLyricsTransition(
         animationSpec =
             tween(
                 durationMillis = 320,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                // Closing plays the opening exactly in reverse (mirrored easing). With the forward
+                // curve the doubled alpha collapsed within ~100ms and the page seemed to just vanish.
+                easing =
+                    if (visible) {
+                        androidx.compose.animation.core.FastOutSlowInEasing
+                    } else {
+                        androidx.compose.animation.core.Easing { f ->
+                            1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(1f - f)
+                        }
+                    },
             ),
         label = "mikoLyricsTransition",
     )
