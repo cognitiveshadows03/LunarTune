@@ -240,6 +240,7 @@ fun LyricsScreen(
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     backHandlerEnabled: Boolean = true,
+    contentRevealProgress: () -> Float = { 1f },
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -507,7 +508,11 @@ fun LyricsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.systemBars),
+                    .graphicsLayer {
+                        val t = contentRevealProgress()
+                        alpha = t
+                        translationY = (1f - t) * 40.dp.toPx()
+                    }.windowInsetsPadding(WindowInsets.systemBars),
         ) {
             AppleMusicGrabber(onClick = onBackClick)
             AppleMusicTrackHeader(
