@@ -35,6 +35,10 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.layout
+import dev.citali.lunartune.ui.component.LyricsEnhanced
+import dev.citali.lunartune.ui.component.LyricsV2
+import dev.citali.lunartune.constants.LyricsMode
+import dev.citali.lunartune.constants.LyricsModeKey
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -145,6 +149,10 @@ import dev.citali.lunartune.ui.utils.highRes
 import dev.citali.lunartune.utils.makeTimeString
 import dev.citali.lunartune.utils.rememberLowDataModeActive
 import dev.citali.lunartune.utils.rememberPreference
+import dev.citali.lunartune.utils.rememberEnumPreference
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 
 private const val PlayerBackgroundMaxBlurRadius = 64f
 private const val ExplicitBadgeInlineId = "explicitBadge"
@@ -4642,17 +4650,15 @@ private fun AppleMusicPortraitContent(
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Lyrics opening (after BitChord): the artwork collapses into a 54dp header thumbnail with the
-    // credits beside it; the lyrics fade up only once the collapse lands. Controls stay put.
-    // The existing lyrics page fades in over the collapsed artwork once it reaches the page's own
-    // header thumbnail (58dp, 24dp in, below the 44dp grabber), so the hand-off reads as one motion.
-    // Closing waits for the page to fade first.
+    // Lyrics (ported from ArchiveTune's AppleMusicPlayer): the artwork collapses into a 56dp mini
+    // header thumbnail beside the credits, the word-synced lyrics (LyricsEnhanced / LyricsV2, per the
+    // lyrics mode setting) fade in below after a short deferral, and the controls auto-hide after 5s
+    // while reading — a tap anywhere brings them back.
     val collapse by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (lyricsOpen) 1f else 0f,
         animationSpec =
             androidx.compose.animation.core.tween(
-                durationMillis = 420,
-                delayMillis = if (lyricsOpen) 0 else 180,
+                durationMillis = 450,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing,
             ),
         label = "appleMusicLyricsCollapse",
@@ -4663,11 +4669,47 @@ private fun AppleMusicPortraitContent(
         androidx.compose.foundation.layout.WindowInsets.statusBars
             .asPaddingValues()
             .calculateTopPadding()
-    val thumb = 58.dp
-    val thumbStart = 24.dp
-    val thumbTop = 47.dp
+    val thumb = 56.dp
+    val thumbStart = AppleMusicGutter
+    val thumbTop = 16.dp
+    val miniHeaderHeight = statusTop + thumbTop + thumb + 8.dp
+    val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    var lyricsContentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(lyricsOpen) {
+        lyricsContentReady = false
+        if (lyricsOpen) {
+            kotlinx.coroutines.delay(160L)
+            lyricsContentReady = true
+        }
+    }
+    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsPoke by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    LaunchedEffect(lyricsOpen, controlsPoke, sliderPosition != null) {
+        controlsVisible = true
+        if (lyricsOpen && sliderPosition == null) {
+            kotlinx.coroutines.delay(5_000L)
+            controlsVisible = false
+        }
+    }
+    val controlsAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (controlsVisible) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(if (controlsVisible) 180 else 140),
+        label = "appleMusicControlsAlpha",
+    )
+
+    BoxWithConstraints(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .pointerInput(lyricsOpen) {
+                    if (!lyricsOpen) return@pointerInput
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        controlsPoke++
+                    }
+                },
+    ) {
         val compactHeight = maxHeight < 720.dp
         val gap = if (compactHeight) 8.dp else 16.dp
         val fullArt = maxWidth
@@ -4698,7 +4740,7 @@ private fun AppleMusicPortraitContent(
                         }
                     }.graphicsLayer {
                         val t = p()
-                        shape = RoundedCornerShape(androidx.compose.ui.unit.lerp(0.dp, 7.dp, t))
+                        shape = RoundedCornerShape(androidx.compose.ui.unit.lerp(0.dp, 8.dp, t))
                         clip = t > 0f
                         compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                     }.drawWithContent {
@@ -4723,12 +4765,111 @@ private fun AppleMusicPortraitContent(
             )
         }
 
+        // Mini header: credits, star and menu beside the collapsed thumbnail.
+        if (collapse > 0f) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .padding(start = thumbStart + thumb + 12.dp, end = AppleMusicGutter - 8.dp, top = statusTop + thumbTop)
+                        .height(thumb)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            val t = p()
+                            alpha = ((t - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                            translationY = (1f - t) * 24.dp.toPx()
+                        },
+            ) {
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                indication = null,
+                                onClick = onCloseLyrics,
+                            ),
+                ) {
+                    Text(
+                        text = mediaMetadata.title,
+                        color = foreground,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.basicMarquee(),
+                    )
+                    Text(
+                        text = artists.joinToString { it.name },
+                        color = foreground.copy(alpha = 0.6f),
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                AppleMusicPlainIcon(
+                    iconRes = if (currentSongLiked) R.drawable.star_filled else R.drawable.star,
+                    tint = if (currentSongLiked) Color(0xFFFFC83D) else foreground.copy(alpha = 0.55f),
+                    iconSize = 22.dp,
+                    onClick = onToggleLike,
+                )
+                AppleMusicPlainIcon(
+                    iconRes = R.drawable.more_horiz,
+                    tint = foreground.copy(alpha = 0.8f),
+                    iconSize = 24.dp,
+                    onClick = onMenuClick,
+                )
+            }
+        }
+
+        // Lyrics pane between the mini header and the controls (full height once they auto-hide).
+        androidx.compose.animation.AnimatedVisibility(
+            visible = lyricsOpen,
+            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
+            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
+        ) {
+            val lyricsBottom by androidx.compose.animation.core.animateDpAsState(
+                targetValue = if (controlsVisible) controlsHeight else 0.dp,
+                animationSpec = androidx.compose.animation.core.tween(300),
+                label = "appleMusicLyricsBottom",
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = miniHeaderHeight, bottom = lyricsBottom)
+                        .padding(horizontal = AppleMusicGutter - 16.dp),
+            ) {
+                if (lyricsContentReady) {
+                    val provider = androidx.compose.runtime.rememberUpdatedState(sliderPosition)
+                    when (lyricsMode) {
+                        LyricsMode.V2 ->
+                            LyricsV2(
+                                sliderPositionProvider = { provider.value },
+                                lyricsSyncOffset = lyricsSyncOffset,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        LyricsMode.ENHANCED ->
+                            LyricsEnhanced(
+                                sliderPositionProvider = { provider.value },
+                                lyricsSyncOffset = lyricsSyncOffset,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                    }
+                }
+            }
+        }
+
             Column(
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .onSizeChanged { controlsHeightPx = it.height }
+                        .graphicsLayer {
+                            alpha = controlsAlpha
+                            translationY = (1f - controlsAlpha) * 24.dp.toPx()
+                        }
                         .padding(horizontal = AppleMusicGutter),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -4779,7 +4920,7 @@ private fun AppleMusicPortraitContent(
                     foreground = foreground,
                     onVolumeChange = onVolumeChange,
                 )
-                Spacer(Modifier.height(if (compactHeight) 4.dp else 8.dp))
+                Spacer(Modifier.height(2.dp))
             }
     }
 }

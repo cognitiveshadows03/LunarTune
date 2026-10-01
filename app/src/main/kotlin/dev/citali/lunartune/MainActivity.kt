@@ -1224,7 +1224,8 @@ class MainActivity : FragmentActivity() {
                                 playerBottomSheetState.isExpandedOrExpanding &&
                                     (
                                         playerDesignStyle == PlayerDesignStyle.V7 ||
-                                            playerDesignStyle == PlayerDesignStyle.V7_LEGACY
+                                            playerDesignStyle == PlayerDesignStyle.V7_LEGACY ||
+                                            playerDesignStyle == PlayerDesignStyle.V10
                                     )
                             )
 

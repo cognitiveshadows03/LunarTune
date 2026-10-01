@@ -903,6 +903,9 @@ fun BottomSheetPlayer(
     val dynamicQueuePeekHeight =
         if (playerDesignStyle == PlayerDesignStyle.V5) {
             0.dp
+        } else if (playerDesignStyle == PlayerDesignStyle.V10) {
+            // Apple Music style: just the 44dp icon row, tucked closer to the gesture bar.
+            48.dp - 12.dp
         } else if (playerDesignStyle == PlayerDesignStyle.V9) {
             88.dp +
                 (if (showCodecOnPlayer) 24.dp else 0.dp) +
@@ -1998,16 +2001,20 @@ fun BottomSheetPlayer(
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
-            onShowLyrics = { isLyricsScreenVisible = true },
+            onShowLyrics = {
+                isLyricsScreenVisible =
+                    if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
+            },
             pureBlack = pureBlack,
         )
 
         mediaMetadata?.let { metadata ->
             MikoLyricsTransition(
-                visible = isLyricsScreenVisible,
-                appleMusicHandOff =
-                    playerDesignStyle == PlayerDesignStyle.V10 &&
-                        LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE,
+                // Apple Music style shows lyrics inline in portrait (ported from ArchiveTune).
+                visible =
+                    isLyricsScreenVisible &&
+                        (playerDesignStyle != PlayerDesignStyle.V10 ||
+                            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE),
                 backHandlerEnabled = isLyricsScreenVisible && state.isExpandedOrExpanding,
                 mediaMetadata = metadata,
                 navController = navController,

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -1394,9 +1395,12 @@ fun QueueCollapsedContentAppleMusic(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 6.dp)
-                .windowInsetsPadding(
-                    WindowInsets.systemBars.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
+                .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 0.dp)
+                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                .padding(
+                    bottom =
+                        (WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - 12.dp)
+                            .coerceAtLeast(0.dp),
                 ),
     ) {
         @Composable
