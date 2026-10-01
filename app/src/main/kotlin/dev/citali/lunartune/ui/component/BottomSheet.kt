@@ -16,7 +16,9 @@ import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -43,6 +45,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
@@ -56,6 +59,8 @@ import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.sign
 import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetCollapseAnimationSpec
@@ -393,21 +398,43 @@ fun Modifier.bottomSheetDraggable(
 ): Modifier =
     this.pointerInput(state) {
         val velocityTracker = VelocityTracker()
+        // Some devices (seen on vivo/Funtouch) report a few pixels of jitter during a normal tap.
+        // With the platform touch slop that already starts a sheet drag, which cancels the tap on
+        // the button underneath (queue, lyrics...) and the sheet just twitches and settles back.
+        // Require a clearly deliberate movement before the sheet takes over the gesture.
+        val dragSlop = viewConfiguration.touchSlop * SheetDragSlopMultiplier
 
-        detectVerticalDragGestures(
-            onVerticalDrag = { change, dragAmount ->
-                velocityTracker.addPointerInputChange(change)
-                state.dispatchRawDelta(dragAmount)
-            },
-            onDragCancel = {
-                val velocity = -velocityTracker.calculateVelocity().y
-                velocityTracker.resetTracking()
-                state.performFling(velocity, onDismiss)
-            },
-            onDragEnd = {
-                val velocity = -velocityTracker.calculateVelocity().y
-                velocityTracker.resetTracking()
-                state.performFling(velocity, onDismiss)
-            },
-        )
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val pointerId = down.id
+            var totalDy = 0f
+            var dragStarted = false
+
+            while (!dragStarted) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == pointerId } ?: return@awaitEachGesture
+                if (!change.pressed) return@awaitEachGesture // a tap: the child handles it
+                if (change.isConsumed) return@awaitEachGesture // a child (e.g. a list) took it
+                totalDy += change.positionChange().y
+                if (abs(totalDy) > dragSlop) {
+                    dragStarted = true
+                    velocityTracker.resetTracking()
+                    velocityTracker.addPointerInputChange(change)
+                    change.consume()
+                    state.dispatchRawDelta(totalDy - sign(totalDy) * dragSlop)
+                }
+            }
+
+            val completed =
+                verticalDrag(pointerId) { change ->
+                    velocityTracker.addPointerInputChange(change)
+                    state.dispatchRawDelta(change.positionChange().y)
+                    change.consume()
+                }
+            val velocity = -velocityTracker.calculateVelocity().y
+            velocityTracker.resetTracking()
+            state.performFling(if (completed) velocity else 0f, onDismiss)
+        }
     }
+
+private const val SheetDragSlopMultiplier = 2.5f
