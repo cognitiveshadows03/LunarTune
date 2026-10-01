@@ -15,6 +15,7 @@ package dev.citali.lunartune.ui.player
  * auto-hiding controls, and the lyrics menu on the header overflow button.
  */
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -251,6 +252,33 @@ internal fun AppleMusicPortraitContent(
     val currentLyrics by (
         playerConnection?.currentLyrics ?: kotlinx.coroutines.flow.MutableStateFlow(null)
     ).collectAsStateWithLifecycle(initialValue = null)
+    // The inline lyrics page has no LyricsScreen to fetch lyrics, and fetches tied to the page's own
+    // composition got cancelled and restarted whenever it opened/closed. Fetch here instead, keyed only
+    // on the song, so lyrics are already loading (or ready) by the time the page is opened.
+    val amContext = androidx.compose.ui.platform.LocalContext.current
+    val amDatabase = dev.citali.lunartune.LocalDatabase.current
+    val amLyricsHelper =
+        remember(amContext) {
+            dagger.hilt.android.EntryPointAccessors
+                .fromApplication(amContext.applicationContext, dev.citali.lunartune.di.LyricsHelperEntryPoint::class.java)
+                .lyricsHelper()
+        }
+    val hasLyrics = currentLyrics != null
+    LaunchedEffect(mediaMetadata.id, hasLyrics) {
+        if (hasLyrics) return@LaunchedEffect
+        try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (amDatabase.lyrics(mediaMetadata.id).first() != null) return@withContext
+                val fetched = amLyricsHelper.getLyricsWithSource(mediaMetadata)
+                amDatabase.query {
+                    insertLyricsIfAbsent(id = mediaMetadata.id, lyrics = fetched.lyrics, source = fetched.providerName)
+                }
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
     val showLyricsControlsState = rememberPreference(ShowLyricsPlayerControlsKey, true)
     val autoHideLyricsControlsState = rememberPreference(LyricsAutoHidePlayerControlsKey, false)
     val latestMetadata = androidx.compose.runtime.rememberUpdatedState(mediaMetadata)
