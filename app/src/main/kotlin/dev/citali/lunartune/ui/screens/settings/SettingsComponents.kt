@@ -429,7 +429,7 @@ fun SettingsRow(
                 modifier =
                     Modifier
                         .size(SettingsDimensions.RowIconSize)
-                        .clip(CircleShape)
+                        .clip(settingsIconShape(item.key))
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -601,7 +601,7 @@ fun SettingsSegmentedItem(
                 modifier =
                     Modifier
                         .size(52.dp)
-                        .clip(CircleShape)
+                        .clip(settingsIconShape(item.key))
                         .background(effectiveAccent),
                 contentAlignment = Alignment.Center,
             ) {
@@ -839,7 +839,7 @@ fun SettingsSearchResultItem(
                 modifier =
                     Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
+                        .clip(settingsIconShape(result.parentKey))
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
