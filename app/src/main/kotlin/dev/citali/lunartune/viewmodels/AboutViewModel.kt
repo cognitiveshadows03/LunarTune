@@ -459,6 +459,21 @@ class AboutViewModel
                                     ),
                                 ),
                         ),
+                        TeamMember(
+                            avatarUrl = "https://avatars.githubusercontent.com/u/169815417?v=4",
+                            name = "AlexJamesHQ",
+                            positionResId = R.string.about_position_beta_tester_contributor,
+                            profileUrl = "https://github.com/AlexJamesHQ",
+                            links =
+                                AboutLinkCollection.of(
+                                    AboutLinkUiModel(
+                                        id = "github",
+                                        iconResId = R.drawable.github,
+                                        labelResId = R.string.about_content_desc_github,
+                                        url = "https://github.com/AlexJamesHQ",
+                                    ),
+                                ),
+                        ),
                     ),
                 respecters =
                     TeamMemberCollection.of(

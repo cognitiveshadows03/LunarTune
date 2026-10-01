@@ -769,6 +769,7 @@
     <string name="about_position_original">Base framework</string>
     <string name="about_position_bot_contributor">Contributor</string>
     <string name="about_position_developers">Developer | Team</string>
+    <string name="about_position_beta_tester_contributor" translatable="false">Beta Tester | Contributor</string>
     <string name="about_position_yuki">dummy reze | Admin</string>
     <string name="about_position_mo_agamy">Playback client fallback</string>
     <string name="about_position_vivi">Dolby and Dirac equalizer presets</string>
