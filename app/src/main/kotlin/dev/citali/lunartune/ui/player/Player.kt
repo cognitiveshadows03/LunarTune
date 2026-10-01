@@ -1888,6 +1888,7 @@ fun BottomSheetPlayer(
                                 appleMusic = playerDesignStyle == PlayerDesignStyle.V10,
                                 appleMusicLyricsOpen = isLyricsScreenVisible,
                                 lyricsSyncOffset = lyricsSyncOffset,
+                                onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
                                 onCloseLyrics = { isLyricsScreenVisible = false },
                                 modifier =
                                     Modifier
@@ -2117,33 +2118,20 @@ private fun MikoLyricsTransition(
     // already finished by the time the first frame landed, so the page just popped in.
     val progress = remember { androidx.compose.animation.core.Animatable(if (visible) 1f else 0f) }
     var mounted by remember { mutableStateOf(visible) }
-    // Frame-paced rather than clock-paced: each frame advances by at most ~20ms of animation, so
-    // when the heavy lyrics page drops frames while it builds, the animation slows down instead of
-    // being skipped (a clock-based tween would already be finished and the page would pop in).
     LaunchedEffect(visible) {
-        suspend fun run(
-            target: Float,
-            durationMs: Float,
-            easing: androidx.compose.animation.core.Easing,
-        ) {
-            val start = progress.value
-            val distance = kotlin.math.abs(target - start)
-            if (distance == 0f) return
-            var linear = 0f
-            var last = androidx.compose.runtime.withFrameNanos { it }
-            while (linear < 1f) {
-                val now = androidx.compose.runtime.withFrameNanos { it }
-                val dtMs = ((now - last) / 1_000_000f).coerceIn(0f, 20f)
-                last = now
-                linear = (linear + dtMs / (durationMs * distance)).coerceAtMost(1f)
-                progress.snapTo(start + (target - start) * easing.transform(linear))
-            }
-        }
         if (visible) {
             mounted = true
-            run(1f, 480f, androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f))
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            progress.animateTo(
+                1f,
+                tween(durationMillis = 480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+            )
         } else if (mounted) {
-            run(0f, 340f, androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f))
+            progress.animateTo(
+                0f,
+                tween(durationMillis = 340, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
+            )
             mounted = false
         }
     }
