@@ -401,7 +401,7 @@ fun Thumbnail(
                         val shouldUseCanvas =
                             archiveTuneCanvasEnabled &&
                                 playerDesignStyle != PlayerDesignStyle.V7 &&
-                                playerDesignStyle != PlayerDesignStyle.V8 &&
+                                (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10) &&
                                 item.mediaId.isNotBlank() &&
                                 item.mediaId == currentMediaItem?.mediaId
                         val shouldFetchCanvas = shouldUseCanvas && !lowDataModeActive
@@ -534,7 +534,7 @@ fun Thumbnail(
                                         cropThumbnailToSquare &&
                                             playerDesignStyle != PlayerDesignStyle.V7 &&
                                             playerDesignStyle != PlayerDesignStyle.V7_LEGACY &&
-                                            playerDesignStyle != PlayerDesignStyle.V8
+                                            (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10)
 
                                     val baseArtworkUrl =
                                         item.metadata?.thumbnailUrl?.highRes()

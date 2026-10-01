@@ -84,6 +84,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -780,7 +782,7 @@ fun PlayerTopActions(
             }
         }
 
-        PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V9 -> {
+        PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.V9 -> {
             Unit
         }
     }
@@ -1926,7 +1928,7 @@ fun PlayerPlaybackControls(
             }
         }
 
-        PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V9 -> {
+        PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.V9 -> {
             Unit
         }
     }
@@ -2282,6 +2284,7 @@ fun V8PlayerContent(
     onVolumeChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
+    appleMusic: Boolean = false,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2319,6 +2322,46 @@ fun V8PlayerContent(
         V8LandscapeContent(
             mediaMetadata = mediaMetadata,
             subtitle = subtitle,
+            artists = mediaMetadata.artists,
+            artworkUrl = artworkUrl,
+            canvasPrimaryUrl = canvasPrimaryUrl,
+            canvasFallbackUrl = canvasFallbackUrl,
+            playbackState = playbackState,
+            isPlaying = isPlaying,
+            isLoading = isLoading,
+            canSkipPrevious = canSkipPrevious,
+            canSkipNext = canSkipNext,
+            currentSongLiked = currentSongLiked,
+            sliderPosition = sliderPosition,
+            position = position,
+            duration = duration,
+            volume = volume,
+            showVolumeBar = showVolumeBar,
+            currentFormat = currentFormat,
+            foreground = foreground,
+            secondaryForeground = secondaryForeground,
+            onMenuClick = onMenuClick,
+            onToggleLike = playerConnection::toggleLike,
+            onTitleClick = onTitleClick,
+            onArtistClick = onArtistClick,
+            onPreviousClick = playerConnection::seekToPrevious,
+            onNextClick = playerConnection::seekToNext,
+            onPlayPauseClick = {
+                if (playbackState == STATE_ENDED) {
+                    playerConnection.player.seekTo(0, 0)
+                    playerConnection.player.playWhenReady = true
+                } else {
+                    playerConnection.player.togglePlayPause()
+                }
+            },
+            onSliderValueChange = onSliderValueChange,
+            onSliderValueChangeFinished = onSliderValueChangeFinished,
+            onVolumeChange = onVolumeChange,
+            modifier = modifier,
+        )
+    } else if (appleMusic) {
+        AppleMusicPortraitContent(
+            mediaMetadata = mediaMetadata,
             artists = mediaMetadata.artists,
             artworkUrl = artworkUrl,
             canvasPrimaryUrl = canvasPrimaryUrl,
@@ -4544,6 +4587,130 @@ fun PlayerBackground(
             else -> {
                 // DEFAULT or other modes - no background
             }
+        }
+    }
+}
+
+
+@Composable
+private fun AppleMusicPortraitContent(
+    mediaMetadata: MediaMetadata,
+    artists: List<MediaMetadata.Artist>,
+    artworkUrl: String?,
+    canvasPrimaryUrl: String?,
+    canvasFallbackUrl: String?,
+    playbackState: Int,
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    canSkipPrevious: Boolean,
+    canSkipNext: Boolean,
+    currentSongLiked: Boolean,
+    sliderPosition: Long?,
+    position: Long,
+    duration: Long,
+    volume: Float,
+    showVolumeBar: Boolean,
+    currentFormat: FormatEntity?,
+    foreground: Color,
+    secondaryForeground: Color,
+    onMenuClick: () -> Unit,
+    onToggleLike: () -> Unit,
+    onPreviousClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onPlayPauseClick: () -> Unit,
+    onSliderValueChange: (Long) -> Unit,
+    onSliderValueChangeFinished: () -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onTitleClick: () -> Unit,
+    onArtistClick: (artistId: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val contentPadding = if (maxWidth < 380.dp) 22.dp else 26.dp
+        val compactHeight = maxHeight < 720.dp
+        val gap = if (compactHeight) 8.dp else 16.dp
+
+        // Full-bleed artwork pinned to the top, fading into the blurred backdrop.
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .graphicsLayer {
+                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    }.drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush =
+                                Brush.verticalGradient(
+                                    0f to Color.Black,
+                                    0.55f to Color.Black,
+                                    1f to Color.Transparent,
+                                ),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    },
+        ) {
+            CrossfadingPlayerArtwork(
+                artworkUrl = artworkUrl,
+                canvasPrimaryUrl = canvasPrimaryUrl,
+                canvasFallbackUrl = canvasFallbackUrl,
+                isPlaying = isPlaying,
+            )
+        }
+
+        Column(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = contentPadding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            V8MetadataActions(
+                title = mediaMetadata.title,
+                explicit = mediaMetadata.explicit,
+                artists = artists,
+                liked = currentSongLiked,
+                foreground = foreground,
+                onMenuClick = onMenuClick,
+                onToggleLike = onToggleLike,
+                onTitleClick = onTitleClick,
+                onArtistClick = onArtistClick,
+            )
+            Spacer(Modifier.height(gap))
+            V8PlaybackProgress(
+                sliderPosition = sliderPosition,
+                position = position,
+                duration = duration,
+                currentFormat = currentFormat,
+                foreground = foreground,
+                onSliderValueChange = onSliderValueChange,
+                onSliderValueChangeFinished = onSliderValueChangeFinished,
+            )
+            Spacer(Modifier.height(gap))
+            V8TransportControls(
+                playbackState = playbackState,
+                isPlaying = isPlaying,
+                isLoading = isLoading,
+                canSkipPrevious = canSkipPrevious,
+                canSkipNext = canSkipNext,
+                foreground = foreground,
+                onPreviousClick = onPreviousClick,
+                onPlayPauseClick = onPlayPauseClick,
+                onNextClick = onNextClick,
+            )
+            if (showVolumeBar) {
+                Spacer(Modifier.height(gap))
+                V8VolumeControls(
+                    volume = volume,
+                    foreground = foreground,
+                    secondaryForeground = secondaryForeground,
+                    onVolumeChange = onVolumeChange,
+                )
+            }
+            Spacer(Modifier.height(if (compactHeight) 6.dp else 12.dp))
         }
     }
 }

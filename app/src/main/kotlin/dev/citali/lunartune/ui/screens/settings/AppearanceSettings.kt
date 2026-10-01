@@ -394,6 +394,7 @@ fun AppearanceSettings(navController: NavController) {
             PlayerDesignStyle.V7,
             PlayerDesignStyle.V7_LEGACY,
             PlayerDesignStyle.V8,
+            PlayerDesignStyle.V10,
             PlayerDesignStyle.V9,
             -> false
 
@@ -404,7 +405,7 @@ fun AppearanceSettings(navController: NavController) {
         playerDesignStyle == PlayerDesignStyle.V7_LEGACY || isPlayerBackgroundCustomizationEnabled
     val isVolumeBarSupported =
         playerDesignStyle == PlayerDesignStyle.V7 ||
-            playerDesignStyle == PlayerDesignStyle.V8
+            (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)
     val isSystemInDarkTheme = isSystemInDarkTheme()
     val useDarkTheme =
         remember(darkMode, isSystemInDarkTheme) {
@@ -767,6 +768,7 @@ fun AppearanceSettings(navController: NavController) {
                                 PlayerDesignStyle.V7_LEGACY -> stringResource(R.string.player_design_v7_legacy)
                                 PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
                                 PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
+                                PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)
                             }
                         },
                     )
