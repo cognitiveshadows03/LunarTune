@@ -461,7 +461,7 @@ class AboutViewModel
                         ),
                         TeamMember(
                             avatarUrl = "https://avatars.githubusercontent.com/u/169815417?v=4",
-                            name = "AlexJamesHQ",
+                            name = "ΛLΞX JΛMΞS ᗪEV",
                             positionResId = R.string.about_position_beta_tester_contributor,
                             profileUrl = "https://github.com/AlexJamesHQ",
                             links =
