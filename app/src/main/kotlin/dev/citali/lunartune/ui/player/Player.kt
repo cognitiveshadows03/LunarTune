@@ -2009,6 +2009,22 @@ fun BottomSheetPlayer(
         )
 
         mediaMetadata?.let { metadata ->
+            if (playerDesignStyle == PlayerDesignStyle.V10) {
+            AppleMusicLyricsPageTransition(
+                // Apple Music style shows lyrics inline in portrait (ported from ArchiveTune).
+                visible =
+                    isLyricsScreenVisible &&
+                        (playerDesignStyle != PlayerDesignStyle.V10 ||
+                            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE),
+                backHandlerEnabled = isLyricsScreenVisible && state.isExpandedOrExpanding,
+                mediaMetadata = metadata,
+                navController = navController,
+                lyricsSyncOffset = lyricsSyncOffset,
+                onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
+                onDismiss = { isLyricsScreenVisible = false },
+                onQueueClick = openQueue,
+            )
+            } else {
             MikoLyricsTransition(
                 // Apple Music style shows lyrics inline in portrait (ported from ArchiveTune).
                 visible =
@@ -2023,6 +2039,7 @@ fun BottomSheetPlayer(
                 onDismiss = { isLyricsScreenVisible = false },
                 onQueueClick = openQueue,
             )
+            }
         }
 
         AnimatedVisibility(
@@ -2143,6 +2160,75 @@ private fun MikoLyricsTransition(
                 onQueueClick = onQueueClick,
                 backHandlerEnabled = backHandlerEnabled,
             )
+        }
+    }
+}
+
+/** Apple Music style keeps the lyrics page transition from 928f642 (fade with mirrored close). */
+@Composable
+private fun AppleMusicLyricsPageTransition(
+    visible: Boolean,
+    backHandlerEnabled: Boolean,
+    mediaMetadata: MediaMetadata,
+    navController: NavController,
+    lyricsSyncOffset: Int,
+    onLyricsSyncOffsetChange: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onQueueClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec =
+            tween(
+                durationMillis = 320,
+                // Closing plays the opening exactly in reverse (mirrored easing). With the forward
+                // curve the doubled alpha collapsed within ~100ms and the page seemed to just vanish.
+                easing =
+                    if (visible) {
+                        androidx.compose.animation.core.FastOutSlowInEasing
+                    } else {
+                        androidx.compose.animation.core.Easing { f ->
+                            1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(1f - f)
+                        }
+                    },
+            ),
+        label = "mikoLyricsTransition",
+    )
+
+    val boundedProgress = progress.coerceIn(0f, 1f)
+
+    if (visible || boundedProgress > 0.001f) {
+        val alpha = boundedProgress
+        val cornerRadius = 20.dp * (1f - boundedProgress)
+
+        Box(
+            modifier =
+                modifier
+                    .fillMaxSize()
+                    .graphicsLayer { this.alpha = boundedProgress }
+                    .background(Color.Black.copy(alpha = 0.28f * boundedProgress)),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            this.alpha = alpha
+                            translationY = size.height * 0.10f * (1f - boundedProgress)
+                        }.clip(RoundedCornerShape(cornerRadius))
+                        .background(MaterialTheme.colorScheme.surface),
+            ) {
+                LyricsScreen(
+                    mediaMetadata = mediaMetadata,
+                    onBackClick = onDismiss,
+                    navController = navController,
+                    lyricsSyncOffset = lyricsSyncOffset,
+                    onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
+                    onQueueClick = onQueueClick,
+                    backHandlerEnabled = backHandlerEnabled,
+                )
+            }
         }
     }
 }
