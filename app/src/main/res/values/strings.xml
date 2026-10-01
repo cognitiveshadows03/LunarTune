@@ -1255,4 +1255,8 @@
     <string name="motion_bounce_desc">Spring overshoot and playfulness</string>
     <string name="motion_preview">Live preview</string>
     <string name="motion_preview_hint">Tap the track to feel the current settings</string>
+    <string name="account_banner_edit">Edit banner</string>
+    <string name="account_banner_choose">Choose from device</string>
+    <string name="account_banner_youtube">Use YouTube channel banner</string>
+    <string name="account_banner_remove">Remove banner</string>
 </resources>

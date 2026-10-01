@@ -9,6 +9,24 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.RectangleShape
+import coil3.request.ImageRequest
+import dev.citali.lunartune.constants.AccountBannerSourceKey
+import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerHandleKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
+import kotlinx.coroutines.launch
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -697,77 +715,220 @@ private fun AccountSummaryCard(
     onSecondaryAction: () -> Unit,
     onOpenAccountSwitcher: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val (bannerSource, onBannerSourceChange) =
+        rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
+    val (bannerUpdatedAt, onBannerUpdatedAtChange) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
+    val (youTubeBannerUrl, onYouTubeBannerUrlChange) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val (youTubeBannerHandle, onYouTubeBannerHandleChange) = rememberPreference(AccountYouTubeBannerHandleKey, "")
+    var showBannerMenu by remember { mutableStateOf(false) }
+
+    // Default banner: the signed-in user's YouTube channel banner, looked up once per handle.
+    LaunchedEffect(isLoggedIn, accountHandle, bannerSource) {
+        if (bannerSource == AccountBanner.SOURCE_YOUTUBE &&
+            isLoggedIn &&
+            accountHandle.isNotBlank() &&
+            youTubeBannerHandle != accountHandle
+        ) {
+            AccountBanner.fetchYouTubeBanner(accountHandle)?.let { url ->
+                onYouTubeBannerUrlChange(url)
+                onYouTubeBannerHandleChange(accountHandle)
+            }
+        }
+    }
+
+    val bannerPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri != null) {
+                coroutineScope.launch {
+                    if (AccountBanner.saveCustom(context, uri)) {
+                        onBannerSourceChange(AccountBanner.SOURCE_CUSTOM)
+                        onBannerUpdatedAtChange(System.currentTimeMillis())
+                    }
+                }
+            }
+        }
+
+    val bannerModel: Any? =
+        when (bannerSource) {
+            AccountBanner.SOURCE_CUSTOM -> {
+                val file = AccountBanner.customFile(context)
+                if (file.exists()) {
+                    ImageRequest
+                        .Builder(context)
+                        .data(file)
+                        .memoryCacheKey("account_banner_$bannerUpdatedAt")
+                        .diskCacheKey("account_banner_$bannerUpdatedAt")
+                        .build()
+                } else {
+                    null
+                }
+            }
+
+            AccountBanner.SOURCE_YOUTUBE -> {
+                youTubeBannerUrl.takeIf {
+                    isLoggedIn && it.isNotBlank() && youTubeBannerHandle == accountHandle
+                }
+            }
+
+            else -> null
+        }
+    val hasBanner = bannerModel != null
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val bodyShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+        Column {
+            if (hasBanner) {
+                AsyncImage(
+                    model = bannerModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(BannerHeight),
+                )
+            }
+
+            Column(
+                modifier =
+                    Modifier
+                        .then(if (hasBanner) Modifier.overlapUp(BodyOverlap) else Modifier)
+                        .fillMaxWidth()
+                        .background(containerColor, if (hasBanner) bodyShape else RectangleShape)
+                        .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = if (hasBanner) 0.dp else 20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Box(contentAlignment = Alignment.BottomEnd) {
-                    Surface(
-                        modifier = Modifier.size(AvatarSize),
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                    ) {
-                        if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
-                            AsyncImage(
-                                model = accountImageUrl,
-                                contentDescription = null,
-                                modifier =
-                                    Modifier
-                                        .fillMaxSize()
-                                        .clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                            )
-                        } else {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    painter =
-                                        painterResource(
-                                            if (isLoggedIn) R.drawable.account else R.drawable.login,
-                                        ),
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .then(if (hasBanner) Modifier.overlapUp(ProfileAvatarSize / 2) else Modifier),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    val avatarShape = MaterialShapes.Cookie9Sided.toShape()
+                    Box(contentAlignment = Alignment.BottomEnd) {
+                        Surface(
+                            modifier = Modifier.size(ProfileAvatarSize),
+                            shape = avatarShape,
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            border = BorderStroke(3.dp, containerColor),
+                        ) {
+                            if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = accountImageUrl,
                                     contentDescription = null,
-                                    modifier = Modifier.size(32.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier =
+                                        Modifier
+                                            .fillMaxSize()
+                                            .clip(avatarShape),
+                                    contentScale = ContentScale.Crop,
                                 )
+                            } else {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter =
+                                            painterResource(
+                                                if (isLoggedIn) R.drawable.account else R.drawable.login,
+                                            ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(36.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    )
+                                }
+                            }
+                        }
+
+                        if (isLoggedIn) {
+                            Surface(
+                                modifier = Modifier.size(26.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primary,
+                                border = BorderStroke(2.dp, containerColor),
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.check),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                    )
+                                }
                             }
                         }
                     }
 
-                    if (isLoggedIn) {
-                        Surface(
-                            modifier = Modifier.size(24.dp),
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.primary,
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    Box {
+                        FilledTonalIconButton(
+                            onClick = { showBannerMenu = true },
+                            shapes = IconButtonDefaults.shapes(),
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    painter = painterResource(R.drawable.check),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onPrimary,
-                                )
-                            }
+                            Icon(
+                                painter = painterResource(R.drawable.edit),
+                                contentDescription = stringResource(R.string.account_banner_edit),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showBannerMenu,
+                            onDismissRequest = { showBannerMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.account_banner_choose)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.image), null) },
+                                onClick = {
+                                    showBannerMenu = false
+                                    bannerPicker.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.account_banner_youtube)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.account), null) },
+                                trailingIcon =
+                                    if (bannerSource == AccountBanner.SOURCE_YOUTUBE) {
+                                        { Icon(painterResource(R.drawable.check), null) }
+                                    } else {
+                                        null
+                                    },
+                                enabled = isLoggedIn,
+                                onClick = {
+                                    showBannerMenu = false
+                                    AccountBanner.deleteCustom(context)
+                                    // Force a fresh lookup in case the channel banner changed.
+                                    onYouTubeBannerHandleChange("")
+                                    onBannerSourceChange(AccountBanner.SOURCE_YOUTUBE)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.account_banner_remove)) },
+                                leadingIcon = { Icon(painterResource(R.drawable.hide_image), null) },
+                                enabled = hasBanner,
+                                onClick = {
+                                    showBannerMenu = false
+                                    AccountBanner.deleteCustom(context)
+                                    onBannerSourceChange(AccountBanner.SOURCE_NONE)
+                                },
+                            )
                         }
                     }
                 }
 
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = accountName,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (accountHandle.isNotBlank()) {
@@ -789,78 +950,82 @@ private fun AccountSummaryCard(
                         )
                     }
                 }
-            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SplitButtonLayout(
-                    leadingButton = {
-                        SplitButtonDefaults.ElevatedLeadingButton(
-                            onClick = onPrimaryAction,
-                            colors =
-                                ButtonDefaults.elevatedButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                ),
-                        ) {
-                            Icon(
-                                painter =
-                                    painterResource(
-                                        if (isLoggedIn) R.drawable.account else R.drawable.login,
-                                    ),
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = if (isLoggedIn) stringResource(R.string.account) else stringResource(R.string.login),
-                            )
-                        }
-                    },
-                    trailingButton = {
-                        SplitButtonDefaults.ElevatedTrailingButton(
-                            checked = false,
-                            onCheckedChange = { onOpenAccountSwitcher() },
-                            enabled = accountSwitcherEnabled,
-                            colors =
-                                ButtonDefaults.elevatedButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                ),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.expand_more),
-                                contentDescription = stringResource(R.string.saved_accounts),
-                                modifier = Modifier.size(SplitButtonDefaults.TrailingIconSize),
-                            )
-                        }
-                    },
-                )
-
-                TextButton(
-                    onClick = onSecondaryAction,
-                    colors =
-                        ButtonDefaults.textButtonColors(
-                            contentColor =
-                                if (isLoggedIn) {
-                                    MaterialTheme.colorScheme.error
-                                } else {
-                                    MaterialTheme.colorScheme.primary
-                                },
-                        ),
-                    shapes = ButtonDefaults.shapes(),
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = if (isLoggedIn) stringResource(R.string.action_logout) else stringResource(R.string.advanced_login),
+                    SplitButtonLayout(
+                        leadingButton = {
+                            SplitButtonDefaults.ElevatedLeadingButton(
+                                onClick = onPrimaryAction,
+                                colors =
+                                    ButtonDefaults.elevatedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    ),
+                            ) {
+                                Icon(
+                                    painter =
+                                        painterResource(
+                                            if (isLoggedIn) R.drawable.account else R.drawable.login,
+                                        ),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isLoggedIn) stringResource(R.string.account) else stringResource(R.string.login),
+                                )
+                            }
+                        },
+                        trailingButton = {
+                            SplitButtonDefaults.ElevatedTrailingButton(
+                                checked = false,
+                                onCheckedChange = { onOpenAccountSwitcher() },
+                                enabled = accountSwitcherEnabled,
+                                colors =
+                                    ButtonDefaults.elevatedButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    ),
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.expand_more),
+                                    contentDescription = stringResource(R.string.saved_accounts),
+                                    modifier = Modifier.size(SplitButtonDefaults.TrailingIconSize),
+                                )
+                            }
+                        },
                     )
+
+                    TextButton(
+                        onClick = onSecondaryAction,
+                        colors =
+                            ButtonDefaults.textButtonColors(
+                                contentColor =
+                                    if (isLoggedIn) {
+                                        MaterialTheme.colorScheme.error
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                            ),
+                        shapes = ButtonDefaults.shapes(),
+                    ) {
+                        Text(
+                            text = if (isLoggedIn) stringResource(R.string.action_logout) else stringResource(R.string.advanced_login),
+                        )
+                    }
                 }
             }
         }
     }
 }
+
+private val BannerHeight = 150.dp
+private val BodyOverlap = 28.dp
+private val ProfileAvatarSize = 96.dp
 
 @Composable
 private fun AccountSwitcherSheet(
