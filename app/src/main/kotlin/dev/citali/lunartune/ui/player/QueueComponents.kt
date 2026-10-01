@@ -1389,12 +1389,12 @@ fun QueueCollapsedContentAppleMusic(
 ) {
     val tint = textBackgroundColor.copy(alpha = 0.7f)
     Row(
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 44.dp, vertical = 6.dp)
+                .padding(horizontal = 20.dp, vertical = 6.dp)
                 .windowInsetsPadding(
                     WindowInsets.systemBars.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
                 ),

@@ -34,6 +34,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import dev.citali.lunartune.ui.component.Lyrics
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -2289,6 +2291,9 @@ fun V8PlayerContent(
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
     appleMusic: Boolean = false,
+    appleMusicLyricsOpen: Boolean = false,
+    lyricsSyncOffset: Int = 0,
+    onCloseLyrics: () -> Unit = {},
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2365,6 +2370,9 @@ fun V8PlayerContent(
         )
     } else if (appleMusic) {
         AppleMusicPortraitContent(
+            lyricsOpen = appleMusicLyricsOpen,
+            lyricsSyncOffset = lyricsSyncOffset,
+            onCloseLyrics = onCloseLyrics,
             mediaMetadata = mediaMetadata,
             artists = mediaMetadata.artists,
             artworkUrl = artworkUrl,
@@ -4601,6 +4609,9 @@ private val AppleMusicGutter = 26.dp
 /** Apple Music style player: blurred backdrop, full-bleed artwork fading into it, Apple controls. */
 @Composable
 private fun AppleMusicPortraitContent(
+    lyricsOpen: Boolean,
+    lyricsSyncOffset: Int,
+    onCloseLyrics: () -> Unit,
     mediaMetadata: MediaMetadata,
     artists: List<MediaMetadata.Artist>,
     artworkUrl: String?,
@@ -4632,6 +4643,31 @@ private fun AppleMusicPortraitContent(
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Lyrics opening (after BitChord): the artwork collapses into a 54dp header thumbnail with the
+    // credits beside it; the lyrics fade up only once the collapse lands. Controls stay put.
+    val collapse by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (lyricsOpen) 1f else 0f,
+        animationSpec =
+            androidx.compose.animation.core.tween(
+                durationMillis = 420,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+        label = "appleMusicLyricsCollapse",
+    )
+    val collapseProvider = androidx.compose.runtime.rememberUpdatedState(collapse)
+    val p: () -> Float = { collapseProvider.value }
+    val panelFade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (lyricsOpen && collapse >= 1f) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 220),
+        label = "appleMusicLyricsFade",
+    )
+    val statusTop =
+        androidx.compose.foundation.layout.WindowInsets.statusBars
+            .asPaddingValues()
+            .calculateTopPadding()
+    val thumb = 54.dp
+    val headerReserve = 84.dp
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val compactHeight = maxHeight < 720.dp
         val gap = if (compactHeight) 8.dp else 16.dp
@@ -4650,19 +4686,31 @@ private fun AppleMusicPortraitContent(
         Box(
             modifier =
                 Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(artHeight)
-                    .graphicsLayer {
+                    .layout { measurable, _ ->
+                        val t = p()
+                        val w = androidx.compose.ui.unit.lerp(fullArt, thumb, t).roundToPx()
+                        val h = androidx.compose.ui.unit.lerp(artHeight, thumb, t).roundToPx()
+                        val placeable = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+                        layout(w, h) {
+                            placeable.place(
+                                androidx.compose.ui.unit.lerp(0.dp, AppleMusicGutter, t).roundToPx(),
+                                androidx.compose.ui.unit.lerp(0.dp, statusTop + (headerReserve - thumb) / 2, t).roundToPx(),
+                            )
+                        }
+                    }.graphicsLayer {
+                        val t = p()
+                        shape = RoundedCornerShape(androidx.compose.ui.unit.lerp(0.dp, 6.dp, t))
+                        clip = t > 0f
                         compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                     }.drawWithContent {
                         drawContent()
+                        val t = p()
                         drawRect(
                             brush =
                                 Brush.verticalGradient(
                                     0f to Color.Black,
                                     0.72f to Color.Black,
-                                    1f to Color.Transparent,
+                                    1f to Color.Black.copy(alpha = t),
                                 ),
                             blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
                         )
@@ -4676,6 +4724,63 @@ private fun AppleMusicPortraitContent(
             )
         }
 
+        // Header credits beside the thumbnail; tapping it closes the lyrics.
+        if (collapse > 0f) {
+            Column(
+                verticalArrangement = Arrangement.Center,
+                modifier =
+                    Modifier
+                        .padding(
+                            start = AppleMusicGutter + thumb + 12.dp,
+                            end = AppleMusicGutter,
+                            top = statusTop + (headerReserve - thumb) / 2,
+                        ).height(thumb)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            val t = p()
+                            alpha = ((t - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                            translationY = (1f - t) * 24.dp.toPx()
+                        }.clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = onCloseLyrics,
+                        ),
+            ) {
+                Text(
+                    text = mediaMetadata.title,
+                    color = foreground,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.basicMarquee(),
+                )
+                Text(
+                    text = artists.joinToString { it.name },
+                    color = foreground.copy(alpha = 0.6f),
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+
+        if (lyricsOpen && collapse >= 1f || panelFade > 0f) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(top = statusTop + headerReserve, bottom = controlsHeight)
+                        .graphicsLayer { alpha = panelFade },
+            ) {
+                Lyrics(
+                    sliderPositionProvider = { sliderPosition },
+                    lyricsSyncOffset = lyricsSyncOffset,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
             Column(
                 modifier =
                     Modifier
@@ -4685,6 +4790,14 @@ private fun AppleMusicPortraitContent(
                         .padding(horizontal = AppleMusicGutter),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                Box(
+                    modifier =
+                        Modifier.graphicsLayer {
+                            val t = p()
+                            alpha = (1f - t / 0.6f).coerceIn(0f, 1f)
+                            translationY = -t * 24.dp.toPx()
+                        },
+                ) {
                     AppleMusicMetadataRow(
                         title = mediaMetadata.title,
                         artists = artists,
@@ -4695,6 +4808,7 @@ private fun AppleMusicPortraitContent(
                         onTitleClick = onTitleClick,
                         onArtistClick = onArtistClick,
                     )
+                }
                 Spacer(Modifier.height(if (compactHeight) 10.dp else 14.dp))
                 AppleMusicProgress(
                     sliderPosition = sliderPosition,

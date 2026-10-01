@@ -1883,6 +1883,9 @@ fun BottomSheetPlayer(
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
                                 appleMusic = playerDesignStyle == PlayerDesignStyle.V10,
+                                appleMusicLyricsOpen = isLyricsScreenVisible,
+                                lyricsSyncOffset = lyricsSyncOffset,
+                                onCloseLyrics = { isLyricsScreenVisible = false },
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
@@ -1995,13 +1998,19 @@ fun BottomSheetPlayer(
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
-            onShowLyrics = { isLyricsScreenVisible = true },
+            onShowLyrics = {
+                isLyricsScreenVisible =
+                    if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
+            },
             pureBlack = pureBlack,
         )
 
         mediaMetadata?.let { metadata ->
             MikoLyricsTransition(
-                visible = isLyricsScreenVisible,
+                visible =
+                    isLyricsScreenVisible &&
+                        (playerDesignStyle != PlayerDesignStyle.V10 ||
+                            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE),
                 backHandlerEnabled = isLyricsScreenVisible && state.isExpandedOrExpanding,
                 mediaMetadata = metadata,
                 navController = navController,
