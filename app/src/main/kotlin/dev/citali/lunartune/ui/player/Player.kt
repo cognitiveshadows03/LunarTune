@@ -929,6 +929,28 @@ fun BottomSheetPlayer(
     var isLyricsScreenVisible by rememberSaveable {
         mutableStateOf(false)
     }
+    // Lyrics page transition state lives here (not inside MikoLyricsTransition) so it survives the
+    // transition composable being recreated when the lyrics page opens or closes.
+    val mikoLyricsProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    val mikoLyricsMounted = remember { mutableStateOf(false) }
+    LaunchedEffect(isLyricsScreenVisible) {
+        if (isLyricsScreenVisible) {
+            mikoLyricsMounted.value = true
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            mikoLyricsProgress.animateTo(
+                1f,
+                tween(durationMillis = 480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+            )
+        } else if (mikoLyricsMounted.value) {
+            mikoLyricsProgress.animateTo(
+                0f,
+                tween(durationMillis = 340, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
+            )
+            mikoLyricsMounted.value = false
+        }
+    }
+
     val openQueue =
         remember(state, queueSheetState) {
             {
@@ -2030,6 +2052,8 @@ fun BottomSheetPlayer(
             )
             } else {
             MikoLyricsTransition(
+                progress = mikoLyricsProgress,
+                mountedState = mikoLyricsMounted,
                 // Apple Music style shows lyrics inline in portrait (ported from ArchiveTune).
                 visible =
                     isLyricsScreenVisible &&
@@ -2105,6 +2129,8 @@ fun BottomSheetPlayer(
 
 @Composable
 private fun MikoLyricsTransition(
+    progress: androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
+    mountedState: androidx.compose.runtime.MutableState<Boolean>,
     visible: Boolean,
     backHandlerEnabled: Boolean,
     mediaMetadata: MediaMetadata,
@@ -2122,26 +2148,7 @@ private fun MikoLyricsTransition(
     // Always starts hidden, even if this composable is (re)created with visible = true — in the
     // Immersive styles it is freshly composed at the moment lyrics open, and starting at 1f made
     // the page pop in with no animation.
-    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
-    var mounted by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        if (visible) {
-            mounted = true
-            androidx.compose.runtime.withFrameNanos { }
-            androidx.compose.runtime.withFrameNanos { }
-            progress.animateTo(
-                1f,
-                tween(durationMillis = 480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
-            )
-        } else if (mounted) {
-            progress.animateTo(
-                0f,
-                tween(durationMillis = 340, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
-            )
-            mounted = false
-        }
-    }
-
+    var mounted by mountedState
     if (mounted) {
         Box(
             modifier =
