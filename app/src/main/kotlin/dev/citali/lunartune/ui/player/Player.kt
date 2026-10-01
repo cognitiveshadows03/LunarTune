@@ -1886,7 +1886,10 @@ fun BottomSheetPlayer(
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
                                 appleMusic = playerDesignStyle == PlayerDesignStyle.V10,
-                                appleMusicLyricsOpen = isLyricsScreenVisible,
+                                // Short-circuit so the Immersive (V8) player never reads the lyrics flag:
+                                // reading it made the whole player recompose on the same frame the lyrics
+                                // page was being built, so the page's opening animation was dropped.
+                                appleMusicLyricsOpen = playerDesignStyle == PlayerDesignStyle.V10 && isLyricsScreenVisible,
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
                                 onCloseLyrics = { isLyricsScreenVisible = false },
@@ -2116,8 +2119,11 @@ private fun MikoLyricsTransition(
     // from 94% scale; closing sinks it back down. The animation is started only after the (heavy)
     // lyrics page has composed and drawn its first invisible frame — previously the tween had
     // already finished by the time the first frame landed, so the page just popped in.
-    val progress = remember { androidx.compose.animation.core.Animatable(if (visible) 1f else 0f) }
-    var mounted by remember { mutableStateOf(visible) }
+    // Always starts hidden, even if this composable is (re)created with visible = true — in the
+    // Immersive styles it is freshly composed at the moment lyrics open, and starting at 1f made
+    // the page pop in with no animation.
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    var mounted by remember { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) {
             mounted = true
