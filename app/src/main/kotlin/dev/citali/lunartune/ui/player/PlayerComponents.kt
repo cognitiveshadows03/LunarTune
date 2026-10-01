@@ -4830,14 +4830,13 @@ private fun AppleMusicPortraitContent(
                     onPlayPauseClick = onPlayPauseClick,
                     onNextClick = onNextClick,
                 )
-                if (showVolumeBar) {
-                    Spacer(Modifier.height(gap))
-                    AppleMusicVolume(
-                        volume = volume,
-                        foreground = foreground,
-                        onVolumeChange = onVolumeChange,
-                    )
-                }
+                // Always shown in the Apple Music style, regardless of the volume bar setting.
+                Spacer(Modifier.height(gap))
+                AppleMusicVolume(
+                    volume = volume,
+                    foreground = foreground,
+                    onVolumeChange = onVolumeChange,
+                )
                 Spacer(Modifier.height(if (compactHeight) 4.dp else 8.dp))
             }
     }
@@ -4889,8 +4888,8 @@ private fun AppleMusicMetadataRow(
             )
         }
         AppleMusicPlainIcon(
-            iconRes = R.drawable.star,
-            tint = if (liked) foreground else foreground.copy(alpha = 0.55f),
+            iconRes = if (liked) R.drawable.star_filled else R.drawable.star,
+            tint = if (liked) Color(0xFFFFC83D) else foreground.copy(alpha = 0.55f),
             iconSize = 22.dp,
             onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
