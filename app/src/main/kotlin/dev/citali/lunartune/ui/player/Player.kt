@@ -2093,50 +2093,50 @@ private fun MikoLyricsTransition(
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
-    appleMusicHandOff: Boolean = false,
 ) {
-    // Started only after the (heavy) lyrics page has composed and drawn a frame — otherwise the first
-    // frame lands after the tween has already run and the page just pops in. The backdrop fades up
-    // first, then the content rises and fades in over it.
-    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
-    var mounted by remember { mutableStateOf(visible) }
-    LaunchedEffect(visible) {
-        if (visible) {
-            mounted = true
-            androidx.compose.runtime.withFrameNanos { }
-            androidx.compose.runtime.withFrameNanos { }
-            progress.animateTo(
-                1f,
-                tween(durationMillis = 460, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            )
-        } else if (mounted) {
-            progress.animateTo(
-                0f,
-                tween(durationMillis = 300, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-            )
-            mounted = false
-        }
-    }
+    val progress by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec =
+            tween(
+                durationMillis = 320,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+        label = "mikoLyricsTransition",
+    )
 
-    if (mounted) {
-        val p = { progress.value.coerceIn(0f, 1f) }
+    val boundedProgress = progress.coerceIn(0f, 1f)
+
+    if (visible || boundedProgress > 0.001f) {
+        val alpha = boundedProgress
+        val cornerRadius = 20.dp * (1f - boundedProgress)
+
         Box(
             modifier =
                 modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = (p() / 0.55f).coerceAtMost(1f) }
-                    .background(MaterialTheme.colorScheme.surface),
+                    .graphicsLayer { this.alpha = boundedProgress }
+                    .background(Color.Black.copy(alpha = 0.28f * boundedProgress)),
         ) {
-            LyricsScreen(
-                mediaMetadata = mediaMetadata,
-                onBackClick = onDismiss,
-                navController = navController,
-                lyricsSyncOffset = lyricsSyncOffset,
-                onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
-                onQueueClick = onQueueClick,
-                backHandlerEnabled = backHandlerEnabled,
-                contentRevealProgress = { ((p() - 0.2f) / 0.8f).coerceIn(0f, 1f) },
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            this.alpha = alpha
+                            translationY = size.height * 0.10f * (1f - boundedProgress)
+                        }.clip(RoundedCornerShape(cornerRadius))
+                        .background(MaterialTheme.colorScheme.surface),
+            ) {
+                LyricsScreen(
+                    mediaMetadata = mediaMetadata,
+                    onBackClick = onDismiss,
+                    navController = navController,
+                    lyricsSyncOffset = lyricsSyncOffset,
+                    onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
+                    onQueueClick = onQueueClick,
+                    backHandlerEnabled = backHandlerEnabled,
+                )
+            }
         }
     }
 }
