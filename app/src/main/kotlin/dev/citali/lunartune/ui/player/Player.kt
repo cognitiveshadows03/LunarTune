@@ -1998,19 +1998,16 @@ fun BottomSheetPlayer(
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
-            onShowLyrics = {
-                isLyricsScreenVisible =
-                    if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
-            },
+            onShowLyrics = { isLyricsScreenVisible = true },
             pureBlack = pureBlack,
         )
 
         mediaMetadata?.let { metadata ->
             MikoLyricsTransition(
-                visible =
-                    isLyricsScreenVisible &&
-                        (playerDesignStyle != PlayerDesignStyle.V10 ||
-                            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE),
+                visible = isLyricsScreenVisible,
+                appleMusicHandOff =
+                    playerDesignStyle == PlayerDesignStyle.V10 &&
+                        LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE,
                 backHandlerEnabled = isLyricsScreenVisible && state.isExpandedOrExpanding,
                 mediaMetadata = metadata,
                 navController = navController,
@@ -2089,12 +2086,16 @@ private fun MikoLyricsTransition(
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
+    appleMusicHandOff: Boolean = false,
 ) {
     val progress by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec =
             tween(
-                durationMillis = 320,
+                // Apple Music style: wait for the player's artwork to land on the page's
+                // header thumbnail, then cross-fade the page in place.
+                durationMillis = if (appleMusicHandOff) 240 else 320,
+                delayMillis = if (appleMusicHandOff && visible) 360 else 0,
                 easing = androidx.compose.animation.core.FastOutSlowInEasing,
             ),
         label = "mikoLyricsTransition",
@@ -2111,7 +2112,7 @@ private fun MikoLyricsTransition(
                 modifier
                     .fillMaxSize()
                     .graphicsLayer { this.alpha = boundedProgress }
-                    .background(Color.Black.copy(alpha = 0.28f * boundedProgress)),
+                    .background(Color.Black.copy(alpha = if (appleMusicHandOff) 0f else 0.28f * boundedProgress)),
         ) {
             Box(
                 modifier =
@@ -2119,8 +2120,8 @@ private fun MikoLyricsTransition(
                         .fillMaxSize()
                         .graphicsLayer {
                             this.alpha = alpha
-                            translationY = size.height * 0.10f * (1f - boundedProgress)
-                        }.clip(RoundedCornerShape(cornerRadius))
+                            if (!appleMusicHandOff) translationY = size.height * 0.10f * (1f - boundedProgress)
+                        }.clip(RoundedCornerShape(if (appleMusicHandOff) 0.dp else cornerRadius))
                         .background(MaterialTheme.colorScheme.surface),
             ) {
                 LyricsScreen(
