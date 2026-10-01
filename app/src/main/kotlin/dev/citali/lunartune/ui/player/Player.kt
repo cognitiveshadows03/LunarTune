@@ -49,6 +49,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -915,10 +916,17 @@ fun BottomSheetPlayer(
 
     val dismissedBound = dynamicQueuePeekHeight + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
+    val appleMusicStatusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val queueSheetState =
         rememberBottomSheetState(
             dismissedBound = dismissedBound,
-            expandedBound = state.expandedBound,
+            expandedBound =
+                if (playerDesignStyle == PlayerDesignStyle.V10) {
+                    // Apple Music style: the queue stops under the collapsed artwork header.
+                    state.expandedBound - appleMusicStatusBarTop - AppleMusicHeaderReserve
+                } else {
+                    state.expandedBound
+                },
             collapsedBound = dismissedBound,
             initialAnchor = 0,
         )
@@ -1883,6 +1891,9 @@ fun BottomSheetPlayer(
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
                                 appleMusic = playerDesignStyle == PlayerDesignStyle.V10,
+                                appleMusicLyricsOpen = isLyricsScreenVisible,
+                                appleMusicQueueProgress = { queueSheetState.progress.coerceIn(0f, 1f) },
+                                lyricsSyncOffset = lyricsSyncOffset,
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
@@ -1986,7 +1997,9 @@ fun BottomSheetPlayer(
             playerBottomSheetState = state,
             navController = navController,
             backgroundColor =
-                if (useBlackBackground) {
+                if (playerDesignStyle == PlayerDesignStyle.V10) {
+                    Color.Black.copy(alpha = 0.22f)
+                } else if (useBlackBackground) {
                     Color.Black
                 } else {
                     MaterialTheme.colorScheme.surfaceContainer
@@ -1995,13 +2008,19 @@ fun BottomSheetPlayer(
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
-            onShowLyrics = { isLyricsScreenVisible = true },
+            onShowLyrics = {
+                isLyricsScreenVisible =
+                    if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
+            },
             pureBlack = pureBlack,
         )
 
         mediaMetadata?.let { metadata ->
             MikoLyricsTransition(
-                visible = isLyricsScreenVisible,
+                visible =
+                    isLyricsScreenVisible &&
+                        (playerDesignStyle != PlayerDesignStyle.V10 ||
+                            LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE),
                 backHandlerEnabled = isLyricsScreenVisible && state.isExpandedOrExpanding,
                 mediaMetadata = metadata,
                 navController = navController,

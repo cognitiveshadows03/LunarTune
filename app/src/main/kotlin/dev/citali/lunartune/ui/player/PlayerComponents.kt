@@ -31,6 +31,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.layout.layout
+import dev.citali.lunartune.ui.component.Lyrics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -2285,6 +2289,9 @@ fun V8PlayerContent(
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
     appleMusic: Boolean = false,
+    appleMusicLyricsOpen: Boolean = false,
+    appleMusicQueueProgress: () -> Float = { 0f },
+    lyricsSyncOffset: Int = 0,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2361,6 +2368,9 @@ fun V8PlayerContent(
         )
     } else if (appleMusic) {
         AppleMusicPortraitContent(
+            lyricsOpen = appleMusicLyricsOpen,
+            queueProgress = appleMusicQueueProgress,
+            lyricsSyncOffset = lyricsSyncOffset,
             mediaMetadata = mediaMetadata,
             artists = mediaMetadata.artists,
             artworkUrl = artworkUrl,
@@ -4592,8 +4602,27 @@ fun PlayerBackground(
 }
 
 
+/** Height reserved under the status bar for the collapsed artwork header (BitChord HEADER). */
+val AppleMusicHeaderReserve = 84.dp
+private val AppleMusicThumbSize = 54.dp
+private val AppleMusicGutter = 26.dp
+private const val AppleMusicCollapseMs = 420
+
+/**
+ * Apple Music style player, with the "sleeve collapse" ported from BitChord's NowPlayingScreen:
+ * opening the queue or the lyrics shrinks the full-bleed artwork into a 54dp thumbnail at the top
+ * left, the credits slide in beside it, and the panel fades up only once the collapse has landed
+ * so the heavy composition never lands on top of the animation.
+ *
+ * One progress value `p` (0 = full artwork, 1 = header) drives everything. The queue owns it while
+ * its sheet moves (so a finger dragging the queue drags the artwork too); lyrics use a 420ms
+ * FastOutSlowIn tween. Read only inside layout/draw lambdas so frames don't recompose.
+ */
 @Composable
 private fun AppleMusicPortraitContent(
+    lyricsOpen: Boolean,
+    queueProgress: () -> Float,
+    lyricsSyncOffset: Int,
     mediaMetadata: MediaMetadata,
     artists: List<MediaMetadata.Artist>,
     artworkUrl: String?,
@@ -4625,31 +4654,75 @@ private fun AppleMusicPortraitContent(
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val animatedCollapse =
+        androidx.compose.animation.core.animateFloatAsState(
+            targetValue = if (lyricsOpen) 1f else 0f,
+            animationSpec =
+                androidx.compose.animation.core.tween(
+                    durationMillis = AppleMusicCollapseMs,
+                    easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                ),
+            label = "appleMusicSleeveCollapse",
+        )
+    val p: () -> Float = { maxOf(animatedCollapse.value, queueProgress()) }
+    val collapseDone by remember { androidx.compose.runtime.derivedStateOf { animatedCollapse.value >= 1f } }
+    val panelFade by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (lyricsOpen && collapseDone) 1f else 0f,
+        animationSpec =
+            androidx.compose.animation.core.tween(
+                durationMillis = 200,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+        label = "appleMusicPanelFade",
+    )
+    val panelComposed = lyricsOpen && collapseDone || panelFade > 0f
+    val statusTop =
+        androidx.compose.foundation.layout.WindowInsets.statusBars
+            .asPaddingValues()
+            .calculateTopPadding()
+
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val contentPadding = if (maxWidth < 380.dp) 22.dp else 26.dp
         val compactHeight = maxHeight < 720.dp
         val gap = if (compactHeight) 8.dp else 16.dp
+        val fullArt = maxWidth
+        val headerTop = statusTop + (AppleMusicHeaderReserve - AppleMusicThumbSize) / 2
+        val headerTextStart = AppleMusicGutter + AppleMusicThumbSize + 12.dp
 
-        // Full-bleed artwork pinned to the top, fading into the blurred backdrop.
+        // ---- The sleeve: full-bleed banner -> header thumbnail ----
         Box(
             modifier =
                 Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .graphicsLayer {
+                    .layout { measurable, _ ->
+                        val t = p()
+                        val sizePx = androidx.compose.ui.unit.lerp(fullArt, AppleMusicThumbSize, t).roundToPx()
+                        val placeable =
+                            measurable.measure(androidx.compose.ui.unit.Constraints.fixed(sizePx, sizePx))
+                        layout(sizePx, sizePx) {
+                            placeable.place(
+                                androidx.compose.ui.unit.lerp(0.dp, AppleMusicGutter, t).roundToPx(),
+                                androidx.compose.ui.unit.lerp(0.dp, headerTop, t).roundToPx(),
+                            )
+                        }
+                    }.graphicsLayer {
+                        val t = p()
+                        shape = RoundedCornerShape(androidx.compose.ui.unit.lerp(0.dp, 6.dp, t))
+                        clip = t > 0f
                         compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
                     }.drawWithContent {
                         drawContent()
-                        drawRect(
-                            brush =
-                                Brush.verticalGradient(
-                                    0f to Color.Black,
-                                    0.55f to Color.Black,
-                                    1f to Color.Transparent,
-                                ),
-                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                        )
+                        val t = p()
+                        if (t < 1f) {
+                            // The banner's dissolve hands back to a plain card as it collapses.
+                            drawRect(
+                                brush =
+                                    Brush.verticalGradient(
+                                        0f to Color.Black,
+                                        0.55f to Color.Black,
+                                        1f to Color.Black.copy(alpha = t),
+                                    ),
+                                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                            )
+                        }
                     },
         ) {
             CrossfadingPlayerArtwork(
@@ -4660,25 +4733,98 @@ private fun AppleMusicPortraitContent(
             )
         }
 
+        // ---- Header credits beside the thumbnail ----
+        Column(
+            verticalArrangement = Arrangement.Center,
+            modifier =
+                Modifier
+                    .padding(start = headerTextStart, end = AppleMusicGutter, top = headerTop)
+                    .height(AppleMusicThumbSize)
+                    .fillMaxWidth()
+                    .graphicsLayer {
+                        val t = p()
+                        alpha = ((t - 0.4f) / 0.6f).coerceIn(0f, 1f)
+                        translationY = (1f - t) * 24.dp.toPx()
+                    }.clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = onTitleClick,
+                    ),
+        ) {
+            Text(
+                text = mediaMetadata.title,
+                color = foreground,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.basicMarquee(),
+            )
+            Text(
+                text = artists.joinToString { it.name },
+                color = secondaryForeground,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
         Column(
             modifier =
                 Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = contentPadding),
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = 1f - queueProgress() },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            V8MetadataActions(
-                title = mediaMetadata.title,
-                explicit = mediaMetadata.explicit,
-                artists = artists,
-                liked = currentSongLiked,
-                foreground = foreground,
-                onMenuClick = onMenuClick,
-                onToggleLike = onToggleLike,
-                onTitleClick = onTitleClick,
-                onArtistClick = onArtistClick,
-            )
+            Spacer(Modifier.height(statusTop + AppleMusicHeaderReserve))
+
+            // ---- The panel, composed only once the sleeve has arrived ----
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+            ) {
+                if (panelComposed) {
+                    Lyrics(
+                        sliderPositionProvider = { sliderPosition },
+                        lyricsSyncOffset = lyricsSyncOffset,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = panelFade },
+                    )
+                }
+            }
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = AppleMusicGutter),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                // The credits row hands over to the header as the sleeve collapses.
+                Box(
+                    modifier =
+                        Modifier.graphicsLayer {
+                            val t = p()
+                            alpha = (1f - t / 0.6f).coerceIn(0f, 1f)
+                            translationY = -t * 24.dp.toPx()
+                        },
+                ) {
+                    V8MetadataActions(
+                        title = mediaMetadata.title,
+                        explicit = mediaMetadata.explicit,
+                        artists = artists,
+                        liked = currentSongLiked,
+                        foreground = foreground,
+                        onMenuClick = onMenuClick,
+                        onToggleLike = onToggleLike,
+                        onTitleClick = onTitleClick,
+                        onArtistClick = onArtistClick,
+                    )
+                }
             Spacer(Modifier.height(gap))
             V8PlaybackProgress(
                 sliderPosition = sliderPosition,
@@ -4711,6 +4857,7 @@ private fun AppleMusicPortraitContent(
                 )
             }
             Spacer(Modifier.height(if (compactHeight) 6.dp else 12.dp))
+            }
         }
     }
 }
