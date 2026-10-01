@@ -20,31 +20,31 @@ private val SettingsIconPolygons: Map<String, RoundedPolygon> =
     mapOf(
         "account" to MaterialShapes.Cookie9Sided,
         "stats" to MaterialShapes.Clover4Leaf,
-        "appearance" to MaterialShapes.Sunny,
-        "playback" to MaterialShapes.Flower,
+        "appearance" to MaterialShapes.Cookie12Sided,
+        "playback" to MaterialShapes.Cookie7Sided,
         "lyrics" to MaterialShapes.Cookie6Sided,
-        "content" to MaterialShapes.SoftBurst,
-        "behavior" to MaterialShapes.Pentagon,
+        "content" to MaterialShapes.Puffy,
+        "behavior" to MaterialShapes.Cookie4Sided,
         "integration" to MaterialShapes.Clover8Leaf,
-        "ai_integration" to MaterialShapes.VerySunny,
+        "ai_integration" to MaterialShapes.PuffyDiamond,
         "internet" to MaterialShapes.Cookie7Sided,
-        "storage" to MaterialShapes.Gem,
+        "storage" to MaterialShapes.Cookie6Sided,
         "downloads" to MaterialShapes.Puffy,
         "backup_restore" to MaterialShapes.Cookie12Sided,
-        "developer_options" to MaterialShapes.Burst,
+        "developer_options" to MaterialShapes.Clover4Leaf,
         "default_links" to MaterialShapes.Cookie4Sided,
-        "updates" to MaterialShapes.SoftBoom,
-        "about" to MaterialShapes.Flower,
+        "updates" to MaterialShapes.Cookie9Sided,
+        "about" to MaterialShapes.Clover8Leaf,
     )
 
 private val FallbackPolygons =
     listOf(
         MaterialShapes.Cookie9Sided,
-        MaterialShapes.Sunny,
+        MaterialShapes.Cookie12Sided,
         MaterialShapes.Clover4Leaf,
-        MaterialShapes.SoftBurst,
+        MaterialShapes.Puffy,
         MaterialShapes.Cookie6Sided,
-        MaterialShapes.Pentagon,
+        MaterialShapes.Cookie4Sided,
     )
 
 @Composable
