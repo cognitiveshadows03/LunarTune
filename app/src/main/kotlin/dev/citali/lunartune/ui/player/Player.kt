@@ -2094,58 +2094,55 @@ private fun MikoLyricsTransition(
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec =
-            tween(
-                durationMillis = 320,
-                // Closing plays the opening exactly in reverse (mirrored easing). With the forward
-                // curve the doubled alpha collapsed within ~100ms and the page seemed to just vanish.
-                easing =
-                    if (visible) {
-                        androidx.compose.animation.core.FastOutSlowInEasing
-                    } else {
-                        androidx.compose.animation.core.Easing { f ->
-                            1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(1f - f)
-                        }
-                    },
-            ),
-        label = "mikoLyricsTransition",
-    )
+    // Swipe-up fade: the page rises from a quarter of the screen below while fading and settling
+    // from 94% scale; closing sinks it back down. The animation is started only after the (heavy)
+    // lyrics page has composed and drawn its first invisible frame — previously the tween had
+    // already finished by the time the first frame landed, so the page just popped in.
+    val progress = remember { androidx.compose.animation.core.Animatable(if (visible) 1f else 0f) }
+    var mounted by remember { mutableStateOf(visible) }
+    LaunchedEffect(visible) {
+        if (visible) {
+            mounted = true
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            progress.animateTo(
+                1f,
+                tween(durationMillis = 480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+            )
+        } else if (mounted) {
+            progress.animateTo(
+                0f,
+                tween(durationMillis = 340, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
+            )
+            mounted = false
+        }
+    }
 
-    val boundedProgress = progress.coerceIn(0f, 1f)
-
-    if (visible || boundedProgress > 0.001f) {
-        val alpha = boundedProgress
-        val cornerRadius = 20.dp * (1f - boundedProgress)
-
+    if (mounted) {
         Box(
             modifier =
                 modifier
                     .fillMaxSize()
-                    .graphicsLayer { this.alpha = boundedProgress }
-                    .background(Color.Black.copy(alpha = 0.28f * boundedProgress)),
+                    .graphicsLayer {
+                        val t = progress.value.coerceIn(0f, 1f)
+                        alpha = t
+                        translationY = size.height * 0.25f * (1f - t)
+                        val scale = 0.94f + 0.06f * t
+                        scaleX = scale
+                        scaleY = scale
+                        shape = RoundedCornerShape(28.dp * (1f - t))
+                        clip = t < 1f
+                    }.background(MaterialTheme.colorScheme.surface),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            this.alpha = alpha
-                            translationY = size.height * 0.10f * (1f - boundedProgress)
-                        }.clip(RoundedCornerShape(cornerRadius))
-                        .background(MaterialTheme.colorScheme.surface),
-            ) {
-                LyricsScreen(
-                    mediaMetadata = mediaMetadata,
-                    onBackClick = onDismiss,
-                    navController = navController,
-                    lyricsSyncOffset = lyricsSyncOffset,
-                    onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
-                    onQueueClick = onQueueClick,
-                    backHandlerEnabled = backHandlerEnabled,
-                )
-            }
+            LyricsScreen(
+                mediaMetadata = mediaMetadata,
+                onBackClick = onDismiss,
+                navController = navController,
+                lyricsSyncOffset = lyricsSyncOffset,
+                onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
+                onQueueClick = onQueueClick,
+                backHandlerEnabled = backHandlerEnabled,
+            )
         }
     }
 }
