@@ -4632,33 +4632,6 @@ private fun AppleMusicPortraitContent(
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val animatedCollapse =
-        androidx.compose.animation.core.animateFloatAsState(
-            targetValue = if (lyricsOpen) 1f else 0f,
-            animationSpec =
-                androidx.compose.animation.core.tween(
-                    durationMillis = AppleMusicCollapseMs,
-                    easing = androidx.compose.animation.core.FastOutSlowInEasing,
-                ),
-            label = "appleMusicSleeveCollapse",
-        )
-    val p: () -> Float = { maxOf(animatedCollapse.value, queueProgress()) }
-    val collapseDone by remember { androidx.compose.runtime.derivedStateOf { animatedCollapse.value >= 1f } }
-    val panelFade by androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (lyricsOpen && collapseDone) 1f else 0f,
-        animationSpec =
-            androidx.compose.animation.core.tween(
-                durationMillis = 200,
-                easing = androidx.compose.animation.core.FastOutSlowInEasing,
-            ),
-        label = "appleMusicPanelFade",
-    )
-    val panelComposed = lyricsOpen && collapseDone || panelFade > 0f
-    val statusTop =
-        androidx.compose.foundation.layout.WindowInsets.statusBars
-            .asPaddingValues()
-            .calculateTopPadding()
-
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val compactHeight = maxHeight < 720.dp
         val gap = if (compactHeight) 8.dp else 16.dp
