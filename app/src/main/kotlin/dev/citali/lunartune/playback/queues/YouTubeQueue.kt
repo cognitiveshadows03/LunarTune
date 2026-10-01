@@ -36,10 +36,21 @@ class YouTubeQueue(
             }
         endpoint = nextResult.endpoint
         continuation = nextResult.continuation
+        var items = nextResult.items.map { it.toMediaItem() }
+        var index = nextResult.currentIndex ?: 0
+        if (followAutomixPreview) {
+            // Radio / autoplay: drop "never recommend" songs, but keep the song the user started.
+            val hidden = neverRecommendIds()
+            if (hidden.isNotEmpty()) {
+                val current = items.getOrNull(index)
+                items = items.filterIndexed { i, item -> i == index || item.mediaId !in hidden }
+                index = current?.let { items.indexOf(it) }?.coerceAtLeast(0) ?: 0
+            }
+        }
         return Queue.Status(
             title = nextResult.title,
-            items = nextResult.items.map { it.toMediaItem() },
-            mediaItemIndex = nextResult.currentIndex ?: 0,
+            items = items,
+            mediaItemIndex = index,
         )
     }
 

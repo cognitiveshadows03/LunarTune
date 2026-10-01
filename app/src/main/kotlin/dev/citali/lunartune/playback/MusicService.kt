@@ -9,6 +9,12 @@
 
 package dev.citali.lunartune.playback
 
+import dev.citali.lunartune.constants.NeverRecommendSongIdsKey
+import dev.citali.lunartune.utils.neverRecommendIds
+import dev.citali.lunartune.utils.parseIdSet
+import dev.citali.lunartune.playback.queues.YouTubeAlbumRadio
+import dev.citali.lunartune.playback.queues.LocalMixQueue
+import dev.citali.lunartune.playback.queues.LocalAlbumRadio
 import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -1162,6 +1168,10 @@ class MusicService :
                 removeBlockedArtistItems(updatedBlockedArtistIds)
             }
         dataStore.data
+            .map { preferences -> parseIdSet(preferences[NeverRecommendSongIdsKey].orEmpty()) }
+            .distinctUntilChanged()
+            .collect(scope) { hidden -> removeNeverRecommendedItems(hidden) }
+        dataStore.data
             .map { preferences -> preferences[HideVideoKey] ?: false }
             .distinctUntilChanged()
             .collect(scope) { shouldHideMusicVideos ->
@@ -2103,6 +2113,32 @@ class MusicService :
         filterExplicit(hideExplicit)
             .filterVideo(hideVideo)
             .filterBlockedArtists(loadBlockedArtistIds())
+            .withoutNeverRecommended()
+
+    /** Pages loaded to extend a queue (radio, autoplay, infinite queue) never bring back hidden songs. */
+    private fun List<MediaItem>.withoutNeverRecommended(): List<MediaItem> {
+        val hidden = neverRecommendIds()
+        return if (hidden.isEmpty()) this else filterNot { it.mediaId in hidden }
+    }
+
+    private fun isRecommendationQueue(queue: Queue): Boolean =
+        (queue is YouTubeQueue && queue.followAutomixPreview) ||
+            queue is YouTubeAlbumRadio ||
+            queue is LocalMixQueue ||
+            queue is LocalAlbumRadio
+
+    /** Drops newly hidden songs from what is already queued as recommendations (never the current song). */
+    private fun removeNeverRecommendedItems(hidden: Set<String>) {
+        if (hidden.isEmpty() || player.mediaItemCount == 0) return
+        val currentId = player.currentMediaItem?.mediaId
+        val radio = isRecommendationQueue(currentQueue)
+        val autoAdded = synchronized(autoAddedMediaIds) { autoAddedMediaIds.toSet() }
+        removeQueueItems { item ->
+            item.mediaId in hidden &&
+                item.mediaId != currentId &&
+                (radio || item.mediaId in autoAdded)
+        }
+    }
 
     private suspend fun loadBlockedArtistIds(): Set<String> =
         withContext(Dispatchers.IO) {
