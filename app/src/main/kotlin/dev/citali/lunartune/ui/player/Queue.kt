@@ -652,7 +652,15 @@ fun Queue(
                         onDispose { view.viewTreeObserver.removeOnWindowFocusChangeListener(listener) }
                     }
 
-                    QueueCollapsedContentV7(
+                    if (playerDesignStyle == PlayerDesignStyle.V10) {
+                        QueueCollapsedContentAppleMusic(
+                            textBackgroundColor = TextBackgroundColor,
+                            onExpandQueue = openQueue,
+                            onShowLyrics = onShowLyrics,
+                            onDeviceClick = { SystemMediaControlResolver.openMediaOutputSwitcher(context) },
+                            device = audioDevice,
+                        )
+                    } else QueueCollapsedContentV7(
                         showCodecOnPlayer = showCodecOnPlayer,
                         currentFormat = currentFormat,
                         textBackgroundColor = TextBackgroundColor,

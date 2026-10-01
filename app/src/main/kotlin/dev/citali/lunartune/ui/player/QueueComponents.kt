@@ -1377,6 +1377,47 @@ fun QueueCollapsedContentV7(
     }
 }
 
+/** Apple Music style bottom row: lyrics, output device, queue as plain icons. */
+@Composable
+fun QueueCollapsedContentAppleMusic(
+    textBackgroundColor: Color,
+    onExpandQueue: () -> Unit,
+    onShowLyrics: () -> Unit,
+    onDeviceClick: () -> Unit,
+    device: ActiveOutputDevice,
+    modifier: Modifier = Modifier,
+) {
+    val tint = textBackgroundColor.copy(alpha = 0.7f)
+    Row(
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 44.dp, vertical = 6.dp)
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
+                ),
+    ) {
+        @Composable
+        fun plain(onClick: () -> Unit, content: @Composable () -> Unit) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick),
+            ) { content() }
+        }
+        plain(onShowLyrics) {
+            Icon(painterResource(R.drawable.lyrics), null, tint = tint, modifier = Modifier.size(24.dp))
+        }
+        plain(onDeviceClick) {
+            Icon(device.type.imageVector, device.name, tint = tint, modifier = Modifier.size(24.dp))
+        }
+        plain(onExpandQueue) {
+            Icon(painterResource(R.drawable.queue_music), null, tint = tint, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
 @Composable
 fun QueueCollapsedContentV9(
     showCodecOnPlayer: Boolean,

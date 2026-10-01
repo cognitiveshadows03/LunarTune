@@ -34,6 +34,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.material3.CircularProgressIndicator
 import dev.citali.lunartune.ui.component.Lyrics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -4685,6 +4687,16 @@ private fun AppleMusicPortraitContent(
         val compactHeight = maxHeight < 720.dp
         val gap = if (compactHeight) 8.dp else 16.dp
         val fullArt = maxWidth
+        // Like the immersive style: the artwork grows down into whatever the controls leave free
+        // (e.g. with the volume bar hidden), staying at least square and cropping to fill.
+        var controlsHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        val controlsHeight = with(androidx.compose.ui.platform.LocalDensity.current) { controlsHeightPx.toDp() }
+        val fullArtHeight =
+            if (controlsHeightPx == 0) {
+                fullArt
+            } else {
+                maxOf(fullArt, maxHeight - controlsHeight + 56.dp).coerceAtMost(maxHeight)
+            }
         val headerTop = statusTop + (AppleMusicHeaderReserve - AppleMusicThumbSize) / 2
         val headerTextStart = AppleMusicGutter + AppleMusicThumbSize + 12.dp
 
@@ -4694,10 +4706,11 @@ private fun AppleMusicPortraitContent(
                 Modifier
                     .layout { measurable, _ ->
                         val t = p()
-                        val sizePx = androidx.compose.ui.unit.lerp(fullArt, AppleMusicThumbSize, t).roundToPx()
+                        val wPx = androidx.compose.ui.unit.lerp(fullArt, AppleMusicThumbSize, t).roundToPx()
+                        val hPx = androidx.compose.ui.unit.lerp(fullArtHeight, AppleMusicThumbSize, t).roundToPx()
                         val placeable =
-                            measurable.measure(androidx.compose.ui.unit.Constraints.fixed(sizePx, sizePx))
-                        layout(sizePx, sizePx) {
+                            measurable.measure(androidx.compose.ui.unit.Constraints.fixed(wPx, hPx))
+                        layout(wPx, hPx) {
                             placeable.place(
                                 androidx.compose.ui.unit.lerp(0.dp, AppleMusicGutter, t).roundToPx(),
                                 androidx.compose.ui.unit.lerp(0.dp, headerTop, t).roundToPx(),
@@ -4717,7 +4730,7 @@ private fun AppleMusicPortraitContent(
                                 brush =
                                     Brush.verticalGradient(
                                         0f to Color.Black,
-                                        0.55f to Color.Black,
+                                        0.72f to Color.Black,
                                         1f to Color.Black.copy(alpha = t),
                                     ),
                                 blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
@@ -4801,6 +4814,7 @@ private fun AppleMusicPortraitContent(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .onSizeChanged { controlsHeightPx = it.height }
                         .padding(horizontal = AppleMusicGutter),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -4813,9 +4827,8 @@ private fun AppleMusicPortraitContent(
                             translationY = -t * 24.dp.toPx()
                         },
                 ) {
-                    V8MetadataActions(
+                    AppleMusicMetadataRow(
                         title = mediaMetadata.title,
-                        explicit = mediaMetadata.explicit,
                         artists = artists,
                         liked = currentSongLiked,
                         foreground = foreground,
@@ -4825,39 +4838,270 @@ private fun AppleMusicPortraitContent(
                         onArtistClick = onArtistClick,
                     )
                 }
-            Spacer(Modifier.height(gap))
-            V8PlaybackProgress(
-                sliderPosition = sliderPosition,
-                position = position,
-                duration = duration,
-                currentFormat = currentFormat,
-                foreground = foreground,
-                onSliderValueChange = onSliderValueChange,
-                onSliderValueChangeFinished = onSliderValueChangeFinished,
-            )
-            Spacer(Modifier.height(gap))
-            V8TransportControls(
-                playbackState = playbackState,
-                isPlaying = isPlaying,
-                isLoading = isLoading,
-                canSkipPrevious = canSkipPrevious,
-                canSkipNext = canSkipNext,
-                foreground = foreground,
-                onPreviousClick = onPreviousClick,
-                onPlayPauseClick = onPlayPauseClick,
-                onNextClick = onNextClick,
-            )
-            if (showVolumeBar) {
-                Spacer(Modifier.height(gap))
-                V8VolumeControls(
-                    volume = volume,
+                Spacer(Modifier.height(if (compactHeight) 10.dp else 14.dp))
+                AppleMusicProgress(
+                    sliderPosition = sliderPosition,
+                    position = position,
+                    duration = duration,
+                    currentFormat = currentFormat,
                     foreground = foreground,
-                    secondaryForeground = secondaryForeground,
-                    onVolumeChange = onVolumeChange,
+                    onSliderValueChange = onSliderValueChange,
+                    onSliderValueChangeFinished = onSliderValueChangeFinished,
                 )
-            }
-            Spacer(Modifier.height(if (compactHeight) 6.dp else 12.dp))
+                Spacer(Modifier.height(gap))
+                AppleMusicTransport(
+                    isPlaying = isPlaying,
+                    isLoading = isLoading,
+                    canSkipPrevious = canSkipPrevious,
+                    canSkipNext = canSkipNext,
+                    foreground = foreground,
+                    onPreviousClick = onPreviousClick,
+                    onPlayPauseClick = onPlayPauseClick,
+                    onNextClick = onNextClick,
+                )
+                if (showVolumeBar) {
+                    Spacer(Modifier.height(gap))
+                    AppleMusicVolume(
+                        volume = volume,
+                        foreground = foreground,
+                        onVolumeChange = onVolumeChange,
+                    )
+                }
+                Spacer(Modifier.height(if (compactHeight) 4.dp else 8.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun AppleMusicMetadataRow(
+    title: String,
+    artists: List<MediaMetadata.Artist>,
+    liked: Boolean,
+    foreground: Color,
+    onMenuClick: () -> Unit,
+    onToggleLike: () -> Unit,
+    onTitleClick: () -> Unit,
+    onArtistClick: (artistId: String) -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = foreground,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .basicMarquee()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = onTitleClick,
+                        ),
+            )
+            Text(
+                text = artists.joinToString { it.name },
+                color = foreground.copy(alpha = 0.6f),
+                fontSize = 18.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier
+                        .basicMarquee()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                        ) { artists.firstOrNull()?.id?.let(onArtistClick) },
+            )
+        }
+        AppleMusicPlainIcon(
+            iconRes = R.drawable.star,
+            tint = if (liked) foreground else foreground.copy(alpha = 0.55f),
+            iconSize = 22.dp,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onToggleLike()
+            },
+        )
+        AppleMusicPlainIcon(
+            iconRes = R.drawable.more_horiz,
+            tint = foreground.copy(alpha = 0.8f),
+            iconSize = 24.dp,
+            onClick = onMenuClick,
+        )
+    }
+}
+
+@Composable
+private fun AppleMusicPlainIcon(
+    iconRes: Int,
+    tint: Color,
+    iconSize: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    boxSize: androidx.compose.ui.unit.Dp = 40.dp,
+    enabled: Boolean = true,
+) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            modifier
+                .size(boxSize)
+                .clip(CircleShape)
+                .clickable(enabled = enabled, onClick = onClick),
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = if (enabled) tint else tint.copy(alpha = 0.3f),
+            modifier = Modifier.size(iconSize),
+        )
+    }
+}
+
+@Composable
+private fun AppleMusicProgress(
+    sliderPosition: Long?,
+    position: Long,
+    duration: Long,
+    currentFormat: FormatEntity?,
+    foreground: Color,
+    onSliderValueChange: (Long) -> Unit,
+    onSliderValueChangeFinished: () -> Unit,
+) {
+    val safeDuration = if (duration <= 0L || duration == C.TIME_UNSET) 0f else duration.toFloat()
+    val current = (sliderPosition ?: position).coerceAtLeast(0L)
+    val safeValue = current.toFloat().coerceIn(0f, safeDuration.coerceAtLeast(0f))
+    val dimmed = foreground.copy(alpha = 0.55f)
+    Column(modifier = Modifier.fillMaxWidth()) {
+        V8FlatSlider(
+            value = safeValue,
+            valueRange = 0f..safeDuration.coerceAtLeast(0f),
+            activeColor = foreground.copy(alpha = 0.85f),
+            inactiveColor = foreground.copy(alpha = 0.22f),
+            trackHeight = if (sliderPosition != null) 10.dp else 6.dp,
+            onValueChange = { onSliderValueChange(it.toLong()) },
+            onValueChangeFinished = onSliderValueChangeFinished,
+            enabled = safeDuration > 0f,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Box(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            Text(
+                text = makeTimeString(current),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = dimmed,
+                modifier = Modifier.align(Alignment.CenterStart),
+            )
+            if (currentFormat != null) {
+                val label = remember(currentFormat.mimeType, currentFormat.codecs) { currentFormat.codecLabel() }
+                Text(
+                    text = label,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = dimmed,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
+            Text(
+                text =
+                    if (safeDuration > 0f) {
+                        "-" + makeTimeString((duration - current).coerceAtLeast(0L))
+                    } else {
+                        ""
+                    },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = dimmed,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppleMusicTransport(
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    canSkipPrevious: Boolean,
+    canSkipNext: Boolean,
+    foreground: Color,
+    onPreviousClick: () -> Unit,
+    onPlayPauseClick: () -> Unit,
+    onNextClick: () -> Unit,
+) {
+    val haptic = LocalHapticFeedback.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        AppleMusicPlainIcon(
+            iconRes = R.drawable.fast_forward,
+            tint = foreground,
+            iconSize = 44.dp,
+            boxSize = 72.dp,
+            enabled = canSkipPrevious,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onPreviousClick()
+            },
+            modifier = Modifier.graphicsLayer { scaleX = -1f },
+        )
+        Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
+            if (isLoading) {
+                CircularProgressIndicator(color = foreground, strokeWidth = 3.dp, modifier = Modifier.size(40.dp))
+            } else {
+                AppleMusicPlainIcon(
+                    iconRes = if (isPlaying) R.drawable.pause else R.drawable.play,
+                    tint = foreground,
+                    iconSize = 54.dp,
+                    boxSize = 80.dp,
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onPlayPauseClick()
+                    },
+                )
+            }
+        }
+        AppleMusicPlainIcon(
+            iconRes = R.drawable.fast_forward,
+            tint = foreground,
+            iconSize = 44.dp,
+            boxSize = 72.dp,
+            enabled = canSkipNext,
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onNextClick()
+            },
+        )
+    }
+}
+
+@Composable
+private fun AppleMusicVolume(
+    volume: Float,
+    foreground: Color,
+    onVolumeChange: (Float) -> Unit,
+) {
+    val dimmed = foreground.copy(alpha = 0.55f)
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.volume_off), null, tint = dimmed, modifier = Modifier.size(16.dp))
+        V8FlatSlider(
+            value = volume.coerceIn(0f, 1f),
+            valueRange = 0f..1f,
+            activeColor = foreground.copy(alpha = 0.85f),
+            inactiveColor = foreground.copy(alpha = 0.22f),
+            trackHeight = 6.dp,
+            onValueChange = onVolumeChange,
+            onValueChangeFinished = {},
+            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+        )
+        Icon(painterResource(R.drawable.volume_up), null, tint = dimmed, modifier = Modifier.size(18.dp))
     }
 }
