@@ -274,6 +274,7 @@ dependencies {
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.reorderable)
 
+    implementation(libs.profileinstaller)
     implementation(libs.haze.core)
     implementation(libs.haze.blur)
 
