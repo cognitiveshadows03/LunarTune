@@ -77,6 +77,7 @@ fun BottomSheet(
     backgroundColor: Color,
     onDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = true,
+    collapsedGesturesEnabled: Boolean = true,
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -90,7 +91,7 @@ fun BottomSheet(
                             .roundToPx()
                             .coerceAtLeast(0)
                     IntOffset(x = 0, y = y)
-                }.bottomSheetDraggable(state, onDismiss)
+                }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
                 .clip(
                     RoundedCornerShape(
                         topStart = if (!state.isExpanded) 16.dp else 0.dp,
@@ -124,10 +125,16 @@ fun BottomSheet(
                     Modifier
                         .graphicsLayer {
                             alpha = 1f - (state.progress * 4).coerceAtMost(1f)
-                        }.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = state::expandSoft,
+                        }.then(
+                            if (collapsedGesturesEnabled) {
+                                Modifier.clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = state::expandSoft,
+                                )
+                            } else {
+                                Modifier
+                            },
                         ).fillMaxWidth()
                         .height(state.collapsedBound),
                 content = collapsedContent,

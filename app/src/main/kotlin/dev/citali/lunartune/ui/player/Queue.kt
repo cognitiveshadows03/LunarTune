@@ -419,10 +419,16 @@ fun Queue(
             }
         }
 
+    // Apple Music (V10) portrait has its own inline queue; the stock sheet must not open from
+    // taps/swipes on the empty collapsed strip. Landscape keeps the normal sheet.
+    val isPortraitForSheet =
+        androidx.compose.ui.platform.LocalConfiguration.current.orientation !=
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE
     BottomSheet(
         state = state,
         backgroundColor = Color.Unspecified,
         modifier = modifier,
+        collapsedGesturesEnabled = !(playerDesignStyle == PlayerDesignStyle.V10 && isPortraitForSheet),
         collapsedContent = {
             when (playerDesignStyle) {
                 PlayerDesignStyle.V2 -> {
