@@ -16,6 +16,7 @@ package dev.citali.lunartune.ui.player
  */
 
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import androidx.compose.foundation.lazy.items
 import dev.citali.lunartune.extensions.metadata
@@ -181,6 +182,8 @@ internal fun AppleMusicPortraitContent(
     lyricsOpen: Boolean,
     queueOpen: Boolean,
     onCloseQueue: () -> Unit,
+    navController: androidx.navigation.NavController,
+    playerSheetState: dev.citali.lunartune.ui.component.BottomSheetState,
     lyricsSyncOffset: Int,
     onLyricsSyncOffsetChange: (Int) -> Unit,
     onCloseLyrics: () -> Unit,
@@ -531,6 +534,8 @@ internal fun AppleMusicPortraitContent(
             }
             if (queueReady) {
                 AppleMusicQueuePane(
+                    navController = navController,
+                    playerSheetState = playerSheetState,
                     modifier =
                         Modifier
                             .fillMaxSize()
@@ -843,13 +848,28 @@ private val androidx.media3.common.Timeline.Window.amQueueKey: Long
 
 /**
  * Apple Music style "Playing Next" queue, shown inline under the collapsed artwork header (same
- * open/close motion as the lyrics page). Shuffle / repeat / autoplay pills, then the upcoming songs:
- * tap to play, drag the handle to reorder (disabled while shuffle is on).
+ * open/close motion as the lyrics page). Shuffle / repeat / autoplay pills, then the upcoming songs
+ * in play order (shuffled order while shuffle is on):
+ * tap to play, drag the handle to reorder, swipe to remove (with undo), long-press for the song
+ * menu, "Select" for multi-select (select all, add to playlist, remove).
  */
 @Composable
-private fun AppleMusicQueuePane(modifier: Modifier = Modifier) {
+private fun AppleMusicQueuePane(
+    navController: androidx.navigation.NavController,
+    playerSheetState: dev.citali.lunartune.ui.component.BottomSheetState,
+    modifier: Modifier = Modifier,
+) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val database = dev.citali.lunartune.LocalDatabase.current
+    val menuState = LocalMenuState.current
+    val bottomSheetPageState = dev.citali.lunartune.ui.component.LocalBottomSheetPageState.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    var undoJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
     val queueWindows by playerConnection.queueWindows.collectAsStateWithLifecycle()
     val currentWindowIndex by playerConnection.currentWindowIndex.collectAsStateWithLifecycle()
     val queueTitle by playerConnection.queueTitle.collectAsStateWithLifecycle()
@@ -857,174 +877,411 @@ private fun AppleMusicQueuePane(modifier: Modifier = Modifier) {
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
     var autoplay by rememberPreference(dev.citali.lunartune.constants.AutoLoadMoreKey, defaultValue = true)
 
+    // Selection
+    var selecting by remember { mutableStateOf(false) }
+    val selectedKeys = remember { androidx.compose.runtime.mutableStateListOf<Long>() }
+    var showAddToPlaylist by remember { mutableStateOf(false) }
+
+    // queueWindows is already in play order (it follows the shuffle order while shuffle is on).
     val upcoming = remember { androidx.compose.runtime.mutableStateListOf<androidx.media3.common.Timeline.Window>() }
     var dragStartKey by remember { mutableStateOf<Long?>(null) }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val reorderState =
         sh.calvin.reorderable.rememberReorderableLazyListState(listState) { from, to ->
-            upcoming.add(to.index, upcoming.removeAt(from.index))
+            if (from.index in upcoming.indices && to.index in upcoming.indices) {
+                upcoming.add(to.index, upcoming.removeAt(from.index))
+            }
         }
     LaunchedEffect(queueWindows, currentWindowIndex, reorderState.isAnyItemDragging) {
         if (reorderState.isAnyItemDragging) return@LaunchedEffect
         val key = dragStartKey
         if (key != null) {
             dragStartKey = null
-            // Commit the finished drag: move the dragged song to the slot it was dropped on.
             val from = queueWindows.indexOfFirst { it.amQueueKey == key }
             val newLocal = upcoming.indexOfFirst { it.amQueueKey == key }
             val to = currentWindowIndex + 1 + newLocal
             if (from >= 0 && newLocal >= 0 && from != to && to in queueWindows.indices) {
-                player.moveMediaItem(queueWindows[from].firstPeriodIndex, queueWindows[to].firstPeriodIndex)
+                if (!player.shuffleModeEnabled) {
+                    player.moveMediaItem(from, to)
+                } else {
+                    // Same as the normal queue: reorder the shuffle order instead of the items.
+                    playerConnection.localPlayer.setShuffleOrder(
+                        androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(
+                            queueWindows
+                                .map { it.firstPeriodIndex }
+                                .toMutableList()
+                                .also { it.add(to, it.removeAt(from)) }
+                                .toIntArray(),
+                            System.currentTimeMillis(),
+                        ),
+                    )
+                }
                 return@LaunchedEffect
             }
         }
         upcoming.clear()
         upcoming.addAll(queueWindows.drop((currentWindowIndex + 1).coerceAtLeast(0)))
+        selectedKeys.retainAll(upcoming.map { it.amQueueKey }.toSet())
+        if (selecting && upcoming.isEmpty()) selecting = false
     }
 
-    Column(modifier = modifier) {
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = AppleMusicGutter).padding(top = 8.dp),
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text("Playing Next", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                if (!queueTitle.isNullOrBlank()) {
+    fun removeWithUndo(windows: List<androidx.media3.common.Timeline.Window>) {
+        if (windows.isEmpty()) return
+        val sorted = windows.sortedBy { it.firstPeriodIndex }
+        sorted.forEachIndexed { i, w -> player.removeMediaItem(w.firstPeriodIndex - i) }
+        undoJob?.cancel()
+        undoJob =
+            scope.launch {
+                val result =
+                    snackbarHostState.showSnackbar(
+                        message =
+                            if (sorted.size == 1) {
+                                context.getString(R.string.removed_song_from_queue, sorted.first().mediaItem.metadata?.title)
+                            } else {
+                                context.getString(R.string.removed_n_songs_from_queue, sorted.size)
+                            },
+                        actionLabel = context.getString(R.string.undo),
+                        duration = androidx.compose.material3.SnackbarDuration.Short,
+                    )
+                if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                    sorted.forEach { w ->
+                        player.addMediaItem(w.mediaItem)
+                        player.moveMediaItem(player.mediaItemCount - 1, w.firstPeriodIndex)
+                    }
+                }
+            }
+    }
+
+    dev.citali.lunartune.ui.menu.AddToPlaylistDialog(
+        isVisible = showAddToPlaylist,
+        onGetSong = {
+            upcoming
+                .filter { it.amQueueKey in selectedKeys }
+                .mapNotNull { it.mediaItem.metadata }
+                .map {
+                    database.withTransaction { insert(it) }
+                    it.id
+                }
+        },
+        onDismiss = { showAddToPlaylist = false },
+        onAddComplete = { songCount, playlistNames ->
+            android.widget.Toast
+                .makeText(
+                    context,
+                    if (playlistNames.size == 1) {
+                        if (songCount == 1) {
+                            context.getString(R.string.added_to_playlist, playlistNames.first())
+                        } else {
+                            context.getString(R.string.added_n_songs_to_playlist, songCount, playlistNames.first())
+                        }
+                    } else if (songCount == 1) {
+                        context.getString(R.string.added_to_n_playlists, playlistNames.size)
+                    } else {
+                        context.getString(R.string.added_n_songs_to_n_playlists, songCount, playlistNames.size)
+                    },
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+            selecting = false
+            selectedKeys.clear()
+        },
+    )
+
+    androidx.activity.compose.BackHandler(enabled = selecting) {
+        selecting = false
+        selectedKeys.clear()
+    }
+
+    Box(modifier = modifier) {
+        Column(Modifier.fillMaxSize()) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = AppleMusicGutter).padding(top = 8.dp),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Playing Next", color = Color.White, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    if (!queueTitle.isNullOrBlank()) {
+                        Text(
+                            "From $queueTitle",
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 14.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (upcoming.isNotEmpty()) {
                     Text(
-                        "From $queueTitle",
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        if (selecting) "Done" else "Select",
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    selecting = !selecting
+                                    selectedKeys.clear()
+                                }.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = AppleMusicGutter),
-        ) {
-            @Composable
-            fun pill(icon: Int, active: Boolean, onClick: () -> Unit) {
-                val bg by animateColorAsState(
-                    if (active) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.12f),
-                    label = "amQueuePill",
-                )
-                val fg by animateColorAsState(
-                    if (active) Color.Black.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.85f),
-                    label = "amQueuePillFg",
-                )
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .height(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(bg)
-                            .clickable(onClick = onClick),
-                ) {
-                    Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(20.dp))
-                }
-            }
-            pill(R.drawable.shuffle, shuffleOn) { player.shuffleModeEnabled = !shuffleOn }
-            pill(
-                if (repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) R.drawable.repeat_one else R.drawable.repeat,
-                repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF,
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = AppleMusicGutter),
             ) {
-                player.repeatMode =
-                    when (repeatMode) {
-                        androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                        androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                        else -> androidx.media3.common.Player.REPEAT_MODE_OFF
-                    }
-            }
-            pill(R.drawable.all_inclusive, autoplay) { autoplay = !autoplay }
-        }
-        Spacer(Modifier.height(8.dp))
-        androidx.compose.foundation.lazy.LazyColumn(
-            state = listState,
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = 16.dp),
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        // Soft fade at the top and bottom edges, like Apple Music.
-                        drawRect(
-                            brush =
-                                Brush.verticalGradient(
-                                    0f to Color.Transparent,
-                                    0.04f to Color.Black,
-                                    0.94f to Color.Black,
-                                    1f to Color.Transparent,
-                                ),
-                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                        )
-                    },
-        ) {
-            items(upcoming.size, key = { upcoming[it].amQueueKey }) { i ->
-                val window = upcoming[i]
-                ReorderableItem(reorderState, key = window.amQueueKey) { dragging ->
-                    val meta = window.mediaItem.metadata
-                    val lift by animateFloatAsState(if (dragging) 1f else 0f, label = "amQueueLift")
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                @Composable
+                fun pill(icon: Int, active: Boolean, onClick: () -> Unit) {
+                    val bg by animateColorAsState(
+                        if (active) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.12f),
+                        label = "amQueuePill",
+                    )
+                    val fg by animateColorAsState(
+                        if (active) Color.Black.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.85f),
+                        label = "amQueuePillFg",
+                    )
+                    Box(
+                        contentAlignment = Alignment.Center,
                         modifier =
                             Modifier
-                                .fillMaxWidth()
-                                .graphicsLayer {
-                                    scaleX = 1f + 0.03f * lift
-                                    scaleY = 1f + 0.03f * lift
-                                }.background(Color.White.copy(alpha = 0.1f * lift), RoundedCornerShape(10.dp))
-                                .clickable {
-                                    val index = window.firstPeriodIndex
-                                    if (!playerConnection.service.manualSeekToIndexWithCrossfade(index)) {
-                                        player.seekToDefaultPosition(index)
-                                        player.playWhenReady = true
-                                    }
-                                }.padding(horizontal = AppleMusicGutter, vertical = 7.dp),
+                                .weight(1f)
+                                .height(34.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(bg)
+                                .clickable(onClick = onClick),
                     ) {
-                        AsyncImage(
-                            model = meta?.thumbnailUrl,
-                            contentDescription = null,
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                            modifier = Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                meta?.title ?: window.mediaItem.mediaMetadata.title?.toString().orEmpty(),
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                meta?.artists?.joinToString { it.name }.orEmpty(),
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 14.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                        Icon(painterResource(icon), null, tint = fg, modifier = Modifier.size(20.dp))
+                    }
+                }
+                pill(R.drawable.shuffle, shuffleOn) { player.shuffleModeEnabled = !shuffleOn }
+                pill(
+                    if (repeatMode == androidx.media3.common.Player.REPEAT_MODE_ONE) R.drawable.repeat_one else R.drawable.repeat,
+                    repeatMode != androidx.media3.common.Player.REPEAT_MODE_OFF,
+                ) {
+                    player.repeatMode =
+                        when (repeatMode) {
+                            androidx.media3.common.Player.REPEAT_MODE_OFF -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                            androidx.media3.common.Player.REPEAT_MODE_ALL -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
                         }
-                        if (!shuffleOn) {
-                            Icon(
-                                painterResource(R.drawable.drag_handle),
-                                null,
-                                tint = Color.White.copy(alpha = 0.45f),
+                }
+                pill(R.drawable.all_inclusive, autoplay) { autoplay = !autoplay }
+            }
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.foundation.lazy.LazyColumn(
+                state = listState,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 8.dp, bottom = if (selecting) 72.dp else 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush =
+                                    Brush.verticalGradient(
+                                        0f to Color.Transparent,
+                                        0.04f to Color.Black,
+                                        0.94f to Color.Black,
+                                        1f to Color.Transparent,
+                                    ),
+                                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                            )
+                        },
+            ) {
+                items(upcoming.size, key = { upcoming[it].amQueueKey }) { i ->
+                    val window = upcoming[i]
+                    val itemKey = window.amQueueKey
+                    ReorderableItem(reorderState, key = itemKey) { dragging ->
+                        val currentWindow by androidx.compose.runtime.rememberUpdatedState(window)
+                        val meta = window.mediaItem.metadata
+                        val selected = itemKey in selectedKeys
+                        val lift by animateFloatAsState(if (dragging) 1f else 0f, label = "amQueueLift")
+                        val dismissState =
+                            androidx.compose.material3.rememberSwipeToDismissBoxState(
+                                positionalThreshold = { it * 0.45f },
+                            )
+                        LaunchedEffect(dismissState.currentValue) {
+                            if (dismissState.currentValue == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart) {
+                                removeWithUndo(listOf(currentWindow))
+                            }
+                        }
+                        val row: @Composable () -> Unit = {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
                                 modifier =
                                     Modifier
-                                        .size(40.dp)
-                                        .padding(8.dp)
-                                        .draggableHandle(onDragStarted = { dragStartKey = window.amQueueKey }),
-                            )
+                                        .fillMaxWidth()
+                                        .graphicsLayer {
+                                            scaleX = 1f + 0.03f * lift
+                                            scaleY = 1f + 0.03f * lift
+                                        }.background(
+                                            Color.White.copy(alpha = maxOf(0.1f * lift, if (selected) 0.12f else 0f)),
+                                            RoundedCornerShape(10.dp),
+                                        ).combinedClickable(
+                                            onClick = {
+                                                if (selecting) {
+                                                    if (selected) selectedKeys.remove(itemKey) else selectedKeys.add(itemKey)
+                                                } else {
+                                                    val index = window.firstPeriodIndex
+                                                    if (!playerConnection.service.manualSeekToIndexWithCrossfade(index)) {
+                                                        player.seekToDefaultPosition(index)
+                                                        player.playWhenReady = true
+                                                    }
+                                                }
+                                            },
+                                            onLongClick = {
+                                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                                if (selecting || meta == null) return@combinedClickable
+                                                menuState.show {
+                                                    dev.citali.lunartune.ui.menu.PlayerMenu(
+                                                        mediaMetadata = meta,
+                                                        navController = navController,
+                                                        playerBottomSheetState = playerSheetState,
+                                                        isQueueTrigger = true,
+                                                        onPlayNextFromQueue =
+                                                            if (i > 0) {
+                                                                { playerConnection.moveQueueItemToNext(window.firstPeriodIndex) }
+                                                            } else {
+                                                                null
+                                                            },
+                                                        onRemoveFromQueue = { removeWithUndo(listOf(window)) },
+                                                        onShowDetailsDialog = {
+                                                            bottomSheetPageState.show {
+                                                                dev.citali.lunartune.ui.utils.ShowMediaInfo(window.mediaItem.mediaId)
+                                                            }
+                                                        },
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+                                            },
+                                        ).padding(horizontal = AppleMusicGutter, vertical = 7.dp),
+                            ) {
+                                androidx.compose.animation.AnimatedVisibility(visible = selecting) {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier =
+                                            Modifier
+                                                .padding(end = 12.dp)
+                                                .size(22.dp)
+                                                .clip(CircleShape)
+                                                .background(if (selected) Color.White else Color.White.copy(alpha = 0.15f)),
+                                    ) {
+                                        if (selected) {
+                                            Icon(painterResource(R.drawable.check), null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+                                }
+                                AsyncImage(
+                                    model = meta?.thumbnailUrl,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        meta?.title ?: window.mediaItem.mediaMetadata.title?.toString().orEmpty(),
+                                        color = Color.White,
+                                        fontSize = 16.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        meta?.artists?.joinToString { it.name }.orEmpty(),
+                                        color = Color.White.copy(alpha = 0.55f),
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                if (!selecting) {
+                                    Icon(
+                                        painterResource(R.drawable.drag_handle),
+                                        null,
+                                        tint = Color.White.copy(alpha = 0.45f),
+                                        modifier =
+                                            Modifier
+                                                .size(40.dp)
+                                                .padding(8.dp)
+                                                .draggableHandle(onDragStarted = { dragStartKey = itemKey }),
+                                    )
+                                }
+                            }
+                        }
+                        if (selecting) {
+                            row()
+                        } else {
+                            androidx.compose.material3.SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = false,
+                                backgroundContent = {
+                                    Box(
+                                        contentAlignment = Alignment.CenterEnd,
+                                        modifier = Modifier.fillMaxSize().background(Color(0xFFE5484D).copy(alpha = 0.85f)).padding(end = AppleMusicGutter),
+                                    ) {
+                                        Icon(painterResource(R.drawable.delete), null, tint = Color.White, modifier = Modifier.size(22.dp))
+                                    }
+                                },
+                            ) { row() }
                         }
                     }
                 }
             }
         }
+
+        // Apple-style selection bar.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = selecting,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { it / 2 },
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { it / 2 },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = AppleMusicGutter, vertical = 8.dp),
+        ) {
+            val allSelected = selectedKeys.size == upcoming.size && upcoming.isNotEmpty()
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color(0xFF2A2A2E).copy(alpha = 0.92f))
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+            ) {
+                @Composable
+                fun action(label: String, enabled: Boolean = true, color: Color = Color.White, onClick: () -> Unit) {
+                    Text(
+                        label,
+                        color = if (enabled) color else color.copy(alpha = 0.35f),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier =
+                            Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable(enabled = enabled, onClick = onClick)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                    )
+                }
+                action(if (allSelected) "Deselect All" else "Select All") {
+                    if (allSelected) {
+                        selectedKeys.clear()
+                    } else {
+                        selectedKeys.clear()
+                        selectedKeys.addAll(upcoming.map { it.amQueueKey })
+                    }
+                }
+                action("Add to Playlist", enabled = selectedKeys.isNotEmpty()) { showAddToPlaylist = true }
+                action("Remove", enabled = selectedKeys.isNotEmpty(), color = Color(0xFFFF6B6B)) {
+                    removeWithUndo(upcoming.filter { it.amQueueKey in selectedKeys })
+                    selectedKeys.clear()
+                    selecting = false
+                }
+            }
+        }
+
+        androidx.compose.material3.SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (selecting) 64.dp else 8.dp),
+        )
     }
 }

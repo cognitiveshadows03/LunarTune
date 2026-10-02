@@ -2384,6 +2384,8 @@ fun V8PlayerContent(
             lyricsOpen = appleMusicLyricsOpen,
             queueOpen = appleMusicQueueOpen,
             onCloseQueue = onCloseAppleMusicQueue,
+            navController = navController,
+            playerSheetState = state,
             lyricsSyncOffset = lyricsSyncOffset,
             onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
             onCloseLyrics = onCloseLyrics,
