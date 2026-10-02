@@ -284,8 +284,9 @@ class BottomSheetState(
         }
     }
 
-    val preUpPostDownNestedScrollConnection
-        get() =
+    // One stable instance: a getter made a fresh connection on every recomposition, so a drag
+    // that recomposed the player mid-gesture lost isTopReached and never settled (sheet stuck).
+    val preUpPostDownNestedScrollConnection: NestedScrollConnection by lazy {
             object : NestedScrollConnection {
                 var isTopReached = false
 
@@ -340,6 +341,7 @@ class BottomSheetState(
                     return Velocity.Zero
                 }
             }
+    }
 }
 
 const val EXPANDED_ANCHOR = 2

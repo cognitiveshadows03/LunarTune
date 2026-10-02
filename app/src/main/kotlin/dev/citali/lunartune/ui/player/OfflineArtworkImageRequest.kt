@@ -15,7 +15,7 @@ import coil3.request.ImageRequest
 import dev.citali.lunartune.utils.DownloadedArtwork
 
 @Composable
-internal fun rememberOfflineArtworkImageRequest(imageUrl: String?): ImageRequest? {
+internal fun rememberOfflineArtworkImageRequest(imageUrl: String?, fixedSizePx: Int? = null): ImageRequest? {
     val context = LocalContext.current
     // Downloaded songs have their cover on disk, so prefer that over a network
     // fetch: it is what keeps artwork showing once Coil's cache is cleared or
@@ -23,7 +23,7 @@ internal fun rememberOfflineArtworkImageRequest(imageUrl: String?): ImageRequest
     val localArtwork = remember(context, imageUrl) {
         DownloadedArtwork.localFile(context, imageUrl)
     }
-    return remember(context, imageUrl, localArtwork) {
+    return remember(context, imageUrl, localArtwork, fixedSizePx) {
         imageUrl
             ?.trim()
             ?.takeIf(String::isNotBlank)
@@ -32,7 +32,10 @@ internal fun rememberOfflineArtworkImageRequest(imageUrl: String?): ImageRequest
                 ImageRequest
                     .Builder(context)
                     .data(source)
-                    .memoryCacheKey(url)
+                    // A fixed decode size (with its own memory key) stops a request measured
+                    // at thumbnail size from being reused for full-size artwork.
+                    .apply { if (fixedSizePx != null) size(fixedSizePx) }
+                    .memoryCacheKey(if (fixedSizePx != null) "$url#$fixedSizePx" else url)
                     .diskCacheKey(url)
                     .diskCachePolicy(CachePolicy.ENABLED)
                     .networkCachePolicy(CachePolicy.ENABLED)

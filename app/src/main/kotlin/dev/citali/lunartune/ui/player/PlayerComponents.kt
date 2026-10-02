@@ -2846,7 +2846,7 @@ internal fun CrossfadingPlayerArtwork(
     ) { artwork ->
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = rememberOfflineArtworkImageRequest(artwork.artworkUrl),
+                model = rememberOfflineArtworkImageRequest(artwork.artworkUrl, fixedSizePx = 1200),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
