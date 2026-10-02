@@ -843,11 +843,19 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
+    LaunchedEffect(state.isExpandedOrExpanding) {
+        PlayerSheetSignals.artworkActive = state.isExpandedOrExpanding
+    }
+
     LaunchedEffect(mediaMetadata?.id, playbackState, aodModeEnabled) {
         val startTime = SystemClock.elapsedRealtime()
         if (playbackState == STATE_READY) {
             while (isActive) {
-                delay(if (aodModeEnabled) 500L else 100L)
+                // Ported from ArchiveTune: ticks pause while the sheet is mid-flight, and the
+                // collapsed mini player only needs ~2 updates per second.
+                val collapsedOrHidden = state.isCollapsed || state.isDismissed
+                delay(if (aodModeEnabled || collapsedOrHidden) 500L else 100L)
+                if (!state.isExpanded && !state.isCollapsed && !state.isDismissed) continue
                 val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
                 val currentPlayerPosition = playerConnection.player.currentPosition
                 val currentPlayerDuration = playerConnection.player.duration
