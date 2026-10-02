@@ -879,6 +879,8 @@ private fun AppleMusicQueuePane(
 
     // Selection
     var selecting by remember { mutableStateOf(false) }
+    // Same lock as the normal queue: drag handles and swipe-to-remove only while unlocked.
+    var locked by rememberPreference(dev.citali.lunartune.constants.QueueEditLockKey, defaultValue = true)
     val selectedKeys = remember { androidx.compose.runtime.mutableStateListOf<Long>() }
     var showAddToPlaylist by remember { mutableStateOf(false) }
 
@@ -1009,20 +1011,23 @@ private fun AppleMusicQueuePane(
                         )
                     }
                 }
-                if (upcoming.isNotEmpty()) {
-                    Text(
-                        if (selecting) "Done" else "Select",
-                        color = Color.White.copy(alpha = 0.85f),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    selecting = !selecting
-                                    selectedKeys.clear()
-                                }.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier =
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = if (locked) 0.12f else 0.9f))
+                            .clickable { locked = !locked },
+                ) {
+                    androidx.compose.animation.Crossfade(locked, label = "amQueueLock") { isLocked ->
+                        Icon(
+                            painterResource(if (isLocked) R.drawable.lock else R.drawable.lock_open),
+                            null,
+                            tint = if (isLocked) Color.White.copy(alpha = 0.85f) else Color.Black.copy(alpha = 0.75f),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -1132,28 +1137,12 @@ private fun AppleMusicQueuePane(
                                             },
                                             onLongClick = {
                                                 haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                                if (selecting || meta == null) return@combinedClickable
-                                                menuState.show {
-                                                    dev.citali.lunartune.ui.menu.PlayerMenu(
-                                                        mediaMetadata = meta,
-                                                        navController = navController,
-                                                        playerBottomSheetState = playerSheetState,
-                                                        isQueueTrigger = true,
-                                                        onPlayNextFromQueue =
-                                                            if (i > 0) {
-                                                                { playerConnection.moveQueueItemToNext(window.firstPeriodIndex) }
-                                                            } else {
-                                                                null
-                                                            },
-                                                        onRemoveFromQueue = { removeWithUndo(listOf(window)) },
-                                                        onShowDetailsDialog = {
-                                                            bottomSheetPageState.show {
-                                                                dev.citali.lunartune.ui.utils.ShowMediaInfo(window.mediaItem.mediaId)
-                                                            }
-                                                        },
-                                                        onDismiss = menuState::dismiss,
-                                                    )
+                                                // Like the normal queue: long-press starts multi-select.
+                                                if (!selecting) {
+                                                    selecting = true
+                                                    selectedKeys.clear()
                                                 }
+                                                if (itemKey !in selectedKeys) selectedKeys.add(itemKey)
                                             },
                                         ).padding(horizontal = AppleMusicGutter, vertical = 7.dp),
                             ) {
@@ -1196,29 +1185,71 @@ private fun AppleMusicQueuePane(
                                     )
                                 }
                                 if (!selecting) {
-                                    Icon(
-                                        painterResource(R.drawable.drag_handle),
-                                        null,
-                                        tint = Color.White.copy(alpha = 0.45f),
+                                    Box(
+                                        contentAlignment = Alignment.Center,
                                         modifier =
                                             Modifier
                                                 .size(40.dp)
-                                                .padding(8.dp)
-                                                .draggableHandle(onDragStarted = { dragStartKey = itemKey }),
-                                    )
+                                                .clip(CircleShape)
+                                                .clickable {
+                                                    if (meta == null) return@clickable
+                                                menuState.show {
+                                                            dev.citali.lunartune.ui.menu.PlayerMenu(
+                                                                mediaMetadata = meta,
+                                                                navController = navController,
+                                                                playerBottomSheetState = playerSheetState,
+                                                                isQueueTrigger = true,
+                                                                onPlayNextFromQueue =
+                                                                    if (i > 0) {
+                                                                        { playerConnection.moveQueueItemToNext(window.firstPeriodIndex) }
+                                                                    } else {
+                                                                        null
+                                                                    },
+                                                                onRemoveFromQueue = { removeWithUndo(listOf(window)) },
+                                                                onShowDetailsDialog = {
+                                                                    bottomSheetPageState.show {
+                                                                        dev.citali.lunartune.ui.utils.ShowMediaInfo(window.mediaItem.mediaId)
+                                                                    }
+                                                                },
+                                                                onDismiss = menuState::dismiss,
+                                                            )
+                                                        }
+                                                        },
+                                    ) {
+                                        Icon(painterResource(R.drawable.more_horiz), null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
+                                    }
+                                    androidx.compose.animation.AnimatedVisibility(visible = !locked) {
+                                        Icon(
+                                            painterResource(R.drawable.drag_handle),
+                                            null,
+                                            tint = Color.White.copy(alpha = 0.45f),
+                                            modifier =
+                                                Modifier
+                                                    .size(40.dp)
+                                                    .padding(8.dp)
+                                                    .draggableHandle(onDragStarted = { dragStartKey = itemKey }),
+                                        )
+                                    }
                                 }
                             }
                         }
-                        if (selecting) {
+                        if (selecting || locked) {
                             row()
                         } else {
                             androidx.compose.material3.SwipeToDismissBox(
                                 state = dismissState,
                                 enableDismissFromStartToEnd = false,
                                 backgroundContent = {
-                                    Box(
+                                    // Frosted (not tinted) and only while actually swiping.
+                                    val swiping = dismissState.dismissDirection == androidx.compose.material3.SwipeToDismissBoxValue.EndToStart
+                                    if (swiping) Box(
                                         contentAlignment = Alignment.CenterEnd,
-                                        modifier = Modifier.fillMaxSize().background(Color(0xFFE5484D).copy(alpha = 0.85f)).padding(end = AppleMusicGutter),
+                                        modifier =
+                                            Modifier
+                                                .fillMaxSize()
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color.White.copy(alpha = 0.14f))
+                                                .padding(end = AppleMusicGutter),
                                     ) {
                                         Icon(painterResource(R.drawable.delete), null, tint = Color.White, modifier = Modifier.size(22.dp))
                                     }
@@ -1261,6 +1292,10 @@ private fun AppleMusicQueuePane(
                                 .clickable(enabled = enabled, onClick = onClick)
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                     )
+                }
+                action("Cancel") {
+                    selecting = false
+                    selectedKeys.clear()
                 }
                 action(if (allSelected) "Deselect All" else "Select All") {
                     if (allSelected) {
