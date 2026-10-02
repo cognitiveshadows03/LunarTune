@@ -876,6 +876,8 @@ private fun AppleMusicQueuePane(
     val shuffleOn by playerConnection.shuffleModeEnabled.collectAsStateWithLifecycle()
     val repeatMode by playerConnection.repeatMode.collectAsStateWithLifecycle()
     var autoplay by rememberPreference(dev.citali.lunartune.constants.AutoLoadMoreKey, defaultValue = true)
+    val infiniteLoading by playerConnection.service.infiniteQueueLoading.collectAsStateWithLifecycle()
+    val isPlayingNow by playerConnection.isPlaying.collectAsStateWithLifecycle()
 
     // Selection
     var selecting by remember { mutableStateOf(false) }
@@ -890,8 +892,11 @@ private fun AppleMusicQueuePane(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val reorderState =
         sh.calvin.reorderable.rememberReorderableLazyListState(listState) { from, to ->
-            if (from.index in upcoming.indices && to.index in upcoming.indices) {
-                upcoming.add(to.index, upcoming.removeAt(from.index))
+            // Item 0 is the "Now Playing" row, so queue rows are offset by one.
+            val f = from.index - 1
+            val t = to.index - 1
+            if (f in upcoming.indices && t in upcoming.indices) {
+                upcoming.add(t, upcoming.removeAt(f))
             }
         }
     LaunchedEffect(queueWindows, currentWindowIndex, reorderState.isAnyItemDragging) {
@@ -1070,7 +1075,22 @@ private fun AppleMusicQueuePane(
                             else -> androidx.media3.common.Player.REPEAT_MODE_OFF
                         }
                 }
-                pill(R.drawable.all_inclusive, autoplay) { autoplay = !autoplay }
+                // Infinite queue: same as the normal queue's toggle (also starts/stops loading).
+                Box(Modifier.weight(1f).graphicsLayer { alpha = if (infiniteLoading) 0.6f else 1f }) {
+                    Row { pill(R.drawable.all_inclusive, autoplay) {
+                        if (infiniteLoading) return@pill
+                        val next = !autoplay
+                        autoplay = next
+                        if (next) playerConnection.service.onInfiniteQueueEnabled() else playerConnection.service.onInfiniteQueueDisabled()
+                    } }
+                    if (infiniteLoading) {
+                        androidx.compose.material3.CircularProgressIndicator(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.align(Alignment.Center).size(18.dp),
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
             androidx.compose.foundation.lazy.LazyColumn(
@@ -1094,6 +1114,59 @@ private fun AppleMusicQueuePane(
                             )
                         },
             ) {
+                // Now Playing row (not draggable / removable).
+                item(key = "am_now_playing") {
+                    val nowWindow = queueWindows.getOrNull(currentWindowIndex)
+                    val nowMeta = nowWindow?.mediaItem?.metadata
+                    if (nowMeta != null) {
+                        Column(Modifier.fillMaxWidth()) {
+                            Text(
+                                "Now Playing",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = AppleMusicGutter, vertical = 4.dp),
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = AppleMusicGutter - 8.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color.White.copy(alpha = 0.1f))
+                                        .padding(horizontal = 8.dp, vertical = 7.dp),
+                            ) {
+                                AsyncImage(
+                                    model = nowMeta.thumbnailUrl,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(nowMeta.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(nowMeta.artists.joinToString { it.name }, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                Icon(
+                                    painterResource(if (isPlayingNow) R.drawable.volume_up else R.drawable.pause),
+                                    null,
+                                    tint = Color.White.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                            if (upcoming.isNotEmpty()) {
+                                Text(
+                                    "Up Next",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(start = AppleMusicGutter, end = AppleMusicGutter, top = 14.dp, bottom = 2.dp),
+                                )
+                            }
+                        }
+                    }
+                }
                 items(upcoming.size, key = { upcoming[it].amQueueKey }) { i ->
                     val window = upcoming[i]
                     val itemKey = window.amQueueKey
