@@ -2827,12 +2827,6 @@ private const val ARTWORK_CROSSFADE_DURATION_MS = 450
  * already muted, so the two briefly-overlapping video layers cannot bleed
  * audio.
  */
-/** Player-sheet signals read by heavy player content (set from BottomSheetPlayer). */
-internal object PlayerSheetSignals {
-    /** False from the moment the player starts minimising: canvas/video artwork pauses at the top of the fade. */
-    var artworkActive by androidx.compose.runtime.mutableStateOf(true)
-}
-
 @Composable
 internal fun CrossfadingPlayerArtwork(
     artworkUrl: String?,
@@ -2861,7 +2855,7 @@ internal fun CrossfadingPlayerArtwork(
                 CanvasArtworkPlayer(
                     primaryUrl = artwork.canvasPrimaryUrl,
                     fallbackUrl = artwork.canvasFallbackUrl,
-                    isPlaying = isPlaying && PlayerSheetSignals.artworkActive,
+                    isPlaying = isPlaying,
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM,
                     modifier = Modifier.fillMaxSize(),
                 )
