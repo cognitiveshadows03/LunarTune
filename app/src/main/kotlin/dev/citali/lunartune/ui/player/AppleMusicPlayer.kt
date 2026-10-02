@@ -264,12 +264,10 @@ internal fun AppleMusicPortraitContent(
                 .lyricsHelper()
         }
     val hasLyrics = currentLyrics != null
-    // Only search once the user opens lyrics for this song; the latch keeps the search running
-    // if they close the page before it finishes.
-    var lyricsRequested by remember(mediaMetadata.id) { mutableStateOf(false) }
-    LaunchedEffect(lyricsOpen, mediaMetadata.id) { if (lyricsOpen) lyricsRequested = true }
-    LaunchedEffect(mediaMetadata.id, hasLyrics, lyricsRequested) {
-        if (hasLyrics || !lyricsRequested) return@LaunchedEffect
+    // Same method as the other players' LyricsScreen: fetch while the lyrics page is shown,
+    // keyed on the song and the current lyrics.
+    LaunchedEffect(mediaMetadata.id, currentLyrics?.lyrics, lyricsOpen) {
+        if (!lyricsOpen || currentLyrics != null) return@LaunchedEffect
         try {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 if (amDatabase.lyrics(mediaMetadata.id).first() != null) return@withContext

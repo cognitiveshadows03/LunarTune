@@ -2392,6 +2392,19 @@ class MainActivity : FragmentActivity() {
                                                         animationSpec = LunarMotion.smooth(),
                                                         initialScale = 0.92f,
                                                     )
+                                            } else if (tabTransition == TabTransitionStyle.BLOOM && targetState.destination.route == "settings") {
+                                                // Settings blooms out of the settings button (top end) with a softer,
+                                                // longer spring so the growth is clearly visible.
+                                                fadeIn(tween(220)) +
+                                                    scaleIn(
+                                                        animationSpec =
+                                                            androidx.compose.animation.core.spring(
+                                                                dampingRatio = 0.78f,
+                                                                stiffness = 260f,
+                                                            ),
+                                                        initialScale = 0.6f,
+                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
+                                                    )
                                             } else if (tabTransition == TabTransitionStyle.BLOOM) {
                                                 fadeIn(tween(320)) +
                                                     scaleIn(
@@ -2500,6 +2513,13 @@ class MainActivity : FragmentActivity() {
                                     popExitTransition = {
                                         if (disableAnimations) {
                                             fadeOut(tween(0))
+                                        } else if (tabTransition == TabTransitionStyle.BLOOM && initialState.destination.route == "settings") {
+                                            fadeOut(tween(220, delayMillis = 60)) +
+                                                scaleOut(
+                                                    animationSpec = LunarMotion.smooth(),
+                                                    targetScale = 0.6f,
+                                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
+                                                )
                                         } else if ((
                                                 initialState.destination.route in topLevelScreens ||
                                                     initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true
