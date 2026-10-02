@@ -35,32 +35,33 @@ object LunarMotion {
     val EmphasizedAccelerate: Easing
         get() = if (MotionTuning.reducedMotion) LinearEasing else CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
+    // Restored pre-LunarMotion feel: no overshoot, quick settles (performance).
     /**
      * Gentle bounce for entrances, icon rotations, sheet panels and swipe snap-backs.
      * Settles in ~350ms with one soft overshoot.
      */
-    fun <T> bouncy() = spring<T>(dampingRatio = MotionTuning.dampingRatio(0.75f), stiffness = MotionTuning.stiffness(500f))
+    fun <T> bouncy() = spring<T>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(1500f))
 
     /**
      * Organic settle with zero overshoot, for progress/shape-driven motion (search morph,
      * crossfades with scale) where overshooting past the target would distort layout.
      */
-    fun <T> smooth() = spring<T>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(700f))
+    fun <T> smooth() = spring<T>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(1500f))
 
     /**
      * Fast retract for exits (FAB scrolling away, banners dismissing). Barely-there give,
      * gone in ~200ms.
      */
-    fun <T> snappy() = spring<T>(dampingRatio = MotionTuning.dampingRatio(0.95f), stiffness = MotionTuning.stiffness(1500f))
+    fun <T> snappy() = spring<T>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(2500f))
 
     /**
      * Full-screen glide for nav transitions (tab blooms, drill slides). A whisper of
      * overshoot over ~520ms so page changes read clearly without seasickness.
      */
-    fun <T> glide() = spring<T>(dampingRatio = MotionTuning.dampingRatio(0.88f), stiffness = MotionTuning.stiffness(350f))
+    fun <T> glide() = spring<T>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(400f))
 
     /** Tactile press bounce for [dev.citali.lunartune.ui.component.IconButton]. */
-    fun press() = spring<Float>(dampingRatio = MotionTuning.dampingRatio(0.62f), stiffness = MotionTuning.stiffness(900f))
+    fun press() = spring<Float>(dampingRatio = MotionTuning.dampingRatio(1f), stiffness = MotionTuning.stiffness(1500f))
 
     /** Scale target while pressed. */
     const val PressedScale = 0.85f

@@ -198,54 +198,28 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
         enterTransition = {
-            if (disableAnimations) {
-                fadeIn(tween(0))
-            } else {
-                fadeIn(if (tabTransition == TabTransitionStyle.FADE) tween(250) else tween(320))
-            }
+            if (disableAnimations) fadeIn(tween(0)) else fadeIn(tween(250))
         },
         exitTransition = {
             if (disableAnimations) {
                 fadeOut(tween(0))
             } else if (targetState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) {
-                fadeOut(tween(250, easing = LunarMotion.EmphasizedAccelerate))
-            } else if (tabTransition == TabTransitionStyle.SPRING_SLIDE) {
-                fadeOut(tween(250, easing = LunarMotion.EmphasizedAccelerate)) +
-                    slideOutHorizontally(animationSpec = LunarMotion.glide()) { -it } +
-                    scaleOut(
-                        animationSpec = LunarMotion.smooth(),
-                        targetScale = 0.96f,
-                    )
+                fadeOut(tween(200))
             } else {
-                fadeOut(tween(250, easing = LunarMotion.EmphasizedAccelerate)) + slideOutHorizontally(animationSpec = LunarMotion.glide()) { -it }
+                fadeOut(tween(200)) + slideOutHorizontally { -it / 2 }
             }
         },
         popEnterTransition = {
             if (disableAnimations) {
                 fadeIn(tween(0))
             } else if (initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) {
-                fadeIn(if (tabTransition == TabTransitionStyle.FADE) tween(250) else tween(320))
+                fadeIn(tween(250))
             } else {
-                if (tabTransition == TabTransitionStyle.SPRING_SLIDE) {
-                    fadeIn(tween(320)) +
-                        slideInHorizontally(animationSpec = LunarMotion.glide()) { -it } +
-                        scaleIn(
-                            animationSpec = LunarMotion.smooth(),
-                            initialScale = 0.94f,
-                        )
-                } else if (tabTransition == TabTransitionStyle.BLOOM) {
-                    fadeIn(tween(320)) + slideInHorizontally(animationSpec = LunarMotion.glide()) { -it }
-                } else {
-                    fadeIn(tween(250))
-                }
+                fadeIn(tween(250)) + slideInHorizontally { -it / 2 }
             }
         },
         popExitTransition = {
-            if (disableAnimations) {
-                fadeOut(tween(0))
-            } else {
-                fadeOut(tween(250, easing = LunarMotion.EmphasizedAccelerate))
-            }
+            if (disableAnimations) fadeOut(tween(0)) else fadeOut(tween(200))
         },
     ) {
         OnlineSearchResult(
