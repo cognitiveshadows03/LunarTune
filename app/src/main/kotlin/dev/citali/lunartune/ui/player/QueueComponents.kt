@@ -1388,9 +1388,11 @@ fun QueueCollapsedContentAppleMusic(
     device: ActiveOutputDevice,
     modifier: Modifier = Modifier,
     lyricsOpenProvider: () -> Boolean = { false },
+    queueOpenProvider: () -> Boolean = { false },
 ) {
     val tint = textBackgroundColor.copy(alpha = 0.7f)
     val lyricsOpen = lyricsOpenProvider()
+    val queueOpen = queueOpenProvider()
     Row(
         horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -1435,8 +1437,8 @@ fun QueueCollapsedContentAppleMusic(
         plain(onDeviceClick) {
             Icon(painterResource(R.drawable.am_airplay_audio), device.name, tint = tint, modifier = Modifier.size(25.dp))
         }
-        plain(onExpandQueue) {
-            Icon(painterResource(R.drawable.am_list_bullet), null, tint = tint, modifier = Modifier.size(25.dp))
+        plain(onExpandQueue, active = queueOpen) {
+            Icon(painterResource(R.drawable.am_list_bullet), null, tint = if (queueOpen) Color.White else tint, modifier = Modifier.size(25.dp))
         }
     }
 }

@@ -929,6 +929,8 @@ fun BottomSheetPlayer(
     var isLyricsScreenVisible by rememberSaveable {
         mutableStateOf(false)
     }
+    // Apple Music style (portrait): its own inline queue instead of the queue sheet.
+    var isAppleQueueOpen by rememberSaveable { mutableStateOf(false) }
     // Lyrics page transition state lives here (not inside MikoLyricsTransition) so it survives the
     // transition composable being recreated when the lyrics page opens or closes.
     val mikoLyricsProgress = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -965,10 +967,12 @@ fun BottomSheetPlayer(
     if (!aodModeEnabled) {
         BackHandler(
             enabled =
+                isAppleQueueOpen ||
                 queueSheetState.isExpandedOrExpanding ||
                     state.isExpandedOrExpanding,
         ) {
             when {
+                isAppleQueueOpen && state.isExpandedOrExpanding -> isAppleQueueOpen = false
                 isLyricsScreenVisible && state.isExpandedOrExpanding -> isLyricsScreenVisible = false
                 queueSheetState.isExpandedOrExpanding -> queueSheetState.collapseSoft()
                 state.isExpandedOrExpanding -> state.collapseSoft()
@@ -1915,6 +1919,8 @@ fun BottomSheetPlayer(
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
                                 onCloseLyrics = { isLyricsScreenVisible = false },
+                                appleMusicQueueOpen = playerDesignStyle == PlayerDesignStyle.V10 && isAppleQueueOpen,
+                                onCloseAppleMusicQueue = { isAppleQueueOpen = false },
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
@@ -2028,7 +2034,13 @@ fun BottomSheetPlayer(
             textButtonColor = textButtonColor,
             iconButtonColor = iconButtonColor,
             lyricsOpenProvider = { isLyricsScreenVisible },
+            appleMusicQueueOpenProvider = { isAppleQueueOpen },
+            onAppleMusicQueueClick = {
+                isLyricsScreenVisible = false
+                isAppleQueueOpen = !isAppleQueueOpen
+            },
             onShowLyrics = {
+                if (playerDesignStyle == PlayerDesignStyle.V10) isAppleQueueOpen = false
                 isLyricsScreenVisible =
                     if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
             },

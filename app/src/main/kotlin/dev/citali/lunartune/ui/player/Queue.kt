@@ -146,6 +146,8 @@ fun Queue(
     iconButtonColor: Color,
     onShowLyrics: () -> Unit = {},
     lyricsOpenProvider: () -> Boolean = { false },
+    appleMusicQueueOpenProvider: () -> Boolean = { false },
+    onAppleMusicQueueClick: () -> Unit = {},
     pureBlack: Boolean,
 ) {
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
@@ -654,9 +656,14 @@ fun Queue(
                     }
 
                     if (playerDesignStyle == PlayerDesignStyle.V10) {
+                        // Portrait uses the Apple Music inline queue; landscape keeps the queue sheet.
+                        val amPortrait =
+                            androidx.compose.ui.platform.LocalConfiguration.current.orientation !=
+                                android.content.res.Configuration.ORIENTATION_LANDSCAPE
                         QueueCollapsedContentAppleMusic(
                             textBackgroundColor = TextBackgroundColor,
-                            onExpandQueue = openQueue,
+                            onExpandQueue = if (amPortrait) onAppleMusicQueueClick else openQueue,
+                            queueOpenProvider = { amPortrait && appleMusicQueueOpenProvider() },
                             onShowLyrics = onShowLyrics,
                             lyricsOpenProvider = lyricsOpenProvider,
                             onDeviceClick = { SystemMediaControlResolver.openMediaOutputSwitcher(context) },

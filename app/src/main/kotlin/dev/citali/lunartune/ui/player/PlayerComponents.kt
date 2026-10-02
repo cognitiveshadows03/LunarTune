@@ -2300,6 +2300,8 @@ fun V8PlayerContent(
     landscape: Boolean = false,
     appleMusic: Boolean = false,
     appleMusicLyricsOpen: Boolean = false,
+    appleMusicQueueOpen: Boolean = false,
+    onCloseAppleMusicQueue: () -> Unit = {},
     lyricsSyncOffset: Int = 0,
     onLyricsSyncOffsetChange: (Int) -> Unit = {},
     onCloseLyrics: () -> Unit = {},
@@ -2380,6 +2382,8 @@ fun V8PlayerContent(
     } else if (appleMusic) {
         AppleMusicPortraitContent(
             lyricsOpen = appleMusicLyricsOpen,
+            queueOpen = appleMusicQueueOpen,
+            onCloseQueue = onCloseAppleMusicQueue,
             lyricsSyncOffset = lyricsSyncOffset,
             onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
             onCloseLyrics = onCloseLyrics,
