@@ -274,8 +274,9 @@ internal fun AppleMusicPortraitContent(
     val hasLyrics = currentLyrics != null
     // Same method as the other players' LyricsScreen: fetch while the lyrics page is shown,
     // keyed on the song and the current lyrics.
-    LaunchedEffect(mediaMetadata.id, currentLyrics?.lyrics, lyricsOpen) {
-        if (!lyricsOpen || currentLyrics != null) return@LaunchedEffect
+    // Prefetch for the currently playing song only, even while the lyrics page is hidden.
+    LaunchedEffect(mediaMetadata.id, currentLyrics?.lyrics) {
+        if (currentLyrics != null) return@LaunchedEffect
         try {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 if (amDatabase.lyrics(mediaMetadata.id).first() != null) return@withContext
@@ -489,11 +490,29 @@ internal fun AppleMusicPortraitContent(
                 animationSpec = androidx.compose.animation.core.tween(300),
                 label = "appleMusicLyricsBottom",
             )
+            // The pane always spans to the bottom (its size never changes, so the line-focus
+            // scroll animates the same with controls shown or hidden). The focus anchor moves
+            // above the controls instead, and lyrics fade out where the controls begin.
+            val paneHeight = maxHeight - miniHeaderHeight
+            val focusAnchor = if (controlsVisible) (paneHeight - controlsHeight).coerceAtLeast(120.dp) else null
+            val fadeStartDp = (paneHeight - lyricsBottom - 48.dp).coerceAtLeast(0.dp)
+            val fadeEndDp = (paneHeight - lyricsBottom).coerceAtLeast(1.dp)
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .padding(top = miniHeaderHeight, bottom = lyricsBottom)
+                        .padding(top = miniHeaderHeight)
+                        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+                        .drawWithContent {
+                            drawContent()
+                            val h = size.height.coerceAtLeast(1f)
+                            val a = (fadeStartDp.toPx() / h).coerceIn(0f, 1f)
+                            val b = (fadeEndDp.toPx() / h).coerceIn(a, 1f)
+                            drawRect(
+                                brush = Brush.verticalGradient(0f to Color.Black, a to Color.Black, b to Color.Transparent, 1f to Color.Transparent),
+                                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                            )
+                        }
                         .padding(horizontal = AppleMusicGutter - 16.dp),
             ) {
                 if (lyricsContentReady) {
@@ -506,6 +525,7 @@ internal fun AppleMusicPortraitContent(
                                 modifier = Modifier.fillMaxSize(),
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
+                                focusAnchorHeight = focusAnchor,
                             )
                         LyricsMode.ENHANCED ->
                             LyricsEnhanced(
@@ -515,6 +535,7 @@ internal fun AppleMusicPortraitContent(
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
                                 alwaysFocusActiveLine = true,
+                                focusAnchorHeight = focusAnchor,
                             )
                     }
                 }
