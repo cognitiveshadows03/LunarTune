@@ -16,6 +16,7 @@ package dev.citali.lunartune.ui.player
  */
 
 import kotlinx.coroutines.flow.first
+import sh.calvin.reorderable.ReorderableItem
 import androidx.compose.foundation.lazy.items
 import dev.citali.lunartune.extensions.metadata
 import android.content.Context
@@ -966,7 +967,7 @@ private fun AppleMusicQueuePane(modifier: Modifier = Modifier) {
         ) {
             items(upcoming.size, key = { upcoming[it].amQueueKey }) { i ->
                 val window = upcoming[i]
-                sh.calvin.reorderable.ReorderableItem(reorderState, key = window.amQueueKey) { dragging ->
+                ReorderableItem(reorderState, key = window.amQueueKey) { dragging ->
                     val meta = window.mediaItem.metadata
                     val lift by animateFloatAsState(if (dragging) 1f else 0f, label = "amQueueLift")
                     Row(
@@ -1015,12 +1016,10 @@ private fun AppleMusicQueuePane(modifier: Modifier = Modifier) {
                                 null,
                                 tint = Color.White.copy(alpha = 0.45f),
                                 modifier =
-                                    with(this@ReorderableItem) {
-                                        Modifier
-                                            .size(40.dp)
-                                            .padding(8.dp)
-                                            .draggableHandle(onDragStarted = { dragStartKey = window.amQueueKey })
-                                    },
+                                    Modifier
+                                        .size(40.dp)
+                                        .padding(8.dp)
+                                        .draggableHandle(onDragStarted = { dragStartKey = window.amQueueKey }),
                             )
                         }
                     }
