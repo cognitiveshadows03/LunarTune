@@ -512,6 +512,7 @@ fun LyricsEnhanced(
                     animateToNearbyItem = !forceNextScroll,
                     force = forceNextScroll || alwaysFocusActiveLine,
                     alignByItemCenter = isTtmlFormat,
+                    durationMs = if (alwaysFocusActiveLine) 750 else LYRIC_FOCUS_SCROLL_DURATION_MS,
                 )
                 forceNextScroll = false
             }
@@ -1147,6 +1148,7 @@ private suspend fun LazyListState.scrollLyricIntoFocus(
     animateToNearbyItem: Boolean,
     force: Boolean,
     alignByItemCenter: Boolean,
+    durationMs: Int = LYRIC_FOCUS_SCROLL_DURATION_MS,
 ) {
     val itemCount = layoutInfo.totalItemsCount
     if (itemCount == 0) return
@@ -1194,8 +1196,9 @@ private suspend fun LazyListState.scrollLyricIntoFocus(
             value = scrollDelta.toFloat(),
             animationSpec =
                 tween(
-                    durationMillis = LYRIC_FOCUS_SCROLL_DURATION_MS,
-                    easing = FastOutSlowInEasing,
+                    durationMillis = durationMs,
+                    // Apple Music style glide: gentle start, long soft landing.
+                    easing = if (durationMs > LYRIC_FOCUS_SCROLL_DURATION_MS) androidx.compose.animation.core.CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f) else FastOutSlowInEasing,
                 ),
         )
     }
