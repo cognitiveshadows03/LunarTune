@@ -10,6 +10,7 @@ package dev.citali.lunartune.utils
 import android.content.Context
 import android.net.Uri
 import java.io.File
+import java.security.MessageDigest
 import dev.citali.lunartune.constants.NeverRecommendSongIdsKey
 import dev.citali.lunartune.constants.PerSongAlbumArtOverridesKey
 import dev.citali.lunartune.constants.PerSongTagsKey
@@ -72,12 +73,33 @@ fun copySongArtworkFromGallery(
     if (songId.isBlank()) return null
     val destDir = File(context.filesDir, "song_art")
     if (!destDir.exists() && !destDir.mkdirs()) return null
-    val dest = File(destDir, "$songId.jpg")
+
+    // Local-song IDs can be file/content URIs and therefore contain '/' and other characters
+    // that are not valid in a single filename. Hash the ID instead of using it as a path.
+    val safeId =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(songId.toByteArray(Charsets.UTF_8))
+            .joinToString("") { byte -> (byte.toInt() and 0xff).toString(16).padStart(2, '0') }
+    val dest = File(destDir, "$safeId.img")
+    val pending = File(destDir, "$safeId.tmp")
+
     return runCatching {
-        context.contentResolver.openInputStream(source)?.use { input ->
-            dest.outputStream().use { output -> input.copyTo(output) }
-        } ?: return null
-        android.net.Uri.fromFile(dest).toString()
+        val copiedBytes =
+            context.contentResolver.openInputStream(source)?.use { input ->
+                pending.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+        if (copiedBytes <= 0L) {
+            pending.delete()
+            return null
+        }
+        if (!pending.renameTo(dest)) {
+            pending.copyTo(dest, overwrite = true)
+            pending.delete()
+        }
+        Uri.fromFile(dest).toString()
+    }.onFailure {
+        pending.delete()
     }.getOrNull()
 }
 

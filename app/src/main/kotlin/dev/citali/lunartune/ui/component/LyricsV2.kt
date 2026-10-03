@@ -18,6 +18,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +63,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -420,21 +422,36 @@ fun LyricsV2(
         if (!lyricsScroll || isManualScrolling || !isSynced) return@LaunchedEffect
         if (currentLineIndex < 0 || currentLineIndex >= entriesWithWords.size) return@LaunchedEffect
 
-        val visibleInfo = listState.layoutInfo
-        val targetOffset = focusOffsetPx(visibleInfo.viewportSize.height)
+        var layoutInfo = listState.layoutInfo
+        val targetOffset = focusOffsetPx(layoutInfo.viewportSize.height)
+        var targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
 
-        val distance = abs(currentLineIndex - (listState.firstVisibleItemIndex))
-        if (distance > 15) {
-            // Far jump — snap first, then settle
+        if (targetItem == null) {
+            // Bring distant lines into the viewport without running Compose's default spring.
+            // That spring can overshoot while lyric rows are also animating their scale/height,
+            // which makes the Apple Music lyrics appear to jump or stutter.
             listState.scrollToItem(
                 (currentLineIndex - 2).coerceAtLeast(0),
                 0,
             )
+            withFrameNanos { }
+            layoutInfo = listState.layoutInfo
+            targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
         }
-        listState.animateScrollToItem(
-            index = currentLineIndex,
-            scrollOffset = -targetOffset,
-        )
+
+        targetItem?.let { item ->
+            val scrollDelta = item.offset - targetOffset
+            if (abs(scrollDelta) > 1) {
+                listState.animateScrollBy(
+                    value = scrollDelta.toFloat(),
+                    animationSpec =
+                        androidx.compose.animation.core.tween(
+                            durationMillis = 600,
+                            easing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f),
+                        ),
+                )
+            }
+        }
     }
 
     BackHandler(enabled = isSelectionModeActive) {
