@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LunarTune — Open-Source Music Client for Android</title>
-  <meta name="description" content="LunarTune is a free, open-source, ad-free music client for Android. Frosted glass UI, synced lyrics, lossless audio and offline playback.">
+  <meta name="description" content="LunarTune — the music player Google wishes they built. Free, open-source, zero ads, frosted glass UI, synced lyrics and lossless audio on Android.">
   <link rel="icon" type="image/png" href="assets/icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -13,13 +13,13 @@
 </head>
 <body>
 
-
+  <!-- ============ BOOT SEQUENCE (one-shot, then removed) ============ -->
   <div id="boot" role="status" aria-label="Loading">
     <div id="boot-name">ルナチューン</div>
     <div id="boot-sub">LUNARTUNE</div>
   </div>
 
-  
+  <!-- ============ SITE (static: no animations, no transitions) ============ -->
   <div id="site" hidden>
 
     <header class="topbar">
@@ -30,87 +30,166 @@
       <nav>
         <a href="#features">FEATURES</a>
         <a href="#screens">SCREENS</a>
+        <a href="#download">DOWNLOAD</a>
         <a href="#faq">FAQ</a>
         <a href="https://github.com/cognitiveshadows03/LunarTune" target="_blank" rel="noopener">GITHUB</a>
-        <a class="nav-cta" href="#download">DOWNLOAD</a>
+        <a class="nav-cta" href="#download">GET APK</a>
       </nav>
     </header>
 
     <main id="top">
-
+      <!-- HERO: full-bleed app icon, no buttons — PRESERVED -->
       <section class="hero">
         <div class="hero-content">
-          <p class="kicker">OPEN-SOURCE ANDROID MUSIC CLIENT</p>
+          <p class="kicker">THE MUSIC PLAYER THEY DON'T WANT YOU TO HAVE</p>
           <h1 class="glitch" data-text="LUNARTUNE">LUNARTUNE</h1>
-          <p class="tagline">Frosted glass, synced lyrics and offline playback.<br>No ads. No trackers. No login.</p>
+          <p class="tagline">Your music. Your rules. Frosted glass UI, synced lyrics,<br>lossless audio — zero ads, zero trackers, zero compromises.</p>
+          <div class="hero-highlights">
+            <span class="highlight-chip">Material 3</span>
+            <span class="highlight-chip">9 Player Styles</span>
+            <span class="highlight-chip">Synced Lyrics</span>
+            <span class="highlight-chip">Lossless FLAC</span>
+          </div>
           <p class="substats">★ <span id="stat-stars">···</span> STARS&ensp;·&ensp;↓ <span id="stat-downloads">···</span> DOWNLOADS&ensp;·&ensp;GPL-3.0</p>
         </div>
         <p class="scroll-hint">SCROLL&nbsp;&nbsp;▼</p>
       </section>
 
-      <div class="strip" aria-hidden="true">✦&nbsp; NO ADS &nbsp;✦&nbsp; 100% OPEN SOURCE &nbsp;✦&nbsp; LOSSLESS READY &nbsp;✦&nbsp; SYNCED LYRICS &nbsp;✦&nbsp; OFFLINE PLAYBACK &nbsp;✦&nbsp; NO LOGIN REQUIRED &nbsp;✦&nbsp; FROSTED GLASS UI &nbsp;✦</div>
+      <div class="strip" aria-hidden="true">✦&nbsp; ZERO ADS &nbsp;✦&nbsp; 100% OPEN SOURCE &nbsp;✦&nbsp; LOSSLESS FLAC &nbsp;✦&nbsp; SYLLABLE-SYNCED LYRICS &nbsp;✦&nbsp; OFFLINE-FIRST &nbsp;✦&nbsp; NO ACCOUNT NEEDED &nbsp;✦&nbsp; YOUR DATA STAYS YOURS &nbsp;✦</div>
 
-      <!-- FEATURES -->
+      <!-- FEATURES — revamped with feature showcase cards -->
       <section id="features" class="section">
         <p class="sec-index">01&ensp;//&ensp;CAPABILITIES</p>
         <h2>Built different<span class="accent">.</span></h2>
-        <p class="sec-sub">Six reasons LunarTune hits harder than the stock clients.</p>
-        <div class="grid">
-          <article class="card">
-            <p class="card-ghost">01</p>
-            <h3>SYNCED LYRICS</h3>
-            <p class="card-jp">同期歌詞</p>
-            <p>Word-by-word synced lyrics over drifting backdrops, cached offline for your whole library.</p>
+        <p class="sec-sub">Nine reasons your current music app is on notice.</p>
+
+        <div class="feature-showcase">
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Privacy</span><span class="stag">Core</span></div>
+              <h3>Ad-Free Background Playback</h3>
+              <p>Music with the screen off. No premium paywall, no quota, no "watch this ad to continue." Just press play and forget about it.</p>
+            </div>
           </article>
-          <article class="card">
-            <p class="card-ghost">02</p>
-            <h3>OFFLINE FIRST</h3>
-            <p class="card-jp">オフライン</p>
-            <p>Preload mode resolves the next stream before it plays, backed by a persistent offline cache.</p>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 12h6M12 9v6"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Performance</span><span class="stag">Privacy</span></div>
+              <h3>Privacy-Focused &amp; Fast</h3>
+              <p>Opens before you blink. No telemetry phoning home, no sign-up forms, no "create an account to continue." Runs fully logged-out or with encrypted creds — your call.</p>
+            </div>
           </article>
-          <article class="card">
-            <p class="card-ghost">03</p>
-            <h3>PRIVATE BY DESIGN</h3>
-            <p class="card-jp">非公開</p>
-            <p>No ads, no trackers, no accounts. 100% free and open source under GPL-3.0, forever.</p>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Design</span><span class="stag">Material 3</span></div>
+              <h3>Material 3 Expressive Design</h3>
+              <p>Every pixel pulled from your album art. Dynamic color palettes that shift with your wallpaper, across every screen size — even on Android 8.</p>
+            </div>
           </article>
-          <article class="card">
-            <p class="card-ghost">04</p>
-            <h3>LAST.FM SCROBBLE</h3>
-            <p class="card-jp">スクロブル</p>
-            <p>Every play scrobbled straight to your Last.fm profile — your stats stay complete automatically.</p>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Lyrics</span><span class="stag">AI</span></div>
+              <h3>Live Synced &amp; AI Lyrics</h3>
+              <p>Every syllable highlighted in real time. Romanization for when you want to sing along in a language you don't speak, plus AI-powered translation so nothing gets lost.</p>
+            </div>
           </article>
-          <article class="card">
-            <p class="card-ghost">05</p>
-            <h3>STUDIO EQUALIZER</h3>
-            <p class="card-jp">イコライザ</p>
-            <p>Dolby and Dirac presets with a full equalizer to bend the soundstage to your ears.</p>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="3"/><path d="M8 21V7M12 21V10M16 21V13"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Customization</span></div>
+              <h3>9 Player Styles &amp; 8 Backgrounds</h3>
+              <p>Nine ways to look at your music, eight vibes to wrap around it. Make it yours — your player shouldn't look like everyone else's.</p>
+            </div>
           </article>
-          <article class="card">
-            <p class="card-ghost">06</p>
-            <h3>LIVING THEME</h3>
-            <p class="card-jp">ダイナミック</p>
-            <p>Theme colors flow from your artwork and wallpaper — even on older Android versions.</p>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Audio</span><span class="stag">Audiophile</span></div>
+              <h3>Dolby &amp; Dirac Equalizer Presets</h3>
+              <p>EBU R128 loudness normalization so nothing clips. Tempo, pitch, crossfade, spatial audio — the studio toolkit your headphones deserve, built right in.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Sync</span><span class="stag">Social</span></div>
+              <h3>Spotify Playlist Import &amp; Sync</h3>
+              <p>Bring your playlists home. One-tap Spotify import, Last.fm scrobbling, ListenBrainz sync, and Discord Rich Presence so your friends know what you're vibing to.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Storage</span><span class="stag">Offline</span></div>
+              <h3>Local Music &amp; Offline Cache</h3>
+              <p>Your local files and streaming, side by side. Smart caching pre-loads the next track before this one ends — dead zones don't stand a chance.</p>
+            </div>
+          </article>
+
+          <article class="showcase-card">
+            <div class="showcase-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <div class="showcase-body">
+              <div class="showcase-tags"><span class="stag">Audiophile</span><span class="stag">Hi-Res</span></div>
+              <h3>Monochrome Lossless FLAC Source</h3>
+              <p>For the ears that can tell. Optional Monochrome source delivers bit-perfect FLAC — the kind of quality that makes you hear things in songs you've played a thousand times.</p>
+            </div>
           </article>
         </div>
       </section>
 
-      
+      <!-- SCREENSHOTS — cascade cards with filter tabs -->
       <section id="screens" class="section">
         <p class="sec-index">02&ensp;//&ensp;ON-DEVICE</p>
         <h2>Screens<span class="accent">.</span></h2>
-        <p class="sec-sub">Swipe sideways — straight from the app, no mockups.</p>
+        <p class="sec-sub">No mockups. No Figma renders. Straight from a real device — swipe and judge for yourself.</p>
+
+        <div class="screen-tabs" role="tablist">
+          <button class="screen-tab active" data-filter="all" role="tab" aria-selected="true">All Screens</button>
+          <button class="screen-tab" data-filter="home" role="tab">Home &amp; Library</button>
+          <button class="screen-tab" data-filter="player" role="tab">Player &amp; Lyrics</button>
+          <button class="screen-tab" data-filter="search" role="tab">Search</button>
+          <button class="screen-tab" data-filter="stats" role="tab">Stats &amp; Recap</button>
+        </div>
+
         <div class="shots">
           <div class="shots-void" aria-hidden="true"><span>NOTHING</span></div>
-          <figure><img src="assets/screens/screenshot_1.jpg" width="1080" height="2246" alt="LunarTune home screen" loading="lazy"><figcaption>SCREEN / 01</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_2.jpg" width="1080" height="2246" alt="LunarTune library screen" loading="lazy"><figcaption>SCREEN / 02</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_3.jpg" width="1080" height="2246" alt="LunarTune player screen" loading="lazy"><figcaption>SCREEN / 03</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_4.jpg" width="1080" height="2246" alt="LunarTune lyrics screen" loading="lazy"><figcaption>SCREEN / 04</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_5.jpg" width="1080" height="2246" alt="LunarTune search screen" loading="lazy"><figcaption>SCREEN / 05</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_6.jpg" width="1080" height="2246" alt="LunarTune settings screen" loading="lazy"><figcaption>SCREEN / 06</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_7.jpg" width="1080" height="2246" alt="LunarTune playlist screen" loading="lazy"><figcaption>SCREEN / 07</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_8.jpg" width="1080" height="2246" alt="LunarTune downloads screen" loading="lazy"><figcaption>SCREEN / 08</figcaption></figure>
-          <figure><img src="assets/screens/screenshot_9.jpg" width="1080" height="1920" alt="LunarTune equalizer screen" loading="lazy"><figcaption>SCREEN / 09</figcaption></figure>
+          <figure data-cat="home"><img src="assets/screens/screenshot_1.jpg" width="1080" height="2246" alt="Home Feed" loading="lazy"><figcaption><strong>Home Feed</strong><span>YouTube Music Recommendations</span></figcaption></figure>
+          <figure data-cat="player"><img src="assets/screens/screenshot_2.jpg" width="1080" height="2246" alt="Now Playing" loading="lazy"><figcaption><strong>Now Playing</strong><span>Album-Art Dynamic Colors</span></figcaption></figure>
+          <figure data-cat="player"><img src="assets/screens/screenshot_3.jpg" width="1080" height="2246" alt="Live Synced Lyrics" loading="lazy"><figcaption><strong>Live Synced Lyrics</strong><span>Word-by-Word &amp; AI Translation</span></figcaption></figure>
+          <figure data-cat="home"><img src="assets/screens/screenshot_4.jpg" width="1080" height="2246" alt="Music Library" loading="lazy"><figcaption><strong>Music Library</strong><span>Playlists &amp; Local Songs</span></figcaption></figure>
+          <figure data-cat="search"><img src="assets/screens/screenshot_5.jpg" width="1080" height="2246" alt="Instant Search" loading="lazy"><figcaption><strong>Instant Search</strong><span>Fast Catalog &amp; Recognition</span></figcaption></figure>
+          <figure data-cat="stats"><img src="assets/screens/screenshot_6.jpg" width="1080" height="2246" alt="Listening Stats" loading="lazy"><figcaption><strong>Listening Stats</strong><span>Play Counts &amp; Insights</span></figcaption></figure>
+          <figure data-cat="stats"><img src="assets/screens/screenshot_7.jpg" width="1080" height="2246" alt="Artist Discography" loading="lazy"><figcaption><strong>Artist Discography</strong><span>Complete Catalogs &amp; Singles</span></figcaption></figure>
+          <figure data-cat="home"><img src="assets/screens/screenshot_8.jpg" width="1080" height="2246" alt="Album View" loading="lazy"><figcaption><strong>Album View</strong><span>Hi-Res Art &amp; Tracklist</span></figcaption></figure>
+          <figure data-cat="stats"><img src="assets/screens/screenshot_9.jpg" width="1080" height="1920" alt="Year in Music" loading="lazy"><figcaption><strong>Year in Music</strong><span>Personalized Annual Recap</span></figcaption></figure>
           <div class="shots-void" aria-hidden="true"></div>
         </div>
         <div class="shots-meta">
@@ -119,17 +198,36 @@
         </div>
       </section>
 
-      <!-- DOWNLOAD -->
+      <!-- DOWNLOAD — enhanced with per-architecture APKs -->
       <section id="download" class="section">
         <p class="sec-index">03&ensp;//&ensp;GET IT</p>
         <h2>Download<span class="accent">.</span></h2>
-        <p class="sec-sub">One button. Latest stable APK, straight from GitHub.</p>
+        <p class="sec-sub">One APK away from never seeing a music ad again. Pick your architecture and go.</p>
+
+        <div class="dl-cards">
+          <div class="dl-card dl-card-recommended">
+            <div class="dl-card-badge">Recommended</div>
+            <h3>arm64-v8a</h3>
+            <p class="dl-card-desc">Phones from 2017 onward. Fastest startup, tightest memory, lowest battery drain. This is the one you want.</p>
+            <a class="btn" href="https://github.com/cognitiveshadows03/LunarTune/releases">↓&ensp;DOWNLOAD APK</a>
+          </div>
+          <div class="dl-card">
+            <h3>Universal APK</h3>
+            <p class="dl-card-desc">Both architectures bundled. Not sure which chip your phone runs? This one works on everything — just download and install.</p>
+            <a class="btn" href="https://github.com/cognitiveshadows03/LunarTune/releases">↓&ensp;DOWNLOAD APK</a>
+          </div>
+          <div class="dl-card">
+            <h3>armeabi-v7a <small>32-bit</small></h3>
+            <p class="dl-card-desc">Older budget phones still going strong? Respect. This build keeps you in the game on Android 8.0+.</p>
+            <a class="btn" href="https://github.com/cognitiveshadows03/LunarTune/releases">↓&ensp;DOWNLOAD APK</a>
+          </div>
+        </div>
+
         <div class="dl-box">
           <img class="dl-icon" src="assets/icon.png" alt="LunarTune app icon" width="96" height="96">
           <div class="dl-main">
             <p class="dl-title">LunarTune for Android</p>
             <p class="dl-ver"><span id="dl-version">LATEST STABLE</span></p>
-            <a id="dl-btn" class="btn" href="https://github.com/cognitiveshadows03/LunarTune/releases">↓&ensp;DOWNLOAD APK</a>
           </div>
           <dl class="dl-meta">
             <div><dt>PACKAGE</dt><dd>dev.citali.lunartune</dd></div>
@@ -144,31 +242,31 @@
       <section id="faq" class="section">
         <p class="sec-index">04&ensp;//&ensp;INTEL</p>
         <h2>FAQ<span class="accent">.</span></h2>
-        <p class="sec-sub">Short answers. Full changelog ships with every release on GitHub.</p>
+        <p class="sec-sub">The short version. Everything else lives in the changelog on GitHub.</p>
         <div class="faq">
           <details open>
-            <summary>Is LunarTune really free?</summary>
-            <p>Yes — 100% free, no ads, no trackers, no premium tier. The source is open under GPL-3.0.</p>
+            <summary>Is this actually free? What's the catch?</summary>
+            <p>No catch. No ads, no trackers, no "premium tier," no data harvesting. 100% open source under GPL-3.0 — read every line yourself if you want.</p>
           </details>
           <details>
-            <summary>Where does the music come from?</summary>
-            <p>LunarTune streams from YouTube Music, with lossless quality available through the Monochrome service.</p>
+            <summary>Where does the music actually come from?</summary>
+            <p>YouTube Music under the hood. Want studio-grade quality? Flip on the Monochrome source for lossless FLAC streaming.</p>
           </details>
           <details>
-            <summary>Do I need root or a login?</summary>
-            <p>Neither. Install the APK on Android 8.0+ and press play.</p>
+            <summary>Do I need root access or an account?</summary>
+            <p>Nope and nope. Sidelaod the APK on anything running Android 8.0+ and hit play. That's it.</p>
           </details>
           <details>
-            <summary>Does it work offline?</summary>
-            <p>Yes. Cache songs and lyrics for offline playback, and preload mode keeps the next track ready.</p>
+            <summary>What about offline — does it actually work?</summary>
+            <p>Cache songs and lyrics ahead of time. Preload mode resolves the next track before the current one ends — no buffering, no surprises, even on a plane.</p>
           </details>
           <details>
-            <summary>How do I update?</summary>
-            <p>Grab the latest stable from the GitHub releases page — the app's update check takes you there.</p>
+            <summary>How do I keep it updated?</summary>
+            <p>The app checks for updates itself and points you to the latest GitHub release. Or just bookmark the releases page — your call.</p>
           </details>
           <details>
-            <summary>Found a bug / want a feature?</summary>
-            <p>Open an issue on <a href="https://github.com/cognitiveshadows03/LunarTune" target="_blank" rel="noopener">GitHub</a> or hang out in the <a href="https://t.me/LunarTuneGC" target="_blank" rel="noopener">Telegram group</a>.</p>
+            <summary>Found a bug? Want a feature?</summary>
+            <p>Drop an issue on <a href="https://github.com/cognitiveshadows03/LunarTune" target="_blank" rel="noopener">GitHub</a> or come vibe with us in the <a href="https://t.me/LunarTuneGC" target="_blank" rel="noopener">Telegram group</a>. We actually read them.</p>
           </details>
         </div>
       </section>
@@ -184,11 +282,11 @@
         <a href="https://t.me/LunarTuneGC" target="_blank" rel="noopener">TELEGRAM ↗</a>
         <a href="https://github.com/cognitiveshadows03/LunarTune/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 ↗</a>
       </nav>
-      <p>© 2026 cognitiveshadows03 — Built for the community.</p>
+      <p>© 2026 cognitiveshadows03 — Built by the community, for the community. No investors. No agenda. Just music.</p>
     </footer>
 
-  </div>
+  </div><!-- /#site -->
 
   <script src="app.js"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a44b9ce64f7ba84f',t:'MTc5MTAyNzAwNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
