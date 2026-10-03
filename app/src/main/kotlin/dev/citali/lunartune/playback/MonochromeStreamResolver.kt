@@ -33,6 +33,8 @@ object MonochromeStreamResolver {
         val url: String,
         val mimeType: String,
         val audioQuality: String,
+        val sampleRate: Int?,
+        val bitDepth: Int?,
     )
 
     private data class CachedStream(
@@ -75,6 +77,8 @@ object MonochromeStreamResolver {
                         url = it.url,
                         mimeType = it.mimeType,
                         audioQuality = it.audioQuality,
+                        sampleRate = it.sampleRate,
+                        bitDepth = it.bitDepth,
                     )
                 }
             }

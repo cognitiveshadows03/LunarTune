@@ -7844,7 +7844,11 @@ class MusicService :
         // previously played song has an entry in playbackUrlCache; checking that cache first
         // silently locked those songs to Opus/AAC even after Monochrome was enabled.
         if (!lowDataModeActive && monochromeEnabled) {
-            resolveLosslessDataSpec(dataSpec = dataSpec, mediaId = mediaId)?.let { losslessDataSpec ->
+            resolveLosslessDataSpec(
+                dataSpec = dataSpec,
+                mediaId = mediaId,
+                previousFormat = storedFormat,
+            )?.let { losslessDataSpec ->
                 return losslessDataSpec
             }
         }
@@ -8009,6 +8013,7 @@ class MusicService :
     private fun resolveLosslessDataSpec(
         dataSpec: DataSpec,
         mediaId: String,
+        previousFormat: FormatEntity?,
     ): DataSpec? {
         if (mediaId.startsWith(MonochromeStreamResolver.CACHE_KEY_PREFIX)) return dataSpec
         if (dataSpec.uri.shouldBypassYouTubeResolver()) return null
@@ -8035,6 +8040,34 @@ class MusicService :
                     )
                 }
             } ?: return null
+
+        // The stream resolver changes the bytes consumed by Media3, but the player badges and
+        // information sheet observe the persisted FormatEntity. Replace the stale YouTube
+        // Opus/AAC details so the UI reports the stream that is actually being decoded.
+        database.query {
+            upsert(
+                FormatEntity(
+                    id = mediaId,
+                    itag = 0,
+                    mimeType = resolved.mimeType.substringBefore(";"),
+                    codecs = "flac",
+                    bitrate = 0,
+                    sampleRate = resolved.sampleRate,
+                    contentLength = 0L,
+                    loudnessDb = previousFormat?.loudnessDb,
+                    perceptualLoudnessDb = previousFormat?.perceptualLoudnessDb,
+                    playbackUrl = null,
+                ),
+            )
+        }
+        Timber.tag("Monochrome").d(
+            "Using lossless stream for %s: %s, sampleRate=%s, bitDepth=%s",
+            mediaId,
+            resolved.mimeType,
+            resolved.sampleRate,
+            resolved.bitDepth,
+        )
+
         return dataSpec
             .buildUpon()
             .setUri(resolved.url.toUri())
