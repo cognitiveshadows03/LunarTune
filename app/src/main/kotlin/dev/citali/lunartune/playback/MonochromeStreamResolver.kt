@@ -44,7 +44,9 @@ object MonochromeStreamResolver {
     private val negativeCache = ConcurrentHashMap<String, Long>()
 
     private const val POSITIVE_TTL_MS = 30L * 60L * 1000L
-    private const val NEGATIVE_TTL_MS = 10L * 60L * 1000L
+    // Keep transient public-instance failures short; a timeout must not force YouTube fallback
+    // for the next ten minutes after the service becomes responsive again.
+    private const val NEGATIVE_TTL_MS = 30L * 1000L
     private const val MAX_DURATION_DELTA_SEC = 4
 
     suspend fun resolve(

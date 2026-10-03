@@ -7839,6 +7839,16 @@ class MusicService :
         }
 
         val lowDataModeActive = isLowDataModeActive()
+
+        // Lossless must be attempted before reusing an in-memory YouTube URL. Nearly every
+        // previously played song has an entry in playbackUrlCache; checking that cache first
+        // silently locked those songs to Opus/AAC even after Monochrome was enabled.
+        if (!lowDataModeActive && monochromeEnabled) {
+            resolveLosslessDataSpec(dataSpec = dataSpec, mediaId = mediaId)?.let { losslessDataSpec ->
+                return losslessDataSpec
+            }
+        }
+
         val authFingerprint = YouTube.currentPlaybackAuthState().fingerprint
         playbackUrlCache[mediaId]
             ?.takeUnless { lowDataModeActive }
@@ -7863,12 +7873,6 @@ class MusicService :
                     resolvedDataSpec.subrange(0L, nonNullLength)
                 } ?: resolvedDataSpec
             }
-
-        if (!lowDataModeActive && monochromeEnabled) {
-            resolveLosslessDataSpec(dataSpec = dataSpec, mediaId = mediaId)?.let { losslessDataSpec ->
-                return losslessDataSpec
-            }
-        }
 
         val playbackData =
             runBlocking(Dispatchers.IO) {
@@ -8019,7 +8023,9 @@ class MusicService :
             }
         val resolved =
             runBlocking(Dispatchers.IO) {
-                withTimeoutOrNull(3_000L) {
+                // Search can require a retry when the public instance is behind Cloudflare.
+                // Three seconds routinely expired before a valid match could be returned.
+                withTimeoutOrNull(10_000L) {
                     MonochromeStreamResolver.resolve(
                         songId = mediaId,
                         title = song.song.title,
