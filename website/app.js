@@ -4,6 +4,7 @@
       then blank 0.5s, then one reveal glitch, then static.
    2. Live stats from the GitHub API (stars, total downloads,
       latest stable version). Silent fallback if offline.
+   3. Screenshot category filtering (tabs).
    ============================================================ */
 (function () {
   "use strict";
@@ -104,7 +105,7 @@
     var starsEl = document.getElementById("stat-stars");
     var dlEl = document.getElementById("stat-downloads");
     var verEl = document.getElementById("dl-version");
-    var btnEl = document.getElementById("dl-btn");
+    var dlBtns = document.querySelectorAll(".dl-card .btn");
 
     fetch(API)
       .then(function (r) { if (!r.ok) throw new Error("repo"); return r.json(); })
@@ -129,17 +130,21 @@
         dlEl.textContent = compact(total);
         if (stable) {
           verEl.textContent = stable.tag_name.toUpperCase() + " STABLE";
-          btnEl.href = stable.html_url;
+          // Update all download links to latest stable
+          for (var k = 0; k < dlBtns.length; k++) {
+            dlBtns[k].href = stable.html_url;
+          }
         }
       })
       .catch(function () { dlEl.textContent = "—"; });
   }
 
-  /* ---------------- SCREENSHOT CASCADE ----------------
+  /* ---------------- SCREENSHOT CASCADE + FILTER TABS ----------------
      Mirrors the app's experimental quick-picks pager: cards tuck under
      each other, and every card's scale / fade / tilt / stack order is a
      pure function of its offset from the scroll center. No timers, no
-     loops — transforms update only while scrolling. */
+     loops — transforms update only while scrolling. Tab filters hide
+     cards and recalculate the cascade on the remaining visible set. */
 
   function initCascade() {
     var track = document.querySelector(".shots");
@@ -147,22 +152,30 @@
     var fillEl = document.getElementById("shots-fill");
     if (!track) return;
     document.documentElement.classList.add("js");
-    var cards = Array.prototype.slice.call(track.querySelectorAll("figure"));
-    var total = cards.length;
+    var allCards = Array.prototype.slice.call(track.querySelectorAll("figure"));
     var ticking = false;
     var voids = Array.prototype.slice.call(track.querySelectorAll(".shots-void"));
 
-    // Size the end spacers so the first/last card sits dead-center.
+    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+    /** Return only the currently visible (non-hidden) figures. */
+    function visibleCards() {
+      return allCards.filter(function (c) { return !c.classList.contains("hidden"); });
+    }
+
+    // Size the end spacers so the first/last visible card sits dead-center.
     function sizeVoids() {
-      if (!cards.length) return;
-      var w = Math.max(0, track.clientWidth / 2 - cards[0].offsetWidth / 2);
+      var vis = visibleCards();
+      if (!vis.length) return;
+      var w = Math.max(0, track.clientWidth / 2 - vis[0].offsetWidth / 2);
       for (var v = 0; v < voids.length; v++) voids[v].style.width = w + "px";
     }
 
-    function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
     function update() {
       ticking = false;
+      var cards = visibleCards();
+      var total = cards.length;
+      if (!total) return;
       var viewCenter = track.scrollLeft + track.clientWidth / 2;
       var best = 0;
       var bestDamp = Infinity;
@@ -179,6 +192,14 @@
         card.style.zIndex = String(10 - Math.round(damp * 10));
         if (damp < bestDamp) { bestDamp = damp; best = i; }
       }
+      // Reset transforms on hidden cards so they don't retain stale state
+      for (var h = 0; h < allCards.length; h++) {
+        if (allCards[h].classList.contains("hidden")) {
+          allCards[h].style.transform = "";
+          allCards[h].style.opacity = "";
+          allCards[h].style.zIndex = "";
+        }
+      }
       if (posEl) {
         posEl.textContent = ("0" + (best + 1)).slice(-2) + " / " + ("0" + total).slice(-2);
       }
@@ -191,14 +212,45 @@
       if (!ticking) { ticking = true; requestAnimationFrame(update); }
     }, { passive: true });
     window.addEventListener("resize", function () { sizeVoids(); update(); });
-    // Images change card widths as they load — re-measure then too,
-    // otherwise the spacers are sized while cards are still collapsed.
     window.addEventListener("load", function () { sizeVoids(); update(); });
     var imgs = track.querySelectorAll("img");
     for (var k = 0; k < imgs.length; k++) {
       if (imgs[k].complete) continue;
       imgs[k].addEventListener("load", function () { sizeVoids(); update(); });
     }
+
+    /* ---- Filter tabs ---- */
+    var tabs = document.querySelectorAll(".screen-tab");
+    for (var t = 0; t < tabs.length; t++) {
+      tabs[t].addEventListener("click", function (e) {
+        var btn = e.currentTarget;
+        var filter = btn.getAttribute("data-filter");
+
+        // Update active tab
+        for (var j = 0; j < tabs.length; j++) {
+          tabs[j].classList.remove("active");
+          tabs[j].setAttribute("aria-selected", "false");
+        }
+        btn.classList.add("active");
+        btn.setAttribute("aria-selected", "true");
+
+        // Show / hide cards
+        for (var k = 0; k < allCards.length; k++) {
+          var cat = allCards[k].getAttribute("data-cat");
+          if (filter === "all" || cat === filter) {
+            allCards[k].classList.remove("hidden");
+          } else {
+            allCards[k].classList.add("hidden");
+          }
+        }
+
+        // Recalculate spacers and cascade for new visible set
+        sizeVoids();
+        track.scrollLeft = 0;
+        update();
+      });
+    }
+
     sizeVoids();
     update();
   }
