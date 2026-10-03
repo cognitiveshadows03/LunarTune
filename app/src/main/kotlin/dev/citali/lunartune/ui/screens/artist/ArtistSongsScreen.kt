@@ -70,6 +70,7 @@ import dev.citali.lunartune.constants.ArtistSongSortType
 import dev.citali.lunartune.constants.ArtistSongSortTypeKey
 import dev.citali.lunartune.constants.CONTENT_TYPE_HEADER
 import dev.citali.lunartune.constants.HideExplicitKey
+import dev.citali.lunartune.extensions.metadata
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.playback.queues.ListQueue
