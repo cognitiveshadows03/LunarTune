@@ -243,17 +243,78 @@ abstract class GenerateIconPackTask : DefaultTask() {
     }
 
     private fun parseMetadata(): List<*> {
+        val metadataText = metadataFile.get().asFile.readText()
         val parsed =
             try {
-                JsonSlurper().parse(metadataFile.get().asFile)
+                JsonSlurper().parseText(metadataText)
             } catch (error: Exception) {
-                throw GradleException(
-                    "IconPack metadata.json is invalid; refusing to regenerate launcher aliases from SVG filenames.",
-                    error,
-                )
+                val repairedMetadata = metadataText.repairMissingTopLevelObjectCommas()
+                if (repairedMetadata == metadataText) {
+                    throw GradleException("IconPack metadata.json is invalid.", error)
+                }
+                try {
+                    logger.warn(
+                        "IconPack metadata.json is missing commas between entries; parsing a repaired copy. " +
+                            "Please correct the source metadata.",
+                    )
+                    JsonSlurper().parseText(repairedMetadata)
+                } catch (repairError: Exception) {
+                    throw GradleException(
+                        "IconPack metadata.json is invalid even after repairing missing entry separators.",
+                        repairError,
+                    )
+                }
             }
         return parsed as? List<*>
             ?: throw GradleException("IconPack metadata.json must contain a JSON array.")
+    }
+
+    /** Repair only missing commas between adjacent objects in the root metadata array. */
+    private fun String.repairMissingTopLevelObjectCommas(): String {
+        val repaired = StringBuilder(length + 2)
+        var arrayDepth = 0
+        var objectDepth = 0
+        var inString = false
+        var escaped = false
+        var needsComma = false
+
+        for (character in this) {
+            if (inString) {
+                repaired.append(character)
+                if (escaped) {
+                    escaped = false
+                } else {
+                    when (character) {
+                        '\\' -> escaped = true
+                        '"' -> inString = false
+                    }
+                }
+                continue
+            }
+
+            if (needsComma) {
+                if (character.isWhitespace()) {
+                    repaired.append(character)
+                    continue
+                }
+                if (character == '{') repaired.append(',')
+                needsComma = false
+            }
+
+            repaired.append(character)
+            when (character) {
+                '"' -> inString = true
+                '[' -> arrayDepth++
+                ']' -> arrayDepth--
+                '{' -> objectDepth++
+                '}' -> {
+                    objectDepth--
+                    if (arrayDepth == 1 && objectDepth == 0) needsComma = true
+                }
+            }
+        }
+
+        return repaired.toString()
     }
 
     private fun resolveSource(source: String): File {
