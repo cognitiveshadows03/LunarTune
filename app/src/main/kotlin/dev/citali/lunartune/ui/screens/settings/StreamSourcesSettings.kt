@@ -266,9 +266,9 @@ fun StreamSourcesSettings(navController: NavController) {
                 item {
                     PreferenceEntry(
                         title = { Text(stringResource(R.string.monochrome_instance)) },
-                        description = monochromeInstance,
+                        description = MonochromeAudioProvider.effectiveInstance(monochromeInstance),
                         onClick = {
-                            instanceDraft = monochromeInstance
+                            instanceDraft = MonochromeAudioProvider.effectiveInstance(monochromeInstance)
                             showInstanceDialog = true
                         },
                     )

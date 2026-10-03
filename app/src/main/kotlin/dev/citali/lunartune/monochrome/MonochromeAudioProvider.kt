@@ -33,7 +33,45 @@ import java.util.Base64
  */
 object MonochromeAudioProvider {
 
-    const val DEFAULT_INSTANCE = "https://api.monochrome.tf"
+    const val DEFAULT_INSTANCE = "https://tracks.monochrome.st"
+
+    /** Retired endpoints (Monochrome moved from monochrome.tf to monochrome.st). */
+    private val RETIRED_INSTANCES = setOf("https://api.monochrome.tf", "http://api.monochrome.tf")
+
+    /** Maps blank or retired instance URLs (e.g. a saved old default) to the current default. */
+    fun effectiveInstance(instanceUrl: String): String {
+        val trimmed = instanceUrl.trim().trimEnd('/')
+        return if (trimmed.isBlank() || trimmed.lowercase() in RETIRED_INSTANCES) DEFAULT_INSTANCE else trimmed
+    }
+
+    private val SNOWFLAKE = Regex("^\\d{15,20}$")
+
+    /** New tracks API (tracks.monochrome.st): GET /search/tracks?q=&limit= -> { tracks: [...] }. */
+    private fun searchTracksApi(base: String, query: String): List<MonochromeTrack>? {
+        val payload = getJson("$base/search/tracks?q=${URLEncoder.encode(query, "UTF-8")}&limit=8") ?: return null
+        val arr = payload.optJSONArray("tracks") ?: return null
+        return buildList {
+            for (i in 0 until arr.length()) {
+                val t = arr.optJSONObject(i) ?: continue
+                val id = (t.optString("trackId").ifBlank { t.optString("id") }).takeIf { it.isNotBlank() } ?: continue
+                val title = t.optString("title").takeIf { it.isNotBlank() } ?: continue
+                val names = t.optJSONArray("artistNames")
+                val artist = names?.let { a -> (0 until a.length()).joinToString(", ") { a.optString(it) } }.orEmpty()
+                add(
+                    MonochromeTrack(
+                        id = id,
+                        title = title,
+                        artistName = artist,
+                        albumTitle = null,
+                        coverUuid = null,
+                        durationSec = t.optLong("duration", -1L).takeIf { it > 0 }?.let { (it / 1000).toInt() },
+                        audioQuality = "LOSSLESS",
+                        streamReady = t.optBoolean("playable", true),
+                    ),
+                )
+            }
+        }
+    }
 
     private const val COVER_BASE = "https://resources.tidal.com/images"
     private const val CONNECT_TIMEOUT_MS = 8_000
@@ -70,6 +108,8 @@ object MonochromeAudioProvider {
         query: String,
     ): List<MonochromeTrack> =
         withContext(Dispatchers.IO) {
+            val instanceUrl = effectiveInstance(instanceUrl)
+            runCatching { searchTracksApi(instanceUrl, query) }.getOrNull()?.let { return@withContext it }
             runCatching {
                 val payload =
                     getJson(
@@ -110,6 +150,18 @@ object MonochromeAudioProvider {
         quality: String = "LOSSLESS",
     ): MonochromeStream? =
         withContext(Dispatchers.IO) {
+            val instanceUrl = effectiveInstance(instanceUrl)
+            // Tracks API ids are snowflakes and stream directly as FLAC from /track/{id}.
+            if (SNOWFLAKE.matches(trackId)) {
+                return@withContext MonochromeStream(
+                    url = "$instanceUrl/track/$trackId",
+                    mimeType = "audio/flac",
+                    codecs = "flac",
+                    audioQuality = "LOSSLESS",
+                    bitDepth = null,
+                    sampleRate = null,
+                )
+            }
             runCatching {
                 val payload =
                     getJson(
@@ -152,6 +204,13 @@ object MonochromeAudioProvider {
      */
     suspend fun checkStatus(instanceUrl: String): MonochromeStatus =
         withContext(Dispatchers.IO) {
+            val instanceUrl = effectiveInstance(instanceUrl)
+            // New tracks API first.
+            val newApi =
+                runCatching {
+                    getJson("$instanceUrl/search/tracks?q=probe&limit=1")?.has("tracks") == true
+                }.getOrDefault(false)
+            if (newApi) return@withContext MonochromeStatus.ACTIVE
             val probeUrl = "${instanceUrl.trimEnd('/')}/search/?s=probe"
             runCatching {
                 val connection = URL(probeUrl).openConnection() as HttpURLConnection
@@ -177,7 +236,13 @@ object MonochromeAudioProvider {
             }.getOrElse { MonochromeStatus.DOWN }
         }
 
+    // The new host intermittently answers 5xx (Cloudflare 521), so retry briefly.
     private fun getJson(url: String): JSONObject? {
+        repeat(2) { runCatching { getJsonOnce(url) }.getOrNull()?.let { return it }; Thread.sleep(400) }
+        return getJsonOnce(url)
+    }
+
+    private fun getJsonOnce(url: String): JSONObject? {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.connectTimeout = CONNECT_TIMEOUT_MS
         connection.readTimeout = READ_TIMEOUT_MS
