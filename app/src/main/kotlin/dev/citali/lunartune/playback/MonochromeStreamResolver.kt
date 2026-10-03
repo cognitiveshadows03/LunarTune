@@ -35,6 +35,8 @@ object MonochromeStreamResolver {
         val audioQuality: String,
         val sampleRate: Int?,
         val bitDepth: Int?,
+        val bitrate: Int?,
+        val contentLength: Long?,
     )
 
     private data class CachedStream(
@@ -79,6 +81,8 @@ object MonochromeStreamResolver {
                         audioQuality = it.audioQuality,
                         sampleRate = it.sampleRate,
                         bitDepth = it.bitDepth,
+                        bitrate = it.bitrate,
+                        contentLength = it.contentLength,
                     )
                 }
             }

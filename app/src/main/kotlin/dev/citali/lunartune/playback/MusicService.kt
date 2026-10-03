@@ -8051,21 +8051,24 @@ class MusicService :
                     itag = 0,
                     mimeType = resolved.mimeType.substringBefore(";"),
                     codecs = "flac",
-                    bitrate = 0,
+                    bitrate = resolved.bitrate ?: 0,
                     sampleRate = resolved.sampleRate,
-                    contentLength = 0L,
+                    contentLength = resolved.contentLength ?: 0L,
                     loudnessDb = previousFormat?.loudnessDb,
                     perceptualLoudnessDb = previousFormat?.perceptualLoudnessDb,
                     playbackUrl = null,
                 ),
             )
         }
+        resolved.contentLength?.takeIf { it > 0L }?.let { contentLengthCache[mediaId] = it }
         Timber.tag("Monochrome").d(
-            "Using lossless stream for %s: %s, sampleRate=%s, bitDepth=%s",
+            "Using lossless stream for %s: %s, bitrate=%s, sampleRate=%s, bitDepth=%s, bytes=%s",
             mediaId,
             resolved.mimeType,
+            resolved.bitrate,
             resolved.sampleRate,
             resolved.bitDepth,
+            resolved.contentLength,
         )
 
         return dataSpec

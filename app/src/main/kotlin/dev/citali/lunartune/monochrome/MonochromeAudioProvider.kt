@@ -96,6 +96,8 @@ object MonochromeAudioProvider {
         val audioQuality: String,
         val bitDepth: Int?,
         val sampleRate: Int?,
+        val bitrate: Int?,
+        val contentLength: Long?,
     )
 
     fun coverUrl(coverUuid: String?): String? =
@@ -153,13 +155,17 @@ object MonochromeAudioProvider {
             val instanceUrl = effectiveInstance(instanceUrl)
             // Tracks API ids are snowflakes and stream directly as FLAC from /track/{id}.
             if (SNOWFLAKE.matches(trackId)) {
+                val streamUrl = "$instanceUrl/track/$trackId"
+                val probe = runCatching { probeFlac(streamUrl) }.getOrNull()
                 return@withContext MonochromeStream(
-                    url = "$instanceUrl/track/$trackId",
+                    url = streamUrl,
                     mimeType = "audio/flac",
                     codecs = "flac",
                     audioQuality = "LOSSLESS",
-                    bitDepth = null,
-                    sampleRate = null,
+                    bitDepth = probe?.bitDepth,
+                    sampleRate = probe?.sampleRate,
+                    bitrate = probe?.bitrate,
+                    contentLength = probe?.contentLength,
                 )
             }
             runCatching {
@@ -180,12 +186,74 @@ object MonochromeAudioProvider {
                     audioQuality = data.optString("audioQuality", quality),
                     bitDepth = data.optInt("bitDepth", -1).takeIf { it > 0 },
                     sampleRate = data.optInt("sampleRate", -1).takeIf { it > 0 },
+                    bitrate = data.optInt("bitrate", -1).takeIf { it > 0 },
+                    contentLength = data.optLong("contentLength", -1L).takeIf { it > 0L },
                 )
             }.getOrElse { error ->
                 Timber.tag("Monochrome").w(error, "Stream resolve failed for %s", trackId)
                 null
             }
         }
+
+    private data class FlacProbe(
+        val sampleRate: Int,
+        val bitDepth: Int,
+        val bitrate: Int?,
+        val contentLength: Long?,
+    )
+
+    /** Reads FLAC STREAMINFO and the HTTP range total without downloading the audio file. */
+    private fun probeFlac(url: String): FlacProbe? {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.connectTimeout = CONNECT_TIMEOUT_MS
+        connection.readTimeout = READ_TIMEOUT_MS
+        connection.requestMethod = "GET"
+        connection.setRequestProperty("Range", "bytes=0-41")
+        connection.setRequestProperty("Accept", "audio/flac,application/octet-stream")
+        connection.setRequestProperty("User-Agent", "LunarTune")
+        return try {
+            if (connection.responseCode !in 200..299) return null
+            val header = connection.inputStream.use { input ->
+                val bytes = ByteArray(42)
+                var read = 0
+                while (read < bytes.size) {
+                    val count = input.read(bytes, read, bytes.size - read)
+                    if (count < 0) break
+                    read += count
+                }
+                bytes.takeIf { read == bytes.size }
+            } ?: return null
+            if (header[0] != 'f'.code.toByte() || header[1] != 'L'.code.toByte() ||
+                header[2] != 'a'.code.toByte() || header[3] != 'C'.code.toByte() ||
+                (header[4].toInt() and 0x7f) != 0
+            ) {
+                return null
+            }
+
+            var packed = 0L
+            for (index in 18..25) {
+                packed = (packed shl 8) or (header[index].toLong() and 0xffL)
+            }
+            val sampleRate = (packed ushr 44).toInt()
+            val bitDepth = (((packed ushr 36) and 0x1fL) + 1L).toInt()
+            val totalSamples = packed and 0xFFFFFFFFFL
+            if (sampleRate <= 0 || bitDepth <= 0) return null
+
+            val contentLength =
+                connection.getHeaderField("Content-Range")
+                    ?.substringAfterLast('/')
+                    ?.toLongOrNull()
+                    ?: connection.contentLengthLong.takeIf { connection.responseCode == HttpURLConnection.HTTP_OK && it > 0L }
+            val durationSeconds = totalSamples.toDouble() / sampleRate.toDouble()
+            val bitrate =
+                contentLength
+                    ?.takeIf { durationSeconds > 0.0 }
+                    ?.let { ((it * 8.0) / durationSeconds).toInt().takeIf { value -> value > 0 } }
+            FlacProbe(sampleRate, bitDepth, bitrate, contentLength)
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     /** Availability of a Monochrome instance, mirroring how the website surfaces playback status. */
     enum class MonochromeStatus {

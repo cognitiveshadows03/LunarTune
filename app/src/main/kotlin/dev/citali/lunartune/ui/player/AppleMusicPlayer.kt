@@ -147,6 +147,8 @@ import dev.citali.lunartune.constants.ShowLyricsPlayerControlsKey
 import dev.citali.lunartune.constants.SliderStyle
 import dev.citali.lunartune.db.entities.FormatEntity
 import dev.citali.lunartune.db.entities.codecLabel
+import dev.citali.lunartune.db.entities.formattedBitrate
+import dev.citali.lunartune.db.entities.formattedSampleRate
 import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.extensions.toggleRepeatMode
 import dev.citali.lunartune.models.MediaMetadata
@@ -755,7 +757,19 @@ private fun AppleMusicProgress(
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             if (currentFormat != null) {
-                val label = remember(currentFormat.mimeType, currentFormat.codecs) { currentFormat.codecLabel() }
+                val label =
+                    remember(
+                        currentFormat.mimeType,
+                        currentFormat.codecs,
+                        currentFormat.bitrate,
+                        currentFormat.sampleRate,
+                    ) {
+                        listOfNotNull(
+                            currentFormat.codecLabel().takeIf { it.isNotBlank() },
+                            currentFormat.formattedBitrate(),
+                            currentFormat.formattedSampleRate(),
+                        ).joinToString(" • ")
+                    }
                 Text(
                     text = label,
                     fontSize = 11.sp,
