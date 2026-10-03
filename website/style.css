@@ -180,8 +180,27 @@ a:hover { color: #fff; }
 
 .tagline { margin-top: 14px; font-size: clamp(1.05rem, 2.4vw, 1.35rem); font-weight: 500; color: #cfd4e6; }
 
-.substats {
+/* NEW: Hero highlight chips */
+.hero-highlights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 18px;
+}
+
+.highlight-chip {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--lime);
+  border: 1px solid rgba(198, 255, 0, 0.3);
+  background: rgba(198, 255, 0, 0.06);
+  padding: 5px 14px;
+  text-transform: uppercase;
+}
+
+.substats {
+  margin-top: 14px;
   display: inline-block;
   font-family: var(--mono);
   font-size: clamp(0.8rem, 2vw, 0.95rem);
@@ -229,39 +248,128 @@ a:hover { color: #fff; }
 .section h2 .accent { color: var(--lime); }
 .sec-sub { color: var(--muted); margin-top: 8px; font-size: 1.05rem; }
 
-/* ================= FEATURE CARDS ================= */
-.grid {
-  margin-top: 30px;
+/* ================= FEATURE SHOWCASE CARDS ================= */
+.feature-showcase {
+  margin-top: 36px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
+  align-items: start;
 }
 
-.card {
-  position: relative;
+.showcase-card {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 18px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--lime);
-  padding: 26px 24px 28px;
+  padding: 24px;
+  position: relative;
   overflow: hidden;
+  height: 100%;
 }
 
-.card-ghost {
+.showcase-card::before {
+  content: "";
   position: absolute;
-  top: 6px;
-  right: 14px;
-  font-weight: 700;
-  font-size: 3.4rem;
-  line-height: 1;
-  color: rgba(139, 145, 167, 0.16);
-  user-select: none;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(to bottom, var(--lime), var(--violet));
 }
 
-.card h3 { font-size: 1.45rem; font-weight: 700; letter-spacing: 0.03em; padding-right: 70px; }
-.card-jp { font-family: var(--mono); font-size: 0.78rem; color: var(--amber); letter-spacing: 0.24em; margin: 2px 0 10px; }
-.card p:last-child { color: #b9bfd4; }
+.showcase-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: rgba(198, 255, 0, 0.04);
+  color: var(--lime);
+}
 
-/* ================= SCREENSHOTS: experimental cascade =================
+.showcase-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.showcase-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.showcase-tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.stag {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--amber);
+  border: 1px solid rgba(255, 179, 0, 0.25);
+  background: rgba(255, 179, 0, 0.06);
+  padding: 2px 10px;
+}
+
+.showcase-body h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  line-height: 1.25;
+}
+
+.showcase-body p {
+  color: #b9bfd4;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  flex: 1;
+}
+
+/* ================= SCREENSHOT FILTER TABS ================= */
+.screen-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+  margin-bottom: 16px;
+}
+
+.screen-tab {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 8px 18px;
+  cursor: pointer;
+}
+
+.screen-tab.active {
+  color: #000;
+  background: var(--lime);
+  border-color: var(--lime);
+}
+
+.screen-tab:hover:not(.active) {
+  color: var(--text);
+  border-color: var(--lime);
+}
+
+/* ================= SCREENSHOTS: cascade cards =================
    Same recipe as the app's experimental quick-picks pager: cards tuck
    under each other (-28px overlap), off-center cards shrink to 0.92,
    fade to 0.65 and tilt 6° toward the middle. Scroll-driven only —
@@ -269,7 +377,7 @@ a:hover { color: #fff; }
    only when JS runs (.js on <html>); without JS it's a plain row. */
 .shots {
   position: relative;
-  margin-top: 30px;
+  margin-top: 16px;
   display: flex;
   gap: 16px;
   overflow-x: auto;
@@ -289,8 +397,13 @@ a:hover { color: #fff; }
   padding: 10px 10px 12px;
 }
 
+.shots figure.hidden {
+  display: none;
+}
+
 .js .shots { gap: 0; }
 .js .shots figure { margin-right: -28px; }
+.js .shots figure.hidden { margin-right: 0; }
 .js .shots figure:last-child { margin-right: 0; }
 
 .shots img {
@@ -300,13 +413,28 @@ a:hover { color: #fff; }
   background: #000;
 }
 
+/* Labeled captions from the reference site */
 .shots figcaption {
   margin-top: 10px;
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.28em;
-  color: var(--muted);
   text-align: center;
+}
+
+.shots figcaption strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+
+.shots figcaption span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin-top: 2px;
 }
 
 .shots-void { display: none; }
@@ -360,7 +488,68 @@ a:hover { color: #fff; }
   border-radius: 999px;
 }
 
-/* ================= DOWNLOAD ================= */
+/* ================= DOWNLOAD SECTION ================= */
+.dl-cards {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.dl-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+}
+
+.dl-card-recommended {
+  border-color: var(--lime);
+  border-width: 2px;
+}
+
+.dl-card-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #000;
+  background: var(--lime);
+  padding: 4px 14px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%);
+}
+
+.dl-card h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dl-card h3 small {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.dl-card-desc {
+  color: #b9bfd4;
+  font-size: 0.92rem;
+  flex: 1;
+}
+
+.dl-card .btn {
+  align-self: flex-start;
+  font-size: 0.9rem;
+  padding: 12px 28px;
+}
+
+/* Legacy download box (kept for metadata) */
 .dl-box {
   margin-top: 30px;
   border: 1px solid var(--line);
@@ -375,7 +564,7 @@ a:hover { color: #fff; }
 .dl-icon { border: 1px solid var(--line); }
 
 .dl-title { font-size: 1.6rem; font-weight: 700; }
-.dl-ver { margin: 6px 0 18px; }
+.dl-ver { margin: 6px 0 0; }
 .dl-ver span {
   font-family: var(--mono);
   font-size: 0.85rem;
@@ -384,6 +573,7 @@ a:hover { color: #fff; }
   border: 1px solid #2e3d0e;
   background: rgba(198, 255, 0, 0.06);
   padding: 6px 14px;
+  display: inline-block;
 }
 
 .btn {
@@ -467,4 +657,7 @@ footer p { flex-basis: 100%; font-family: var(--mono); font-size: 0.75rem; color
   .dl-box { grid-template-columns: 1fr; }
   .dl-icon { width: 72px; height: 72px; }
   .scroll-hint { display: none; }
+  .feature-showcase { grid-template-columns: 1fr; }
+  .dl-cards { grid-template-columns: 1fr; }
+  .screen-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
 }
