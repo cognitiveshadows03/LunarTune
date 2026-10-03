@@ -184,6 +184,15 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
+        <receiver
+            android:name=".appicon.LauncherAliasRecoveryReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".musicrecognition.MusicRecognitionTileActionActivity"
             android:excludeFromRecents="true"

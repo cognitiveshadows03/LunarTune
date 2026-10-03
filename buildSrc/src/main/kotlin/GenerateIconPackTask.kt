@@ -247,14 +247,13 @@ abstract class GenerateIconPackTask : DefaultTask() {
             try {
                 JsonSlurper().parse(metadataFile.get().asFile)
             } catch (error: Exception) {
-                // A typo in metadata.json must not break APK builds: fall back to auto-discovered SVGs.
-                logger.warn("IconPack: metadata.json is not valid JSON (${error.message}); using SVG file names instead.")
-                return emptyList<Any>()
+                throw GradleException(
+                    "IconPack metadata.json is invalid; refusing to regenerate launcher aliases from SVG filenames.",
+                    error,
+                )
             }
-        return parsed as? List<*> ?: run {
-            logger.warn("IconPack: metadata.json is not a JSON array; using SVG file names instead.")
-            emptyList<Any>()
-        }
+        return parsed as? List<*>
+            ?: throw GradleException("IconPack metadata.json must contain a JSON array.")
     }
 
     private fun resolveSource(source: String): File {
