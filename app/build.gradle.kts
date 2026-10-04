@@ -372,6 +372,7 @@ dependencies {
 
     implementation("org.json:json:20240303")
     implementation("com.github.yalantis:ucrop:2.2.11")
+    implementation("androidx.transition:transition:1.5.1")
 
 }
 
