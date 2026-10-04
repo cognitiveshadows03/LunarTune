@@ -1292,4 +1292,6 @@
     <string name="using_shared_header_image">Using the shared image when one is selected</string>
     <string name="header_image_selected">Custom image selected</string>
     <string name="header_image_not_selected">Not selected — tap to choose an image</string>
+    <string name="library_card_shading">Color shading</string>
+    <string name="library_card_shading_desc">Tint library shortcut cards with their accent colors</string>
 </resources>
