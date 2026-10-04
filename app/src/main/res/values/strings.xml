@@ -1292,7 +1292,6 @@
     <string name="using_shared_header_image">Using the shared image when one is selected</string>
     <string name="header_image_selected">Custom image selected</string>
     <string name="header_image_not_selected">Not selected — tap to choose an image</string>
-    <string name="screen_header_images_desc">Images are cropped to a fixed 16:9 banner before use. Set one shared image, then optionally override either screen.</string>
     <string name="header_image_selected_cropped">Custom 16:9 banner selected — tap to replace</string>
     <string name="header_override_shared">Uses the shared banner — tap to choose a separate image</string>
     <string name="header_override_custom">Separate 16:9 banner selected — tap to replace</string>

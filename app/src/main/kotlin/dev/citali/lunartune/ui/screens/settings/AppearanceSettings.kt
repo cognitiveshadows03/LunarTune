@@ -762,14 +762,6 @@ fun AppearanceSettings(navController: NavController) {
 
             PreferenceGroup(title = stringResource(R.string.screen_header_images)) {
                 item {
-                    Text(
-                        text = stringResource(R.string.screen_header_images_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-                item {
                     PreferenceEntry(
                         title = { Text(stringResource(R.string.shared_header_image)) },
                         description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected_cropped),
