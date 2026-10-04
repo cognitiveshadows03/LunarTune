@@ -61,6 +61,8 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.QuickPicks
+import dev.citali.lunartune.constants.HomeHeaderImageUriKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 
 import dev.citali.lunartune.home.HomeAction
 import dev.citali.lunartune.home.HomeScreenState
@@ -70,6 +72,8 @@ import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.ui.component.ExpressivePullToRefreshBox
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MenuState
+import dev.citali.lunartune.ui.component.ScreenImageHeader
+import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider
 import dev.citali.lunartune.viewmodels.HomeViewModel
 import moe.rukamori.archivetune.innertube.pages.HomePage
@@ -285,6 +289,9 @@ private fun HomeContent(
 ) {
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
+    val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
+    val (homeHeaderImageUri) = rememberPreference(HomeHeaderImageUriKey, "")
+    val effectiveHeaderImageUri = homeHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val remoteQuickPicks =
         uiState
             .takeIf { it.quickPicksMode == QuickPicks.QUICK_PICKS }
@@ -336,6 +343,14 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
+                    if (effectiveHeaderImageUri.isNotBlank()) {
+                        item(key = "home_image_header", contentType = "image_header") {
+                            ScreenImageHeader(
+                                imageUri = effectiveHeaderImageUri,
+                                height = 240.dp,
+                            )
+                        }
+                    }
                     if (uiState.showCategoryChips) {
                         item(
                             key = "home_category_chips",

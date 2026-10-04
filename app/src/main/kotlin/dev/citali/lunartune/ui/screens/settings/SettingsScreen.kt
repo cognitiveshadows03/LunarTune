@@ -37,13 +37,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -55,10 +58,14 @@ import androidx.navigation.NavController
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
+import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.ui.component.IconButton
+import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.Updater
+import dev.citali.lunartune.utils.rememberPreference
 
 
 private fun searchableSettingsRoute(parentKey: String, scrollKey: String?): String? {
@@ -96,6 +103,9 @@ fun SettingsScreen(
     onClearUpdateBadge: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
+    val (settingsHeaderImageUri) = rememberPreference(SettingsHeaderImageUriKey, "")
+    val effectiveHeaderImageUri = settingsHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val listState = rememberLazyListState()
 
@@ -380,7 +390,17 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            LargeFlexibleTopAppBar(
+            if (effectiveHeaderImageUri.isNotBlank()) {
+                TopAppBar(
+                    title = {},
+                    navigationIcon = {
+                        IconButton(onClick = navController::navigateUp, onLongClick = navController::backToMain) {
+                            Icon(painterResource(R.drawable.arrow_back), stringResource(R.string.back_button_desc))
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                )
+            } else LargeFlexibleTopAppBar(
                 title = {
                     Text(
                         text = stringResource(R.string.settings),
@@ -423,6 +443,19 @@ fun SettingsScreen(
                     bottom = SettingsDimensions.ScreenBottomPadding,
                 ),
         ) {
+            if (effectiveHeaderImageUri.isNotBlank() && searchQuery.isBlank()) {
+                item(key = "settings_image_header", contentType = "image_header") {
+                    ScreenImageHeader(imageUri = effectiveHeaderImageUri, height = 220.dp) {
+                        Text(
+                            text = stringResource(R.string.settings),
+                            color = Color.White,
+                            style = MaterialTheme.typography.displaySmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.BottomStart).padding(24.dp),
+                        )
+                    }
+                }
+            }
             if (hasUpdate && !isUpdateDismissed) {
                 item(key = "update", contentType = "settings_banner") {
                     SettingsUpdateBanner(

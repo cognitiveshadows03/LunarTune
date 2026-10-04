@@ -139,6 +139,9 @@ class ScheduledBackupRepository
                     ENABLED_KEY.name,
                     DIRECTORY_URI_KEY.name,
                     DIRECTORY_NAME_KEY.name,
+                    "sharedScreenHeaderImageUri",
+                    "homeHeaderImageUri",
+                    "settingsHeaderImageUri",
                 )
 
             private fun androidx.datastore.preferences.core.Preferences.toScheduledBackupSettings(): ScheduledBackupSettings =

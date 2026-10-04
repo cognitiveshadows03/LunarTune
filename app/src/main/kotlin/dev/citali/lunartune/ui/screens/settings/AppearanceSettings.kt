@@ -114,6 +114,9 @@ import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.QuickPicksDisplayModeKey
 import dev.citali.lunartune.constants.RandomThemeOnStartupKey
 import dev.citali.lunartune.constants.ShowHomeCategoryChipsKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
+import dev.citali.lunartune.constants.HomeHeaderImageUriKey
+import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.ShowLibraryCardCachedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLikedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
@@ -160,6 +163,9 @@ fun AppearanceSettings(navController: NavController) {
     val playlistTagsViewModel: PlaylistTagsViewModel = hiltViewModel()
     val playlistTagsState by playlistTagsViewModel.screenState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val (sharedHeaderImageUri, onSharedHeaderImageUriChange) = rememberPreference(SharedScreenHeaderImageUriKey, "")
+    val (homeHeaderImageUri, onHomeHeaderImageUriChange) = rememberPreference(HomeHeaderImageUriKey, "")
+    val (settingsHeaderImageUri, onSettingsHeaderImageUriChange) = rememberPreference(SettingsHeaderImageUriKey, "")
     val defaultDisableAnimations = remember(context) { context.isLowRamDevice() }
     val (dynamicTheme, onDynamicThemeChange) =
         rememberPreference(
@@ -331,6 +337,24 @@ fun AppearanceSettings(navController: NavController) {
             QuickPicksDisplayModeKey,
             defaultValue = QuickPicksDisplayMode.CARD,
         )
+
+    fun persistHeaderImage(uri: Uri?, oldValue: String, update: (String) -> Unit) {
+        uri ?: return
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        if (oldValue.isNotBlank() && oldValue != uri.toString()) runCatching {
+            context.contentResolver.releasePersistableUriPermission(Uri.parse(oldValue), Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        update(uri.toString())
+    }
+    val sharedHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        persistHeaderImage(it, sharedHeaderImageUri, onSharedHeaderImageUriChange)
+    }
+    val homeHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        persistHeaderImage(it, homeHeaderImageUri, onHomeHeaderImageUriChange)
+    }
+    val settingsHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
+        persistHeaderImage(it, settingsHeaderImageUri, onSettingsHeaderImageUriChange)
+    }
 
     val customFontPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -745,6 +769,56 @@ fun AppearanceSettings(navController: NavController) {
                         description = customFontDescription,
                         icon = { Icon(painterResource(R.drawable.text_fields), null) },
                         onClick = pickCustomFont,
+                    )
+                }
+            }
+
+            PreferenceGroup(title = stringResource(R.string.screen_header_images)) {
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.shared_header_image)) },
+                        description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected),
+                        icon = { Icon(painterResource(R.drawable.image), null) },
+                        onClick = { sharedHeaderPicker.launch(arrayOf("image/*")) },
+                    )
+                }
+                if (sharedHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.remove_shared_header_image)) },
+                        icon = { Icon(painterResource(R.drawable.delete), null) },
+                        onClick = { onSharedHeaderImageUriChange("") },
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.home_header_image_override)) },
+                        description = stringResource(if (homeHeaderImageUri.isBlank()) R.string.using_shared_header_image else R.string.header_image_selected),
+                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
+                        onClick = { homeHeaderPicker.launch(arrayOf("image/*")) },
+                    )
+                }
+                if (homeHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.use_shared_header_image)) },
+                        description = stringResource(R.string.home_header_image_override),
+                        icon = { Icon(painterResource(R.drawable.delete), null) },
+                        onClick = { onHomeHeaderImageUriChange("") },
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.settings_header_image_override)) },
+                        description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.using_shared_header_image else R.string.header_image_selected),
+                        icon = { Icon(painterResource(R.drawable.settings), null) },
+                        onClick = { settingsHeaderPicker.launch(arrayOf("image/*")) },
+                    )
+                }
+                if (settingsHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.use_shared_header_image)) },
+                        description = stringResource(R.string.settings_header_image_override),
+                        icon = { Icon(painterResource(R.drawable.delete), null) },
+                        onClick = { onSettingsHeaderImageUriChange("") },
                     )
                 }
             }
