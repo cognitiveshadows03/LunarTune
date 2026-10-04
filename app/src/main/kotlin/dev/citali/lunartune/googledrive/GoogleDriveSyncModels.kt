@@ -1,0 +1,21 @@
+/*
+ * LunarTune (2026)
+ * © cognitiveshadows03 — github.com/cognitiveshadows03
+ * GPL-3.0 License | Contributors: see git history
+ * Do not remove or alter this notice. - Per GPL-3.0 Section 4 & Section 5
+ */
+
+package dev.citali.lunartune.googledrive
+
+import dev.citali.lunartune.backup.ScheduledBackupFrequency
+
+data class GoogleDriveSyncSettings(
+    val enabled: Boolean = false,
+    val frequency: ScheduledBackupFrequency = ScheduledBackupFrequency.WEEKLY,
+    val customDateEpochDay: Long? = null,
+    val remoteFolderUri: String? = null,
+    val remoteFolderName: String? = null,
+    val overwriteExisting: Boolean = false,
+    val lastSyncEpochMs: Long? = null,
+    val lastSyncFailed: Boolean = false,
+)

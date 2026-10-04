@@ -1259,4 +1259,27 @@
     <string name="account_banner_choose">Choose from device</string>
     <string name="account_banner_youtube">Use YouTube channel banner</string>
     <string name="account_banner_remove">Remove banner</string>
+
+    <string name="google_drive_sync">Cloud storage sync</string>
+    <string name="google_drive_sync_enabled">Enable cloud sync</string>
+    <string name="google_drive_sync_enabled_description_on">Auto-sync to Google Drive is active.</string>
+    <string name="google_drive_sync_enabled_description_off">Auto-sync to Google Drive is paused.</string>
+    <string name="google_drive_sync_remote_folder">Drive folder</string>
+    <string name="google_drive_sync_remote_folder_not_set">Not set — tap to pick a Drive folder</string>
+    <string name="google_drive_sync_remote_folder_default_name">Drive folder</string>
+    <string name="google_drive_sync_clear_folder">Clear folder</string>
+    <string name="google_drive_sync_clear_folder_description">Forget the picked folder and disable auto-sync. You can pick a different folder afterwards.</string>
+    <string name="google_drive_sync_overwrite">Overwrite existing Drive backup</string>
+    <string name="google_drive_sync_overwrite_description">Keep one current backup instead of creating a dated history.</string>
+    <string name="google_drive_sync_run_now">Sync now</string>
+    <string name="google_drive_sync_running">Syncing to Google Drive…</string>
+    <string name="google_drive_sync_last_synced">Last synced: %1$s</string>
+    <string name="google_drive_sync_last_sync_failed">Last sync failed — will retry automatically</string>
+    <string name="google_drive_sync_never_synced">Never synced</string>
+    <string name="google_drive_sync_load_failed">Google Drive sync settings could not be loaded</string>
+    <string name="google_drive_sync_update_failed">Google Drive sync settings could not be saved</string>
+    <string name="google_drive_sync_succeeded">Backup uploaded to Google Drive.</string>
+    <string name="google_drive_sync_failed_transient">Sync failed — will retry automatically.</string>
+    <string name="google_drive_sync_failed_permanent">Sync failed. The folder may have been removed or access revoked — try re-picking the folder.</string>
+    <string name="google_drive_sync_cloud_app_disclaimer">A cloud storage app (Google Drive, Dropbox, Nextcloud, or OneDrive) must be installed on this phone for backups to reach the cloud. Without one, the system folder picker only shows local storage and backups stay on this device.</string>
 </resources>

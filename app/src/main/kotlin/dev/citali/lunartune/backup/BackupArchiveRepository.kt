@@ -17,6 +17,7 @@ import kotlinx.coroutines.sync.withLock
 import dev.citali.lunartune.db.InternalDatabase
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.extensions.zipOutputStream
+import dev.citali.lunartune.googledrive.GoogleDriveSyncRepository
 import dev.citali.lunartune.utils.dataStore
 import java.io.FileInputStream
 import java.io.OutputStream
@@ -159,7 +160,8 @@ class BackupArchiveRepository
             preferences.forEach { (key, value) ->
                 if (
                     key.name !in excludedKeyNames &&
-                    key.name !in ScheduledBackupRepository.NON_PORTABLE_PREFERENCE_KEYS
+                    key.name !in ScheduledBackupRepository.NON_PORTABLE_PREFERENCE_KEYS &&
+                    key.name !in GoogleDriveSyncRepository.NON_PORTABLE_PREFERENCE_KEYS
                 ) {
                     serializer.writePreference(key, value)
                 }

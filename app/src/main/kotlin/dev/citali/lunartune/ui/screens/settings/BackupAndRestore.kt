@@ -9,7 +9,9 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
+import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -92,6 +94,8 @@ import dev.citali.lunartune.viewmodels.BackupRestoreViewModel
 import dev.citali.lunartune.viewmodels.BackupSource
 import dev.citali.lunartune.viewmodels.ScheduledBackupScreenState
 import dev.citali.lunartune.viewmodels.ScheduledBackupUiData
+import dev.citali.lunartune.viewmodels.GoogleDriveSyncScreenState
+import dev.citali.lunartune.viewmodels.GoogleDriveSyncUiData
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -132,10 +136,16 @@ fun BackupAndRestore(
 
     val backupRestoreProgress by viewModel.backupRestoreProgress.collectAsStateWithLifecycle()
     val scheduledBackupState by viewModel.scheduledBackupState.collectAsStateWithLifecycle()
+    val googleDriveSyncState by viewModel.googleDriveSyncState.collectAsStateWithLifecycle()
     val (importLocalFirst, onImportLocalFirstChange) = rememberPreference(ImportSourcePriorityKey, false)
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(viewModel) {
+        viewModel.googleDriveSyncEvent.collect { messageRes ->
+            snackbarHostState.showSnackbar(context.getString(messageRes))
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.backupEvent.collect { message ->
@@ -158,6 +168,22 @@ fun BackupAndRestore(
     val backupDirectoryLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             uri?.let(viewModel::onScheduledBackupDirectorySelected)
+        }
+    val googleDriveFolderLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            viewModel.onGoogleDriveSyncRemoteFolderSelected(
+                uri.toString(),
+                resolveFolderDisplayName(context, uri).ifBlank {
+                    context.getString(R.string.google_drive_sync_remote_folder_default_name)
+                },
+            )
         }
     val restoreLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -271,6 +297,38 @@ fun BackupAndRestore(
                 onDirectoryClick = { backupDirectoryLauncher.launch(null) },
                 onOverwriteChanged = viewModel::onScheduledBackupOverwriteChanged,
             )
+
+            val googleDriveData = (googleDriveSyncState as? GoogleDriveSyncScreenState.Success)?.data
+                ?: GoogleDriveSyncUiData(
+                    enabled = false,
+                    frequency = ScheduledBackupFrequency.WEEKLY,
+                    customDateEpochDay = null,
+                    customDateLabel = null,
+                    remoteFolderName = null,
+                    remoteFolderUri = null,
+                    overwriteExisting = true,
+                    showCustomDatePicker = false,
+                    lastSyncLabel = null,
+                    lastSyncFailed = false,
+                    isSyncing = false,
+                )
+            GoogleDriveSyncSection(
+                data = googleDriveData,
+                enabled = googleDriveSyncState !is GoogleDriveSyncScreenState.Loading,
+                onEnabledChanged = viewModel::onGoogleDriveSyncEnabledChanged,
+                onFrequencySelected = viewModel::onGoogleDriveSyncFrequencySelected,
+                onFolderClick = { googleDriveFolderLauncher.launch(null) },
+                onClearFolderClick = viewModel::onGoogleDriveSyncRemoteFolderCleared,
+                onOverwriteChanged = viewModel::onGoogleDriveSyncOverwriteChanged,
+                onSyncNowClick = viewModel::onGoogleDriveSyncRunNow,
+            )
+            if (googleDriveData.showCustomDatePicker) {
+                ScheduledBackupDatePickerDialog(
+                    selectedEpochDay = googleDriveData.customDateEpochDay,
+                    onDateSelected = viewModel::onGoogleDriveSyncCustomDateSelected,
+                    onDismiss = viewModel::onGoogleDriveSyncCustomDateDismissed,
+                )
+            }
 
             PreferenceGroup(title = stringResource(R.string.internal_service)) {
                 item {
@@ -505,6 +563,91 @@ private fun ScheduledBackupSection(
         }
     }
 }
+
+@Composable
+private fun GoogleDriveSyncSection(
+    data: GoogleDriveSyncUiData,
+    enabled: Boolean,
+    onEnabledChanged: (Boolean) -> Unit,
+    onFrequencySelected: (ScheduledBackupFrequency) -> Unit,
+    onFolderClick: () -> Unit,
+    onClearFolderClick: () -> Unit,
+    onOverwriteChanged: (Boolean) -> Unit,
+    onSyncNowClick: () -> Unit,
+) {
+    PreferenceGroup(title = stringResource(R.string.google_drive_sync)) {
+        item {
+            SwitchPreference(
+                title = { Text(stringResource(R.string.google_drive_sync_enabled)) },
+                description = stringResource(if (data.enabled) R.string.google_drive_sync_enabled_description_on else R.string.google_drive_sync_enabled_description_off),
+                icon = { Icon(painterResource(R.drawable.backup), null) },
+                checked = data.enabled,
+                onCheckedChange = onEnabledChanged,
+                isEnabled = enabled && data.remoteFolderUri != null,
+            )
+        }
+        item {
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.google_drive_sync_remote_folder)) },
+                description = data.remoteFolderName ?: stringResource(R.string.google_drive_sync_remote_folder_not_set),
+                icon = { Icon(painterResource(R.drawable.snippet_folder), null) },
+                onClick = onFolderClick,
+                isEnabled = enabled,
+            )
+        }
+        if (data.remoteFolderUri != null) item {
+            PreferenceEntry(
+                title = { Text(stringResource(R.string.google_drive_sync_clear_folder)) },
+                description = stringResource(R.string.google_drive_sync_clear_folder_description),
+                icon = { Icon(painterResource(R.drawable.delete), null) },
+                onClick = onClearFolderClick,
+                isEnabled = enabled && !data.isSyncing,
+            )
+        }
+        item {
+            EnumListPreference(
+                title = { Text(stringResource(R.string.scheduled_backup_frequency)) },
+                description = data.customDateLabel ?: stringResource(R.string.scheduled_backup_frequency_description),
+                icon = { Icon(painterResource(R.drawable.calendar_today), null) },
+                selectedValue = data.frequency,
+                valueText = { stringResource(it.labelRes) },
+                onValueSelected = onFrequencySelected,
+                isEnabled = enabled && data.enabled,
+            )
+        }
+        item {
+            SwitchPreference(
+                title = { Text(stringResource(R.string.google_drive_sync_overwrite)) },
+                description = stringResource(R.string.google_drive_sync_overwrite_description),
+                icon = { Icon(painterResource(R.drawable.backup), null) },
+                checked = data.overwriteExisting,
+                onCheckedChange = onOverwriteChanged,
+                isEnabled = enabled && data.remoteFolderUri != null,
+            )
+        }
+        item {
+            PreferenceEntry(
+                title = { Text(stringResource(if (data.isSyncing) R.string.google_drive_sync_running else R.string.google_drive_sync_run_now)) },
+                description = when {
+                    data.lastSyncFailed -> stringResource(R.string.google_drive_sync_last_sync_failed)
+                    data.lastSyncLabel != null -> stringResource(R.string.google_drive_sync_last_synced, data.lastSyncLabel)
+                    else -> stringResource(R.string.google_drive_sync_never_synced)
+                },
+                icon = { Icon(painterResource(R.drawable.sync), null) },
+                onClick = onSyncNowClick,
+                isEnabled = enabled && data.remoteFolderUri != null && !data.isSyncing,
+            )
+        }
+        item { Text(stringResource(R.string.google_drive_sync_cloud_app_disclaimer), modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodySmall) }
+    }
+}
+
+private fun resolveFolderDisplayName(context: android.content.Context, treeUri: Uri): String = try {
+    val id = DocumentsContract.getTreeDocumentId(treeUri)
+    val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, id)
+    context.contentResolver.query(documentUri, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0).orEmpty() else "" }.orEmpty()
+} catch (_: Exception) { "" }
 
 @Composable
 private fun ScheduledBackupDatePickerDialog(
