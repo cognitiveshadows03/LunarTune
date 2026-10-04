@@ -37,6 +37,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -380,6 +382,11 @@ fun SettingsScreen(
         }
     }
     val visibleGroups = filteredGroups
+    val collapseThresholdPx = with(LocalDensity.current) { 150.dp.roundToPx() }
+    val imageHeaderCollapsed =
+        effectiveHeaderImageUri.isNotBlank() &&
+            searchQuery.isBlank() &&
+            (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > collapseThresholdPx)
 
     Scaffold(
         modifier =
@@ -417,6 +424,7 @@ fun SettingsScreen(
             }
         },
     ) { innerPadding ->
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier =
@@ -597,6 +605,34 @@ fun SettingsScreen(
                 }
             }
             }
+        }
+
+        if (imageHeaderCollapsed) {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.settings),
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = navController::navigateUp,
+                        onLongClick = navController::backToMain,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = stringResource(R.string.back_button_desc),
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                ),
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        }
         }
     }
 }
