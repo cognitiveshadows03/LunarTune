@@ -96,7 +96,6 @@ import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
 import dev.citali.lunartune.constants.ShowLibraryCardMyTopKey
 import dev.citali.lunartune.constants.ShowLibraryCardOfflineKey
 import dev.citali.lunartune.constants.ShowLibraryCardWatermarksKey
-import dev.citali.lunartune.constants.ShadeLibraryCardsKey
 import dev.citali.lunartune.constants.ShowSpotifyPlaylistsKey
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.playback.queues.ListQueue
@@ -1195,7 +1194,6 @@ private fun MostPlayedAlbumSpotlightCard(
     modifier: Modifier = Modifier,
 ) {
     val (showWatermarks) = rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
-    val (shadeCards) = rememberPreference(ShadeLibraryCardsKey, defaultValue = true)
     val primaryColor = MaterialTheme.colorScheme.primary
     val isDark =
         MaterialTheme.colorScheme.surface.let {
@@ -1203,8 +1201,8 @@ private fun MostPlayedAlbumSpotlightCard(
         }
     val surfaceContainer = MaterialTheme.colorScheme.surfaceContainer
     val spotlightBg =
-        remember(surfaceContainer, primaryColor, isDark, shadeCards) {
-            if (!shadeCards) surfaceContainer else if (isDark) {
+        remember(surfaceContainer, primaryColor, isDark) {
+            if (isDark) {
                 Color(ColorUtils.blendARGB(surfaceContainer.toArgb(), primaryColor.toArgb(), 0.12f))
             } else {
                 Color(ColorUtils.blendARGB(surfaceContainer.toArgb(), primaryColor.toArgb(), 0.08f))
@@ -1391,7 +1389,6 @@ fun ShortcutCard(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val (showWatermarks) = rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
-    val (shadeCards) = rememberPreference(ShadeLibraryCardsKey, defaultValue = true)
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.96f else 1.0f,
@@ -1406,8 +1403,8 @@ fun ShortcutCard(
 
     val surfaceContainerColor = MaterialTheme.colorScheme.surfaceContainer
     val finalBgColor =
-        remember(surfaceContainerColor, iconColor, isDark, shadeCards) {
-            if (!shadeCards) surfaceContainerColor else if (isDark) {
+        remember(surfaceContainerColor, iconColor, isDark) {
+            if (isDark) {
                 Color(ColorUtils.blendARGB(surfaceContainerColor.toArgb(), iconColor.toArgb(), 0.08f))
             } else {
                 Color(ColorUtils.blendARGB(surfaceContainerColor.toArgb(), iconColor.toArgb(), 0.06f))
