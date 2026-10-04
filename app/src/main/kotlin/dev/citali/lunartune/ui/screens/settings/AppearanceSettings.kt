@@ -150,6 +150,7 @@ import dev.citali.lunartune.ui.component.ThumbnailCornerRadiusSelectorButton
 import dev.citali.lunartune.ui.player.StyledPlaybackSlider
 import dev.citali.lunartune.ui.theme.CustomFontLoader
 import dev.citali.lunartune.ui.utils.backToMain
+import dev.citali.lunartune.ui.utils.rememberBannerImageCropper
 import dev.citali.lunartune.utils.isLowRamDevice
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -341,23 +342,9 @@ fun AppearanceSettings(navController: NavController) {
             defaultValue = QuickPicksDisplayMode.CARD,
         )
 
-    fun persistHeaderImage(uri: Uri?, oldValue: String, update: (String) -> Unit) {
-        uri ?: return
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        if (oldValue.isNotBlank() && oldValue != uri.toString()) runCatching {
-            context.contentResolver.releasePersistableUriPermission(Uri.parse(oldValue), Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        update(uri.toString())
-    }
-    val sharedHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
-        persistHeaderImage(it, sharedHeaderImageUri, onSharedHeaderImageUriChange)
-    }
-    val homeHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
-        persistHeaderImage(it, homeHeaderImageUri, onHomeHeaderImageUriChange)
-    }
-    val settingsHeaderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
-        persistHeaderImage(it, settingsHeaderImageUri, onSettingsHeaderImageUriChange)
-    }
+    val pickSharedHeader = rememberBannerImageCropper("shared_header") { onSharedHeaderImageUriChange(it.toString()) }
+    val pickHomeHeader = rememberBannerImageCropper("home_header") { onHomeHeaderImageUriChange(it.toString()) }
+    val pickSettingsHeader = rememberBannerImageCropper("settings_header") { onSettingsHeaderImageUriChange(it.toString()) }
 
     val customFontPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -778,50 +765,57 @@ fun AppearanceSettings(navController: NavController) {
 
             PreferenceGroup(title = stringResource(R.string.screen_header_images)) {
                 item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.shared_header_image)) },
-                        description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected),
-                        icon = { Icon(painterResource(R.drawable.image), null) },
-                        onClick = { sharedHeaderPicker.launch(arrayOf("image/*")) },
+                    Text(
+                        text = stringResource(R.string.screen_header_images_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
-                if (sharedHeaderImageUri.isNotBlank()) item {
+                item {
                     PreferenceEntry(
-                        title = { Text(stringResource(R.string.remove_shared_header_image)) },
-                        icon = { Icon(painterResource(R.drawable.delete), null) },
-                        onClick = { onSharedHeaderImageUriChange("") },
+                        title = { Text(stringResource(R.string.shared_header_image)) },
+                        description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected_cropped),
+                        icon = { Icon(painterResource(R.drawable.image), null) },
+                        onClick = pickSharedHeader,
                     )
                 }
                 item {
                     PreferenceEntry(
                         title = { Text(stringResource(R.string.home_header_image_override)) },
-                        description = stringResource(if (homeHeaderImageUri.isBlank()) R.string.using_shared_header_image else R.string.header_image_selected),
+                        description = stringResource(if (homeHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
                         icon = { Icon(painterResource(R.drawable.home_outlined), null) },
-                        onClick = { homeHeaderPicker.launch(arrayOf("image/*")) },
-                    )
-                }
-                if (homeHeaderImageUri.isNotBlank()) item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.use_shared_header_image)) },
-                        description = stringResource(R.string.home_header_image_override),
-                        icon = { Icon(painterResource(R.drawable.delete), null) },
-                        onClick = { onHomeHeaderImageUriChange("") },
+                        onClick = pickHomeHeader,
                     )
                 }
                 item {
                     PreferenceEntry(
                         title = { Text(stringResource(R.string.settings_header_image_override)) },
-                        description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.using_shared_header_image else R.string.header_image_selected),
+                        description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
                         icon = { Icon(painterResource(R.drawable.settings), null) },
-                        onClick = { settingsHeaderPicker.launch(arrayOf("image/*")) },
+                        onClick = pickSettingsHeader,
                     )
                 }
-                if (settingsHeaderImageUri.isNotBlank()) item {
+                if (homeHeaderImageUri.isNotBlank() || settingsHeaderImageUri.isNotBlank()) item {
                     PreferenceEntry(
-                        title = { Text(stringResource(R.string.use_shared_header_image)) },
-                        description = stringResource(R.string.settings_header_image_override),
+                        title = { Text(stringResource(R.string.reset_header_overrides)) },
+                        description = stringResource(R.string.reset_header_overrides_desc),
+                        icon = { Icon(painterResource(R.drawable.sync), null) },
+                        onClick = {
+                            onHomeHeaderImageUriChange("")
+                            onSettingsHeaderImageUriChange("")
+                        },
+                    )
+                }
+                if (sharedHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.remove_all_header_images)) },
                         icon = { Icon(painterResource(R.drawable.delete), null) },
-                        onClick = { onSettingsHeaderImageUriChange("") },
+                        onClick = {
+                            onSharedHeaderImageUriChange("")
+                            onHomeHeaderImageUriChange("")
+                            onSettingsHeaderImageUriChange("")
+                        },
                     )
                 }
             }

@@ -9,7 +9,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
@@ -142,6 +141,7 @@ import dev.citali.lunartune.ui.component.TextFieldDialog
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
+import dev.citali.lunartune.ui.utils.rememberBannerImageCropper
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.SavedAccount
 import dev.citali.lunartune.utils.Updater
@@ -738,17 +738,14 @@ private fun AccountSummaryCard(
         }
     }
 
-    val bannerPicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            if (uri != null) {
-                coroutineScope.launch {
-                    if (AccountBanner.saveCustom(context, uri)) {
-                        onBannerSourceChange(AccountBanner.SOURCE_CUSTOM)
-                        onBannerUpdatedAtChange(System.currentTimeMillis())
-                    }
-                }
+    val pickAndCropBanner = rememberBannerImageCropper("account_banner_crop") { uri ->
+        coroutineScope.launch {
+            if (AccountBanner.saveCustom(context, uri)) {
+                onBannerSourceChange(AccountBanner.SOURCE_CUSTOM)
+                onBannerUpdatedAtChange(System.currentTimeMillis())
             }
         }
+    }
 
     val bannerModel: Any? =
         when (bannerSource) {
@@ -886,9 +883,7 @@ private fun AccountSummaryCard(
                                 leadingIcon = { Icon(painterResource(R.drawable.image), null) },
                                 onClick = {
                                     showBannerMenu = false
-                                    bannerPicker.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                    )
+                                    pickAndCropBanner()
                                 },
                             )
                             DropdownMenuItem(

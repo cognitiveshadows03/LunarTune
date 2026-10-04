@@ -1294,4 +1294,11 @@
     <string name="header_image_not_selected">Not selected — tap to choose an image</string>
     <string name="library_card_shading">Color shading</string>
     <string name="library_card_shading_desc">Tint library shortcut cards with their accent colors</string>
+    <string name="screen_header_images_desc">Images are cropped to a fixed 16:9 banner before use. Set one shared image, then optionally override either screen.</string>
+    <string name="header_image_selected_cropped">Custom 16:9 banner selected — tap to replace</string>
+    <string name="header_override_shared">Uses the shared banner — tap to choose a separate image</string>
+    <string name="header_override_custom">Separate 16:9 banner selected — tap to replace</string>
+    <string name="reset_header_overrides">Reset screen overrides</string>
+    <string name="reset_header_overrides_desc">Use the shared banner on both Home and Settings</string>
+    <string name="remove_all_header_images">Remove all header images</string>
 </resources>

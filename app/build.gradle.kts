@@ -371,6 +371,7 @@ dependencies {
     implementation(libs.accompanist.lyrics.core)
 
     implementation("org.json:json:20240303")
+    implementation("com.github.yalantis:ucrop:2.2.11")
 
 }
 
