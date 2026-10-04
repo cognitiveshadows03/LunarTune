@@ -52,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -71,6 +72,8 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.DisableBlurKey
+import dev.citali.lunartune.constants.HomeHeaderImageUriKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.extensions.togglePlayPause
 import moe.rukamori.archivetune.innertube.models.AlbumItem
 import moe.rukamori.archivetune.innertube.models.ArtistItem
@@ -90,6 +93,7 @@ import dev.citali.lunartune.ui.menu.YouTubeArtistMenu
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.screens.MoodAndGenresButton
 import dev.citali.lunartune.ui.screens.MoodAndGenresButtonHeight
+import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.SearchDiscoveryScreenState
 import dev.citali.lunartune.viewmodels.SearchDiscoveryTab
@@ -106,6 +110,9 @@ fun SearchScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val (disableBlur) = rememberPreference(DisableBlurKey, false)
+    val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
+    val (homeHeaderImageUri) = rememberPreference(HomeHeaderImageUriKey, "")
+    val effectiveHeaderImageUri = homeHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
     val lazyListState = rememberLazyListState()
@@ -137,7 +144,19 @@ fun SearchScreen(
                     },
                 ),
     ) {
-        if (!disableBlur) {
+        if (effectiveHeaderImageUri.isNotBlank()) {
+            val headerOffset = if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
+            ScreenImageHeader(
+                imageUri = effectiveHeaderImageUri,
+                blendColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .graphicsLayer {
+                        translationY = -headerOffset.toFloat()
+                        alpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
+                    },
+            )
+        } else if (!disableBlur) {
             Box(
                 modifier =
                     Modifier

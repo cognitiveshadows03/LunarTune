@@ -39,9 +39,9 @@ fun ScreenImageHeader(
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = .08f),
-                    .45f to Color.Black.copy(alpha = .16f),
-                    .72f to blendColor.copy(alpha = .42f),
+                    0f to Color.Black.copy(alpha = .30f),
+                    .45f to Color.Black.copy(alpha = .36f),
+                    .72f to blendColor.copy(alpha = .48f),
                     1f to blendColor,
                 ),
             ),

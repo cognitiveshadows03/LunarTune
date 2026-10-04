@@ -72,6 +72,8 @@ import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.ChipSortTypeKey
 import dev.citali.lunartune.constants.DefaultLibraryFilterOrderPreference
 import dev.citali.lunartune.constants.DisableBlurKey
+import dev.citali.lunartune.constants.HomeHeaderImageUriKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.constants.LibraryChipOrderKey
 import dev.citali.lunartune.constants.LibraryFilter
 import dev.citali.lunartune.constants.PlaylistTagOrderKey
@@ -81,6 +83,7 @@ import dev.citali.lunartune.constants.toLibraryFilterOrder
 import dev.citali.lunartune.constants.toPlaylistTagOrder
 import dev.citali.lunartune.db.entities.TagEntity
 import dev.citali.lunartune.ui.component.TagsManagementDialog
+import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -96,6 +99,9 @@ fun LibraryScreen(navController: NavController) {
     val (showTagsInLibrary) = rememberPreference(ShowTagsInLibraryKey, defaultValue = true)
     val (showSpotifyPlaylists) = rememberPreference(ShowSpotifyPlaylistsKey, defaultValue = false)
     val (disableBlur) = rememberPreference(DisableBlurKey, false)
+    val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
+    val (homeHeaderImageUri) = rememberPreference(HomeHeaderImageUriKey, "")
+    val effectiveHeaderImageUri = homeHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val (libraryChipOrderPreference) =
         rememberPreference(
             LibraryChipOrderKey,
@@ -142,7 +148,13 @@ fun LibraryScreen(navController: NavController) {
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        if (!disableBlur) {
+        if (effectiveHeaderImageUri.isNotBlank()) {
+            ScreenImageHeader(
+                imageUri = effectiveHeaderImageUri,
+                blendColor = MaterialTheme.colorScheme.background,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        } else if (!disableBlur) {
             Box(
                 modifier =
                     Modifier
