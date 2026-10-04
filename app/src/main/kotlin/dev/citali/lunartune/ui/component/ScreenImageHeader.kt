@@ -26,6 +26,7 @@ fun ScreenImageHeader(
     imageUri: String,
     height: Dp,
     modifier: Modifier = Modifier,
+    blendColor: Color = Color.Black,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     Box(modifier = modifier.fillMaxWidth().height(height)) {
@@ -41,8 +42,9 @@ fun ScreenImageHeader(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
                     0f to Color.Black.copy(alpha = .08f),
-                    .48f to Color.Black.copy(alpha = .18f),
-                    1f to Color.Black.copy(alpha = .88f),
+                    .45f to Color.Black.copy(alpha = .16f),
+                    .72f to blendColor.copy(alpha = .42f),
+                    1f to blendColor,
                 ),
             ),
         )

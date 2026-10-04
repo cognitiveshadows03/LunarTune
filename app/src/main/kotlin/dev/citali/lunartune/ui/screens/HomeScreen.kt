@@ -43,6 +43,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -316,6 +317,21 @@ private fun HomeContent(
             )
         }
 
+        if (effectiveHeaderImageUri.isNotBlank()) {
+            val headerOffset = if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
+            ScreenImageHeader(
+                imageUri = effectiveHeaderImageUri,
+                height = 300.dp,
+                blendColor = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .graphicsLayer {
+                        translationY = -headerOffset.toFloat()
+                        alpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
+                    },
+            )
+        }
+
         ExpressivePullToRefreshBox(
             isRefreshing = uiState.isRefreshing,
             onRefresh = { onAction(HomeAction.Refresh) },
@@ -343,14 +359,6 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    if (effectiveHeaderImageUri.isNotBlank()) {
-                        item(key = "home_image_header", contentType = "image_header") {
-                            ScreenImageHeader(
-                                imageUri = effectiveHeaderImageUri,
-                                height = 240.dp,
-                            )
-                        }
-                    }
                     if (uiState.showCategoryChips) {
                         item(
                             key = "home_category_chips",

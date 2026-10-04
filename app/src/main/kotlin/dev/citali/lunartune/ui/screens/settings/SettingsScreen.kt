@@ -37,7 +37,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -390,41 +389,32 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            if (effectiveHeaderImageUri.isNotBlank()) {
-                TopAppBar(
-                    title = {},
+            if (effectiveHeaderImageUri.isBlank() || searchQuery.isNotBlank()) {
+                LargeFlexibleTopAppBar(
+                    title = {
+                        Text(
+                            text = stringResource(R.string.settings),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    },
                     navigationIcon = {
-                        IconButton(onClick = navController::navigateUp, onLongClick = navController::backToMain) {
-                            Icon(painterResource(R.drawable.arrow_back), stringResource(R.string.back_button_desc))
+                        IconButton(
+                            onClick = navController::navigateUp,
+                            onLongClick = navController::backToMain,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = stringResource(R.string.back_button_desc),
+                            )
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
-                )
-            } else LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        fontWeight = FontWeight.Bold,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = stringResource(R.string.back_button_desc),
-                        )
-                    }
-                },
-                colors =
-                    TopAppBarDefaults.largeTopAppBarColors(
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     ),
-                scrollBehavior = scrollBehavior,
-            )
+                    scrollBehavior = scrollBehavior,
+                )
+            }
         },
     ) { innerPadding ->
         LazyColumn(
@@ -445,13 +435,28 @@ fun SettingsScreen(
         ) {
             if (effectiveHeaderImageUri.isNotBlank() && searchQuery.isBlank()) {
                 item(key = "settings_image_header", contentType = "image_header") {
-                    ScreenImageHeader(imageUri = effectiveHeaderImageUri, height = 220.dp) {
+                    ScreenImageHeader(
+                        imageUri = effectiveHeaderImageUri,
+                        height = 300.dp,
+                        blendColor = MaterialTheme.colorScheme.surface,
+                    ) {
+                        IconButton(
+                            onClick = navController::navigateUp,
+                            onLongClick = navController::backToMain,
+                            modifier = Modifier.align(Alignment.TopStart).padding(start = 28.dp, top = 46.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.arrow_back),
+                                contentDescription = stringResource(R.string.back_button_desc),
+                                tint = Color.White,
+                            )
+                        }
                         Text(
                             text = stringResource(R.string.settings),
                             color = Color.White,
                             style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.align(Alignment.BottomStart).padding(24.dp),
+                            modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 32.dp),
                         )
                     }
                 }
