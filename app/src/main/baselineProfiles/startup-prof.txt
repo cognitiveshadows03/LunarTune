@@ -1,0 +1,55 @@
+# LunarTune startup profile.
+#
+# This is intentionally smaller than baseline-prof.txt. It covers only cold-start,
+# first composition, the initial Home/Search/Library destinations, navigation chrome,
+# image loading, and the player connection restored during launch. Keeping this set
+# focused lets AGP place startup-critical code together in the primary DEX instead of
+# pulling every settings/player class into the startup layout.
+
+# Application and activity lifecycle
+HSPLdev/citali/lunartune/App;->**(**)**
+Ldev/citali/lunartune/App**;
+HSPLdev/citali/lunartune/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLdev/citali/lunartune/MainActivity;->onStart()V
+HSPLdev/citali/lunartune/MainActivity;->onResume()V
+HSPLdev/citali/lunartune/MainActivity;->**(**)**
+Ldev/citali/lunartune/MainActivity**;
+Ldev/citali/lunartune/AnimationPreferencesKt;
+
+# First Compose tree, theme and navigation
+HSPLdev/citali/lunartune/ui/theme/ThemeKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/HomeScreenKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/SearchScreenKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/library/LibraryScreenKt;->**(**)**
+Ldev/citali/lunartune/ui/screens/Screens**;
+Ldev/citali/lunartune/ui/screens/NavigationBuilderKt;
+Ldev/citali/lunartune/ui/screens/HomeScreenKt;
+Ldev/citali/lunartune/ui/screens/SearchScreenKt;
+Ldev/citali/lunartune/ui/screens/library/LibraryScreenKt;
+Ldev/citali/lunartune/ui/theme/**;
+
+# Startup view models and repositories
+HSPLdev/citali/lunartune/viewmodels/HomeViewModel;->**(**)**
+HSPLdev/citali/lunartune/viewmodels/LibraryViewModel;->**(**)**
+Ldev/citali/lunartune/home/**;
+Ldev/citali/lunartune/library/**;
+
+# Navigation chrome and restored mini-player
+HSPLdev/citali/lunartune/ui/component/CapsuleNavigationBarKt;->**(**)**
+HSPLdev/citali/lunartune/ui/component/FloatingNavigationToolbarKt;->**(**)**
+HSPLdev/citali/lunartune/ui/player/MiniPlayerKt;->**(**)**
+Ldev/citali/lunartune/ui/component/CapsuleNavigationBarKt;
+Ldev/citali/lunartune/ui/component/FloatingNavigationToolbarKt;
+Ldev/citali/lunartune/ui/player/MiniPlayerKt;
+
+# Database and playback state touched while restoring the session
+HSPLdev/citali/lunartune/playback/PlayerConnection;->**(**)**
+Ldev/citali/lunartune/playback/PlayerConnection**;
+Ldev/citali/lunartune/models/PersistPlayerState**;
+Ldev/citali/lunartune/models/PersistQueue**;
+Ldev/citali/lunartune/db/MusicDatabase**;
+Ldev/citali/lunartune/db/InternalDatabase**;
+
+# Image pipeline used by the first visible list
+Lcoil3/**;

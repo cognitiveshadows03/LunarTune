@@ -40,9 +40,14 @@ HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
 Ldev/citali/lunartune/ui/screens/**;
 
 # ---- Home screen ------------------------------------------------------------
+# HomeScreen and the main SearchScreen live directly in ui/screens in LunarTune,
+# not in ArchiveTune's old ui/screens/home package.
 HSPLdev/citali/lunartune/viewmodels/HomeViewModel;->**(**)**
-HSPLdev/citali/lunartune/ui/screens/home/**;->**(**)**
-Ldev/citali/lunartune/ui/screens/home/**;
+HSPLdev/citali/lunartune/ui/screens/HomeScreenKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/SearchScreenKt;->**(**)**
+HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
+Ldev/citali/lunartune/ui/screens/HomeScreenKt;
+Ldev/citali/lunartune/ui/screens/SearchScreenKt;
 
 # ---- Library / playlists / search ------------------------------------------
 HSPLdev/citali/lunartune/viewmodels/**;->**(**)**
