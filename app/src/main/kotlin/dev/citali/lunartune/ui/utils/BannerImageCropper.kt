@@ -41,7 +41,6 @@ fun rememberBannerImageCropper(
             setHideBottomControls(false)
             setToolbarTitle("Crop banner")
             setToolbarColor(surface)
-            setStatusBarColor(surface)
             setActiveControlsWidgetColor(primary)
             setCompressionQuality(92)
         }
