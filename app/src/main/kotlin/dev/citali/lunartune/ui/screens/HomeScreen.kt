@@ -321,7 +321,6 @@ private fun HomeContent(
             val headerOffset = if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
-                height = 300.dp,
                 blendColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                     .align(Alignment.TopCenter)

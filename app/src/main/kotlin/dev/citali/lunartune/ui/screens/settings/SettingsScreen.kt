@@ -437,8 +437,7 @@ fun SettingsScreen(
                 item(key = "settings_image_header", contentType = "image_header") {
                     ScreenImageHeader(
                         imageUri = effectiveHeaderImageUri,
-                        height = 300.dp,
-                        blendColor = MaterialTheme.colorScheme.surface,
+                                blendColor = MaterialTheme.colorScheme.surface,
                     ) {
                         IconButton(
                             onClick = navController::navigateUp,

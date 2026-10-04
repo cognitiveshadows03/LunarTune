@@ -11,25 +11,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 
 /** Scrollable ROM-inspired image header with a readability scrim. */
 @Composable
 fun ScreenImageHeader(
     imageUri: String,
-    height: Dp,
     modifier: Modifier = Modifier,
     blendColor: Color = Color.Black,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
-    Box(modifier = modifier.fillMaxWidth().height(height)) {
+    Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         AsyncImage(
             model = imageUri,
             contentDescription = null,

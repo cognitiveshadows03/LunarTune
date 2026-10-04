@@ -26,6 +26,7 @@ fun rememberBannerImageCropper(
 ): () -> Unit {
     val context = LocalContext.current
     val primary = MaterialTheme.colorScheme.primary.toArgb()
+    val onSurface = MaterialTheme.colorScheme.onSurface.toArgb()
     val surface = MaterialTheme.colorScheme.surface.toArgb()
     val cropLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -41,6 +42,8 @@ fun rememberBannerImageCropper(
             setHideBottomControls(false)
             setToolbarTitle("Crop banner")
             setToolbarColor(surface)
+            setToolbarWidgetColor(onSurface)
+            setRootViewBackgroundColor(surface)
             setActiveControlsWidgetColor(primary)
             setCompressionQuality(92)
         }
