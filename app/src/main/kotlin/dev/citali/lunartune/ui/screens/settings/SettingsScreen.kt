@@ -61,10 +61,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.request.ImageRequest
 import androidx.navigation.NavController
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
+import dev.citali.lunartune.constants.AccountBannerSourceKey
+import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.ui.component.IconButton
@@ -73,6 +79,7 @@ import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.Updater
 import dev.citali.lunartune.utils.rememberPreference
+import dev.citali.lunartune.viewmodels.HomeViewModel
 
 
 private fun searchableSettingsRoute(parentKey: String, scrollKey: String?): String? {
@@ -113,6 +120,24 @@ fun SettingsScreen(
     val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
     val (settingsHeaderImageUri) = rememberPreference(SettingsHeaderImageUriKey, "")
     val effectiveHeaderImageUri = settingsHeaderImageUri.ifBlank { sharedHeaderImageUri }
+    val (accountBannerSource) = rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
+    val (accountBannerUpdatedAt) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
+    val (accountYouTubeBannerUrl) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val accountViewModel: HomeViewModel = hiltViewModel()
+    val accountImageUrl by accountViewModel.accountImageUrl.collectAsStateWithLifecycle()
+    val accountRowBannerModel: Any? =
+        when (accountBannerSource) {
+            AccountBanner.SOURCE_CUSTOM ->
+                AccountBanner.customFile(context).takeIf { it.exists() }?.let { file ->
+                    ImageRequest.Builder(context)
+                        .data(file)
+                        .memoryCacheKey("settings_account_banner_$accountBannerUpdatedAt")
+                        .diskCacheKey("settings_account_banner_$accountBannerUpdatedAt")
+                        .build()
+                }
+            AccountBanner.SOURCE_YOUTUBE -> accountYouTubeBannerUrl.takeIf { it.isNotBlank() }
+            else -> null
+        }
     val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     val listState = rememberLazyListState()
 
@@ -596,6 +621,8 @@ fun SettingsScreen(
                         item = settingsItem,
                         index = index,
                         count = group.items.size,
+                        backgroundModel = accountRowBannerModel.takeIf { settingsItem.key == "account" },
+                        iconImageModel = accountImageUrl.takeIf { settingsItem.key == "account" && !it.isNullOrBlank() },
                         modifier =
                             Modifier
                                 .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -545,6 +547,8 @@ fun SettingsSegmentedItem(
     index: Int,
     count: Int,
     modifier: Modifier = Modifier,
+    backgroundModel: Any? = null,
+    iconImageModel: Any? = null,
 ) {
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
@@ -589,12 +593,27 @@ fun SettingsSegmentedItem(
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 88.dp)
-                    .padding(horizontal = 22.dp, vertical = 14.dp),
+        Box {
+            if (backgroundModel != null) {
+                AsyncImage(
+                    model = backgroundModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .background(Color.Black.copy(alpha = 0.52f)),
+                )
+            }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 88.dp)
+                        .padding(horizontal = 22.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -605,7 +624,14 @@ fun SettingsSegmentedItem(
                         .background(effectiveAccent),
                 contentAlignment = Alignment.Center,
             ) {
-                if (item.showUpdateIndicator) {
+                if (iconImageModel != null) {
+                    AsyncImage(
+                        model = iconImageModel,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else if (item.showUpdateIndicator) {
                     BadgedBox(
                         badge = {
                             Badge(
@@ -641,7 +667,7 @@ fun SettingsSegmentedItem(
                     text = item.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (backgroundModel != null) Color.White else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -650,7 +676,7 @@ fun SettingsSegmentedItem(
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (backgroundModel != null) Color.White.copy(alpha = 0.86f) else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -672,6 +698,7 @@ fun SettingsSegmentedItem(
                 }
             }
         }
+    }
     }
 }
 
