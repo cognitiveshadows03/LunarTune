@@ -817,6 +817,56 @@ object ThemePalettes {
             neutral = Color(0xFFFF0000),
         )
 
+    val Monochrome =
+        ThemePalette(
+            id = "monochrome",
+            nameResId = R.string.palette_monochrome,
+            primary = Color(0xFF8E8E93),
+            secondary = Color(0xFF737373),
+            tertiary = Color(0xFFA3A3A3),
+            neutral = Color(0xFF808080),
+        )
+
+    val LunarEclipse =
+        ThemePalette(
+            id = "lunar_eclipse",
+            nameResId = R.string.palette_lunar_eclipse,
+            primary = Color(0xFFB7A7FF),
+            secondary = Color(0xFF7D6BB3),
+            tertiary = Color(0xFFE2DCFF),
+            neutral = Color(0xFF77727F),
+        )
+
+    val Nord =
+        ThemePalette(
+            id = "nord",
+            nameResId = R.string.palette_nord,
+            primary = Color(0xFF88C0D0),
+            secondary = Color(0xFF81A1C1),
+            tertiary = Color(0xFFA3BE8C),
+            neutral = Color(0xFF4C566A),
+        )
+
+    val Dracula =
+        ThemePalette(
+            id = "dracula",
+            nameResId = R.string.palette_dracula,
+            primary = Color(0xFFBD93F9),
+            secondary = Color(0xFFFF79C6),
+            tertiary = Color(0xFF8BE9FD),
+            neutral = Color(0xFF6272A4),
+        )
+
+    val Solarized =
+        ThemePalette(
+            id = "solarized",
+            nameResId = R.string.palette_solarized,
+            primary = Color(0xFF268BD2),
+            secondary = Color(0xFF2AA198),
+            tertiary = Color(0xFFB58900),
+            neutral = Color(0xFF657B83),
+        )
+
     val allPalettes: List<ThemePalette> =
         listOf(
             Default,
@@ -887,6 +937,11 @@ object ThemePalettes {
             Aurora,
             Candy,
             Rainbow,
+            Monochrome,
+            LunarEclipse,
+            Nord,
+            Dracula,
+            Solarized,
         )
 
     fun findByPrimaryColor(colorHex: String): ThemePalette? = allPalettes.find { it.primary.toHexString() == colorHex }

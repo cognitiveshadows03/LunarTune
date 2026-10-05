@@ -876,16 +876,17 @@ private fun SpeedDialRandomTile(
                 .combinedClickable(onClick = onClick),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                repeat(3) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = CircleShape,
-                        modifier = Modifier.size(18.dp),
-                    ) {}
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                repeat(2) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                        repeat(2) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primary,
+                                shape = CircleShape,
+                                modifier = Modifier.size(16.dp),
+                            ) {}
+                        }
+                    }
                 }
             }
         }

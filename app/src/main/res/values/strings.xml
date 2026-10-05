@@ -1299,4 +1299,9 @@
     <string name="reset_header_overrides_desc">Use the shared banner on both Home and Settings</string>
     <string name="remove_all_header_images">Remove all header images</string>
     <string name="banner_image_too_large">Banner images and GIFs must be 20 MB or smaller</string>
+    <string name="palette_monochrome">Monochrome</string>
+    <string name="palette_lunar_eclipse">Lunar Eclipse</string>
+    <string name="palette_nord">Nord</string>
+    <string name="palette_dracula">Dracula</string>
+    <string name="palette_solarized">Solarized</string>
 </resources>
