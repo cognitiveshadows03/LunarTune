@@ -760,55 +760,6 @@ fun AppearanceSettings(navController: NavController) {
                 }
             }
 
-            PreferenceGroup(title = stringResource(R.string.screen_header_images)) {
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.shared_header_image)) },
-                        description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected_cropped),
-                        icon = { Icon(painterResource(R.drawable.image), null) },
-                        onClick = pickSharedHeader,
-                    )
-                }
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.home_header_image_override)) },
-                        description = stringResource(if (homeHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
-                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
-                        onClick = pickHomeHeader,
-                    )
-                }
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.settings_header_image_override)) },
-                        description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
-                        icon = { Icon(painterResource(R.drawable.settings), null) },
-                        onClick = pickSettingsHeader,
-                    )
-                }
-                if (homeHeaderImageUri.isNotBlank() || settingsHeaderImageUri.isNotBlank()) item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.reset_header_overrides)) },
-                        description = stringResource(R.string.reset_header_overrides_desc),
-                        icon = { Icon(painterResource(R.drawable.sync), null) },
-                        onClick = {
-                            onHomeHeaderImageUriChange("")
-                            onSettingsHeaderImageUriChange("")
-                        },
-                    )
-                }
-                if (sharedHeaderImageUri.isNotBlank()) item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.remove_all_header_images)) },
-                        icon = { Icon(painterResource(R.drawable.delete), null) },
-                        onClick = {
-                            onSharedHeaderImageUriChange("")
-                            onHomeHeaderImageUriChange("")
-                            onSettingsHeaderImageUriChange("")
-                        },
-                    )
-                }
-            }
-
             PreferenceGroup(title = stringResource(R.string.player)) {
                 item {
                     EnumListPreference(
@@ -1149,6 +1100,55 @@ fun AppearanceSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.image), null) },
                         checked = showLibraryCardWatermarks,
                         onCheckedChange = onShowLibraryCardWatermarksChange,
+                    )
+                }
+            }
+
+            PreferenceGroup(title = stringResource(R.string.screen_header_images)) {
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.shared_header_image)) },
+                        description = stringResource(if (sharedHeaderImageUri.isBlank()) R.string.header_image_not_selected else R.string.header_image_selected_cropped),
+                        icon = { Icon(painterResource(R.drawable.image), null) },
+                        onClick = pickSharedHeader,
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.home_header_image_override)) },
+                        description = stringResource(if (homeHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
+                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
+                        onClick = pickHomeHeader,
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.settings_header_image_override)) },
+                        description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
+                        icon = { Icon(painterResource(R.drawable.settings), null) },
+                        onClick = pickSettingsHeader,
+                    )
+                }
+                if (homeHeaderImageUri.isNotBlank() || settingsHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.reset_header_overrides)) },
+                        description = stringResource(R.string.reset_header_overrides_desc),
+                        icon = { Icon(painterResource(R.drawable.sync), null) },
+                        onClick = {
+                            onHomeHeaderImageUriChange("")
+                            onSettingsHeaderImageUriChange("")
+                        },
+                    )
+                }
+                if (sharedHeaderImageUri.isNotBlank()) item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.remove_all_header_images)) },
+                        icon = { Icon(painterResource(R.drawable.delete), null) },
+                        onClick = {
+                            onSharedHeaderImageUriChange("")
+                            onHomeHeaderImageUriChange("")
+                            onSettingsHeaderImageUriChange("")
+                        },
                     )
                 }
             }

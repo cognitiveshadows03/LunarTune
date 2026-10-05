@@ -192,7 +192,7 @@ fun buildSettingsGroups(
                 SettingsChild("Hide scrollbar", "hide_scrollbar", listOf("scrollbar", "scroll bar", "hide scroll", "no scrollbar")),
                 SettingsChild("Default open tab", "default_open_tab", listOf("default tab", "home tab", "start page", "open tab")),
                 SettingsChild("Grid layout", "grid_layout", listOf("grid", "layout", "list view", "artist grid")),
-                SettingsChild("Header images", "screen_header_images", listOf("home header", "settings header", "custom image", "crdroid", "derpfest")),
+                SettingsChild("Page banners", "screen_header_images", listOf("home banner", "settings banner", "page banner", "custom image", "crdroid", "derpfest")),
                 SettingsChild("Show home category chips", "show_home_category_chips", listOf("home chips", "category chips", "home category", "chips")) { SearchResultSwitch(ShowHomeCategoryChipsKey, false) },
                 SettingsChild("Language", "app_language", listOf("language", "app language", "locale")),
             ),

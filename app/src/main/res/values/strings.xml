@@ -1283,7 +1283,7 @@
     <string name="google_drive_sync_failed_permanent">Sync failed. The folder may have been removed or access revoked — try re-picking the folder.</string>
     <string name="google_drive_sync_cloud_app_disclaimer">A cloud storage app (Google Drive, Dropbox, Nextcloud, or OneDrive) must be installed on this phone for backups to reach the cloud. Without one, the system folder picker only shows local storage and backups stay on this device.</string>
 
-    <string name="screen_header_images">Home and Settings headers</string>
+    <string name="screen_header_images">Page banners</string>
     <string name="shared_header_image">Shared header image</string>
     <string name="remove_shared_header_image">Remove shared header image</string>
     <string name="home_header_image_override">Home header image</string>
