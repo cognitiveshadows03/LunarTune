@@ -25,7 +25,6 @@ object ListenBrainzManager {
     private val started = AtomicBoolean(false)
     private var scope: CoroutineScope? = null
     private var job: Job? = null
-    private var lifecycleObserver: Any? = null
     private val httpClient =
         OkHttpClient
             .Builder()

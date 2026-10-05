@@ -159,7 +159,6 @@ import dev.citali.lunartune.viewmodels.PoTokenViewModel
 import java.util.UUID
 
 private val AccountContentMaxWidth = 840.dp
-private val AvatarSize = 72.dp
 private val RowIconSize = 40.dp
 private const val DEFAULT_PO_TOKEN_SOURCE_URL = "https://youtube.com/account"
 
@@ -1613,12 +1612,4 @@ private fun TokenEditorDialog(
             InfoLabel(text = stringResource(R.string.token_adv_login_description))
         },
     )
-}
-
-private fun previewSecureValue(value: String): String {
-    val normalized = value.replace("\n", " ").replace("\r", " ").trim()
-    if (normalized.length <= 76) {
-        return normalized
-    }
-    return normalized.take(52) + "\u2025" + normalized.takeLast(18)
 }

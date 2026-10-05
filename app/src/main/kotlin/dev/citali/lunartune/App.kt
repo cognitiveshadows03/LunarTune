@@ -9,10 +9,8 @@ package dev.citali.lunartune
 
 import android.app.ActivityManager
 import android.app.Application
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -434,16 +432,6 @@ class App :
             }
         } catch (_: Exception) {
         }
-    }
-
-    private fun ensureMainActivityLaunchable() {
-        runCatching {
-            packageManager.setComponentEnabledSetting(
-                ComponentName(this, MainActivity::class.java),
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                PackageManager.DONT_KILL_APP,
-            )
-        }.onFailure(Timber::w)
     }
 
     companion object {

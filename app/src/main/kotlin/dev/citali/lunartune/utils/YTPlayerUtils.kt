@@ -1413,21 +1413,6 @@ object YTPlayerUtils {
             .onFailure { Timber.tag(logTag).e(it, "Failed to fetch metadata") }
     }
 
-    private fun findFormat(
-        playerResponse: PlayerResponse,
-        audioQuality: AudioQuality,
-        connectivityManager: ConnectivityManager,
-        // optional override from user preference; if non-null, use this instead of ConnectivityManager
-        networkMetered: Boolean? = null,
-    ): PlayerResponse.StreamingData.Format? {
-        val isMetered = networkMetered ?: connectivityManager.isActiveNetworkMetered
-        return selectAudioFormatCandidates(
-            playerResponse,
-            audioQuality,
-            isMetered,
-        ).firstOrNull()
-    }
-
     private fun selectAudioFormatCandidates(
         playerResponse: PlayerResponse,
         audioQuality: AudioQuality,
