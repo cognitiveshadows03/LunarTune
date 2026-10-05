@@ -81,6 +81,7 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.analytics.PlaybackStats
 import androidx.media3.exoplayer.analytics.PlaybackStatsListener
@@ -3056,6 +3057,11 @@ class MusicService :
         val shouldContinuePlayback = crossfadePlaybackRequested
 
         var handoffCompleted = false
+        val previousSeekParameters = localPlayer.seekParameters
+        // The incoming player has already decoded this portion of the track. A
+        // sync-point seek can land up to a segment/frame earlier and audibly repeat
+        // the final part of the fade, so handoff seeks must be sample-accurate.
+        localPlayer.setSeekParameters(SeekParameters.EXACT)
         try {
             localPlayer.pauseAtEndOfMediaItems = false
             player.volume = 0f
@@ -3096,6 +3102,7 @@ class MusicService :
             currentMediaMetadata.value = player.getMediaItemAt(targetIndex).metadata
             handoffCompleted = true
         } finally {
+            localPlayer.setSeekParameters(previousSeekParameters)
             if (!handoffCompleted) {
                 crossfadeHandoffInProgress = false
                 crossfadeHandoffProgress = 0f
