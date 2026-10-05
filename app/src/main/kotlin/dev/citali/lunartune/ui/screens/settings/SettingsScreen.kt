@@ -14,6 +14,12 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -607,7 +613,12 @@ fun SettingsScreen(
             }
         }
 
-        if (imageHeaderCollapsed) {
+        AnimatedVisibility(
+            visible = imageHeaderCollapsed,
+            enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { -it },
+            exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { -it },
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
             TopAppBar(
                 title = {
                     Text(
@@ -630,7 +641,6 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surface,
                 ),
-                modifier = Modifier.align(Alignment.TopCenter),
             )
         }
         }
