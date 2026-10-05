@@ -24,10 +24,11 @@ import coil3.compose.AsyncImage
 fun ScreenImageHeader(
     imageUri: String,
     modifier: Modifier = Modifier,
+    aspectRatio: Float = 16f / 9f,
     blendColor: Color = Color.Black,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
-    Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+    Box(modifier = modifier.fillMaxWidth().aspectRatio(aspectRatio)) {
         AsyncImage(
             model = imageUri,
             contentDescription = null,
