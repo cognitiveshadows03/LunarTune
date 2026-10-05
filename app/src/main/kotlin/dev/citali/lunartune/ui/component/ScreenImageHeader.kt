@@ -108,20 +108,33 @@ private fun PersistentGifImage(
             withFrameNanos { frameClock = SystemClock.elapsedRealtime() }
         }
     }
-    Canvas(modifier) {
-        val gif = movie ?: return@Canvas
-        val duration = gif.duration().takeIf { it > 0 } ?: 1_000
-        gif.setTime(((frameClock - epoch) % duration).toInt())
-        val movieWidth = gif.width().coerceAtLeast(1).toFloat()
-        val movieHeight = gif.height().coerceAtLeast(1).toFloat()
-        val scale = maxOf(size.width / movieWidth, size.height / movieHeight)
-        val left = (size.width / scale - movieWidth) / 2f
-        val top = (size.height / scale - movieHeight) / 2f
-        drawContext.canvas.nativeCanvas.run {
-            save()
-            scale(scale, scale)
-            gif.draw(this, left, top)
-            restore()
+    Box(modifier) {
+        // Coil's optimized decoder produces a visible frame quickly on a cold launch.
+        // Keep it underneath only while the persistent-timeline Movie is being decoded,
+        // avoiding the blank banner interval introduced by the custom GIF renderer.
+        if (movie == null) {
+            AsyncImage(
+                model = imageUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            val gif = movie ?: return@Canvas
+            val duration = gif.duration().takeIf { it > 0 } ?: 1_000
+            gif.setTime(((frameClock - epoch) % duration).toInt())
+            val movieWidth = gif.width().coerceAtLeast(1).toFloat()
+            val movieHeight = gif.height().coerceAtLeast(1).toFloat()
+            val scale = maxOf(size.width / movieWidth, size.height / movieHeight)
+            val left = (size.width / scale - movieWidth) / 2f
+            val top = (size.height / scale - movieHeight) / 2f
+            drawContext.canvas.nativeCanvas.run {
+                save()
+                scale(scale, scale)
+                gif.draw(this, left, top)
+                restore()
+            }
         }
     }
 }

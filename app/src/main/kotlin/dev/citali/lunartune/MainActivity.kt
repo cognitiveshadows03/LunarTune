@@ -2450,6 +2450,7 @@ class MainActivity : FragmentActivity() {
                                         onClearUpdateBadge = { latestVersionName = BuildConfig.VERSION_NAME },
                                         homeScrollConnection = homeScrollBehavior.nestedScrollConnection,
                                         searchScrollConnection = searchScrollBehavior.nestedScrollConnection,
+                                        libraryShellHeaderOffset = { topAppBarScrollBehavior.state.heightOffset },
                                         onlineSearchSort = onlineSearchSort,
                                     )
                                 }

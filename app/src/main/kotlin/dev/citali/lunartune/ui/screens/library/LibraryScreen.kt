@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -66,8 +67,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.core.graphics.toColorInt
 import androidx.navigation.NavController
 import kotlinx.coroutines.launch
@@ -96,7 +99,10 @@ internal val LibraryHeaderContentPadding = 64.dp
 internal val LibraryPullToRefreshIndicatorOffset = 0.dp
 
 @Composable
-fun LibraryScreen(navController: NavController) {
+fun LibraryScreen(
+    navController: NavController,
+    shellHeaderOffset: () -> Float = { 0f },
+) {
     val defaultFilter by rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
     val database = LocalDatabase.current
     val (selectedTagIds, onSelectedTagIdsChange) = rememberPlaylistTagFilterState(database)
@@ -207,7 +213,8 @@ fun LibraryScreen(navController: NavController) {
                 Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = AppBarHeight),
+                    .padding(top = AppBarHeight)
+                    .offset { IntOffset(0, shellHeaderOffset().roundToInt()) },
         ) {
             val tabListState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
