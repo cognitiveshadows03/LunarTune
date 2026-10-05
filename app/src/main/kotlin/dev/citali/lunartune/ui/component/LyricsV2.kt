@@ -103,6 +103,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
@@ -207,6 +208,8 @@ fun LyricsV2(
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
     focusAnchorHeight: Dp? = null,
+    /** Enables Apple Music player-only romanization stability work; all other callers keep their defaults. */
+    appleMusicPlayerMode: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -322,9 +325,17 @@ fun LyricsV2(
         }
 
     val entriesWithWords: List<LyricsEntry> = lyricsEntries
+    val hasRomanizedWordTimedLyrics =
+        remember(entriesWithWords, romanizationPreferences) {
+            entriesWithWords.any { entry ->
+                !entry.words.isNullOrEmpty() &&
+                    (providedRomanizedTextForEntry(entry, romanizationPreferences) != null ||
+                        shouldRomanizeLyricsLine(entry.text, romanizationPreferences))
+            }
+        }
 
     // ── Romanization ──
-    LaunchedEffect(entriesWithWords, romanizationPreferences) {
+    LaunchedEffect(entriesWithWords, romanizationPreferences, appleMusicPlayerMode) {
         if (!romanizationPreferences.isEnabled) {
             entriesWithWords.forEach { entry ->
                 if (entry.romanizedTextFlow.value != null) {
@@ -333,6 +344,11 @@ fun LyricsV2(
             }
             return@LaunchedEffect
         }
+
+        // Keep Kuromoji work single-threaded only in the Apple Music player. The regular
+        // lyrics screens keep their existing parallel romanization behavior.
+        val romanizationSemaphore =
+            Semaphore(if (appleMusicPlayerMode) 1 else entriesWithWords.size.coerceAtLeast(1))
 
         entriesWithWords.forEach { entry ->
             val providerRomanized = providedRomanizedTextForEntry(entry, romanizationPreferences)
@@ -351,14 +367,19 @@ fun LyricsV2(
             }
 
             launch {
+                romanizationSemaphore.acquire()
                 val romanized =
                     try {
-                        romanizeLyricsLine(entry.text, romanizationPreferences)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        reportException(e)
-                        null
+                        try {
+                            romanizeLyricsLine(entry.text, romanizationPreferences)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            reportException(e)
+                            null
+                        }
+                    } finally {
+                        romanizationSemaphore.release()
                     }
                 entry.romanizedTextFlow.value = romanized
             }
@@ -371,9 +392,10 @@ fun LyricsV2(
     var playbackPositionMs by remember { mutableLongStateOf(0L) }
     var currentLineIndex by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(entriesWithWords, isSynced, leadMs, lyricsSyncOffset) {
+    LaunchedEffect(entriesWithWords, isSynced, leadMs, lyricsSyncOffset, appleMusicPlayerMode, hasRomanizedWordTimedLyrics) {
         if (!isSynced || entriesWithWords.isEmpty()) return@LaunchedEffect
-        val pollIntervalMs = if (isTtmlFormat) 16L else 50L
+        val pollIntervalMs =
+            if (isTtmlFormat || (appleMusicPlayerMode && hasRomanizedWordTimedLyrics)) 16L else 50L
         while (isActive) {
             val sliderPos = sliderPositionProvider()
             val pos = sliderPos ?: player.currentPosition

@@ -107,6 +107,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Semaphore
 import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
@@ -187,6 +188,8 @@ fun LyricsEnhanced(
     focusAnchorHeight: Dp? = null,
     /** Always pull the active line to the focus point (Apple Music style), not only when it drifts out of view. */
     alwaysFocusActiveLine: Boolean = false,
+    /** Enables Apple Music player-only romanization stability work; all other callers keep their defaults. */
+    appleMusicPlayerMode: Boolean = false,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -288,7 +291,7 @@ fun LyricsEnhanced(
         mutableIntStateOf(0)
     }
 
-    LaunchedEffect(lyricsEntries, romanizationPreferences) {
+    LaunchedEffect(lyricsEntries, romanizationPreferences, appleMusicPlayerMode) {
         syncedLyrics = buildSyncedLyrics(lyricsEntries, isTtmlFormat, emptyMap())
         syncedLyricsRenderVersion += 1
         if (!romanizationPreferences.isEnabled) return@LaunchedEffect
@@ -305,32 +308,42 @@ fun LyricsEnhanced(
             }
         if (toRomanize.isEmpty()) return@LaunchedEffect
 
+        // Kuromoji is CPU-heavy and shared by the romanizer. On the Apple Music player,
+        // serialize line work so a Japanese track does not saturate the Default dispatcher
+        // while the lyrics surface is animating. Other player screens retain full parallelism.
+        val romanizationSemaphore =
+            Semaphore(if (appleMusicPlayerMode) 1 else toRomanize.size.coerceAtLeast(1))
         val jobs =
             toRomanize.map { (index, entry) ->
                 async {
-                    val romanized: List<String?> =
+                    romanizationSemaphore.acquire()
+                    val romanized =
                         try {
-                            if (isTtmlFormat && entry.words != null) {
-                                val mainWordCount = entry.words!!.count { !it.isBackground }
-                                providedRomanizedWordsForEntry(entry, mainWordCount, romanizationPreferences)
-                                    ?: entry.words!!.filter { !it.isBackground }.map { word ->
-                                        romanizeLyricsWordWithLineContext(word.text, entry.text, romanizationPreferences)
-                                    }
-                            } else {
-                                listOf(
-                                    providedRomanizedTextForEntry(entry, romanizationPreferences)
-                                        ?: romanizeLyricsLine(entry.text, romanizationPreferences),
-                                )
+                            try {
+                                if (isTtmlFormat && entry.words != null) {
+                                    val mainWordCount = entry.words!!.count { !it.isBackground }
+                                    providedRomanizedWordsForEntry(entry, mainWordCount, romanizationPreferences)
+                                        ?: entry.words!!.filter { !it.isBackground }.map { word ->
+                                            romanizeLyricsWordWithLineContext(word.text, entry.text, romanizationPreferences)
+                                        }
+                                } else {
+                                    listOf(
+                                        providedRomanizedTextForEntry(entry, romanizationPreferences)
+                                            ?: romanizeLyricsLine(entry.text, romanizationPreferences),
+                                    )
+                                }
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                reportException(e)
+                                if (isTtmlFormat && entry.words != null) {
+                                    List(entry.words!!.count { !it.isBackground }) { null }
+                                } else {
+                                    listOf(null)
+                                }
                             }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            reportException(e)
-                            if (isTtmlFormat && entry.words != null) {
-                                List(entry.words!!.count { !it.isBackground }) { null }
-                            } else {
-                                listOf(null)
-                            }
+                        } finally {
+                            romanizationSemaphore.release()
                         }
                     index to romanized
                 }

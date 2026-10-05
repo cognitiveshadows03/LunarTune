@@ -528,6 +528,7 @@ internal fun AppleMusicPortraitContent(
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
                                 focusAnchorHeight = focusAnchor,
+                                appleMusicPlayerMode = true,
                             )
                         LyricsMode.ENHANCED ->
                             LyricsEnhanced(
@@ -538,6 +539,7 @@ internal fun AppleMusicPortraitContent(
                                 textColorOverride = Color.White,
                                 alwaysFocusActiveLine = true,
                                 focusAnchorHeight = focusAnchor,
+                                appleMusicPlayerMode = true,
                             )
                     }
                 }
