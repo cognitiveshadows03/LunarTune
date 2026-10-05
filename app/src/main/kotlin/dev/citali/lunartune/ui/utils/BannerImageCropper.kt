@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
 import dev.citali.lunartune.R
+import dev.citali.lunartune.storage.BannerStorageManager
 import com.yalantis.ucrop.UCrop
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -40,7 +41,12 @@ fun rememberBannerImageCropper(
     val surface = MaterialTheme.colorScheme.surface.toArgb()
     val cropLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.let(UCrop::getOutput)?.let(onCropped)
+            result.data?.let(UCrop::getOutput)?.let { output ->
+                onCropped(output)
+                scope.launch(Dispatchers.IO) {
+                    BannerStorageManager.trimIfEnabled(context, output.path?.let(::File))
+                }
+            }
         }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
@@ -66,7 +72,10 @@ fun rememberBannerImageCropper(
                     } ?: error("Unable to open GIF")
                     true
                 }.getOrDefault(false)
-                if (copied) withContext(Dispatchers.Main) { onCropped(Uri.fromFile(destination)) }
+                if (copied) {
+                    withContext(Dispatchers.Main) { onCropped(Uri.fromFile(destination)) }
+                    BannerStorageManager.trimIfEnabled(context, destination)
+                }
             }
             return@rememberLauncherForActivityResult
         }

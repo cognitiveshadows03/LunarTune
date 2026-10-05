@@ -1304,4 +1304,12 @@
     <string name="palette_nord">Nord</string>
     <string name="palette_dracula">Dracula</string>
     <string name="palette_solarized">Solarized</string>
+    <string name="banner_storage">Banner storage</string>
+    <string name="max_banner_storage_size">Banner storage limit</string>
+    <string name="banner_storage_usage">Currently using %1$s. Smart Trimmer removes the oldest unused banners above this limit.</string>
+    <string name="clear_banner_storage">Clear banner storage</string>
+    <string name="clear_banner_storage_desc">Delete replaced banners or remove every selected banner</string>
+    <string name="clear_banner_storage_warning">Currently selected Home, Settings, shared, and Account banners are protected by Smart Trimmer. Choose whether to keep them or remove everything.</string>
+    <string name="keep_selected_banners">Keep selected banners</string>
+    <string name="remove_all_banners">Remove all banners</string>
 </resources>

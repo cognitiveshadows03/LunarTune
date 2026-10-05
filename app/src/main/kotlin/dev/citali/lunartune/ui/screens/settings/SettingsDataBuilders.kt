@@ -424,6 +424,7 @@ fun buildSettingsGroups(
                 SettingsChild("Clear canvas cache", "clear_canvas_cache", listOf("clear canvas cache", "delete canvas cache", "wipe canvas cache")),
                 SettingsChild("Storage folder", "storage_folder", listOf("storage path", "storage location", "storage directory")),
                 SettingsChild("Download location", "download_location", listOf("download path", "location", "folder", "directory", "save to")),
+                SettingsChild("Banner storage", "banner_storage", listOf("banner images", "gif storage", "clear banners", "banner limit")),
                 SettingsChild("Smart trimmer", "smart_trimmer", listOf("smart trimmer", "trim cache", "auto clean cache")) { SearchResultSwitch(SmartTrimmerKey, false) },
             ),
         )

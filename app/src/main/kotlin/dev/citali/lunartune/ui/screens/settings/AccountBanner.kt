@@ -22,7 +22,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-internal object AccountBanner {
+object AccountBanner {
     const val SOURCE_YOUTUBE = "youtube"
     const val SOURCE_CUSTOM = "custom"
     const val SOURCE_NONE = "none"

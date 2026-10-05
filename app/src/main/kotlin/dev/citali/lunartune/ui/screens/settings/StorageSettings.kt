@@ -52,6 +52,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,16 +69,19 @@ import coil3.imageLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.MaxCanvasCacheSizeKey
+import dev.citali.lunartune.constants.MaxBannerStorageSizeKey
 import dev.citali.lunartune.constants.MaxImageCacheSizeKey
 import dev.citali.lunartune.constants.MaxSongCacheSizeKey
 import dev.citali.lunartune.constants.SmartTrimmerKey
 import dev.citali.lunartune.extensions.directorySizeBytes
 import dev.citali.lunartune.extensions.tryOrNull
+import dev.citali.lunartune.storage.BannerStorageManager
 import dev.citali.lunartune.storage.StorageFolderKind
 import dev.citali.lunartune.storage.StorageLocationKind
 import dev.citali.lunartune.storage.StorageLocationRepository
@@ -108,6 +112,7 @@ fun StorageSettings(
     viewModel: StorageSettingsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val imageDiskCache = context.imageLoader.diskCache ?: return
     val playerCache = LocalPlayerConnection.current?.service?.playerCache ?: return
     val downloadCache = LocalPlayerConnection.current?.service?.downloadCache ?: return
@@ -170,14 +175,21 @@ fun StorageSettings(
             key = MaxCanvasCacheSizeKey,
             defaultValue = 256,
         )
+    val (maxBannerStorageSize, onMaxBannerStorageSizeChange) =
+        rememberPreference(
+            key = MaxBannerStorageSizeKey,
+            defaultValue = 100,
+        )
     var clearCacheDialog by remember { mutableStateOf(false) }
     var clearDownloads by remember { mutableStateOf(false) }
     var clearImageCacheDialog by remember { mutableStateOf(false) }
     var clearCanvasCacheDialog by remember { mutableStateOf(false) }
+    var clearBannerStorageDialog by remember { mutableStateOf(false) }
     var imageCacheSize by remember { mutableLongStateOf(0L) }
     var playerCacheSize by remember { mutableLongStateOf(0L) }
     var downloadCacheSize by remember { mutableLongStateOf(0L) }
     var canvasCacheBytes by remember { mutableLongStateOf(0L) }
+    var bannerStorageBytes by remember { mutableLongStateOf(0L) }
     val isCacheClearInProgress =
         (screenState as? StorageSettingsScreenState.Success)
             ?.model
@@ -238,10 +250,20 @@ fun StorageSettings(
             viewModel.clearSongCache(showFeedback = false)
         }
     }
+    LaunchedEffect(smartTrimmer, maxBannerStorageSize) {
+        withContext(Dispatchers.IO) { BannerStorageManager.trimIfEnabled(context) }
+        bannerStorageBytes = withContext(Dispatchers.IO) { BannerStorageManager.sizeBytes(context) }
+    }
     LaunchedEffect(maxCanvasCacheSize) {
         CanvasArtworkPlaybackCache.setMaxSize(maxCanvasCacheSize)
         if (maxCanvasCacheSize == 0) {
             viewModel.clearCanvasCache(showFeedback = false)
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (isActive) {
+            bannerStorageBytes = withContext(Dispatchers.IO) { BannerStorageManager.sizeBytes(context) }
+            delay(StorageRefreshIntervalMillis)
         }
     }
     LaunchedEffect(imageDiskCache, isCacheClearInProgress) {
@@ -539,6 +561,71 @@ fun StorageSettings(
                         title = { Text(stringResource(R.string.clear_canvas_cache)) },
                         onClick = { clearCanvasCacheDialog = true },
                     )
+                }
+            }
+
+            PreferenceGroup(title = stringResource(R.string.banner_storage)) {
+                item {
+                    ListPreference(
+                        title = { Text(stringResource(R.string.max_banner_storage_size)) },
+                        description = stringResource(
+                            R.string.banner_storage_usage,
+                            formatFileSize(bannerStorageBytes),
+                        ),
+                        icon = { Icon(painterResource(R.drawable.image), null) },
+                        selectedValue = maxBannerStorageSize,
+                        values = listOf(25, 50, 100, 200),
+                        valueText = { formatFileSize(cacheSizeMegabytesToBytes(it)) },
+                        onValueSelected = onMaxBannerStorageSizeChange,
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.clear_banner_storage)) },
+                        description = stringResource(R.string.clear_banner_storage_desc),
+                        icon = { Icon(painterResource(R.drawable.delete), null) },
+                        onClick = { clearBannerStorageDialog = true },
+                    )
+                }
+            }
+
+            if (clearBannerStorageDialog) {
+                BasicAlertDialog(onDismissRequest = { clearBannerStorageDialog = false }) {
+                    Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.padding(24.dp),
+                        ) {
+                            Text(stringResource(R.string.clear_banner_storage), style = MaterialTheme.typography.headlineSmall)
+                            Text(stringResource(R.string.clear_banner_storage_warning))
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) { BannerStorageManager.clearUnused(context) }
+                                        bannerStorageBytes = withContext(Dispatchers.IO) { BannerStorageManager.sizeBytes(context) }
+                                        clearBannerStorageDialog = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.keep_selected_banners)) }
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        withContext(Dispatchers.IO) { BannerStorageManager.clearAll(context) }
+                                        bannerStorageBytes = 0L
+                                        clearBannerStorageDialog = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.remove_all_banners)) }
+                            Button(
+                                onClick = { clearBannerStorageDialog = false },
+                                colors = ButtonDefaults.textButtonColors(),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(android.R.string.cancel)) }
+                        }
+                    }
                 }
             }
 
