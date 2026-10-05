@@ -821,10 +821,12 @@ object ThemePalettes {
         ThemePalette(
             id = "monochrome",
             nameResId = R.string.palette_monochrome,
-            primary = Color(0xFF8E8E93),
-            secondary = Color(0xFF737373),
-            tertiary = Color(0xFFA3A3A3),
-            neutral = Color(0xFF808080),
+            // Slightly cool neutral greys avoid the harsh pure black-and-white
+            // Material monochrome scheme while retaining an achromatic appearance.
+            primary = Color(0xFF92979C),
+            secondary = Color(0xFF7E8388),
+            tertiary = Color(0xFFA8ADB2),
+            neutral = Color(0xFF85898D),
         )
 
     val LunarEclipse =
