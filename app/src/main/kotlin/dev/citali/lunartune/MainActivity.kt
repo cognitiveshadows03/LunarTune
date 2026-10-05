@@ -1317,7 +1317,6 @@ class MainActivity : FragmentActivity() {
                         appBarScrollBehavior(
                             canScroll = {
                                 navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == false &&
-                                    navBackStackEntry?.destination?.route != Screens.Library.route &&
                                     !playerBottomSheetState.isExpandedOrExpanding
                             },
                         )
@@ -1685,8 +1684,6 @@ class MainActivity : FragmentActivity() {
                                                 // sub-screens use the shared shell behavior.
                                                 else -> topAppBarScrollBehavior
                                             }
-                                        val isLibraryRoute = navBackStackEntry?.destination?.route == Screens.Library.route
-
                                         // Rigid slide (Step 3): the header translates as a block via
                                         // Modifier.offset while the M3 TopAppBar itself gets
                                         // scrollBehavior = null (below), so it never collapses or
@@ -1702,7 +1699,7 @@ class MainActivity : FragmentActivity() {
                                         // its limit on entry (not just the first-measured one).
                                         var headerHeightPx by remember { mutableStateOf(0) }
                                         LaunchedEffect(currentScrollBehavior, headerHeightPx) {
-                                            if (headerHeightPx > 0 && !isLibraryRoute) {
+                                            if (headerHeightPx > 0) {
                                                 val limit = -headerHeightPx.toFloat()
                                                 val state = currentScrollBehavior.state
                                                 if (state.heightOffsetLimit != limit) {
@@ -1720,13 +1717,7 @@ class MainActivity : FragmentActivity() {
                                                     }.offset {
                                                         IntOffset(
                                                             x = 0,
-                                                            y =
-                                                                if (isLibraryRoute) {
-                                                                    0
-                                                                } else {
-                                                                    currentScrollBehavior.state.heightOffset
-                                                                        .roundToInt()
-                                                                },
+                                                            y = currentScrollBehavior.state.heightOffset.roundToInt(),
                                                         )
                                                     },
                                         ) {
@@ -1743,18 +1734,9 @@ class MainActivity : FragmentActivity() {
                                                     modifier =
                                                         Modifier
                                                             .offset {
-                                                                if (isLibraryRoute) {
-                                                                    // Library owns its scroll; the shell gradient
-                                                                    // stays static (mirrors the header Box above and
-                                                                    // matches upstream, which ships a static Library
-                                                                    // gradient). Keeping it rendered avoids the
-                                                                    // Libraryâ†’Home predictive-back scrim pop.
-                                                                    IntOffset(x = 0, y = 0)
-                                                                } else {
-                                                                    val raw = currentScrollBehavior.state.heightOffset
-                                                                    val clamped = raw.coerceAtLeast(-appBarHeightPx)
-                                                                    IntOffset(x = 0, y = (clamped - raw).roundToInt())
-                                                                }
+                                                                val raw = currentScrollBehavior.state.heightOffset
+                                                                val clamped = raw.coerceAtLeast(-appBarHeightPx)
+                                                                IntOffset(x = 0, y = (clamped - raw).roundToInt())
                                                             }.fillMaxWidth()
                                                             .height(
                                                                 AppBarHeight +
