@@ -8,6 +8,8 @@ package dev.citali.lunartune.ui.utils
 
 import android.app.Activity
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -16,11 +18,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalContext
+import dev.citali.lunartune.R
 import com.yalantis.ucrop.UCrop
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val MAX_BANNER_IMPORT_BYTES = 20L * 1024L * 1024L
 
 /** Crops static images to 16:9 and preserves animated GIFs for display-time cropping. */
 @Composable
@@ -40,6 +45,13 @@ fun rememberBannerImageCropper(
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
         source ?: return@rememberLauncherForActivityResult
+        val sourceSize = context.contentResolver.query(source, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst() && !cursor.isNull(0)) cursor.getLong(0) else null
+        } ?: runCatching { context.contentResolver.openAssetFileDescriptor(source, "r")?.use { it.length } }.getOrNull()
+        if (sourceSize != null && sourceSize > MAX_BANNER_IMPORT_BYTES) {
+            Toast.makeText(context, context.getString(R.string.banner_image_too_large), Toast.LENGTH_LONG).show()
+            return@rememberLauncherForActivityResult
+        }
         val directory = File(context.filesDir, "cropped_banners").apply { mkdirs() }
         val mimeType = context.contentResolver.getType(source).orEmpty()
         val isGif = mimeType.equals("image/gif", ignoreCase = true) || source.toString().substringBefore('?').endsWith(".gif", ignoreCase = true)

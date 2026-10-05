@@ -1298,4 +1298,5 @@
     <string name="reset_header_overrides">Reset screen overrides</string>
     <string name="reset_header_overrides_desc">Use the shared banner on both Home and Settings</string>
     <string name="remove_all_header_images">Remove all header images</string>
+    <string name="banner_image_too_large">Banner images and GIFs must be 20 MB or smaller</string>
 </resources>
