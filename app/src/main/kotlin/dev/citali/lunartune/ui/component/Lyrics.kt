@@ -530,7 +530,6 @@ fun Lyrics(
         remember(lyrics) {
             !lyrics.isNullOrEmpty() && (isLineSyncedLrc(lyrics) || isTtml(lyrics))
         }
-    val hasWordTimedLyrics = remember(lines) { lines.any { !it.words.isNullOrEmpty() } }
 
     val lyricsBaseColor = if (useDarkTheme || playerBackground != PlayerBackgroundStyle.DEFAULT) Color.White else Color.Black
     val lyricsGlowColor = if (useDarkTheme || playerBackground != PlayerBackgroundStyle.DEFAULT) Color.White else Color.Black
@@ -652,15 +651,7 @@ fun Lyrics(
                 delay(250L)
                 continue
             }
-            if (isTtmlLyrics ||
-                (!animationsDisabled &&
-                    lyricsAnimationStyle == LyricsAnimationStyle.APPLE &&
-                    romanizationPreferences.isEnabled &&
-                    hasWordTimedLyrics)
-            ) {
-                // Word-progress coloring is interpolated from this position. A 50 ms
-                // polling interval is visibly choppy for Apple-style lyrics, so use
-                // Compose's frame clock when animated romanized word lyrics are shown.
+            if (isTtmlLyrics) {
                 withFrameNanos { }
             } else {
                 delay(50L)
@@ -2148,11 +2139,6 @@ fun Lyrics(
 
                                             if (hasWordTimings && item.words != null && isActiveLine &&
                                                 effectiveAnimationStyle != LyricsAnimationStyle.NONE &&
-                                                // Rebuilding a multi-span romanized line on every playback tick
-                                                // causes visible layout jitter in the Apple animation, especially
-                                                // for Japanese lyrics. Keep its secondary line typographically
-                                                // stable while the primary lyric retains the Apple word animation.
-                                                effectiveAnimationStyle != LyricsAnimationStyle.APPLE &&
                                                 !reduceMotionDuringScroll
                                             ) {
                                                 val romanizedWords = romanized.split(" ")
