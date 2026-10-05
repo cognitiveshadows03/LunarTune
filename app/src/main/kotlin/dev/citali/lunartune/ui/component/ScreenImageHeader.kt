@@ -75,6 +75,7 @@ fun ScreenImageHeader(
 
 
 private val gifAnimationEpochs = ConcurrentHashMap<String, Long>()
+private val gifMovieCache = ConcurrentHashMap<String, Movie>()
 
 /** Draws GIF frames against a process-wide clock so navigation does not restart animation. */
 @Composable
@@ -83,15 +84,19 @@ private fun PersistentGifImage(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val movie by produceState<Movie?>(null, imageUri) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val uri = Uri.parse(imageUri)
-                when (uri.scheme) {
-                    "file" -> Movie.decodeFile(File(requireNotNull(uri.path)).absolutePath)
-                    else -> context.contentResolver.openInputStream(uri)?.use(Movie::decodeStream)
-                }
-            }.getOrNull()
+    val movie by produceState<Movie?>(gifMovieCache[imageUri], imageUri) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                runCatching {
+                    val uri = Uri.parse(imageUri)
+                    val decoded =
+                        when (uri.scheme) {
+                            "file" -> Movie.decodeFile(File(requireNotNull(uri.path)).absolutePath)
+                            else -> context.contentResolver.openInputStream(uri)?.use(Movie::decodeStream)
+                        }
+                    decoded?.also { gifMovieCache[imageUri] = it }
+                }.getOrNull()
+            }
         }
     }
     val epoch = remember(imageUri) {
