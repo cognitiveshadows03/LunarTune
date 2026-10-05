@@ -46,7 +46,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -58,10 +57,6 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -152,31 +147,11 @@ fun LibraryScreen(
     val configuration = LocalConfiguration.current
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
-    var bannerTranslationY by remember { mutableFloatStateOf(0f) }
-    val bannerScrollConnection = remember(effectiveHeaderImageUri) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (effectiveHeaderImageUri.isNotBlank() && available.y < 0f) {
-                    bannerTranslationY = (bannerTranslationY + available.y).coerceIn(-900f, 0f)
-                }
-                return Offset.Zero
-            }
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (effectiveHeaderImageUri.isNotBlank() && available.y > 0f) {
-                    bannerTranslationY = (bannerTranslationY + available.y).coerceIn(-900f, 0f)
-                }
-                return Offset.Zero
-            }
-        }
-    }
-
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .nestedScroll(bannerScrollConnection),
+                .background(MaterialTheme.colorScheme.background),
     ) {
         if (effectiveHeaderImageUri.isNotBlank()) {
             ScreenImageHeader(
@@ -185,8 +160,9 @@ fun LibraryScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .graphicsLayer {
-                        translationY = bannerTranslationY
-                        alpha = (1f + bannerTranslationY / 500f).coerceIn(0f, 1f)
+                        val offset = shellHeaderOffset()
+                        translationY = offset
+                        alpha = (1f + offset / with(density) { AppBarHeight.toPx() }).coerceIn(0f, 1f)
                     },
             )
         } else if (!disableBlur) {
