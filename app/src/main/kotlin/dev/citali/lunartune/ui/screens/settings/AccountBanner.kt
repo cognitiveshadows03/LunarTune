@@ -39,6 +39,14 @@ internal object AccountBanner {
     ): Boolean =
         withContext(Dispatchers.IO) {
             runCatching {
+                val target = customFile(context)
+                if (context.contentResolver.getType(uri).equals("image/gif", ignoreCase = true)) {
+                    val temp = File(target.parentFile, "$FILE_NAME.tmp")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        temp.outputStream().use(input::copyTo)
+                    } ?: return@runCatching false
+                    return@runCatching temp.renameTo(target)
+                }
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                 context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
                 var sample = 1
@@ -58,7 +66,6 @@ internal object AccountBanner {
                     } else {
                         bitmap
                     }
-                val target = customFile(context)
                 val temp = File(target.parentFile, "$FILE_NAME.tmp")
                 temp.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 90, it) }
                 temp.renameTo(target)
