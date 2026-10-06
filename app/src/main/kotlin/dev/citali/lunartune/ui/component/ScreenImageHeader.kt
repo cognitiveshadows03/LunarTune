@@ -9,7 +9,6 @@ package dev.citali.lunartune.ui.component
 import android.graphics.Movie
 import android.net.Uri
 import android.os.SystemClock
-import android.util.LruCache
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -36,7 +35,6 @@ import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
@@ -77,72 +75,70 @@ fun ScreenImageHeader(
 }
 
 
-private data class GifRenderState(
+private data class GifPlayback(
     val movie: Movie,
     val epochMs: Long,
 )
 
-private val gifAnimationEpochs = ConcurrentHashMap<String, Long>()
-private val gifByteCache =
-    object : LruCache<String, ByteArray>(24 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: ByteArray): Int = value.size
+private val gifPlaybackCache = ConcurrentHashMap<String, GifPlayback>()
+private val gifDecodeLocks = ConcurrentHashMap<String, Any>()
+
+private fun decodeGifMovie(context: android.content.Context, imageUri: String): Movie? =
+    runCatching {
+        val uri = Uri.parse(imageUri)
+        when (uri.scheme?.lowercase()) {
+            "file" -> Movie.decodeFile(File(requireNotNull(uri.path)).absolutePath)
+            "http", "https" -> {
+                val connection = URL(imageUri).openConnection().apply {
+                    connectTimeout = 8_000
+                    readTimeout = 15_000
+                }
+                connection.getInputStream().use(Movie::decodeStream)
+            }
+            null ->
+                File(imageUri).takeIf { it.isFile }?.let { Movie.decodeFile(it.absolutePath) }
+                    ?: context.contentResolver.openInputStream(uri)?.use(Movie::decodeStream)
+            else -> context.contentResolver.openInputStream(uri)?.use(Movie::decodeStream)
+        }
+    }.getOrNull()
+
+private fun getGifPlayback(context: android.content.Context, imageUri: String): GifPlayback? {
+    gifPlaybackCache[imageUri]?.let { return it }
+    val decodeLock = gifDecodeLocks.computeIfAbsent(imageUri) { Any() }
+    return synchronized(decodeLock) {
+        gifPlaybackCache[imageUri]
+            ?: run {
+                val movie = decodeGifMovie(context, imageUri) ?: return@synchronized null
+                val playback = GifPlayback(movie, SystemClock.elapsedRealtime())
+                gifPlaybackCache.putIfAbsent(imageUri, playback) ?: playback
+            }
     }
-
-private fun decodeGifMovie(context: android.content.Context, imageUri: String): Movie? {
-    val bytes =
-        gifByteCache.get(imageUri)
-            ?: runCatching {
-                val uri = Uri.parse(imageUri)
-                val loaded =
-                    when (uri.scheme?.lowercase()) {
-                        "file" -> File(requireNotNull(uri.path)).readBytes()
-                        "http", "https" -> {
-                            val connection = URL(imageUri).openConnection().apply {
-                                connectTimeout = 8_000
-                                readTimeout = 15_000
-                            }
-                            connection.getInputStream().use { it.readBytes() }
-                        }
-                        null ->
-                            File(imageUri).takeIf { it.isFile }?.readBytes()
-                                ?: context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    }
-                loaded?.also { gifByteCache.put(imageUri, it) }
-            }.getOrNull()
-            ?: return null
-
-    return runCatching { Movie.decodeStream(ByteArrayInputStream(bytes)) }.getOrNull()
 }
 
-/** Draws a per-composition Movie against a persistent clock, avoiding cross-tab decoder races. */
+/** Draws a cached GIF Movie against a persistent clock, without restarting on navigation. */
 @Composable
 private fun PersistentGifImage(
     imageUri: String,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    var animation by remember(imageUri) { mutableStateOf<GifRenderState?>(null) }
+    var playback by remember(imageUri) { mutableStateOf(gifPlaybackCache[imageUri]) }
     LaunchedEffect(context, imageUri) {
-        val decodedMovie = withContext(Dispatchers.IO) { decodeGifMovie(context, imageUri) }
-        animation =
-            decodedMovie?.let { movie ->
-                val now = SystemClock.elapsedRealtime()
-                val epoch = gifAnimationEpochs.putIfAbsent(imageUri, now) ?: now
-                GifRenderState(movie = movie, epochMs = epoch)
-            }
+        if (playback == null) {
+            playback = withContext(Dispatchers.IO) { getGifPlayback(context, imageUri) }
+        }
     }
     var frameClock by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(animation) {
-        if (animation != null) {
+    LaunchedEffect(playback) {
+        if (playback != null) {
             while (isActive) {
                 withFrameNanos { frameClock = SystemClock.elapsedRealtime() }
             }
         }
     }
     Box(modifier) {
-        // Coil's decoder supplies an early frame while the independent Movie decoder loads.
-        if (animation == null) {
+        // Coil provides a quick first display only on a cold cache miss.
+        if (playback == null) {
             AsyncImage(
                 model = imageUri,
                 contentDescription = null,
@@ -151,21 +147,25 @@ private fun PersistentGifImage(
             )
         }
         Canvas(Modifier.fillMaxSize()) {
-            val current = animation ?: return@Canvas
+            val current = playback ?: return@Canvas
             val gif = current.movie
             val duration = gif.duration().takeIf { it > 0 } ?: 1_000
             val elapsed = (frameClock - current.epochMs).coerceAtLeast(0L)
-            gif.setTime((elapsed % duration).toInt())
             val movieWidth = gif.width().coerceAtLeast(1).toFloat()
             val movieHeight = gif.height().coerceAtLeast(1).toFloat()
             val scale = maxOf(size.width / movieWidth, size.height / movieHeight)
             val left = (size.width / scale - movieWidth) / 2f
             val top = (size.height / scale - movieHeight) / 2f
-            drawContext.canvas.nativeCanvas.run {
-                save()
-                scale(scale, scale)
-                gif.draw(this, left, top)
-                restore()
+            val nativeCanvas = drawContext.canvas.nativeCanvas
+            synchronized(gif) {
+                gif.setTime((elapsed % duration).toInt())
+                val saveCount = nativeCanvas.save()
+                try {
+                    nativeCanvas.scale(scale, scale)
+                    gif.draw(nativeCanvas, left, top)
+                } finally {
+                    nativeCanvas.restoreToCount(saveCount)
+                }
             }
         }
     }
