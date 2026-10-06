@@ -65,7 +65,11 @@ import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.HideNavigationBarLabelsKey
+import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
+import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
+import dev.citali.lunartune.constants.NavBarLongPressAction
 import dev.citali.lunartune.constants.NavBarLongPressActionsKey
+import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NAVIGATION_BAR_CORNER_RADIUS_DEFAULT
 import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NAVIGATION_BAR_LABEL_SPACING_DEFAULT
@@ -106,6 +110,14 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
+private fun longPressActionLabel(action: NavBarLongPressAction): String =
+    when (action) {
+        NavBarLongPressAction.NONE -> stringResource(R.string.navbar_long_press_action_none)
+        NavBarLongPressAction.PLAY_RANDOM_SONG -> stringResource(R.string.navbar_long_press_action_random_song)
+        NavBarLongPressAction.MUSIC_RECOGNITION -> stringResource(R.string.navbar_long_press_action_music_recognition)
+    }
+
+@Composable
 fun NavigationBarSettings(navController: NavController) {
     val (navigationBarStyle, onNavigationBarStyleChange) =
         rememberEnumPreference(
@@ -116,6 +128,21 @@ fun NavigationBarSettings(navController: NavController) {
         rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
     val (navBarLongPressActions, onNavBarLongPressActionsChange) =
         rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
+    val (homeLongPressAction, onHomeLongPressActionChange) =
+        rememberEnumPreference(
+            HomeNavBarLongPressActionKey,
+            defaultValue = NavBarLongPressAction.PLAY_RANDOM_SONG,
+        )
+    val (searchLongPressAction, onSearchLongPressActionChange) =
+        rememberEnumPreference(
+            SearchNavBarLongPressActionKey,
+            defaultValue = NavBarLongPressAction.MUSIC_RECOGNITION,
+        )
+    val (libraryLongPressAction, onLibraryLongPressActionChange) =
+        rememberEnumPreference(
+            LibraryNavBarLongPressActionKey,
+            defaultValue = NavBarLongPressAction.NONE,
+        )
     val (navigationBarWidth, onNavigationBarWidthChange) =
         rememberPreference(NavigationBarWidthKey, defaultValue = NAVIGATION_BAR_WIDTH_DEFAULT)
     val (navigationBarHeight, onNavigationBarHeightChange) =
@@ -223,6 +250,44 @@ fun NavigationBarSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.shuffle), null) },
                         checked = navBarLongPressActions,
                         onCheckedChange = onNavBarLongPressActionsChange,
+                    )
+                }
+            }
+
+            PreferenceGroup(title = stringResource(R.string.navbar_long_press_mappings)) {
+                item {
+                    EnumListPreference(
+                        title = { Text(stringResource(R.string.navbar_home_long_press_action)) },
+                        description = stringResource(R.string.navbar_long_press_mapping_desc),
+                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
+                        selectedValue = homeLongPressAction,
+                        valueText = { longPressActionLabel(it) },
+                        onValueSelected = onHomeLongPressActionChange,
+                        isEnabled = navBarLongPressActions,
+                    )
+                }
+
+                item {
+                    EnumListPreference(
+                        title = { Text(stringResource(R.string.navbar_search_long_press_action)) },
+                        description = stringResource(R.string.navbar_long_press_mapping_desc),
+                        icon = { Icon(painterResource(R.drawable.search), null) },
+                        selectedValue = searchLongPressAction,
+                        valueText = { longPressActionLabel(it) },
+                        onValueSelected = onSearchLongPressActionChange,
+                        isEnabled = navBarLongPressActions,
+                    )
+                }
+
+                item {
+                    EnumListPreference(
+                        title = { Text(stringResource(R.string.navbar_library_long_press_action)) },
+                        description = stringResource(R.string.navbar_long_press_mapping_desc),
+                        icon = { Icon(painterResource(R.drawable.library_outlined), null) },
+                        selectedValue = libraryLongPressAction,
+                        valueText = { longPressActionLabel(it) },
+                        onValueSelected = onLibraryLongPressActionChange,
+                        isEnabled = navBarLongPressActions,
                     )
                 }
             }

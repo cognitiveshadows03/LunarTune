@@ -1030,6 +1030,16 @@ val NavigationBarStyleKey = stringPreferencesKey("navigationBarStyle")
 val HideNavigationBarLabelsKey = booleanPreferencesKey("hideNavigationBarLabels")
 val NavBarLongPressActionsKey = booleanPreferencesKey("navBarLongPressActions")
 
+enum class NavBarLongPressAction {
+    NONE,
+    PLAY_RANDOM_SONG,
+    MUSIC_RECOGNITION,
+}
+
+val HomeNavBarLongPressActionKey = stringPreferencesKey("homeNavBarLongPressAction")
+val SearchNavBarLongPressActionKey = stringPreferencesKey("searchNavBarLongPressAction")
+val LibraryNavBarLongPressActionKey = stringPreferencesKey("libraryNavBarLongPressAction")
+
 val NavigationBarWidthKey = floatPreferencesKey("navigationBarWidth")
 const val NAVIGATION_BAR_WIDTH_DEFAULT = 0.8f
 

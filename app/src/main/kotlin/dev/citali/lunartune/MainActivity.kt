@@ -16,6 +16,8 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -170,6 +172,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
+import androidx.media3.datasource.cache.ContentMetadata
+import androidx.media3.exoplayer.offline.Download
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -237,7 +241,11 @@ import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
+import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
+import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
+import dev.citali.lunartune.constants.NavBarLongPressAction
 import dev.citali.lunartune.constants.NavBarLongPressActionsKey
+import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
 import dev.citali.lunartune.constants.PauseSearchHistoryKey
@@ -494,6 +502,72 @@ class MainActivity : FragmentActivity() {
             isMusicServiceBound = false
         }
     }
+
+    private suspend fun selectNavBarLongPressSong(): Pair<Song?, Boolean> =
+        withContext(Dispatchers.IO) {
+            val isOnline = hasValidatedInternetConnection()
+            val hasUnblockedArtists: (Song) -> Boolean = { song ->
+                song.artists.none { it.blockedAt != null }
+            }
+
+            if (isOnline) {
+                val from = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
+                val favorites = database.mostPlayedSongs(from, limit = 24).first().filter(hasUnblockedArtists)
+                val song =
+                    favorites.randomOrNull()
+                        ?: database.recentSongs(40).first().filter(hasUnblockedArtists).randomOrNull()
+                song to false
+            } else {
+                val localSongs = database.localSongs().first()
+                val downloadedSongs = runCatching { database.downloadedSongsList() }.getOrDefault(emptyList())
+                val cachedSongIds = fullyCachedNavBarSongIds()
+                val cachedSongs =
+                    if (cachedSongIds.isEmpty()) {
+                        emptyList()
+                    } else {
+                        database.getSongsByIds(cachedSongIds)
+                    }
+                val song =
+                    (localSongs + downloadedSongs + cachedSongs)
+                        .distinctBy { it.id }
+                        .filter(hasUnblockedArtists)
+                        .randomOrNull()
+                song to true
+            }
+        }
+
+    private fun fullyCachedNavBarSongIds(): List<String> {
+        val cachedIds = mutableSetOf<String>()
+        downloadUtil.downloads.value
+            .filterValues { it.state == Download.STATE_COMPLETED }
+            .keys
+            .forEach { cachedIds += it }
+
+        listOf(downloadUtil.downloadCache, downloadUtil.playerCache).forEach { cache ->
+            val cacheKeys = runCatching { cache.keys }.getOrDefault(emptySet())
+            cacheKeys.forEach { mediaId ->
+                val contentLength =
+                    runCatching {
+                        cache.getContentMetadata(mediaId).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
+                    }.getOrDefault(-1L)
+                if (contentLength > 0L &&
+                    runCatching { cache.isCached(mediaId, 0L, contentLength) }.getOrDefault(false)
+                ) {
+                    cachedIds += mediaId
+                }
+            }
+        }
+        return cachedIds.toList()
+    }
+
+    private fun hasValidatedInternetConnection(): Boolean =
+        runCatching {
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            capabilities != null &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }.getOrDefault(false)
 
     override fun onStop() {
         if (!isMusicServiceBound || playerConnection?.aodModeEnabled?.value == true) {
@@ -1548,6 +1622,21 @@ class MainActivity : FragmentActivity() {
                             }
                         }
                     val (navBarLongPressActions) = rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
+                    val homeLongPressAction by
+                        rememberEnumPreference(
+                            HomeNavBarLongPressActionKey,
+                            defaultValue = NavBarLongPressAction.PLAY_RANDOM_SONG,
+                        )
+                    val searchLongPressAction by
+                        rememberEnumPreference(
+                            SearchNavBarLongPressActionKey,
+                            defaultValue = NavBarLongPressAction.MUSIC_RECOGNITION,
+                        )
+                    val libraryLongPressAction by
+                        rememberEnumPreference(
+                            LibraryNavBarLongPressActionKey,
+                            defaultValue = NavBarLongPressAction.NONE,
+                        )
                     val haptic = LocalHapticFeedback.current
                     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
                     val customHaptic =
@@ -2142,38 +2231,35 @@ class MainActivity : FragmentActivity() {
                                                 onItemLongClick =
                                                     if (navBarLongPressActions) {
                                                         { screen ->
-                                                            when (screen) {
-                                                                Screens.Home -> {
+                                                            val action =
+                                                                when (screen) {
+                                                                    Screens.Home -> homeLongPressAction
+                                                                    Screens.Search -> searchLongPressAction
+                                                                    Screens.Library -> libraryLongPressAction
+                                                                    else -> NavBarLongPressAction.NONE
+                                                                }
+                                                            when (action) {
+                                                                NavBarLongPressAction.NONE -> Unit
+                                                                NavBarLongPressAction.PLAY_RANDOM_SONG -> {
                                                                     coroutineScope.launch {
-                                                                        val song =
-                                                                            withContext(Dispatchers.IO) {
-                                                                                val from =
-                                                                                    System.currentTimeMillis() -
-                                                                                        90L * 24 * 60 * 60 * 1000
-                                                                                val favorites =
-                                                                                    database
-                                                                                        .mostPlayedSongs(from, limit = 24)
-                                                                                        .first()
-                                                                                        .filter { candidate ->
-                                                                                            candidate.artists.none { it.blockedAt != null }
-                                                                                        }
-                                                                                favorites.randomOrNull()
-                                                                                    ?: database.recentSongs(40).first()
-                                                                                        .filter { candidate ->
-                                                                                            candidate.artists.none { it.blockedAt != null }
-                                                                                        }.randomOrNull()
-                                                                            }
+                                                                        val (song, usedOfflineFallback) = selectNavBarLongPressSong()
                                                                         if (song == null) {
+                                                                            val messageRes =
+                                                                                if (usedOfflineFallback) {
+                                                                                    R.string.navbar_long_press_no_offline_songs
+                                                                                } else {
+                                                                                    R.string.navbar_long_press_no_history
+                                                                                }
                                                                             Toast
                                                                                 .makeText(
                                                                                     this@MainActivity,
-                                                                                    getString(R.string.navbar_long_press_no_history),
+                                                                                    getString(messageRes),
                                                                                     Toast.LENGTH_SHORT,
                                                                                 ).show()
                                                                             return@launch
                                                                         }
                                                                         playerConnection?.playQueue(
-                                                                            if (song.song.isLocal) {
+                                                                            if (usedOfflineFallback || song.song.isLocal) {
                                                                                 ListQueue(items = listOf(song.toMediaItem()))
                                                                             } else {
                                                                                 YouTubeQueue(
@@ -2187,10 +2273,8 @@ class MainActivity : FragmentActivity() {
                                                                         )
                                                                     }
                                                                 }
-
-                                                                Screens.Search -> navController.navigate(MusicRecognitionRoute)
-
-                                                                else -> Unit
+                                                                NavBarLongPressAction.MUSIC_RECOGNITION ->
+                                                                    navController.navigate(MusicRecognitionRoute)
                                                             }
                                                         }
                                                     } else {
