@@ -141,7 +141,7 @@ fun LibraryScreen(
             initialPage = libraryFilters.indexOf(defaultFilter).takeIf { it >= 0 } ?: 0,
         ) { libraryFilters.size }
 
-    val currentFilter = libraryFilters.getOrElse(pagerState.currentPage) { LibraryFilter.LIBRARY }
+    val currentFilter = libraryFilters.getOrElse(pagerState.settledPage) { LibraryFilter.LIBRARY }
 
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
@@ -204,8 +204,8 @@ fun LibraryScreen(
             }
 
             // Sync Pager -> Preference & lazy list centering
-            LaunchedEffect(pagerState.currentPage, libraryFilters) {
-                val targetPage = pagerState.currentPage.coerceIn(0, libraryFilters.lastIndex)
+            LaunchedEffect(pagerState.settledPage, libraryFilters) {
+                val targetPage = pagerState.settledPage.coerceIn(0, libraryFilters.lastIndex)
                 val targetFilter = libraryFilters.getOrElse(targetPage) { LibraryFilter.LIBRARY }
 
                 // Centering the tab chip scroll alignment
@@ -539,15 +539,8 @@ fun ExpressiveTabChip(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
-        targetValue =
-            if (isPressed) {
-                0.92f
-            } else if (selected) {
-                1.05f
-            } else {
-                1.0f
-            },
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "TabChipScale",
     )
 
