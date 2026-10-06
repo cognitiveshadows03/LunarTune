@@ -52,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -496,12 +495,12 @@ fun SettingsScreen(
                             Icon(
                                 painter = painterResource(R.drawable.arrow_back),
                                 contentDescription = stringResource(R.string.back_button_desc),
-                                tint = Color.White,
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
                         Text(
                             text = stringResource(R.string.settings),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             style = MaterialTheme.typography.displaySmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 32.dp),
