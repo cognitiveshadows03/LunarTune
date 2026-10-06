@@ -492,11 +492,10 @@ internal fun AppleMusicPortraitContent(
                 animationSpec = androidx.compose.animation.core.tween(300),
                 label = "appleMusicLyricsBottom",
             )
-            // The pane always spans to the bottom (its size never changes, so the line-focus
-            // scroll animates the same with controls shown or hidden). The focus anchor moves
-            // above the controls instead, and lyrics fade out where the controls begin.
+            // Keep the lyrics scroll viewport/focus stable while controls fade in and out.
+            // The bottom fade still protects the visible controls, without changing the line's
+            // scroll target and causing the lyrics to jump as controls appear or disappear.
             val paneHeight = maxHeight - miniHeaderHeight
-            val focusAnchor = if (controlsVisible) (paneHeight - controlsHeight).coerceAtLeast(120.dp) else null
             val fadeStartDp = (paneHeight - lyricsBottom - 48.dp).coerceAtLeast(0.dp)
             val fadeEndDp = (paneHeight - lyricsBottom).coerceAtLeast(1.dp)
             Box(
@@ -527,7 +526,6 @@ internal fun AppleMusicPortraitContent(
                                 modifier = Modifier.fillMaxSize(),
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
-                                focusAnchorHeight = focusAnchor,
                                 appleMusicPlayerMode = true,
                             )
                         LyricsMode.ENHANCED ->
@@ -538,7 +536,6 @@ internal fun AppleMusicPortraitContent(
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
                                 alwaysFocusActiveLine = true,
-                                focusAnchorHeight = focusAnchor,
                                 appleMusicPlayerMode = true,
                             )
                     }
