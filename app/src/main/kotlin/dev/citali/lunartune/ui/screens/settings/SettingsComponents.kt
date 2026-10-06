@@ -548,6 +548,8 @@ fun SettingsSegmentedItem(
     modifier: Modifier = Modifier,
     backgroundModel: Any? = null,
     iconImageModel: Any? = null,
+    titleOverride: String? = null,
+    subtitleOverride: String? = null,
 ) {
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
@@ -663,14 +665,14 @@ fun SettingsSegmentedItem(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = item.title,
+                    text = titleOverride ?: item.title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (backgroundModel != null) Color.White else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                item.subtitle?.let { subtitle ->
+                (subtitleOverride ?: item.subtitle)?.let { subtitle ->
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = subtitle,

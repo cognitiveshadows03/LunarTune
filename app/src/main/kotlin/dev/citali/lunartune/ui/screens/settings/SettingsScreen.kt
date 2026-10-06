@@ -70,7 +70,10 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AccountBannerSourceKey
 import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
+import dev.citali.lunartune.constants.AccountChannelHandleKey
+import dev.citali.lunartune.constants.AccountNameKey
 import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
+import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.ui.component.IconButton
@@ -80,6 +83,7 @@ import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.Updater
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.HomeViewModel
+import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
 
 private fun searchableSettingsRoute(parentKey: String, scrollKey: String?): String? {
@@ -123,8 +127,14 @@ fun SettingsScreen(
     val (accountBannerSource) = rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
     val (accountBannerUpdatedAt) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
     val (accountYouTubeBannerUrl) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val (accountNamePreference) = rememberPreference(AccountNameKey, "")
+    val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
+    val (innerTubeCookie) = rememberPreference(InnerTubeCookieKey, "")
+    val isAccountLoggedIn = remember(innerTubeCookie) { hasYouTubeLoginCookie(innerTubeCookie) }
     val accountViewModel: HomeViewModel = hiltViewModel()
+    val accountNameFromViewModel by accountViewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by accountViewModel.accountImageUrl.collectAsStateWithLifecycle()
+    val accountRowTitle = accountNameFromViewModel.ifBlank { accountNamePreference }
     val accountRowBannerModel: Any? =
         when (accountBannerSource) {
             AccountBanner.SOURCE_CUSTOM ->
@@ -617,12 +627,24 @@ fun SettingsScreen(
                     key = { _, item -> item.key },
                     contentType = { _, _ -> "settings_segment" },
                 ) { index, settingsItem ->
+                    val isAccountRow = settingsItem.key == "account"
                     SettingsSegmentedItem(
                         item = settingsItem,
                         index = index,
                         count = group.items.size,
-                        backgroundModel = accountRowBannerModel.takeIf { settingsItem.key == "account" },
-                        iconImageModel = accountImageUrl.takeIf { settingsItem.key == "account" && !it.isNullOrBlank() },
+                        backgroundModel = accountRowBannerModel.takeIf { isAccountRow && isAccountLoggedIn },
+                        iconImageModel =
+                            accountImageUrl.takeIf {
+                                isAccountRow && isAccountLoggedIn && !it.isNullOrBlank()
+                            },
+                        titleOverride =
+                            accountRowTitle.takeIf {
+                                isAccountRow && isAccountLoggedIn && it.isNotBlank()
+                            },
+                        subtitleOverride =
+                            accountChannelHandle.takeIf {
+                                isAccountRow && isAccountLoggedIn && it.isNotBlank()
+                            },
                         modifier =
                             Modifier
                                 .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
