@@ -7,10 +7,12 @@
 
 package dev.citali.lunartune.ui.screens.artist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -27,12 +29,17 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,6 +53,7 @@ import dev.citali.lunartune.constants.CONTENT_TYPE_LIST
 import dev.citali.lunartune.constants.CONTENT_TYPE_PLAYLIST
 import dev.citali.lunartune.constants.CONTENT_TYPE_SONG
 import dev.citali.lunartune.constants.GridThumbnailHeight
+import dev.citali.lunartune.extensions.metadata
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.extensions.togglePlayPause
 import moe.rukamori.archivetune.innertube.models.AlbumItem
@@ -60,6 +68,7 @@ import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalMenuState
+import dev.citali.lunartune.ui.component.MultiSelectFloatingToolbar
 import dev.citali.lunartune.ui.component.YouTubeGridItem
 import dev.citali.lunartune.ui.component.YouTubeListItem
 import dev.citali.lunartune.ui.component.shimmer.GridItemPlaceHolder
@@ -67,6 +76,7 @@ import dev.citali.lunartune.ui.component.shimmer.ListItemPlaceHolder
 import dev.citali.lunartune.ui.component.shimmer.ShimmerHost
 import dev.citali.lunartune.ui.menu.YouTubeAlbumMenu
 import dev.citali.lunartune.ui.menu.YouTubeArtistMenu
+import dev.citali.lunartune.ui.menu.SelectionMediaMetadataMenu
 import dev.citali.lunartune.ui.menu.YouTubePlaylistMenu
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.utils.backToMain
@@ -92,6 +102,23 @@ fun ArtistItemsScreen(
     val title by viewModel.title.collectAsStateWithLifecycle()
     val itemsPage by viewModel.itemsPage.collectAsStateWithLifecycle()
     val itemsLayout by viewModel.itemsLayout.collectAsStateWithLifecycle()
+    val pageSongs = remember(itemsPage?.items) {
+        itemsPage?.items.orEmpty().filterIsInstance<SongItem>().distinctBy { it.id }
+    }
+    var selectedSongIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    val selectedSongIdSet = remember(selectedSongIds) { selectedSongIds.toSet() }
+    val selectedSongs = remember(pageSongs, selectedSongIdSet) {
+        pageSongs.filter { it.id in selectedSongIdSet }
+    }
+    val isSongListPage = itemsLayout == ArtistItemsPageLayout.LIST && itemsPage?.items?.firstOrNull() is SongItem
+    val activeSelectionCount = if (isSongListPage) selectedSongs.size else 0
+    val clearSelection = remember { { selectedSongIds = emptyList() } }
+
+    LaunchedEffect(isSongListPage, pageSongs) {
+        val validSongIds = if (isSongListPage) pageSongs.mapTo(mutableSetOf<String>()) { it.id } else emptySet()
+        selectedSongIds = selectedSongIds.filter(validSongIds::contains)
+    }
+    BackHandler(enabled = activeSelectionCount > 0, onBack = clearSelection)
 
     LaunchedEffect(lazyListState) {
         snapshotFlow {
@@ -120,118 +147,161 @@ fun ArtistItemsScreen(
             }
         }
     } else if (itemsLayout == ArtistItemsPageLayout.LIST && itemsPage?.items?.firstOrNull() is SongItem) {
-        LazyColumn(
-            state = lazyListState,
-            contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-        ) {
-            items(
-                items = itemsPage?.items.orEmpty().distinctBy { it.id },
-                key = { "artist_items_${it.contentKey}" },
-                contentType = { it.contentType },
-            ) { item ->
-                YouTubeListItem(
-                    item = item,
-                    isActive =
-                        when (item) {
-                            is SongItem -> mediaMetadata?.id == item.id
-                            is AlbumItem -> mediaMetadata?.album?.id == item.id
-                            else -> false
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                state = lazyListState,
+                contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
+            ) {
+                items(
+                    items = itemsPage?.items.orEmpty().distinctBy { it.id },
+                    key = { "artist_items_${it.contentKey}" },
+                    contentType = { it.contentType },
+                ) { item ->
+                    YouTubeListItem(
+                        item = item,
+                        isSelected = item is SongItem && item.id in selectedSongIdSet,
+                        isActive =
+                            when (item) {
+                                is SongItem -> mediaMetadata?.id == item.id
+                                is AlbumItem -> mediaMetadata?.album?.id == item.id
+                                else -> false
+                            },
+                        isPlaying = isPlaying,
+                        trailingContent = {
+                            IconButton(
+                                onClick = {
+                                    if (activeSelectionCount == 0) {
+                                        menuState.show {
+                                            when (item) {
+                                                is SongItem -> {
+                                                    YouTubeSongMenu(
+                                                        song = item,
+                                                        navController = navController,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+
+                                                is AlbumItem -> {
+                                                    YouTubeAlbumMenu(
+                                                        albumItem = item,
+                                                        navController = navController,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+
+                                                is ArtistItem -> {
+                                                    YouTubeArtistMenu(
+                                                        artist = item,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+
+                                                is PlaylistItem -> {
+                                                    YouTubePlaylistMenu(
+                                                        playlist = item,
+                                                        coroutineScope = coroutineScope,
+                                                        onDismiss = menuState::dismiss,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                onLongClick = {},
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_vert),
+                                    contentDescription = null,
+                                )
+                            }
                         },
-                    isPlaying = isPlaying,
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                menuState.show {
-                                    when (item) {
-                                        is SongItem -> {
-                                            YouTubeSongMenu(
-                                                song = item,
-                                                navController = navController,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                        }
-
-                                        is AlbumItem -> {
-                                            YouTubeAlbumMenu(
-                                                albumItem = item,
-                                                navController = navController,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                        }
-
-                                        is ArtistItem -> {
-                                            YouTubeArtistMenu(
-                                                artist = item,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                        }
-
-                                        is PlaylistItem -> {
-                                            YouTubePlaylistMenu(
-                                                playlist = item,
-                                                coroutineScope = coroutineScope,
-                                                onDismiss = menuState::dismiss,
-                                            )
-                                        }
-                                    }
-                                }
-                            },
-                            onLongClick = {},
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
-                            )
-                        }
-                    },
-                    modifier =
-                        Modifier
-                            .clickable {
-                                when (item) {
-                                    is SongItem -> {
-                                        if (item.id == mediaMetadata?.id) {
-                                            playerConnection.player.togglePlayPause()
+                        modifier =
+                            Modifier
+                                .combinedClickable(
+                                    onClick = {
+                                        if (activeSelectionCount > 0) {
+                                            if (item is SongItem) {
+                                                selectedSongIds =
+                                                    if (item.id in selectedSongIdSet) {
+                                                        selectedSongIds - item.id
+                                                    } else {
+                                                        selectedSongIds + item.id
+                                                    }
+                                            }
                                         } else {
-                                            val songs =
-                                                itemsPage
-                                                    ?.items
-                                                    .orEmpty()
-                                                    .filterIsInstance<SongItem>()
-                                            playerConnection.playQueue(
-                                                ListQueue(
-                                                    title = title,
-                                                    items = songs.map { it.toMediaItem() },
-                                                    startIndex = songs.indexOfFirst { it.id == item.id }.coerceAtLeast(0),
-                                                ),
-                                            )
+                                            when (item) {
+                                                is SongItem -> {
+                                                    if (item.id == mediaMetadata?.id) {
+                                                        playerConnection.player.togglePlayPause()
+                                                    } else {
+                                                        playerConnection.playQueue(
+                                                            ListQueue(
+                                                                title = title,
+                                                                items = pageSongs.map { it.toMediaItem() },
+                                                                startIndex = pageSongs.indexOfFirst { it.id == item.id }.coerceAtLeast(0),
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+
+                                                is AlbumItem -> {
+                                                    navController.navigate("album/${item.id}")
+                                                }
+
+                                                is ArtistItem -> {
+                                                    navController.navigate("artist/${item.id}")
+                                                }
+
+                                                is PlaylistItem -> {
+                                                    navController.navigate("online_playlist/${item.id}")
+                                                }
+                                            }
                                         }
-                                    }
+                                    },
+                                    onLongClick = {
+                                        if (item is SongItem) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (item.id !in selectedSongIdSet) {
+                                                selectedSongIds = selectedSongIds + item.id
+                                            }
+                                        }
+                                    },
+                                ),
+                    )
+                }
 
-                                    is AlbumItem -> {
-                                        navController.navigate("album/${item.id}")
-                                    }
-
-                                    is ArtistItem -> {
-                                        navController.navigate("artist/${item.id}")
-                                    }
-
-                                    is PlaylistItem -> {
-                                        navController.navigate("online_playlist/${item.id}")
-                                    }
-                                }
-                            },
-                )
-            }
-
-            if (itemsPage?.continuation != null) {
-                item(key = "loading") {
-                    ShimmerHost {
-                        repeat(3) {
-                            ListItemPlaceHolder()
+                if (itemsPage?.continuation != null) {
+                    item(key = "loading") {
+                        ShimmerHost {
+                            repeat(3) {
+                                ListItemPlaceHolder()
+                            }
                         }
                     }
                 }
             }
+            MultiSelectFloatingToolbar(
+                visible = activeSelectionCount > 0,
+                allSelected = pageSongs.isNotEmpty() && selectedSongs.size == pageSongs.size,
+                onToggleAll = {
+                    selectedSongIds =
+                        if (pageSongs.isNotEmpty() && selectedSongs.size == pageSongs.size) {
+                            emptyList()
+                        } else {
+                            pageSongs.map { it.id }
+                        }
+                },
+                onMoreClick = {
+                    menuState.show {
+                        SelectionMediaMetadataMenu(
+                            songSelection = selectedSongs.map { it.toMediaItem().metadata!! },
+                            currentItems = emptyList(),
+                            onDismiss = menuState::dismiss,
+                            clearAction = clearSelection,
+                        )
+                    }
+                },
+            )
         }
     } else {
         LazyVerticalGrid(
@@ -334,27 +404,36 @@ fun ArtistItemsScreen(
     }
 
     TopAppBar(
-        title = { Text(title) },
+        title = {
+            if (activeSelectionCount > 0) {
+                Text(pluralStringResource(R.plurals.n_song, activeSelectionCount, activeSelectionCount))
+            } else {
+                Text(title)
+            }
+        },
         navigationIcon = {
             IconButton(
-                onClick = navController::navigateUp,
-                onLongClick = navController::backToMain,
+                onClick = {
+                    if (activeSelectionCount > 0) clearSelection() else navController.navigateUp()
+                },
+                onLongClick = {
+                    if (activeSelectionCount == 0) navController.backToMain()
+                },
             ) {
                 Icon(
-                    painterResource(R.drawable.arrow_back),
+                    painterResource(if (activeSelectionCount > 0) R.drawable.close else R.drawable.arrow_back),
                     contentDescription = null,
                 )
             }
         },
         actions = {
-            val songs = itemsPage?.items.orEmpty().filterIsInstance<SongItem>()
-            if (songs.isNotEmpty()) {
+            if (activeSelectionCount == 0 && pageSongs.isNotEmpty()) {
                 IconButton(
                     onClick = {
                         playerConnection.playQueue(
                             ListQueue(
                                 title = title,
-                                items = songs.map { it.toMediaItem() },
+                                items = pageSongs.map { it.toMediaItem() },
                             ),
                         )
                     },
@@ -370,7 +449,7 @@ fun ArtistItemsScreen(
                         playerConnection.playQueue(
                             ListQueue(
                                 title = title,
-                                items = songs.shuffled().map { it.toMediaItem() },
+                                items = pageSongs.shuffled().map { it.toMediaItem() },
                             ),
                         )
                     },

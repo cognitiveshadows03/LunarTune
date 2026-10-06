@@ -15,6 +15,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -82,6 +83,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,6 +109,7 @@ import dev.citali.lunartune.constants.CONTENT_TYPE_PLAYLIST
 import dev.citali.lunartune.constants.CONTENT_TYPE_SONG
 import dev.citali.lunartune.constants.HideExplicitKey
 import dev.citali.lunartune.db.entities.ArtistEntity
+import dev.citali.lunartune.extensions.metadata
 import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.extensions.togglePlayPause
 import moe.rukamori.archivetune.innertube.models.AlbumItem
@@ -127,6 +130,7 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MediaDetailIconAction
 import dev.citali.lunartune.ui.component.MediaDetailPrimaryActions
+import dev.citali.lunartune.ui.component.MultiSelectFloatingToolbar
 import dev.citali.lunartune.ui.component.NavigationTitle
 import dev.citali.lunartune.ui.component.SongListItem
 import dev.citali.lunartune.ui.component.YouTubeGridItem
@@ -136,6 +140,7 @@ import dev.citali.lunartune.ui.component.shimmer.ListItemPlaceHolder
 import dev.citali.lunartune.ui.component.shimmer.ShimmerHost
 import dev.citali.lunartune.ui.component.shimmer.TextPlaceholder
 import dev.citali.lunartune.ui.menu.AlbumMenu
+import dev.citali.lunartune.ui.menu.SelectionMediaMetadataMenu
 import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.menu.YouTubeAlbumMenu
 import dev.citali.lunartune.ui.menu.YouTubeArtistMenu
@@ -280,6 +285,35 @@ fun ArtistScreen(
                 listOf(topSongsSection) + sections.filterNot { it === topSongsSection }
             }
         }
+    val selectableArtistSongs =
+        remember(showLocal, orderedRemoteSections) {
+            if (showLocal) {
+                emptyList()
+            } else {
+                orderedRemoteSections
+                    .asSequence()
+                    .filter { section ->
+                        section.layout == ArtistSectionLayout.LIST && section.items.all { it is SongItem }
+                    }
+                    .flatMap { section -> section.items.asSequence().filterIsInstance<SongItem>() }
+                    .distinctBy { it.id }
+                    .toList()
+            }
+        }
+    var selectedArtistSongIds by rememberSaveable(viewModel.artistId) { mutableStateOf(emptyList<String>()) }
+    val selectedArtistSongIdSet = remember(selectedArtistSongIds) { selectedArtistSongIds.toSet() }
+    val selectedArtistSongs =
+        remember(selectableArtistSongs, selectedArtistSongIdSet) {
+            selectableArtistSongs.filter { it.id in selectedArtistSongIdSet }
+        }
+    val clearArtistSelection = remember { { selectedArtistSongIds = emptyList() } }
+
+    LaunchedEffect(selectableArtistSongs) {
+        val validSongIds = selectableArtistSongs.mapTo(mutableSetOf<String>()) { it.id }
+        selectedArtistSongIds = selectedArtistSongIds.filter(validSongIds::contains)
+    }
+    BackHandler(enabled = selectedArtistSongs.isNotEmpty(), onBack = clearArtistSelection)
+
     val showArtistOverflowMenu: () -> Unit = {
         menuState.show {
             ArtistOverflowMenu(
@@ -822,17 +856,20 @@ fun ArtistScreen(
                             ) { song ->
                                 YouTubeListItem(
                                     item = song as SongItem,
+                                    isSelected = song.id in selectedArtistSongIdSet,
                                     isActive = mediaMetadata?.id == song.id,
                                     isPlaying = isPlaying,
                                     trailingContent = {
                                         IconButton(
                                             onClick = {
-                                                menuState.show {
-                                                    YouTubeSongMenu(
-                                                        song = song,
-                                                        navController = navController,
-                                                        onDismiss = menuState::dismiss,
-                                                    )
+                                                if (selectedArtistSongs.isEmpty()) {
+                                                    menuState.show {
+                                                        YouTubeSongMenu(
+                                                            song = song,
+                                                            navController = navController,
+                                                            onDismiss = menuState::dismiss,
+                                                        )
+                                                    }
                                                 }
                                             },
                                             onLongClick = {},
@@ -847,7 +884,14 @@ fun ArtistScreen(
                                         Modifier
                                             .combinedClickable(
                                                 onClick = {
-                                                    if (song.id == mediaMetadata?.id) {
+                                                    if (selectedArtistSongs.isNotEmpty()) {
+                                                        selectedArtistSongIds =
+                                                            if (song.id in selectedArtistSongIdSet) {
+                                                                selectedArtistSongIds - song.id
+                                                            } else {
+                                                                selectedArtistSongIds + song.id
+                                                            }
+                                                    } else if (song.id == mediaMetadata?.id) {
                                                         playerConnection.player.togglePlayPause()
                                                     } else {
                                                         playerConnection.playQueue(
@@ -860,12 +904,8 @@ fun ArtistScreen(
                                                 },
                                                 onLongClick = {
                                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    menuState.show {
-                                                        YouTubeSongMenu(
-                                                            song = song,
-                                                            navController = navController,
-                                                            onDismiss = menuState::dismiss,
-                                                        )
+                                                    if (song.id !in selectedArtistSongIdSet) {
+                                                        selectedArtistSongIds = selectedArtistSongIds + song.id
                                                     }
                                                 },
                                             ).animateItem(),
@@ -995,13 +1035,36 @@ fun ArtistScreen(
 
         // FAB for switching between local/remote view
         HideOnScrollFAB(
-            visible = librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
+            visible = selectedArtistSongs.isEmpty() && librarySongs.isNotEmpty() && libraryArtist?.artist?.isLocal != true,
             lazyListState = lazyListState,
             icon = if (showLocal) R.drawable.language else R.drawable.library_music,
             label = if (showLocal) stringResource(R.string.together_online) else stringResource(R.string.filter_library),
             onClick = {
                 showLocal = showLocal.not()
                 if (!showLocal && artistPage == null) viewModel.fetchArtistsFromYTM()
+            },
+        )
+
+        MultiSelectFloatingToolbar(
+            visible = selectedArtistSongs.isNotEmpty(),
+            allSelected = selectableArtistSongs.isNotEmpty() && selectedArtistSongs.size == selectableArtistSongs.size,
+            onToggleAll = {
+                selectedArtistSongIds =
+                    if (selectableArtistSongs.isNotEmpty() && selectedArtistSongs.size == selectableArtistSongs.size) {
+                        emptyList()
+                    } else {
+                        selectableArtistSongs.map { it.id }
+                    }
+            },
+            onMoreClick = {
+                menuState.show {
+                    SelectionMediaMetadataMenu(
+                        songSelection = selectedArtistSongs.map { it.toMediaItem().metadata!! },
+                        currentItems = emptyList(),
+                        onDismiss = menuState::dismiss,
+                        clearAction = clearArtistSelection,
+                    )
+                }
             },
         )
 
@@ -1018,38 +1081,51 @@ fun ArtistScreen(
     // Top App Bar
     TopAppBar(
         title = {
-            val animatedAlpha by animateFloatAsState(
-                targetValue = if (!transparentAppBar) 1f else 0f,
-                animationSpec = tween(200),
-                label = "titleAlpha",
-            )
-            Text(
-                text = artistPage?.artist?.title ?: libraryArtist?.artist?.name ?: "",
-                modifier = Modifier.alpha(animatedAlpha),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (selectedArtistSongs.isNotEmpty()) {
+                Text(
+                    text = pluralStringResource(R.plurals.n_song, selectedArtistSongs.size, selectedArtistSongs.size),
+                    fontWeight = FontWeight.Bold,
+                )
+            } else {
+                val animatedAlpha by animateFloatAsState(
+                    targetValue = if (!transparentAppBar) 1f else 0f,
+                    animationSpec = tween(200),
+                    label = "titleAlpha",
+                )
+                Text(
+                    text = artistPage?.artist?.title ?: libraryArtist?.artist?.name ?: "",
+                    modifier = Modifier.alpha(animatedAlpha),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         },
         navigationIcon = {
             IconButton(
-                onClick = navController::navigateUp,
-                onLongClick = navController::backToMain,
+                onClick = {
+                    if (selectedArtistSongs.isNotEmpty()) clearArtistSelection() else navController.navigateUp()
+                },
+                onLongClick = {
+                    if (selectedArtistSongs.isEmpty()) navController.backToMain()
+                },
             ) {
                 Icon(
-                    painterResource(R.drawable.arrow_back),
+                    painterResource(if (selectedArtistSongs.isNotEmpty()) R.drawable.close else R.drawable.arrow_back),
                     contentDescription = null,
                 )
             }
         },
         actions = {
-            IconButton(
-                onClick = showArtistOverflowMenu,
-                onLongClick = {},
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.more_horiz),
-                    contentDescription = stringResource(R.string.more_options),
-                )
+            if (selectedArtistSongs.isEmpty()) {
+                IconButton(
+                    onClick = showArtistOverflowMenu,
+                    onLongClick = {},
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.more_horiz),
+                        contentDescription = stringResource(R.string.more_options),
+                    )
+                }
             }
         },
         colors =
