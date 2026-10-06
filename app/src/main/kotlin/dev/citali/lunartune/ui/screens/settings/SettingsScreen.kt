@@ -71,6 +71,7 @@ import dev.citali.lunartune.constants.AccountBannerSourceKey
 import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
 import dev.citali.lunartune.constants.AccountChannelHandleKey
 import dev.citali.lunartune.constants.AccountNameKey
+import dev.citali.lunartune.constants.AccountRowIdentityEnabledKey
 import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
@@ -128,6 +129,7 @@ fun SettingsScreen(
     val (accountYouTubeBannerUrl) = rememberPreference(AccountYouTubeBannerUrlKey, "")
     val (accountNamePreference) = rememberPreference(AccountNameKey, "")
     val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
+    val (accountRowIdentityEnabled) = rememberPreference(AccountRowIdentityEnabledKey, true)
     val (innerTubeCookie) = rememberPreference(InnerTubeCookieKey, "")
     val isAccountLoggedIn = remember(innerTubeCookie) { hasYouTubeLoginCookie(innerTubeCookie) }
     val accountViewModel: HomeViewModel = hiltViewModel()
@@ -638,11 +640,17 @@ fun SettingsScreen(
                             },
                         titleOverride =
                             accountRowTitle.takeIf {
-                                isAccountRow && isAccountLoggedIn && it.isNotBlank()
+                                accountRowIdentityEnabled &&
+                                    isAccountRow &&
+                                    isAccountLoggedIn &&
+                                    it.isNotBlank()
                             },
                         subtitleOverride =
                             accountChannelHandle.takeIf {
-                                isAccountRow && isAccountLoggedIn && it.isNotBlank()
+                                accountRowIdentityEnabled &&
+                                    isAccountRow &&
+                                    isAccountLoggedIn &&
+                                    it.isNotBlank()
                             },
                         modifier =
                             Modifier

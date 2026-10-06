@@ -728,6 +728,8 @@
     <string name="restore_database_incompatible">The library database in this backup could not be converted for this version of LunarTune.</string>
     <string name="discord_integration">Discord Integration</string>
     <string name="account_integrations_summary">Discord, Last.fm, Libre.fm, ListenBrainz</string>
+    <string name="account_row_identity_title">Show channel details on Account row</string>
+    <string name="account_row_identity_description">Use your channel name and handle on the Settings Account row. Turn off to restore its default text.</string>
     <string name="discord_login_description">Connect your Discord account with OAuth so LunarTune can publish Rich Presence.</string>
     <string name="discord_open_authorization">Open Discord authorization</string>
     <string name="discord_waiting_for_authorization">Waiting for Discord authorization...</string>

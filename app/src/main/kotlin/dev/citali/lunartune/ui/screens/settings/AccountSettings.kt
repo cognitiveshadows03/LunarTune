@@ -121,6 +121,7 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AccountChannelHandleKey
 import dev.citali.lunartune.constants.AccountEmailKey
 import dev.citali.lunartune.constants.AccountNameKey
+import dev.citali.lunartune.constants.AccountRowIdentityEnabledKey
 import dev.citali.lunartune.constants.DataSyncIdKey
 import dev.citali.lunartune.constants.ForceSyncOnAccountSwitchKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
@@ -186,6 +187,8 @@ fun AccountSettings(
     val (accountNamePref, onAccountNameChange) = rememberPreference(AccountNameKey, "")
     val (accountEmail, onAccountEmailChange) = rememberPreference(AccountEmailKey, "")
     val (accountChannelHandle, onAccountChannelHandleChange) = rememberPreference(AccountChannelHandleKey, "")
+    val (accountRowIdentityEnabled, onAccountRowIdentityEnabledChange) =
+        rememberPreference(AccountRowIdentityEnabledKey, true)
     val (innerTubeCookie, onInnerTubeCookieChange) = rememberPreference(InnerTubeCookieKey, "")
     val (visitorData, onVisitorDataChange) = rememberPreference(VisitorDataKey, "")
     val (dataSyncId, onDataSyncIdChange) = rememberPreference(DataSyncIdKey, "")
@@ -553,13 +556,23 @@ fun AccountSettings(
 
                 item {
                     ExpressiveSectionCard(title = miscLabel) {
+                        ExpressiveSwitchRow(
+                            icon = painterResource(R.drawable.account),
+                            title = stringResource(R.string.account_row_identity_title),
+                            subtitle = stringResource(R.string.account_row_identity_description),
+                            checked = accountRowIdentityEnabled,
+                            onCheckedChange = onAccountRowIdentityEnabledChange,
+                            index = 0,
+                            count = 4,
+                        )
+
                         ExpressiveActionRow(
                             icon = painterResource(R.drawable.visibility_off),
                             title = stringResource(R.string.hidden_playlists),
                             subtitle = stringResource(R.string.hidden_playlists_description),
                             onClick = { navController.navigate("settings/hidden_playlists") },
-                            index = 0,
-                            count = 3,
+                            index = 1,
+                            count = 4,
                         )
 
                         ExpressiveActionRow(
@@ -576,8 +589,8 @@ fun AccountSettings(
                                     showTokenEditor = true
                                 }
                             },
-                            index = 1,
-                            count = 3,
+                            index = 2,
+                            count = 4,
                         )
 
                         ExpressiveActionRow(
@@ -601,8 +614,8 @@ fun AccountSettings(
                             enabled = !isPoTokenLoggedIn && poTokenState !is PoTokenState.Loading,
                             accent = if (isPoTokenLoggedIn) MaterialTheme.colorScheme.tertiary else null,
                             onClick = onGeneratePoToken,
-                            index = 2,
-                            count = 3,
+                            index = 3,
+                            count = 4,
                         )
                     }
                 }

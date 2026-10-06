@@ -876,6 +876,7 @@ val PoTokenKey = stringPreferencesKey("poToken")
 val AccountNameKey = stringPreferencesKey("accountName")
 val AccountEmailKey = stringPreferencesKey("accountEmail")
 val AccountChannelHandleKey = stringPreferencesKey("accountChannelHandle")
+val AccountRowIdentityEnabledKey = booleanPreferencesKey("accountRowIdentityEnabled")
 // Account card banner: "youtube" (channel banner, default), "custom" (picked image) or "none"
 val AccountBannerSourceKey = stringPreferencesKey("accountBannerSource")
 val AccountBannerUpdatedAtKey = longPreferencesKey("accountBannerUpdatedAt")
