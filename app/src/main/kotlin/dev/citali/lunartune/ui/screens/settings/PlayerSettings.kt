@@ -55,6 +55,7 @@ import dev.citali.lunartune.constants.PauseOnDeviceMuteKey
 import dev.citali.lunartune.constants.PermanentShuffleKey
 import dev.citali.lunartune.constants.PersistentQueueKey
 import dev.citali.lunartune.constants.PreloadNextSongKey
+import dev.citali.lunartune.constants.PreloadQueueSongsCountKey
 import dev.citali.lunartune.constants.SeekExtraSeconds
 import dev.citali.lunartune.constants.SkipSilenceKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
@@ -91,6 +92,11 @@ fun PlayerSettings(navController: NavController) {
         rememberPreference(
             PreloadNextSongKey,
             defaultValue = false,
+        )
+    val (preloadQueueSongsCount, onPreloadQueueSongsCountChange) =
+        rememberPreference(
+            PreloadQueueSongsCountKey,
+            defaultValue = 1,
         )
     val (persistentQueue, onPersistentQueueChange) =
         rememberPreference(
@@ -324,6 +330,18 @@ fun PlayerSettings(navController: NavController) {
                         checked = preloadNextSong,
                         onCheckedChange = onPreloadNextSongChange,
                         isEnabled = !lowDataMode,
+                    )
+                }
+
+                item(visible = preloadNextSong) {
+                    NumberPickerPreference(
+                        title = { Text(stringResource(R.string.queue_songs_preload_count)) },
+                        icon = { Icon(painterResource(R.drawable.queue_music), null) },
+                        value = preloadQueueSongsCount,
+                        onValueChange = onPreloadQueueSongsCountChange,
+                        minValue = 1,
+                        maxValue = 10,
+                        valueText = { it.toString() },
                     )
                 }
 

@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import dev.citali.lunartune.constants.PreloadQueueLyricsEnabledKey
 import dev.citali.lunartune.constants.QueueLyricsPreloadCountKey
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.LyricsEntity
@@ -64,8 +65,15 @@ class LyricsPreloadManager
                 scope.launch {
                     try {
                         val preferences = context.dataStore.data.first()
-                        val preloadCount = preferences[QueueLyricsPreloadCountKey] ?: DEFAULT_PRELOAD_COUNT
-                        if (preloadCount <= 0) {
+                        val preloadEnabled = preferences[PreloadQueueLyricsEnabledKey] ?: true
+                        if (!preloadEnabled) {
+                            Log.d(TAG, "Queue lyrics pre-load is disabled")
+                            return@launch
+                        }
+                        val preloadCount =
+                            (preferences[QueueLyricsPreloadCountKey] ?: DEFAULT_PRELOAD_COUNT)
+                                .coerceIn(0, MAX_PRELOAD_COUNT)
+                        if (preloadCount == 0) {
                             Log.d(TAG, "Queue lyrics pre-load is off (count = 0)")
                             return@launch
                         }
@@ -182,7 +190,8 @@ class LyricsPreloadManager
 
         companion object {
             private const val TAG = "LyricsPreloadManager"
-            private const val DEFAULT_PRELOAD_COUNT = 3
+            private const val DEFAULT_PRELOAD_COUNT = 1
+            private const val MAX_PRELOAD_COUNT = 10
             private const val MAX_CONCURRENT_PRELOADS = 2
         }
     }

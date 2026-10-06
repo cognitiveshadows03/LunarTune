@@ -141,7 +141,7 @@ fun LibraryScreen(
             initialPage = libraryFilters.indexOf(defaultFilter).takeIf { it >= 0 } ?: 0,
         ) { libraryFilters.size }
 
-    val currentFilter = libraryFilters.getOrElse(pagerState.settledPage) { LibraryFilter.LIBRARY }
+    val currentFilter = libraryFilters.getOrElse(pagerState.targetPage) { LibraryFilter.LIBRARY }
 
     val density = LocalDensity.current
     val configuration = LocalConfiguration.current
