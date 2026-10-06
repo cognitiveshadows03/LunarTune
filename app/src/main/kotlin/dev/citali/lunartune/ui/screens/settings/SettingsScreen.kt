@@ -633,10 +633,16 @@ fun SettingsScreen(
                         item = settingsItem,
                         index = index,
                         count = group.items.size,
-                        backgroundModel = accountRowBannerModel.takeIf { isAccountRow && isAccountLoggedIn },
+                        backgroundModel =
+                            accountRowBannerModel.takeIf {
+                                accountRowIdentityEnabled && isAccountRow && isAccountLoggedIn
+                            },
                         iconImageModel =
                             accountImageUrl.takeIf {
-                                isAccountRow && isAccountLoggedIn && !it.isNullOrBlank()
+                                accountRowIdentityEnabled &&
+                                    isAccountRow &&
+                                    isAccountLoggedIn &&
+                                    !it.isNullOrBlank()
                             },
                         titleOverride =
                             accountRowTitle.takeIf {
