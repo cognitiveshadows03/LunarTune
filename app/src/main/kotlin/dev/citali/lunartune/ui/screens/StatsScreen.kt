@@ -91,6 +91,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
@@ -109,7 +110,6 @@ import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.StatPeriod
 import dev.citali.lunartune.db.entities.Artist
-import dev.citali.lunartune.db.entities.ListeningBySlot
 import dev.citali.lunartune.db.entities.ListeningSummary
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongWithStats
@@ -382,7 +382,6 @@ fun StatsScreen(
                 item(key = "overview", contentType = "overview") {
                     StatsSummarySection(
                         summary = listeningSummary,
-                        trendBuckets = data.listeningTrendBuckets,
                         previousPeriodTimeListened = data.previousPeriodTimeListened,
                         comparisonLabelResId = data.comparisonLabelResId,
                         modifier = Modifier.animateItem(),
@@ -1017,7 +1016,6 @@ private fun StatsYearPickerDialog(
 @Composable
 private fun StatsSummarySection(
     summary: ListeningSummary,
-    trendBuckets: List<ListeningBySlot>,
     previousPeriodTimeListened: Long?,
     comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
@@ -1041,7 +1039,6 @@ private fun StatsSummarySection(
                 ) {
                     StatsListeningTimeHero(
                         summary = summary,
-                        trendBuckets = trendBuckets,
                         previousPeriodTimeListened = previousPeriodTimeListened,
                         comparisonLabelResId = comparisonLabelResId,
                         modifier = Modifier.weight(1.2f),
@@ -1068,7 +1065,6 @@ private fun StatsSummarySection(
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     StatsListeningTimeHero(
                         summary = summary,
-                        trendBuckets = trendBuckets,
                         previousPeriodTimeListened = previousPeriodTimeListened,
                         comparisonLabelResId = comparisonLabelResId,
                     )
@@ -1099,7 +1095,6 @@ private fun StatsSummarySection(
 @Composable
 private fun StatsListeningTimeHero(
     summary: ListeningSummary,
-    trendBuckets: List<ListeningBySlot>,
     previousPeriodTimeListened: Long?,
     comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
@@ -1160,62 +1155,6 @@ private fun StatsListeningTimeHero(
                 fontWeight = FontWeight.SemiBold,
                 color = foreground,
             )
-            StatsTrendMiniChart(
-                buckets = trendBuckets,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatsTrendMiniChart(
-    buckets: List<ListeningBySlot>,
-    modifier: Modifier = Modifier,
-) {
-    val values =
-        remember(buckets) {
-            val bucketMap = buckets.associateBy { it.slot }
-            (0 until 7).map { bucketMap[it]?.timeListened ?: 0L }
-        }
-    val maxTime = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-    val barColor = MaterialTheme.colorScheme.onPrimaryContainer
-
-    Column(
-        modifier = modifier.padding(top = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.stats_listening_trend),
-            style = MaterialTheme.typography.labelSmall,
-            color = barColor.copy(alpha = 0.72f),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().height(28.dp),
-            horizontalArrangement = Arrangement.spacedBy(7.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            values.forEachIndexed { index, value ->
-                val fraction = (value.toDouble() / maxTime).toFloat().coerceIn(0f, 1f)
-                val animatedFraction by animateFloatAsState(
-                    targetValue = fraction,
-                    animationSpec = tween(350),
-                    label = "trend_bucket_$index",
-                )
-                Box(
-                    modifier = Modifier.weight(1f).height(28.dp),
-                    contentAlignment = Alignment.BottomCenter,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth(0.42f)
-                                .height((28 * animatedFraction).dp.coerceAtLeast(2.dp))
-                                .clip(CircleShape)
-                                .background(barColor.copy(alpha = 0.3f + 0.7f * animatedFraction)),
-                    )
-                }
-            }
         }
     }
 }
@@ -1719,7 +1658,7 @@ private fun SegmentedArtistChart(
                             )
                             Text(
                                 text = "${segment.percentage}%",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                             )
                         }

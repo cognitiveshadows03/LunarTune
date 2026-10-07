@@ -582,7 +582,6 @@
     <string name="stats_trend_no_comparison">Trend comparison unavailable</string>
     <string name="stats_trend_no_previous_listening">No listening in the previous period</string>
     <string name="stats_trend_all_time">All-time listening</string>
-    <string name="stats_listening_trend">Listening trend</string>
     <string name="stats_trend_vs_last_week">vs last week</string>
     <string name="stats_trend_vs_last_month">vs last month</string>
     <string name="stats_trend_vs_previous_three_months">vs previous 3 months</string>
@@ -599,8 +598,8 @@
     <string name="stats_listening_by_hour">Listening by Hour</string>
     <string name="stats_peak_hour">Most active: %s</string>
     <string name="stats_pattern_period_label">Last month average · per occurrence</string>
-    <string name="stats_pattern_insight_day">You listen most on %1$s</string>
-    <string name="stats_pattern_insight_hour">You listen most around %1$s</string>
+    <string name="stats_pattern_insight_day">Most active on %1$s</string>
+    <string name="stats_pattern_insight_hour">Most active around %1$s</string>
     <string name="stats_pattern_no_history">No listening recorded last month</string>
     <string name="stats_pattern_comparison">%1$s %2$s vs last month</string>
     <string name="stats_pattern_tooltip_day">%1$s · avg %2$s · %3$d %4$s</string>
