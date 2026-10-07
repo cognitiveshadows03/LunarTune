@@ -624,6 +624,8 @@
     <string name="stats_time_range">Time range</string>
     <string name="stats_listening_patterns">Listening patterns</string>
     <string name="stats_artist_breakdown">Artist breakdown</string>
+    <string name="stats_other">Other</string>
+    <string name="stats_top_artist_time">Top artist: %1$s · %2$s</string>
     <string name="day_sun">Sun</string>
     <string name="day_mon">Mon</string>
     <string name="day_tue">Tue</string>

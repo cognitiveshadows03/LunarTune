@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.ui.screens
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -58,8 +59,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -71,6 +74,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -89,8 +94,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.toBitmap
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
@@ -127,7 +139,12 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 import android.graphics.Color as AndroidColor
 
 @OptIn(
@@ -380,8 +397,9 @@ fun StatsScreen(
                                 supportingText = mostPlayedArtists.take(5).size.toString(),
                             )
                             SegmentedArtistChart(
-                                artists = mostPlayedArtists.take(5),
+                                artists = mostPlayedArtists,
                                 totalTimeListened = listeningSummary.totalTimeListened,
+                                animationKey = selectedOption to indexChips,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
@@ -1329,152 +1347,399 @@ private fun StatsHighlightCard(
     }
 }
 
+private data class ArtistBreakdownSegment(
+    val key: String,
+    val artist: Artist?,
+    val startAngle: Float,
+    val sweepAngle: Float,
+    val percentage: Int,
+)
+
+private fun buildArtistBreakdownSegments(
+    artists: List<Artist>,
+    totalTimeListened: Long,
+): List<ArtistBreakdownSegment> {
+    val rankedArtists =
+        artists
+            .mapNotNull { artist ->
+                val time = artist.timeListened?.toLong() ?: 0L
+                if (time <= 0L) null else artist to time
+            }.sortedByDescending { it.second }
+    val artistTotal = rankedArtists.sumOf { it.second }
+    val displayTotal = totalTimeListened.takeIf { it > 0L } ?: artistTotal
+    val allocationTotal = maxOf(displayTotal, artistTotal)
+    if (allocationTotal <= 0L) return emptyList()
+
+    val topArtists = rankedArtists.take(5)
+    val topArtistTime = topArtists.sumOf { it.second }
+    val otherTime = (allocationTotal - topArtistTime).coerceAtLeast(0L)
+    val weightedSegments =
+        buildList<Pair<Artist?, Long>> {
+            topArtists.forEach { (artist, time) -> add(artist to time) }
+            if (otherTime > 0L) add(null to otherTime)
+        }
+    val weights = weightedSegments.map { it.second }
+    val percentages = allocatePercentagesToHundred(weights)
+
+    var startAngle = -90f
+    return weightedSegments.mapIndexed { index, (artist, weight) ->
+        val sweep =
+            if (index == weightedSegments.lastIndex) {
+                (270f - startAngle).coerceAtLeast(0f)
+            } else {
+                (weight.toDouble() / allocationTotal.toDouble() * 360.0).toFloat()
+            }
+        ArtistBreakdownSegment(
+            key = artist?.id ?: "other",
+            artist = artist,
+            startAngle = startAngle,
+            sweepAngle = sweep,
+            percentage = percentages[index],
+        ).also {
+            startAngle += sweep
+        }
+    }
+}
+
+private fun allocatePercentagesToHundred(weights: List<Long>): List<Int> {
+    if (weights.isEmpty()) return emptyList()
+    val total = weights.sum().toDouble()
+    if (total <= 0.0) return List(weights.size) { 0 }
+
+    val exactPercentages = weights.map { it.toDouble() * 100.0 / total }
+    val percentages = exactPercentages.map { it.toInt() }.toMutableList()
+    val remainder = 100 - percentages.sum()
+    exactPercentages.indices
+        .sortedByDescending { exactPercentages[it] - percentages[it] }
+        .take(remainder)
+        .forEach { percentages[it] += 1 }
+    return percentages
+}
+
 @Composable
 private fun SegmentedArtistChart(
     artists: List<Artist>,
     totalTimeListened: Long,
+    animationKey: Any,
     modifier: Modifier = Modifier,
 ) {
-    val visibleArtistTime = remember(artists) { artists.sumOf { it.timeListened?.toLong() ?: 0L } }
-    val displayTotalTime =
-        remember(totalTimeListened, visibleArtistTime) {
-            totalTimeListened.takeIf { it > 0L } ?: visibleArtistTime
+    val segmentData = remember(artists, totalTimeListened) { buildArtistBreakdownSegments(artists, totalTimeListened) }
+    if (segmentData.isEmpty()) return
+
+    val context = LocalContext.current
+    val photoColors = remember { mutableStateOf<Map<String, Color>>(emptyMap()) }
+    val photoSources =
+        remember(segmentData) {
+            segmentData
+                .mapNotNull { segment ->
+                    segment.artist?.let { artist ->
+                        artist.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { artist.id to it }
+                    }
+                }.distinctBy { it.first }
         }
-    if (visibleArtistTime == 0L) return
-
-    val segmentData =
-        remember(artists, visibleArtistTime) {
-            val rawSegments =
-                artists.mapNotNull { artist ->
-                    val time = artist.timeListened?.toLong() ?: 0L
-                    if (time <= 0L) return@mapNotNull null
-                    artist to (time.toFloat() / visibleArtistTime) * 360f
+    LaunchedEffect(photoSources) {
+        val artworkBitmaps =
+            withContext(Dispatchers.IO) {
+                val loaded = mutableListOf<Pair<String, android.graphics.Bitmap>>()
+                for ((artistId, url) in photoSources) {
+                    val bitmap =
+                        runCatching {
+                            val request =
+                                ImageRequest
+                                    .Builder(context)
+                                    .data(url)
+                                    .size(96, 96)
+                                    .allowHardware(false)
+                                    .build()
+                            context.imageLoader.execute(request).image?.toBitmap()
+                        }.getOrNull()
+                    if (bitmap != null) loaded += artistId to bitmap
                 }
-
-            if (rawSegments.isEmpty()) {
-                emptyList()
-            } else {
-                val topArtistId = rawSegments.maxByOrNull { it.second }?.first?.id
-                val retainedSegments =
-                    rawSegments
-                        .filter { (_, sweep) -> sweep >= 1f }
-                        .ifEmpty { listOf(rawSegments.maxBy { it.second }) }
-                val retainedSweep = retainedSegments.sumOf { it.second.toDouble() }.toFloat()
-                val remainderSweep = (360f - retainedSweep).coerceAtLeast(0f)
-                val completedSegments =
-                    retainedSegments.map { (artist, sweep) ->
-                        artist to
-                            if (artist.id == topArtistId) {
-                                sweep + remainderSweep
-                            } else {
-                                sweep
-                            }
-                    }
-
-                var startAngle = -90f
-                completedSegments.map { (artist, sweep) ->
-                    Triple(artist, startAngle, sweep).also {
-                        startAngle += sweep
-                    }
-                }
+                loaded
             }
-        }
+        photoColors.value =
+            withContext(Dispatchers.Default) {
+                artworkBitmaps.mapNotNull { (artistId, bitmap) ->
+                    val palette =
+                        runCatching {
+                            Palette
+                                .from(bitmap)
+                                .maximumColorCount(16)
+                                .resizeBitmapArea(64 * 64)
+                                .generate()
+                        }.getOrNull()
+                    val swatch =
+                        palette?.vibrantSwatch
+                            ?: palette?.lightVibrantSwatch
+                            ?: palette?.mutedSwatch
+                            ?: palette?.dominantSwatch
+                    swatch?.let { artistId to Color(it.rgb) }
+                }.toMap()
+            }
+    }
+
+    val segmentKeys = remember(segmentData) { segmentData.map { it.key } }
+    val selectedKey = remember(animationKey, segmentKeys) { mutableStateOf(segmentKeys.firstOrNull()) }
+    val selectedIndex = segmentData.indexOfFirst { it.key == selectedKey.value }.let { if (it >= 0) it else 0 }
+    val selectedSegment = segmentData[selectedIndex]
+    val sweepAnimation = remember(animationKey) { Animatable(0f) }
+    LaunchedEffect(sweepAnimation) {
+        sweepAnimation.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 950),
+        )
+    }
+    val sweepProgress = sweepAnimation.value
 
     val primaryColor = MaterialTheme.colorScheme.primary
-    val segmentColors =
+    val fallbackColors =
         remember(primaryColor, segmentData.size) {
             createDistinctArtistColors(
                 seedColor = primaryColor,
                 count = segmentData.size,
             )
         }
+    val otherColor = MaterialTheme.colorScheme.tertiary
+    val segmentColors =
+        remember(segmentData, photoColors.value, fallbackColors, otherColor) {
+            segmentData.mapIndexed { index, segment ->
+                if (segment.artist == null) {
+                    otherColor
+                } else {
+                    photoColors.value[segment.key] ?: fallbackColors[index]
+                }
+            }
+        }
+    val selectedColor = segmentColors[selectedIndex]
+    val topArtist = segmentData.firstOrNull { it.artist != null }?.artist
 
     ElevatedCard(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.elevatedCardColors(),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .padding(20.dp)
-                    .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(140.dp)
-                        .drawWithCache {
-                            val strokeWidth = size.width * 0.18f
-                            val inset = strokeWidth / 2f
-                            val arcRect =
-                                Rect(
-                                    left = inset,
-                                    top = inset,
-                                    right = size.width - inset,
-                                    bottom = size.height - inset,
-                                )
-                            onDrawBehind {
-                                segmentData.forEachIndexed { i, (_, startAngle, sweep) ->
-                                    val gapDeg = if (segmentData.size > 1) 2f else 0f
-                                    drawArc(
-                                        color = segmentColors[i % segmentColors.size],
-                                        startAngle = startAngle + gapDeg / 2f,
-                                        sweepAngle = (sweep - gapDeg).coerceAtLeast(0f),
-                                        useCenter = false,
-                                        topLeft = arcRect.topLeft,
-                                        size = Size(arcRect.width, arcRect.height),
-                                        style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
-                                    )
-                                }
-                            }
-                        },
-            )
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.weight(1f),
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                segmentData.forEachIndexed { i, (artist, _, sweep) ->
-                    val percentage = (sweep / 360f * 100).toInt()
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                Box(
+                    modifier =
+                        Modifier
+                            .size(140.dp)
+                            .drawWithCache {
+                                val strokeWidth = size.width * 0.18f
+                                val inset = strokeWidth / 2f
+                                val arcRect =
+                                    Rect(
+                                        left = inset,
+                                        top = inset,
+                                        right = size.width - inset,
+                                        bottom = size.height - inset,
+                                    )
+                                val selectedOffsetPx = 5.dp.toPx()
+                                onDrawBehind {
+                                    val revealEnd = 360f * sweepProgress
+                                    segmentData.forEachIndexed { index, segment ->
+                                        val segmentStartFromTop = segment.startAngle + 90f
+                                        val segmentEndFromTop = segmentStartFromTop + segment.sweepAngle
+                                        val revealedSweep =
+                                            (minOf(segmentEndFromTop, revealEnd) - segmentStartFromTop)
+                                                .coerceAtLeast(0f)
+                                        val gapDegrees =
+                                            if (segmentData.size > 1) minOf(1.5f, segment.sweepAngle * 0.3f) else 0f
+                                        val reachesSegmentEnd = revealedSweep >= segment.sweepAngle
+                                        val visibleSweep =
+                                            if (reachesSegmentEnd) {
+                                                (segment.sweepAngle - gapDegrees).coerceAtLeast(0f)
+                                            } else {
+                                                (revealedSweep - gapDegrees / 2f).coerceAtLeast(0f)
+                                            }
+                                        if (visibleSweep > 0.25f) {
+                                            val isSelected = index == selectedIndex
+                                            val middleAngle = segment.startAngle + segment.sweepAngle / 2f
+                                            val radians = middleAngle.toDouble() * PI / 180.0
+                                            val dx = if (isSelected) cos(radians).toFloat() * selectedOffsetPx else 0f
+                                            val dy = if (isSelected) sin(radians).toFloat() * selectedOffsetPx else 0f
+                                            withTransform({ translate(left = dx, top = dy) }) {
+                                                drawArc(
+                                                    color =
+                                                        segmentColors[index].copy(
+                                                            alpha = if (isSelected) 1f else 0.36f,
+                                                        ),
+                                                    startAngle = segment.startAngle + gapDegrees / 2f,
+                                                    sweepAngle = visibleSweep,
+                                                    useCenter = false,
+                                                    topLeft = arcRect.topLeft,
+                                                    size = Size(arcRect.width, arcRect.height),
+                                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }.pointerInput(animationKey, segmentData) {
+                                detectTapGestures { offset ->
+                                    val centerX = size.width / 2f
+                                    val centerY = size.height / 2f
+                                    val dx = offset.x - centerX
+                                    val dy = offset.y - centerY
+                                    val distance = sqrt(dx * dx + dy * dy)
+                                    val outerRadius = size.minDimension / 2f
+                                    val innerRadius = outerRadius - size.width * 0.18f
+                                    val hitSlop = 8.dp.toPx()
+                                    if (distance < innerRadius - hitSlop || distance > outerRadius + hitSlop) {
+                                        return@detectTapGestures
+                                    }
+
+                                    val rawAngle = atan2(dy, dx) * 180f / PI.toFloat()
+                                    val angleFromTop = (rawAngle + 90f + 360f) % 360f
+                                    var sweepStart = 0f
+                                    val tappedIndex =
+                                        segmentData.indexOfFirst { segment ->
+                                            val containsAngle =
+                                                angleFromTop >= sweepStart &&
+                                                    angleFromTop < sweepStart + segment.sweepAngle
+                                            sweepStart += segment.sweepAngle
+                                            containsAngle
+                                        }
+                                    if (tappedIndex >= 0) selectedKey.value = segmentData[tappedIndex].key
+                                }
+                            },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        modifier = Modifier.width(86.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
-                        Box(
-                            modifier =
-                                Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(segmentColors[i % segmentColors.size]),
-                        )
+                        if (selectedSegment.artist != null) {
+                            AsyncImage(
+                                model = selectedSegment.artist.thumbnailUrl,
+                                contentDescription = null,
+                                placeholder = painterResource(R.drawable.person),
+                                error = painterResource(R.drawable.person),
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(34.dp).clip(CircleShape),
+                            )
+                        } else {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(selectedColor.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.more_horiz),
+                                    contentDescription = null,
+                                    tint = selectedColor,
+                                    modifier = Modifier.size(22.dp),
+                                )
+                            }
+                        }
                         Text(
-                            text = artist.artist.name,
-                            style = MaterialTheme.typography.labelMedium,
+                            text = "${selectedSegment.percentage}%",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
                         Text(
-                            text = "$percentage%",
+                            text = selectedSegment.artist?.artist?.name ?: stringResource(R.string.stats_other),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    segmentData.forEachIndexed { index, segment ->
+                        val isSelected = index == selectedIndex
+                        val alpha = if (isSelected) 1f else 0.48f
+                        val rowColor = if (isSelected) segmentColors[index].copy(alpha = 0.12f) else Color.Transparent
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(rowColor)
+                                    .clickable { selectedKey.value = segment.key }
+                                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            if (segment.artist != null) {
+                                AsyncImage(
+                                    model = segment.artist.thumbnailUrl,
+                                    contentDescription = null,
+                                    placeholder = painterResource(R.drawable.person),
+                                    error = painterResource(R.drawable.person),
+                                    contentScale = ContentScale.Crop,
+                                    modifier =
+                                        Modifier
+                                            .size(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .graphicsLayer { this.alpha = alpha },
+                                )
+                            } else {
+                                Box(
+                                    modifier =
+                                        Modifier
+                                            .size(30.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(segmentColors[index].copy(alpha = alpha)),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.more_horiz),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                            Text(
+                                text = segment.artist?.artist?.name ?: stringResource(R.string.stats_other),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "${segment.percentage}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (topArtist != null) {
                 Text(
-                    text = makeTimeString(displayTotalTime) ?: "-",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = stringResource(R.string.stats_total_time_listened),
-                    style = MaterialTheme.typography.labelSmall,
+                    text =
+                        stringResource(
+                            R.string.stats_top_artist_time,
+                            topArtist.artist.name,
+                            makeTimeString(topArtist.timeListened?.toLong() ?: 0L) ?: "-",
+                        ),
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
