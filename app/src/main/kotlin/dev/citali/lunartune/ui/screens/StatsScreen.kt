@@ -11,6 +11,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -72,11 +74,13 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -116,11 +120,13 @@ import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.joinByBullet
 import dev.citali.lunartune.utils.makeTimeString
+import dev.citali.lunartune.viewmodels.ListeningPatternSlot
 import dev.citali.lunartune.viewmodels.StatsScreenState
 import dev.citali.lunartune.viewmodels.StatsViewModel
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlin.math.roundToInt
 import android.graphics.Color as AndroidColor
 
@@ -346,6 +352,13 @@ fun StatsScreen(
                     item(key = "periodEmpty", contentType = "status") {
                         StatsPeriodEmptyMessage(modifier = Modifier.animateItem())
                     }
+                    item(key = "listeningPatternsEmptyPeriod", contentType = "insights") {
+                        StatsListeningPatterns(
+                            daySlots = listeningByDayOfWeek,
+                            hourSlots = listeningByHour,
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
                     return@LazyColumn
                 }
 
@@ -396,7 +409,6 @@ fun StatsScreen(
                     StatsListeningPatterns(
                         daySlots = listeningByDayOfWeek,
                         hourSlots = listeningByHour,
-                        currentDayOfWeek = remember { LocalDateTime.now().dayOfWeek.value % 7 },
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -770,9 +782,8 @@ private fun StatsSongsHeader(
 
 @Composable
 private fun StatsListeningPatterns(
-    daySlots: List<ListeningBySlot>,
-    hourSlots: List<ListeningBySlot>,
-    currentDayOfWeek: Int,
+    daySlots: List<ListeningPatternSlot>,
+    hourSlots: List<ListeningPatternSlot>,
     modifier: Modifier = Modifier,
 ) {
     if (daySlots.isEmpty() && hourSlots.isEmpty()) return
@@ -795,7 +806,6 @@ private fun StatsListeningPatterns(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ListeningByDayChart(
                         slots = daySlots,
-                        currentDayOfWeek = currentDayOfWeek,
                         modifier = Modifier.weight(1f),
                     )
                     ListeningByHourChart(
@@ -808,7 +818,6 @@ private fun StatsListeningPatterns(
                     if (daySlots.isNotEmpty()) {
                         ListeningByDayChart(
                             slots = daySlots,
-                            currentDayOfWeek = currentDayOfWeek,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -1495,8 +1504,7 @@ private fun createDistinctArtistColors(
 
 @Composable
 private fun ListeningByDayChart(
-    slots: List<ListeningBySlot>,
-    currentDayOfWeek: Int,
+    slots: List<ListeningPatternSlot>,
     modifier: Modifier = Modifier,
 ) {
     val dayLabels =
@@ -1509,10 +1517,28 @@ private fun ListeningByDayChart(
             R.string.day_fri,
             R.string.day_sat,
         )
+    val weekdayPluralNames = stringArrayResource(R.array.stats_pattern_weekday_plural)
     val slotMap = remember(slots) { slots.associateBy { it.slot } }
-    val maxTime = remember(slots) { slots.maxOfOrNull { it.timeListened } ?: 1L }
+    val maxTime = (slots.maxOfOrNull { it.averageTimeListened } ?: 0L).coerceAtLeast(1L)
+    val peakSlot = slots.maxByOrNull { it.averageTimeListened }?.takeIf { it.averageTimeListened > 0L }?.slot
+    val comparisonSlot =
+        slots
+            .filter { it.comparisonPercent != null }
+            .maxByOrNull { it.currentMonthAverageTimeListened }
+    val selectedSlot = remember(slots) { mutableIntStateOf(-1) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.secondaryContainer
+    val insight =
+        peakSlot?.let { stringResource(R.string.stats_pattern_insight_day, weekdayPluralNames[it]) }
+            ?: stringResource(R.string.stats_pattern_no_history)
+    val comparison =
+        comparisonSlot?.let { slot ->
+            stringResource(
+                R.string.stats_pattern_comparison,
+                weekdayPluralNames[slot.slot],
+                formatSignedPercent(slot.comparisonPercent ?: 0),
+            )
+        }
 
     ElevatedCard(
         modifier = modifier,
@@ -1525,6 +1551,21 @@ private fun ListeningByDayChart(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.secondary,
             )
+            PatternChartMeta(insight = insight, comparison = comparison)
+            val selected = slotMap[selectedSlot.intValue]
+            if (selected != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                PatternTooltip(
+                    text =
+                        stringResource(
+                            R.string.stats_pattern_tooltip_day,
+                            stringResource(dayLabels[selected.slot]),
+                            formatAverageListeningTime(selected.averageTimeListened),
+                            selected.occurrenceCount,
+                            weekdayPluralNames[selected.slot],
+                        ),
+                )
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1532,9 +1573,12 @@ private fun ListeningByDayChart(
                 verticalAlignment = Alignment.Bottom,
             ) {
                 for (day in 0..6) {
-                    val time = slotMap[day]?.timeListened ?: 0L
+                    val slot = slotMap[day]
+                    val time = slot?.averageTimeListened ?: 0L
                     val fraction = time.toFloat() / maxTime
-                    val barColor = if (day == currentDayOfWeek) primaryColor else containerColor
+                    val isPeak = day == peakSlot
+                    val isSelected = day == selectedSlot.intValue
+                    val barColor = if (isPeak || isSelected) primaryColor else containerColor
                     val animatedFraction by animateFloatAsState(
                         targetValue = fraction,
                         animationSpec = tween(400),
@@ -1543,7 +1587,12 @@ private fun ListeningByDayChart(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.weight(1f),
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { selectedSlot.intValue = day }
+                                .padding(vertical = 4.dp),
                     ) {
                         Box(
                             modifier =
@@ -1564,8 +1613,8 @@ private fun ListeningByDayChart(
                         Text(
                             text = stringResource(dayLabels[day]),
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (day == currentDayOfWeek) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (day == currentDayOfWeek) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isPeak || isSelected) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (isPeak || isSelected) FontWeight.Bold else FontWeight.Normal,
                         )
                     }
                 }
@@ -1576,26 +1625,32 @@ private fun ListeningByDayChart(
 
 @Composable
 private fun ListeningByHourChart(
-    slots: List<ListeningBySlot>,
+    slots: List<ListeningPatternSlot>,
     modifier: Modifier = Modifier,
 ) {
+    val formatter = remember { DateTimeFormatter.ofPattern("h a", Locale.getDefault()) }
+    val hourLabels = remember(formatter) { (0..23).map { LocalTime.of(it, 0).format(formatter) } }
+    val timeLabels = remember(formatter) { listOf(0, 6, 12, 18, 0).map { LocalTime.of(it, 0).format(formatter) } }
     val slotMap = remember(slots) { slots.associateBy { it.slot } }
-    val maxTime = remember(slots) { slots.maxOfOrNull { it.timeListened } ?: 1L }
-    val peakSlot = remember(slots) { slots.maxByOrNull { it.timeListened }?.slot }
+    val maxTime = (slots.maxOfOrNull { it.averageTimeListened } ?: 0L).coerceAtLeast(1L)
+    val peakSlot = slots.maxByOrNull { it.averageTimeListened }?.takeIf { it.averageTimeListened > 0L }?.slot
+    val comparisonSlot =
+        slots
+            .filter { it.comparisonPercent != null }
+            .maxByOrNull { it.currentMonthAverageTimeListened }
+    val selectedSlot = remember(slots) { mutableIntStateOf(-1) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.primaryContainer
-
-    val peakLabel =
-        remember(peakSlot) {
-            val formatter = DateTimeFormatter.ofPattern("ha")
-            peakSlot?.let { LocalTime.of(it, 0).format(formatter) }
-        }
-    val timeLabels =
-        remember {
-            val formatter = DateTimeFormatter.ofPattern("ha")
-            listOf(0, 6, 12, 18, 0).map { hour ->
-                LocalTime.of(hour, 0).format(formatter)
-            }
+    val insight =
+        peakSlot?.let { stringResource(R.string.stats_pattern_insight_hour, hourLabels[it]) }
+            ?: stringResource(R.string.stats_pattern_no_history)
+    val comparison =
+        comparisonSlot?.let { slot ->
+            stringResource(
+                R.string.stats_pattern_comparison,
+                hourLabels[slot.slot],
+                formatSignedPercent(slot.comparisonPercent ?: 0),
+            )
         }
 
     ElevatedCard(
@@ -1604,51 +1659,65 @@ private fun ListeningByHourChart(
         colors = CardDefaults.elevatedCardColors(),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.stats_listening_by_hour),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.secondary,
+            Text(
+                text = stringResource(R.string.stats_listening_by_hour),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            PatternChartMeta(insight = insight, comparison = comparison)
+            val selected = slotMap[selectedSlot.intValue]
+            if (selected != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                PatternTooltip(
+                    text =
+                        stringResource(
+                            R.string.stats_pattern_tooltip_hour,
+                            hourLabels[selected.slot],
+                            formatAverageListeningTime(selected.averageTimeListened),
+                            selected.occurrenceCount,
+                        ),
                 )
-                if (peakLabel != null) {
-                    Text(
-                        text = stringResource(R.string.stats_peak_hour, peakLabel),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = primaryColor,
-                    )
-                }
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .pointerInput(slots) {
+                            detectTapGestures { offset ->
+                                val slotWidth = size.width.toFloat() / 24f
+                                selectedSlot.intValue = (offset.x / slotWidth).toInt().coerceIn(0, 23)
+                            }
+                        },
                 verticalAlignment = Alignment.Bottom,
             ) {
                 for (hour in 0..23) {
-                    val time = slotMap[hour]?.timeListened ?: 0L
+                    val slot = slotMap[hour]
+                    val time = slot?.averageTimeListened ?: 0L
                     val fraction = time.toFloat() / maxTime
                     val isPeak = hour == peakSlot
-                    val barColor = if (isPeak) primaryColor else containerColor.copy(alpha = 0.6f + fraction * 0.4f)
+                    val isSelected = hour == selectedSlot.intValue
+                    val barColor =
+                        if (isPeak || isSelected) {
+                            primaryColor
+                        } else {
+                            containerColor.copy(alpha = 0.6f + fraction * 0.4f)
+                        }
                     val animatedFraction by animateFloatAsState(
                         targetValue = fraction,
                         animationSpec = tween(400),
                         label = "hour_$hour",
                     )
                     Box(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(48.dp),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                         contentAlignment = Alignment.BottomCenter,
                     ) {
                         Box(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
+                                    .padding(horizontal = 1.dp)
                                     .height((48 * animatedFraction).dp.coerceAtLeast(2.dp))
                                     .clip(RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp))
                                     .background(barColor),
@@ -1672,5 +1741,72 @@ private fun ListeningByHourChart(
         }
     }
 }
+
+@Composable
+private fun PatternChartMeta(
+    insight: String,
+    comparison: String?,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = insight,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = stringResource(R.string.stats_pattern_period_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (comparison != null) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            ) {
+                Text(
+                    text = comparison,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PatternTooltip(text: String) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun formatAverageListeningTime(durationMs: Long): String {
+    if (durationMs <= 0L) return "0 min"
+    val minutes = ((durationMs + 30_000L) / 60_000L).coerceAtLeast(1L)
+    return when {
+        minutes < 60L -> "$minutes min"
+        minutes % 60L == 0L -> "${minutes / 60L} hr"
+        else -> "${minutes / 60L} hr ${minutes % 60L} min"
+    }
+}
+
+private fun formatSignedPercent(value: Int): String =
+    if (value > 0) "+$value%" else "$value%"
 
 enum class OptionStats { WEEKS, MONTHS, YEARS, CONTINUOUS }

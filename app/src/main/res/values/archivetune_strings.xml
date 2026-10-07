@@ -598,6 +598,22 @@
     <string name="stats_listening_by_day">Listening by Day</string>
     <string name="stats_listening_by_hour">Listening by Hour</string>
     <string name="stats_peak_hour">Most active: %s</string>
+    <string name="stats_pattern_period_label">Last month average · per occurrence</string>
+    <string name="stats_pattern_insight_day">You listen most on %1$s</string>
+    <string name="stats_pattern_insight_hour">You listen most around %1$s</string>
+    <string name="stats_pattern_no_history">No listening recorded last month</string>
+    <string name="stats_pattern_comparison">%1$s %2$s vs last month</string>
+    <string name="stats_pattern_tooltip_day">%1$s · avg %2$s · %3$d %4$s</string>
+    <string name="stats_pattern_tooltip_hour">%1$s · avg %2$s · %3$d days</string>
+    <string-array name="stats_pattern_weekday_plural">
+        <item>Sundays</item>
+        <item>Mondays</item>
+        <item>Tuesdays</item>
+        <item>Wednesdays</item>
+        <item>Thursdays</item>
+        <item>Fridays</item>
+        <item>Saturdays</item>
+    </string-array>
     <string name="stats_top_songs">Top songs</string>
     <string name="stats_show_all_songs">Show all %1$d songs</string>
     <string name="stats_show_top_songs">Show top 5</string>
