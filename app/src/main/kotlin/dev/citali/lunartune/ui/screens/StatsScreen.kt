@@ -1528,7 +1528,7 @@ private fun SegmentedArtistChart(
                                     val dx = offset.x - centerX
                                     val dy = offset.y - centerY
                                     val distance = sqrt(dx * dx + dy * dy)
-                                    val outerRadius = size.minDimension / 2f
+                                    val outerRadius = minOf(size.width, size.height) / 2f
                                     val innerRadius = outerRadius - size.width * 0.18f
                                     val hitSlop = 8.dp.toPx()
                                     if (distance < innerRadius - hitSlop || distance > outerRadius + hitSlop) {
