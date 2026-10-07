@@ -75,6 +75,7 @@ import dev.citali.lunartune.ui.screens.settings.LyricsAnimationSettings
 import dev.citali.lunartune.ui.screens.settings.LyricsSettings
 import dev.citali.lunartune.ui.screens.settings.NavigationBarSettings
 import dev.citali.lunartune.ui.screens.settings.MusicTogetherScreen
+import dev.citali.lunartune.ui.screens.settings.MusicTransferScreen
 import dev.citali.lunartune.ui.screens.settings.PalettePickerScreen
 import dev.citali.lunartune.ui.screens.settings.PlayerSettings
 import dev.citali.lunartune.ui.screens.settings.PrivacySettings
@@ -445,6 +446,9 @@ fun NavGraphBuilder.navigationBuilder(
     }
     composable("settings/backup_restore") {
         BackupAndRestore(navController)
+    }
+    composable("settings/music_transfer") {
+        MusicTransferScreen(navController)
     }
     composable("settings/discord") {
         DiscordSettings(navController)

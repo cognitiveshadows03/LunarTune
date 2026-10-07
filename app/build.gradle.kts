@@ -328,6 +328,7 @@ dependencies {
     implementation(libs.room.ktx)
 
     implementation(libs.apache.lang3)
+    implementation(libs.jsoup)
 
     implementation(libs.hilt)
     implementation(libs.re2j)

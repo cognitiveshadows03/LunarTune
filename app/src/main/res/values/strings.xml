@@ -1324,4 +1324,22 @@
     <string name="clear_banner_storage_warning">Currently selected Home, Settings, shared, and Account banners are protected by Smart Trimmer. Choose whether to keep them or remove everything.</string>
     <string name="keep_selected_banners">Keep selected banners</string>
     <string name="remove_all_banners">Remove all banners</string>
+
+    <string name="music_transfer_title">Transfer your gems</string>
+    <string name="music_transfer_entry_description">Move a Spotify or Apple Music playlist into LunarTune.</string>
+    <string name="music_transfer_description">Bring a playlist from Spotify or Apple Music into LunarTune. Tracks are matched and reviewed before you choose a local playlist or a playlist in your signed-in YouTube Music account.</string>
+    <string name="music_transfer_spotify">Spotify</string>
+    <string name="music_transfer_apple_music">Apple Music</string>
+    <string name="music_transfer_spotify_connect_description">Connect your Spotify account to browse its playlists.</string>
+    <string name="music_transfer_connect_spotify">Connect Spotify</string>
+    <string name="music_transfer_spotify_playlists">Your Spotify playlists</string>
+    <string name="music_transfer_refresh_spotify">Refresh Spotify playlists</string>
+    <string name="music_transfer_spotify_empty">No Spotify playlists were found for this account.</string>
+    <string name="music_transfer_apple_public_only">Paste a public Apple Music playlist share link. Private playlists aren't available through a share link.</string>
+    <string name="music_transfer_apple_link_label">Apple Music playlist link</string>
+    <string name="music_transfer_apple_link_hint">https://music.apple.com/.../playlist/...</string>
+    <string name="music_transfer_load_apple_playlist">Load playlist</string>
+    <string name="music_transfer_matching_title">Matching tracks</string>
+    <string name="music_transfer_destination_local">Local</string>
+    <string name="music_transfer_destination_youtube">YouTube Music</string>
 </resources>

@@ -70,6 +70,7 @@ import timber.log.Timber
 fun AddToPlaylistDialogOnline(
     isVisible: Boolean,
     allowSyncing: Boolean = true,
+    showDestinationTypeLabels: Boolean = false,
     initialTextFieldValue: String? = null,
     songs: SnapshotStateList<Song>, // list of song ids. Songs should be inserted to database in this function.
     onDismiss: () -> Unit,
@@ -131,7 +132,8 @@ fun AddToPlaylistDialogOnline(
                     importResolver.resolve(
                         songs = snapshotSongs,
                         localLibrary = localLibrary,
-                        localFirst = importLocalFirst,
+                        // Remote YouTube Music playlists can only contain YouTube-backed songs.
+                        localFirst = importLocalFirst && targetPlaylist?.playlist?.browseId == null,
                         onProgress = { completed, count ->
                             val percent = ((completed.toDouble() / count) * 100).toInt().coerceIn(0, 100)
                             withContext(Dispatchers.Main) {
@@ -187,7 +189,11 @@ fun AddToPlaylistDialogOnline(
 
                 confirmedResults.forEachIndexed { index, result ->
                     val resolvedSong = result.resolvedSong
-                    if (resolvedSong == null || result.resolvedId == null) {
+                    if (
+                        resolvedSong == null ||
+                        result.resolvedId == null ||
+                        (targetPlaylist?.playlist?.browseId != null && result.source == ImportSource.LOCAL)
+                    ) {
                         failedSongs += result.originalSong.title
                     } else {
                         try {
@@ -283,8 +289,24 @@ fun AddToPlaylistDialogOnline(
             items(playlists) { playlist ->
                 PlaylistListItem(
                     playlist = playlist,
-                        modifier =
-                            Modifier.clickable {
+                    trailingContent = {
+                        if (showDestinationTypeLabels) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        if (playlist.playlist.browseId != null) {
+                                            R.string.music_transfer_destination_youtube
+                                        } else {
+                                            R.string.music_transfer_destination_local
+                                        },
+                                    ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    modifier =
+                        Modifier.clickable {
                             prepareSongsForReview(targetPlaylist = playlist, addToLiked = false)
                         },
                 )
@@ -331,6 +353,7 @@ fun AddToPlaylistDialogOnline(
         ImportReviewScreen(
             results = results,
             localLibrary = reviewLocalLibrary,
+            allowLocalMatches = pendingTargetPlaylist?.playlist?.browseId == null,
             onCancel = {
                 reviewResults = null
                 reviewLocalLibrary = emptyList()

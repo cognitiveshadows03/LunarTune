@@ -91,6 +91,7 @@ private fun searchableSettingsRoute(parentKey: String, scrollKey: String?): Stri
     // searching "app lock" lands on the lock screen instead of the privacy one.
     when (scrollKey) {
         "app_lock", "biometric_lock" -> return "settings/app_lock"
+        "cross_service_import" -> return "settings/music_transfer"
     }
     val route =
         when (parentKey) {

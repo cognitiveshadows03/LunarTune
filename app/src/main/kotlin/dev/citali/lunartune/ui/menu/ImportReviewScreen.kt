@@ -79,6 +79,7 @@ fun ImportReviewScreen(
     localLibrary: List<Song>,
     onCancel: () -> Unit,
     onConfirm: (List<ImportedSongResult>) -> Unit,
+    allowLocalMatches: Boolean = true,
 ) {
     val reviewItems = remember(results) { results.map(::ImportReviewItemState).toMutableStateList() }
     val replacementSearcher = remember { ImportReplacementSearcher() }
@@ -273,6 +274,7 @@ fun ImportReviewScreen(
                             ImportReviewItem(
                                 item = item,
                                 isEditing = editingIndex == index,
+                                allowLocalMatches = allowLocalMatches,
                                 query = query,
                                 onQueryChange = {
                                     query = it
@@ -322,6 +324,7 @@ fun ImportReviewScreen(
 private fun ImportReviewItem(
     item: ImportReviewItemState,
     isEditing: Boolean,
+    allowLocalMatches: Boolean,
     query: String,
     onQueryChange: (String) -> Unit,
     candidates: List<Song>,
@@ -410,15 +413,17 @@ private fun ImportReviewItem(
                     modifier = Modifier.padding(top = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    OutlinedButton(
-                        onClick = onSearchLocal,
-                        enabled = query.isNotBlank() && searchingSource == null,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        SearchButtonContent(
-                            loading = searchingSource == ImportReplacementSource.LOCAL,
-                            text = stringResource(R.string.import_search_local),
-                        )
+                    if (allowLocalMatches) {
+                        OutlinedButton(
+                            onClick = onSearchLocal,
+                            enabled = query.isNotBlank() && searchingSource == null,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            SearchButtonContent(
+                                loading = searchingSource == ImportReplacementSource.LOCAL,
+                                text = stringResource(R.string.import_search_local),
+                            )
+                        }
                     }
                     Button(
                         onClick = onSearchYouTube,

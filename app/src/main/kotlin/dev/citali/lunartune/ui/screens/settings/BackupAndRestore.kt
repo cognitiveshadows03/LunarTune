@@ -380,6 +380,15 @@ fun BackupAndRestore(
 
                 item {
                     PreferenceEntry(
+                        title = { Text(stringResource(R.string.music_transfer_title)) },
+                        description = stringResource(R.string.music_transfer_entry_description),
+                        icon = { Icon(painterResource(R.drawable.playlist_import), null) },
+                        onClick = { navController.navigate("settings/music_transfer") },
+                    )
+                }
+
+                item {
+                    PreferenceEntry(
                         title = { Text(stringResource(R.string.import_online)) },
                         description = stringResource(R.string.import_m3u_format),
                         icon = { Icon(painterResource(R.drawable.playlist_import), null) },
