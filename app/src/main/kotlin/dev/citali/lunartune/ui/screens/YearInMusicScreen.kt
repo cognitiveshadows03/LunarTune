@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -66,9 +68,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -325,6 +330,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
     val artistsLabel = stringResource(R.string.year_in_music_ranked_artists)
     val albumsLabel = stringResource(R.string.year_in_music_ranked_albums)
     val summaryLabel = stringResource(R.string.share_summary)
+    val orbitLabel = stringResource(R.string.year_in_music_orbit_title)
     val emptyLabel = stringResource(R.string.no_listening_data)
 
     return remember(
@@ -341,6 +347,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
         artistsLabel,
         albumsLabel,
         summaryLabel,
+        orbitLabel,
         emptyLabel,
     ) {
         if (!content.hasData) {
@@ -398,6 +405,14 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         topArtists = content.topArtists,
                         topAlbums = content.topAlbums,
                         label = summaryLabel,
+                    ),
+                )
+                add(
+                    YearInMusicRecapCard.ListeningOrbit(
+                        year = content.selectedYear,
+                        totalListeningTime = content.totalListeningTime,
+                        totalSongsPlayed = content.totalSongsPlayed,
+                        label = orbitLabel,
                     ),
                 )
             }
@@ -476,6 +491,7 @@ private fun RecapCardFrame(
                 is YearInMusicRecapCard.RankedArtists -> listOf(RecapBlack, RecapSurface, RecapRedDeep)
                 is YearInMusicRecapCard.RankedAlbums -> listOf(RecapRedDeep, RecapBlack, RecapSurface)
                 is YearInMusicRecapCard.Summary -> listOf(RecapBlack, RecapRedDeep, RecapPurple.copy(alpha = 0.78f))
+                is YearInMusicRecapCard.ListeningOrbit -> listOf(RecapBlack, RecapSurfaceHigh, RecapBlack)
             }
         }
 
@@ -543,6 +559,13 @@ private fun RecapCardFrame(
                         applySafeContentInsets = applySafeContentInsets,
                     )
                 }
+
+                is YearInMusicRecapCard.ListeningOrbit -> {
+                    ListeningOrbitRecapCard(
+                        card = card,
+                        applySafeContentInsets = applySafeContentInsets,
+                    )
+                }
             }
         }
     }
@@ -605,21 +628,13 @@ private fun IntroRecapCard(
                 ).then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
                 .padding(24.dp),
     ) {
-        Box(
+        ListeningOrbitGraphic(
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
-                    .size(176.dp)
-                    .graphicsLayer {
-                        rotationZ = -18f
-                        translationX = 44f
-                        translationY = 30f
-                    }.clip(RoundedCornerShape(18.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(Color(0xFFFFE569), RecapPink, Color(0xFFFF8A42)),
-                        ),
-                    ),
+                    .padding(top = 16.dp, end = 12.dp)
+                    .size(width = 138.dp, height = 210.dp),
+            lightBackground = true,
         )
 
         Row(
@@ -1070,6 +1085,192 @@ private fun SummaryRecapCard(
                 modifier = Modifier.align(Alignment.Start),
             )
         }
+    }
+}
+
+@Composable
+private fun ListeningOrbitRecapCard(
+    card: YearInMusicRecapCard.ListeningOrbit,
+    applySafeContentInsets: Boolean,
+) {
+    val onSurface = MaterialTheme.colorScheme.onSurface
+    val accent = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "${card.year} · ${stringResource(R.string.year_in_music_recap_word)}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = card.label,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = onSurface,
+                        lineHeight = 30.sp,
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ListeningOrbitGraphic(
+                        modifier = Modifier.weight(1.1f).fillMaxHeight(),
+                    )
+                    Column(
+                        modifier = Modifier.weight(0.9f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.year_in_music_minutes_label).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = formatListeningMinutes(card.totalListeningTime),
+                            style = MaterialTheme.typography.displaySmall.copy(fontSize = 36.sp),
+                            fontWeight = FontWeight.Black,
+                            color = accent,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(R.string.year_in_music_minutes_unit).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        Text(
+                            text = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Black,
+                            color = onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(R.string.year_in_music_plays_label).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.year_in_music_recap).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LunarTuneBrand(
+                        contentColor = onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ListeningOrbitGraphic(
+    modifier: Modifier = Modifier,
+    lightBackground: Boolean = false,
+) {
+    Canvas(modifier = modifier) {
+        val centerX = size.width
+        val centerY = size.height / 2f
+        val outerRadius = minOf(size.width * 0.94f, size.height * 0.47f)
+        if (outerRadius <= 0f) return@Canvas
+
+        val ringColors =
+            if (lightBackground) {
+                listOf(
+                    Color.White.copy(alpha = 0.38f),
+                    RecapInk.copy(alpha = 0.24f),
+                    Color.White.copy(alpha = 0.48f),
+                    RecapPink.copy(alpha = 0.64f),
+                    RecapInk.copy(alpha = 0.38f),
+                    Color.White.copy(alpha = 0.68f),
+                )
+            } else {
+                listOf(
+                    RecapBlue.copy(alpha = 0.28f),
+                    RecapPurple.copy(alpha = 0.36f),
+                    RecapPink.copy(alpha = 0.42f),
+                    RecapRed.copy(alpha = 0.50f),
+                    RecapGreen.copy(alpha = 0.62f),
+                    RecapLime.copy(alpha = 0.78f),
+                )
+            }
+        val accentColor = if (lightBackground) Color.White else RecapLime
+        val secondaryMarkerColor = if (lightBackground) RecapInk else RecapBlue
+        val ringStroke = 1.4.dp.toPx()
+
+        ringColors.forEachIndexed { index, color ->
+            val radius = outerRadius * (1f - index * 0.14f)
+            drawArc(
+                color = color,
+                startAngle = 90f,
+                sweepAngle = 180f,
+                useCenter = false,
+                topLeft = Offset(centerX - radius, centerY - radius),
+                size = Size(radius * 2f, radius * 2f),
+                style = Stroke(width = ringStroke),
+            )
+        }
+
+        val highlightedRadius = outerRadius * 0.84f
+        drawArc(
+            color = accentColor,
+            startAngle = 145f,
+            sweepAngle = 70f,
+            useCenter = false,
+            topLeft = Offset(centerX - highlightedRadius, centerY - highlightedRadius),
+            size = Size(highlightedRadius * 2f, highlightedRadius * 2f),
+            style = Stroke(width = 3.dp.toPx()),
+        )
+        drawCircle(
+            color = accentColor,
+            radius = 4.dp.toPx(),
+            center = Offset(centerX - highlightedRadius * 0.94f, centerY - highlightedRadius * 0.34f),
+        )
+
+        val innerMarkerRadius = outerRadius * 0.58f
+        drawCircle(
+            color = secondaryMarkerColor,
+            radius = 3.dp.toPx(),
+            center = Offset(centerX - innerMarkerRadius * 0.82f, centerY + innerMarkerRadius * 0.57f),
+        )
     }
 }
 
@@ -1746,5 +1947,14 @@ private sealed interface YearInMusicRecapCard {
         override val label: String,
     ) : YearInMusicRecapCard {
         override val id: String = "summary_$year"
+    }
+
+    data class ListeningOrbit(
+        val year: Int,
+        val totalListeningTime: Long,
+        val totalSongsPlayed: Long,
+        override val label: String,
+    ) : YearInMusicRecapCard {
+        override val id: String = "listening_orbit_$year"
     }
 }
