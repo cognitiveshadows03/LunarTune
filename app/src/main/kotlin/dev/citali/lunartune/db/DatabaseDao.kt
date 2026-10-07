@@ -1503,6 +1503,18 @@ interface DatabaseDao {
 
     @Query(
         """
+        SELECT COUNT(DISTINCT date(timestamp / 1000, 'unixepoch'))
+        FROM event
+        WHERE timestamp > :fromTimestamp AND timestamp <= :toTimestamp
+        """,
+    )
+    fun listeningActiveDays(
+        fromTimestamp: Long,
+        toTimestamp: Long,
+    ): Flow<Int>
+
+    @Query(
+        """
         SELECT CAST(
                    MIN(
                        :bucketCount - 1,

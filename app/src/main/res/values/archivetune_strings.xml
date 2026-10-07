@@ -562,7 +562,8 @@
     <string name="year_in_music_intro_details">Reveal your top songs, artists, albums, and listening time.</string>
     <string name="year_in_music_swipe_begin">Swipe to begin</string>
     <string name="year_in_music_totals_title">You kept the music moving</string>
-    <string name="year_in_music_orbit_title">We spent some quality time together.</string>
+    <string name="year_in_music_orbit_title">It&apos;s been a big year.</string>
+    <string name="year_in_music_active_days">Active Days</string>
     <string name="year_in_music_top_track">Your top track</string>
     <string name="year_in_music_ranked_artists">Artists on repeat</string>
     <string name="year_in_music_ranked_albums">Albums you returned to</string>
@@ -572,6 +573,7 @@
     <string name="year_in_music_minutes_label">Listening time</string>
     <string name="year_in_music_minutes_unit">minutes</string>
     <string name="year_in_music_plays_label">Total plays</string>
+    <string name="year_in_music_plays_short">Plays</string>
     <string name="year_in_music_top_pick">Top pick</string>
     <string name="year_in_music_current_card">Share card</string>
     <string name="stats_favourite_artist">Your Favourite Artist</string>

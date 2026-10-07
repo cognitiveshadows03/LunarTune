@@ -121,6 +121,15 @@ class YearInMusicViewModel
                     )
                 }.stateIn(viewModelScope, SharingStarted.Lazily, ListeningTotals(0, 0L))
 
+        private val activeDays =
+            selectedYear
+                .flatMapLatest { year ->
+                    database.listeningActiveDays(
+                        fromTimestamp = getYearStartTimestamp(year),
+                        toTimestamp = getYearEndTimestamp(year),
+                    )
+                }.stateIn(viewModelScope, SharingStarted.Lazily, 0)
+
         private val recapData =
             combine(
                 topSongsStats,
@@ -144,7 +153,8 @@ class YearInMusicViewModel
                 selectedYear,
                 availableYears,
                 recapData,
-            ) { year, years, data ->
+                activeDays,
+            ) { year, years, data, days ->
                 YearInMusicUiState.Content(
                     selectedYear = year,
                     availableYears = years,
@@ -154,6 +164,7 @@ class YearInMusicViewModel
                     topAlbums = data.topAlbums,
                     totalListeningTime = data.totalListeningTime,
                     totalSongsPlayed = data.totalSongsPlayed,
+                    activeDays = days,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -234,6 +245,7 @@ sealed interface YearInMusicUiState {
         override val availableYears: List<Int>,
         val totalListeningTime: Long = 0L,
         val totalSongsPlayed: Long = 0L,
+        val activeDays: Int = 0,
         val topSongsStats: List<SongWithStats> = emptyList(),
         val topSongs: List<Song> = emptyList(),
         val topArtists: List<Artist> = emptyList(),
