@@ -4130,9 +4130,7 @@ class MusicService :
         clearAutomix()
         autoAddedMediaIds.clear()
         scope.launch(SilentHandler) {
-            val hideExplicit = dataStore.get(HideExplicitKey, false)
-            val hideVideo = dataStore.get(HideVideoKey, false)
-            val autoLoadMoreEnabled = dataStore.get(AutoLoadMoreKey, true)
+            // Start preparing a safe preload item before preference reads and queue hydration.
             val preloadItem =
                 queue.preloadItem
                     ?.toMediaItem()
@@ -4144,6 +4142,10 @@ class MusicService :
                 player.prepare()
                 player.playWhenReady = playWhenReady
             }
+
+            val hideExplicit = dataStore.get(HideExplicitKey, false)
+            val hideVideo = dataStore.get(HideVideoKey, false)
+            val autoLoadMoreEnabled = dataStore.get(AutoLoadMoreKey, true)
             var initialStatus =
                 withContext(Dispatchers.IO) {
                     try {
