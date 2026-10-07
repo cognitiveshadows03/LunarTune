@@ -9,6 +9,7 @@ package dev.citali.lunartune.together
 
 import androidx.compose.runtime.Immutable
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
@@ -19,9 +20,12 @@ import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,6 +33,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.InetAddress
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
@@ -119,6 +125,16 @@ class TogetherClient(
             }
         }
 
+    // LAN session links are plain ws:// by design. Use CIO only after validating that the
+    // destination resolves entirely to loopback or a private/link-local address; OkHttp
+    // correctly follows Android's app-wide cleartext policy, which would otherwise block LAN.
+    private val lanClient =
+        HttpClient(CIO) {
+            install(WebSockets) {
+                pingIntervalMillis = 25_000
+            }
+        }
+
     private val scope = CoroutineScope(externalScope.coroutineContext + SupervisorJob())
 
     private val _state = MutableStateFlow<TogetherClientState>(TogetherClientState.Idle)
@@ -141,41 +157,44 @@ class TogetherClient(
             disconnect()
             _state.value = TogetherClientState.Connecting(joinInfo)
 
-            val wsUrl = joinInfo.toWebSocketUrl()
-            val urls = listOfNotNull(wsUrl, alternateWebSocketSchemeOrNull(wsUrl)).distinct()
-
-            val token = normalizedBearerToken
-
-            var lastError: Throwable? = null
-            for (candidate in urls) {
-                try {
-                    client.webSocket(
-                        urlString = candidate,
-                        request = {
-                            if (token != null) header("Authorization", "Bearer $token")
-                        },
-                    ) {
-                        session = this
-                        val hello =
-                            ClientHello(
-                                protocolVersion = TogetherProtocolVersion,
-                                sessionId = joinInfo.sessionId,
-                                sessionKey = joinInfo.sessionKey,
-                                clientId = clientId,
-                                displayName = displayName.trim(),
-                            )
-                        send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
-                        _state.value = TogetherClientState.Connected(joinInfo)
-                        runLoop(this, joinInfo.sessionId)
-                    }
+            val useSecureTransport = joinInfo.scheme.equals("wss", ignoreCase = true)
+            if (!useSecureTransport) {
+                val hostError = validatePrivateLanHost(joinInfo.host)
+                if (hostError != null) {
+                    _events.tryEmit(TogetherClientEvent.Error(connectionFailureMessage(hostError), hostError))
+                    _state.value = TogetherClientState.Idle
                     return@launch
-                } catch (t: Throwable) {
-                    lastError = t
                 }
             }
 
-            _events.tryEmit(TogetherClientEvent.Error(connectionFailureMessage(lastError), lastError))
-            _state.value = TogetherClientState.Idle
+            val wsUrl = joinInfo.toWebSocketUrl()
+            val connectionClient = if (useSecureTransport) client else lanClient
+            val token = normalizedBearerToken
+            try {
+                connectionClient.webSocket(
+                    urlString = wsUrl,
+                    request = {
+                        if (token != null) header("Authorization", "Bearer $token")
+                    },
+                ) {
+                    session = this
+                    val hello =
+                        ClientHello(
+                            protocolVersion = TogetherProtocolVersion,
+                            sessionId = joinInfo.sessionId,
+                            sessionKey = joinInfo.sessionKey,
+                            clientId = clientId,
+                            displayName = displayName.trim(),
+                        )
+                    send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
+                    _state.value = TogetherClientState.Connected(joinInfo)
+                    runLoop(this, joinInfo.sessionId)
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                _events.tryEmit(TogetherClientEvent.Error(connectionFailureMessage(t), t))
+                _state.value = TogetherClientState.Idle
+            }
         }
     }
 
@@ -187,53 +206,52 @@ class TogetherClient(
     ) {
         scope.launch {
             disconnect()
-            _state.value = TogetherClientState.ConnectingRemote(wsUrl = wsUrl, sessionId = sessionId)
-
-            val urls = listOfNotNull(wsUrl.trim(), alternateWebSocketSchemeOrNull(wsUrl.trim())).distinct()
+            val candidate = wsUrl.trim()
+            _state.value = TogetherClientState.ConnectingRemote(wsUrl = candidate, sessionId = sessionId)
 
             val token = normalizedBearerToken
-
-            var lastError: Throwable? = null
-            for (candidate in urls) {
-                try {
-                    client.webSocket(
-                        urlString = candidate,
-                        request = {
-                            if (token != null) header("Authorization", "Bearer $token")
-                        },
-                    ) {
-                        session = this
-                        val hello =
-                            ClientHello(
-                                protocolVersion = TogetherProtocolVersion,
-                                sessionId = sessionId,
-                                sessionKey = sessionKey,
-                                clientId = clientId,
-                                displayName = displayName.trim().ifBlank { "Guest" },
-                            )
-                        send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
-                        _state.value = TogetherClientState.ConnectedRemote(wsUrl = candidate, sessionId = sessionId)
-                        runLoop(this, sessionId)
-                    }
-                    return@launch
-                } catch (t: Throwable) {
-                    lastError = t
+            try {
+                client.webSocket(
+                    urlString = candidate,
+                    request = {
+                        if (token != null) header("Authorization", "Bearer $token")
+                    },
+                ) {
+                    session = this
+                    val hello =
+                        ClientHello(
+                            protocolVersion = TogetherProtocolVersion,
+                            sessionId = sessionId,
+                            sessionKey = sessionKey,
+                            clientId = clientId,
+                            displayName = displayName.trim().ifBlank { "Guest" },
+                        )
+                    send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
+                    _state.value = TogetherClientState.ConnectedRemote(wsUrl = candidate, sessionId = sessionId)
+                    runLoop(this, sessionId)
                 }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                _events.tryEmit(TogetherClientEvent.Error(connectionFailureMessage(t), t))
+                _state.value = TogetherClientState.Idle
             }
-
-            _events.tryEmit(TogetherClientEvent.Error(connectionFailureMessage(lastError), lastError))
-            _state.value = TogetherClientState.Idle
         }
     }
 
-    private fun alternateWebSocketSchemeOrNull(url: String): String? {
-        val trimmed = url.trim()
-        return when {
-            trimmed.startsWith("ws://") -> "wss://${trimmed.removePrefix("ws://")}"
-            trimmed.startsWith("wss://") -> "ws://${trimmed.removePrefix("wss://")}"
-            else -> null
+    private suspend fun validatePrivateLanHost(host: String): Throwable? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val addresses = InetAddress.getAllByName(host)
+                require(
+                    addresses.isNotEmpty() &&
+                        addresses.all { address ->
+                            address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress
+                        },
+                ) {
+                    "Local session links must resolve to a private LAN address"
+                }
+            }.exceptionOrNull()
         }
-    }
 
     private fun connectionFailureMessage(t: Throwable?): String {
         val root = generateSequence(t) { it.cause }.lastOrNull()
@@ -283,6 +301,12 @@ class TogetherClient(
         session = null
         selfParticipantId = null
         _state.value = TogetherClientState.Idle
+    }
+
+    fun close() {
+        client.close()
+        lanClient.close()
+        scope.cancel()
     }
 
     fun requestControl(

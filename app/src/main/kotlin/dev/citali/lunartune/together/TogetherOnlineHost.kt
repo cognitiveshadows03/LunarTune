@@ -19,9 +19,11 @@ import io.ktor.websocket.WebSocketSession
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import io.ktor.websocket.send
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.launch
@@ -102,51 +104,35 @@ class TogetherOnlineHost(
         guests.clear()
         lastParticipants = emptyList()
 
-        val trimmed = wsUrl.trim()
-        val urls = listOfNotNull(trimmed, alternateWebSocketSchemeOrNull(trimmed)).distinct()
-
+        val candidate = wsUrl.trim()
         val token = normalizedBearerToken
         if (token == null) {
             onEvent?.invoke(TogetherServerEvent.Error("Together token is missing"))
             return
         }
 
-        var lastError: Throwable? = null
-        for (candidate in urls) {
-            try {
-                client.webSocket(
-                    urlString = candidate,
-                    request = {
-                        header("Authorization", "Bearer $token")
-                    },
-                ) {
-                    session = this
-                    val hello =
-                        ClientHello(
-                            protocolVersion = TogetherProtocolVersion,
-                            sessionId = sessionId,
-                            sessionKey = sessionKey,
-                            clientId = clientId,
-                            displayName = hostDisplayName.trim(),
-                        )
-                    send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
-                    runLoop(this, candidate)
-                }
-                return
-            } catch (t: Throwable) {
-                lastError = t
+        try {
+            client.webSocket(
+                urlString = candidate,
+                request = {
+                    header("Authorization", "Bearer $token")
+                },
+            ) {
+                session = this
+                val hello =
+                    ClientHello(
+                        protocolVersion = TogetherProtocolVersion,
+                        sessionId = sessionId,
+                        sessionKey = sessionKey,
+                        clientId = clientId,
+                        displayName = hostDisplayName.trim(),
+                    )
+                send(TogetherJson.json.encodeToString(TogetherMessage.serializer(), hello))
+                runLoop(this, candidate)
             }
-        }
-
-        onEvent?.invoke(TogetherServerEvent.Error(connectionFailureMessage(lastError), lastError))
-    }
-
-    private fun alternateWebSocketSchemeOrNull(url: String): String? {
-        val trimmed = url.trim()
-        return when {
-            trimmed.startsWith("ws://") -> "wss://${trimmed.removePrefix("ws://")}"
-            trimmed.startsWith("wss://") -> "ws://${trimmed.removePrefix("wss://")}"
-            else -> null
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            onEvent?.invoke(TogetherServerEvent.Error(connectionFailureMessage(t), t))
         }
     }
 
@@ -200,6 +186,11 @@ class TogetherOnlineHost(
         authorityParticipantId = null
         guests.clear()
         lastParticipants = emptyList()
+    }
+
+    fun close() {
+        client.close()
+        scope.cancel()
     }
 
     fun currentParticipants(): List<TogetherParticipant> = lastParticipants

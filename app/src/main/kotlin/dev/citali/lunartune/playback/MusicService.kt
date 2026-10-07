@@ -6028,12 +6028,14 @@ class MusicService :
             togetherClient?.disconnect()
         } catch (_: Exception) {
         }
+        togetherClient?.close()
         togetherClient = null
 
         try {
             togetherOnlineHost?.disconnect()
         } catch (_: Exception) {
         }
+        togetherOnlineHost?.close()
         togetherOnlineHost = null
 
         try {

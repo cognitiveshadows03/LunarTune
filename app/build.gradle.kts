@@ -351,6 +351,7 @@ dependencies {
     implementation("com.materialkolor:material-kolor:5.0.0-alpha07")
 
     implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.cio)
     implementation(libs.ktor.client.okhttp)
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.websockets)

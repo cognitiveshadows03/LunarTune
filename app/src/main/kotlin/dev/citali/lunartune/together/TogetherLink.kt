@@ -17,17 +17,23 @@ data class TogetherJoinInfo(
     val port: Int,
     val sessionId: String,
     val sessionKey: String,
+    val scheme: String = "ws",
 ) {
-    fun toWebSocketUrl(): String = "ws://$host:$port/together"
+    fun toWebSocketUrl(): String {
+        val wsScheme = if (scheme.equals("wss", ignoreCase = true)) "wss" else "ws"
+        return "$wsScheme://$host:$port/together"
+    }
 
     fun toDeepLink(): String {
         val charset = StandardCharsets.UTF_8.name()
+        val normalizedScheme = if (scheme.equals("wss", ignoreCase = true)) "wss" else "ws"
         val q =
             listOf(
                 "host" to host,
                 "port" to port.toString(),
                 "sid" to sessionId,
                 "key" to sessionKey,
+                "scheme" to normalizedScheme,
             ).joinToString("&") { (k, v) ->
                 "${URLEncoder.encode(k, charset)}=${URLEncoder.encode(v, charset)}"
             }
@@ -62,11 +68,12 @@ object TogetherLink {
         val port = params["port"]?.toIntOrNull()
         val sid = params["sid"]?.trim().orEmpty()
         val key = params["key"]?.trim().orEmpty()
+        val scheme = params["scheme"]?.trim()?.lowercase().orEmpty().ifBlank { "ws" }
 
         if (host.isBlank() || port == null || sid.isBlank() || key.isBlank()) return null
-        if (port !in 1..65535) return null
+        if (port !in 1..65535 || scheme !in setOf("ws", "wss")) return null
 
-        return TogetherJoinInfo(host = host, port = port, sessionId = sid, sessionKey = key)
+        return TogetherJoinInfo(host = host, port = port, sessionId = sid, sessionKey = key, scheme = scheme)
     }
 
     private fun decodeWsUrl(uri: URI): TogetherJoinInfo? {
@@ -88,7 +95,8 @@ object TogetherLink {
         if (host.isBlank() || sid.isBlank() || key.isBlank()) return null
         if (port !in 1..65535) return null
 
-        return TogetherJoinInfo(host = host, port = port, sessionId = sid, sessionKey = key)
+        val wsScheme = if (scheme == "wss" || scheme == "https") "wss" else "ws"
+        return TogetherJoinInfo(host = host, port = port, sessionId = sid, sessionKey = key, scheme = wsScheme)
     }
 
     private fun decodeCompact(raw: String): TogetherJoinInfo? {

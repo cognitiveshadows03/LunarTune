@@ -1456,9 +1456,11 @@ interface DatabaseDao {
     )
     fun libraryTopMixSongs(mixId: String): List<Song>
 
+    // Event LocalDateTime values are stored as UTC wall-clock fields. Do not apply SQLite
+    // 'localtime' here: it would shift the already-local hour/day by the device offset.
     @Query(
         """
-        SELECT CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch', 'localtime')) AS INTEGER) AS slot,
+        SELECT CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) AS slot,
                SUM(playTime) AS timeListened
         FROM event
         WHERE timestamp > :fromTimestamp AND timestamp <= :toTimestamp
@@ -1473,7 +1475,7 @@ interface DatabaseDao {
 
     @Query(
         """
-        SELECT CAST(strftime('%w', datetime(timestamp / 1000, 'unixepoch', 'localtime')) AS INTEGER) AS slot,
+        SELECT CAST(strftime('%w', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) AS slot,
                SUM(playTime) AS timeListened
         FROM event
         WHERE timestamp > :fromTimestamp AND timestamp <= :toTimestamp
