@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -70,6 +71,9 @@ data class StatsUiData(
     val mostPlayedAlbums: List<Album>,
     val listeningByHour: List<ListeningBySlot>,
     val listeningByDayOfWeek: List<ListeningBySlot>,
+    val listeningTrendBuckets: List<ListeningBySlot>,
+    val previousPeriodTimeListened: Long?,
+    @StringRes val comparisonLabelResId: Int?,
     val listeningSummary: ListeningSummary,
     val firstEvent: EventWithSong?,
     val isSongListExpanded: Boolean,
@@ -130,12 +134,96 @@ class StatsViewModel
         private fun toTimestamp(
             selection: OptionStats,
             t: Int,
+            now: LocalDateTime = LocalDateTime.now(),
         ): Long =
             if (selection == OptionStats.CONTINUOUS || t == 0) {
-                LocalDateTime.now().toInstant(ZoneOffset.UTC).toEpochMilli()
+                now.toInstant(ZoneOffset.UTC).toEpochMilli()
             } else {
-                statToPeriod(selection, t - 1)
+                statToPeriod(selection, t - 1, now)
             }
+
+        private fun periodWindow(
+            selection: OptionStats,
+            index: Int,
+            now: LocalDateTime,
+        ): PeriodWindow {
+            val fromTimestamp = statToPeriod(selection, index, now)
+            val toTimestamp = toTimestamp(selection, index, now)
+            val comparison =
+                when (selection) {
+                    OptionStats.CONTINUOUS -> {
+                        val period = StatPeriod.entries.getOrNull(index)
+                        val previousStart =
+                            when (period) {
+                                StatPeriod.WEEK_1 -> now.minusWeeks(2)
+                                StatPeriod.MONTH_1 -> now.minusMonths(2)
+                                StatPeriod.MONTH_3 -> now.minusMonths(6)
+                                StatPeriod.MONTH_6 -> now.minusMonths(12)
+                                StatPeriod.YEAR_1 -> now.minusYears(2)
+                                StatPeriod.ALL, null -> null
+                            }
+                        val labelResId =
+                            when (period) {
+                                StatPeriod.WEEK_1 -> R.string.stats_trend_vs_last_week
+                                StatPeriod.MONTH_1 -> R.string.stats_trend_vs_last_month
+                                StatPeriod.MONTH_3 -> R.string.stats_trend_vs_previous_three_months
+                                StatPeriod.MONTH_6 -> R.string.stats_trend_vs_previous_six_months
+                                StatPeriod.YEAR_1 -> R.string.stats_trend_vs_last_year
+                                StatPeriod.ALL, null -> null
+                            }
+                        if (previousStart != null && labelResId != null) {
+                            ComparisonWindow(
+                                fromTimestamp = previousStart.toInstant(ZoneOffset.UTC).toEpochMilli(),
+                                toTimestamp = fromTimestamp,
+                                labelResId = labelResId,
+                            )
+                        } else {
+                            null
+                        }
+                    }
+
+                    OptionStats.WEEKS -> {
+                        val previousStart =
+                            if (index == 0) {
+                                now.minusDays(2).toInstant(ZoneOffset.UTC).toEpochMilli()
+                            } else {
+                                statToPeriod(selection, index + 1, now)
+                            }
+                        ComparisonWindow(
+                            fromTimestamp = previousStart,
+                            toTimestamp = fromTimestamp,
+                            labelResId =
+                                if (index == 0) {
+                                    R.string.stats_trend_vs_yesterday
+                                } else {
+                                    R.string.stats_trend_vs_previous_week
+                                },
+                        )
+                    }
+
+                    OptionStats.MONTHS -> {
+                        ComparisonWindow(
+                            fromTimestamp = statToPeriod(selection, index + 1, now),
+                            toTimestamp = fromTimestamp,
+                            labelResId = R.string.stats_trend_vs_previous_month,
+                        )
+                    }
+
+                    OptionStats.YEARS -> {
+                        ComparisonWindow(
+                            fromTimestamp = statToPeriod(selection, index + 1, now),
+                            toTimestamp = fromTimestamp,
+                            labelResId = R.string.stats_trend_vs_previous_year,
+                        )
+                    }
+                }
+
+            return PeriodWindow(
+                fromTimestamp = fromTimestamp,
+                toTimestamp = toTimestamp,
+                comparison = comparison,
+            )
+        }
 
         private val mostPlayedSongsStats =
             periodPair()
@@ -209,6 +297,33 @@ class StatsViewModel
                     )
                 }
 
+        private val listeningTrendStats =
+            periodPair()
+                .flatMapLatest { (selection, index) ->
+                    val window = periodWindow(selection, index, LocalDateTime.now())
+                    val trendBuckets =
+                        database.listeningTrendBuckets(
+                            fromTimestamp = window.fromTimestamp,
+                            toTimestamp = window.toTimestamp,
+                            bucketCount = LISTENING_TREND_BUCKET_COUNT,
+                        )
+                    val previousTime =
+                        window.comparison?.let { comparison ->
+                            database
+                                .listeningTotals(
+                                    fromTimestamp = comparison.fromTimestamp,
+                                    toTimestamp = comparison.toTimestamp,
+                                ).map { it.totalTimeListened }
+                        } ?: flowOf<Long?>(null)
+                    combine(trendBuckets, previousTime) { buckets, previousTimeListened ->
+                        ListeningTrendStats(
+                            buckets = buckets,
+                            previousPeriodTimeListened = previousTimeListened,
+                            comparisonLabelResId = window.comparison?.labelResId,
+                        )
+                    }
+                }
+
         private val firstEvent =
             database
                 .firstEvent()
@@ -234,18 +349,27 @@ class StatsViewModel
 
         private val listeningStats =
             combine(
-                listeningByHour,
-                listeningByDayOfWeek,
-                listeningTotals,
-                firstEvent,
-                latestEventTimestamp,
-            ) { byHour, byDay, totals, first, latest ->
-                ListeningStats(
-                    byHour = byHour,
-                    byDay = byDay,
-                    totals = totals,
-                    firstEvent = first,
-                    latestEventTimestamp = latest,
+                combine(
+                    listeningByHour,
+                    listeningByDayOfWeek,
+                    listeningTotals,
+                    firstEvent,
+                    latestEventTimestamp,
+                ) { byHour, byDay, totals, first, latest ->
+                    ListeningStats(
+                        byHour = byHour,
+                        byDay = byDay,
+                        totals = totals,
+                        firstEvent = first,
+                        latestEventTimestamp = latest,
+                    )
+                },
+                listeningTrendStats,
+            ) { stats, trend ->
+                stats.copy(
+                    listeningTrendBuckets = trend.buckets,
+                    previousPeriodTimeListened = trend.previousPeriodTimeListened,
+                    comparisonLabelResId = trend.comparisonLabelResId,
                 )
             }
 
@@ -292,6 +416,9 @@ class StatsViewModel
                                     mostPlayedAlbums = primary.albums,
                                     listeningByHour = listening.byHour,
                                     listeningByDayOfWeek = listening.byDay,
+                                    listeningTrendBuckets = listening.listeningTrendBuckets,
+                                    previousPeriodTimeListened = listening.previousPeriodTimeListened,
+                                    comparisonLabelResId = listening.comparisonLabelResId,
                                     listeningSummary = summary,
                                     firstEvent = listening.firstEvent,
                                     isSongListExpanded = expanded,
@@ -380,9 +507,31 @@ class StatsViewModel
             val totals: ListeningTotals,
             val firstEvent: EventWithSong?,
             val latestEventTimestamp: Long?,
+            val listeningTrendBuckets: List<ListeningBySlot> = emptyList(),
+            val previousPeriodTimeListened: Long? = null,
+            @StringRes val comparisonLabelResId: Int? = null,
+        )
+
+        private data class ListeningTrendStats(
+            val buckets: List<ListeningBySlot>,
+            val previousPeriodTimeListened: Long?,
+            @StringRes val comparisonLabelResId: Int?,
+        )
+
+        private data class PeriodWindow(
+            val fromTimestamp: Long,
+            val toTimestamp: Long,
+            val comparison: ComparisonWindow?,
+        )
+
+        private data class ComparisonWindow(
+            val fromTimestamp: Long,
+            val toTimestamp: Long,
+            @StringRes val labelResId: Int,
         )
 
         private companion object {
             const val COLLAPSED_SONG_COUNT = 5
+            const val LISTENING_TREND_BUCKET_COUNT = 7
         }
     }

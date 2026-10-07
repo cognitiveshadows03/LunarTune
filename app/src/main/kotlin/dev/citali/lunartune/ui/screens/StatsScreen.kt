@@ -121,6 +121,7 @@ import dev.citali.lunartune.viewmodels.StatsViewModel
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 import android.graphics.Color as AndroidColor
 
 @OptIn(
@@ -351,6 +352,9 @@ fun StatsScreen(
                 item(key = "overview", contentType = "overview") {
                     StatsSummarySection(
                         summary = listeningSummary,
+                        trendBuckets = data.listeningTrendBuckets,
+                        previousPeriodTimeListened = data.previousPeriodTimeListened,
+                        comparisonLabelResId = data.comparisonLabelResId,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -986,6 +990,9 @@ private fun StatsYearPickerDialog(
 @Composable
 private fun StatsSummarySection(
     summary: ListeningSummary,
+    trendBuckets: List<ListeningBySlot>,
+    previousPeriodTimeListened: Long?,
+    comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
 ) {
     if (summary.totalPlayCount == 0) return
@@ -1007,6 +1014,9 @@ private fun StatsSummarySection(
                 ) {
                     StatsListeningTimeHero(
                         summary = summary,
+                        trendBuckets = trendBuckets,
+                        previousPeriodTimeListened = previousPeriodTimeListened,
+                        comparisonLabelResId = comparisonLabelResId,
                         modifier = Modifier.weight(1.2f),
                     )
                     Column(
@@ -1029,7 +1039,12 @@ private fun StatsSummarySection(
                 }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatsListeningTimeHero(summary = summary)
+                    StatsListeningTimeHero(
+                        summary = summary,
+                        trendBuckets = trendBuckets,
+                        previousPeriodTimeListened = previousPeriodTimeListened,
+                        comparisonLabelResId = comparisonLabelResId,
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         StatMetricCard(
@@ -1057,8 +1072,41 @@ private fun StatsSummarySection(
 @Composable
 private fun StatsListeningTimeHero(
     summary: ListeningSummary,
+    trendBuckets: List<ListeningBySlot>,
+    previousPeriodTimeListened: Long?,
+    comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
 ) {
+    val foreground = MaterialTheme.colorScheme.onPrimaryContainer
+    val comparisonLabel =
+        if (comparisonLabelResId != null) {
+            stringResource(comparisonLabelResId)
+        } else {
+            null
+        }
+    val trendText =
+        when {
+            comparisonLabel == null -> stringResource(R.string.stats_trend_all_time)
+            previousPeriodTimeListened == null -> stringResource(R.string.stats_trend_no_comparison)
+            previousPeriodTimeListened <= 0L -> stringResource(R.string.stats_trend_no_previous_listening)
+            else -> {
+                val percentChange =
+                    (
+                        (summary.totalTimeListened.toDouble() - previousPeriodTimeListened.toDouble()) /
+                            previousPeriodTimeListened.toDouble() * 100.0
+                    ).roundToInt()
+                when {
+                    percentChange > 0 ->
+                        stringResource(R.string.stats_trend_increase, percentChange, comparisonLabel)
+
+                    percentChange < 0 ->
+                        stringResource(R.string.stats_trend_decrease, -percentChange, comparisonLabel)
+
+                    else -> stringResource(R.string.stats_trend_unchanged, comparisonLabel)
+                }
+            }
+        }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
@@ -1071,14 +1119,76 @@ private fun StatsListeningTimeHero(
             Text(
                 text = stringResource(R.string.stats_total_time_listened),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = foreground,
             )
             Text(
                 text = makeTimeString(summary.totalTimeListened) ?: "-",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                color = foreground,
             )
+            Text(
+                text = trendText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = foreground,
+            )
+            StatsTrendMiniChart(
+                buckets = trendBuckets,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatsTrendMiniChart(
+    buckets: List<ListeningBySlot>,
+    modifier: Modifier = Modifier,
+) {
+    val values =
+        remember(buckets) {
+            val bucketMap = buckets.associateBy { it.slot }
+            (0 until 7).map { bucketMap[it]?.timeListened ?: 0L }
+        }
+    val maxTime = values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+    val barColor = MaterialTheme.colorScheme.onPrimaryContainer
+
+    Column(
+        modifier = modifier.padding(top = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.stats_listening_trend),
+            style = MaterialTheme.typography.labelSmall,
+            color = barColor.copy(alpha = 0.72f),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().height(28.dp),
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            values.forEachIndexed { index, value ->
+                val fraction = (value.toDouble() / maxTime).toFloat().coerceIn(0f, 1f)
+                val animatedFraction by animateFloatAsState(
+                    targetValue = fraction,
+                    animationSpec = tween(350),
+                    label = "trend_bucket_$index",
+                )
+                Box(
+                    modifier = Modifier.weight(1f).height(28.dp),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(0.42f)
+                                .height((28 * animatedFraction).dp.coerceAtLeast(2.dp))
+                                .clip(CircleShape)
+                                .background(barColor.copy(alpha = 0.3f + 0.7f * animatedFraction)),
+                    )
+                }
+            }
         }
     }
 }

@@ -1499,6 +1499,31 @@ interface DatabaseDao {
         toTimestamp: Long,
     ): Flow<ListeningTotals>
 
+    @Query(
+        """
+        SELECT CAST(
+                   MIN(
+                       :bucketCount - 1,
+                       CASE
+                           WHEN :toTimestamp > :fromTimestamp
+                           THEN (timestamp - :fromTimestamp) * :bucketCount / (:toTimestamp - :fromTimestamp)
+                           ELSE 0
+                       END
+                   ) AS INTEGER
+               ) AS slot,
+               COALESCE(SUM(playTime), 0) AS timeListened
+        FROM event
+        WHERE timestamp > :fromTimestamp AND timestamp <= :toTimestamp
+        GROUP BY slot
+        ORDER BY slot
+        """,
+    )
+    fun listeningTrendBuckets(
+        fromTimestamp: Long,
+        toTimestamp: Long,
+        bucketCount: Int,
+    ): Flow<List<ListeningBySlot>>
+
     @Transaction
     @Query("SELECT * FROM event ORDER BY rowId ASC LIMIT 1")
     fun firstEvent(): Flow<EventWithSong?>

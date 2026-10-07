@@ -20,43 +20,38 @@ enum class StatPeriod {
     ALL,
     ;
 
-    fun toTimeMillis(): Long =
+    fun toTimeMillis(now: LocalDateTime = LocalDateTime.now()): Long =
         when (this) {
             WEEK_1 -> {
-                LocalDateTime
-                    .now()
+                now
                     .minusWeeks(1)
                     .toInstant(ZoneOffset.UTC)
                     .toEpochMilli()
             }
 
             MONTH_1 -> {
-                LocalDateTime
-                    .now()
+                now
                     .minusMonths(1)
                     .toInstant(ZoneOffset.UTC)
                     .toEpochMilli()
             }
 
             MONTH_3 -> {
-                LocalDateTime
-                    .now()
+                now
                     .minusMonths(3)
                     .toInstant(ZoneOffset.UTC)
                     .toEpochMilli()
             }
 
             MONTH_6 -> {
-                LocalDateTime
-                    .now()
+                now
                     .minusMonths(6)
                     .toInstant(ZoneOffset.UTC)
                     .toEpochMilli()
             }
 
             YEAR_1 -> {
-                LocalDateTime
-                    .now()
+                now
                     .minusMonths(12)
                     .toInstant(ZoneOffset.UTC)
                     .toEpochMilli()
@@ -71,11 +66,11 @@ enum class StatPeriod {
 fun statToPeriod(
     selection: OptionStats,
     test: Int,
+    now: LocalDateTime = LocalDateTime.now(),
 ): Long =
     when (selection) {
         OptionStats.WEEKS -> {
-            LocalDateTime
-                .now()
+            now
                 .minusWeeks(test.toLong())
                 .minusDays(1)
                 .toInstant(ZoneOffset.UTC)
@@ -83,8 +78,7 @@ fun statToPeriod(
         }
 
         OptionStats.MONTHS -> {
-            LocalDateTime
-                .now()
+            now
                 .withDayOfMonth(1)
                 .minusMonths(test.toLong())
                 .toInstant(ZoneOffset.UTC)
@@ -92,8 +86,7 @@ fun statToPeriod(
         }
 
         OptionStats.YEARS -> {
-            LocalDateTime
-                .now()
+            now
                 .withDayOfMonth(1)
                 .withMonth(1)
                 .minusYears(test.toLong())
@@ -103,7 +96,7 @@ fun statToPeriod(
         }
 
         OptionStats.CONTINUOUS -> {
-            val index = if (test > StatPeriod.entries.size) 0 else test
-            StatPeriod.entries[index].toTimeMillis()
+            val index = test.coerceIn(0, StatPeriod.entries.lastIndex)
+            StatPeriod.entries[index].toTimeMillis(now)
         }
     }
