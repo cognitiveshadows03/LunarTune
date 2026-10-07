@@ -1335,7 +1335,7 @@
     <string name="music_transfer_spotify_playlists">Your Spotify playlists</string>
     <string name="music_transfer_refresh_spotify">Refresh Spotify playlists</string>
     <string name="music_transfer_spotify_empty">No Spotify playlists were found for this account.</string>
-    <string name="music_transfer_apple_public_only">Paste a public Apple Music playlist share link. Private playlists aren't available through a share link.</string>
+    <string name="music_transfer_apple_public_only">Paste a public Apple Music playlist share link. Private playlists are not accessible from a share link.</string>
     <string name="music_transfer_apple_link_label">Apple Music playlist link</string>
     <string name="music_transfer_apple_link_hint">https://music.apple.com/.../playlist/...</string>
     <string name="music_transfer_load_apple_playlist">Load playlist</string>
