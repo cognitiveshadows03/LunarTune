@@ -600,17 +600,12 @@
     <string name="stats_listening_by_day">Listening by Day</string>
     <string name="stats_listening_by_hour">Listening by Hour</string>
     <string name="stats_peak_hour">Most active: %s</string>
-    <string name="stats_pattern_avg_per_day">Avg per day · %1$s</string>
-    <string name="stats_pattern_avg_per_hour">Avg per hour · %1$s</string>
-    <string name="stats_pattern_all_time">all time</string>
+    <string name="stats_pattern_avg_per_day">Avg per day · last month</string>
+    <string name="stats_pattern_avg_per_hour">Avg per hour · last month</string>
     <string name="stats_pattern_insight_day">Most active on %1$s</string>
     <string name="stats_pattern_insight_hour">Most active around %1$s</string>
-    <string name="stats_pattern_no_history">No listening recorded in this period</string>
-    <string name="stats_pattern_peak_change">%1$s %2$s %3$s</string>
-    <plurals name="stats_pattern_last_days">
-        <item quantity="one">last %d day</item>
-        <item quantity="other">last %d days</item>
-    </plurals>
+    <string name="stats_pattern_no_history">No listening recorded last month</string>
+    <string name="stats_pattern_peak_change">%1$s %2$s vs last month</string>
     <string name="stats_pattern_tooltip_day">%1$s · avg %2$s · %3$d %4$s</string>
     <string name="stats_pattern_tooltip_hour">%1$s · avg %2$s · %3$d days</string>
     <string-array name="stats_pattern_weekday_plural">

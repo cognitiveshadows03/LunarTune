@@ -94,3 +94,22 @@ fun frostedMiniPlayerStyle(
         fallbackColorEffect(HazeColorEffect.tint(fallbackScrim))
         noiseFactor(0f)
     }
+
+/**
+ * Frost for the top-bar dropdown menu. Painted over the menu's own opaque
+ * container, so when Haze has no source to sample (frost disabled, or the
+ * popup window can't be tracked on this device) the blur simply paints
+ * nothing and the solid M3 surface remains.
+ */
+fun frostedTopMenuStyle(
+    scrim: Color,
+    fallbackScrim: Color,
+): HazeBlurStyle =
+    HazeBlurStyle {
+        blurEnabled(true)
+        blurRadius(14.dp)
+        backgroundColor(scrim)
+        colorEffects(emptyList())
+        fallbackColorEffect(HazeColorEffect.tint(fallbackScrim))
+        noiseFactor(0f)
+    }

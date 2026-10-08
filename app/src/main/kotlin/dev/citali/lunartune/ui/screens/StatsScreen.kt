@@ -374,9 +374,6 @@ fun StatsScreen(
                         StatsListeningPatterns(
                             daySlots = listeningByDayOfWeek,
                             hourSlots = listeningByHour,
-                            periodDays = data.patternPeriodDays,
-                            isAllTime = data.patternIsAllTime,
-                            comparisonLabelResId = data.patternComparisonLabelResId,
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -430,9 +427,6 @@ fun StatsScreen(
                     StatsListeningPatterns(
                         daySlots = listeningByDayOfWeek,
                         hourSlots = listeningByHour,
-                        periodDays = data.patternPeriodDays,
-                        isAllTime = data.patternIsAllTime,
-                        comparisonLabelResId = data.patternComparisonLabelResId,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -808,24 +802,9 @@ private fun StatsSongsHeader(
 private fun StatsListeningPatterns(
     daySlots: List<ListeningPatternSlot>,
     hourSlots: List<ListeningPatternSlot>,
-    periodDays: Long,
-    isAllTime: Boolean,
-    comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
 ) {
     if (daySlots.isEmpty() && hourSlots.isEmpty()) return
-
-    val periodTail =
-        if (isAllTime) {
-            stringResource(R.string.stats_pattern_all_time)
-        } else {
-            pluralStringResource(
-                R.plurals.stats_pattern_last_days,
-                periodDays.toInt().coerceAtLeast(1),
-                periodDays.coerceAtLeast(1L),
-            )
-        }
-    val comparisonLabel = comparisonLabelResId?.let { stringResource(it) }
 
     Column(
         modifier =
@@ -845,14 +824,10 @@ private fun StatsListeningPatterns(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ListeningByDayChart(
                         slots = daySlots,
-                        periodTail = periodTail,
-                        comparisonLabel = comparisonLabel,
                         modifier = Modifier.weight(1f),
                     )
                     ListeningByHourChart(
                         slots = hourSlots,
-                        periodTail = periodTail,
-                        comparisonLabel = comparisonLabel,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -861,16 +836,12 @@ private fun StatsListeningPatterns(
                     if (daySlots.isNotEmpty()) {
                         ListeningByDayChart(
                             slots = daySlots,
-                            periodTail = periodTail,
-                            comparisonLabel = comparisonLabel,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     if (hourSlots.isNotEmpty()) {
                         ListeningByHourChart(
                             slots = hourSlots,
-                            periodTail = periodTail,
-                            comparisonLabel = comparisonLabel,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -1739,8 +1710,6 @@ private fun createDistinctArtistColors(
 @Composable
 private fun ListeningByDayChart(
     slots: List<ListeningPatternSlot>,
-    periodTail: String,
-    comparisonLabel: String?,
     modifier: Modifier = Modifier,
 ) {
     val dayLabels =
@@ -1763,23 +1732,22 @@ private fun ListeningByDayChart(
     val insight =
         peakSlot?.let { stringResource(R.string.stats_pattern_insight_day, weekdayPluralNames[it]) }
             ?: stringResource(R.string.stats_pattern_no_history)
-    // The chip describes the highlighted (peak) bar itself, never some other slot.
+    // The chip describes the highlighted (peak) bar only, comparing its month-to-date
+    // average against the monthly baseline; guarded so tiny baselines stay absolute.
     val change =
-        comparisonLabel?.let { label ->
-            peakSlot
-                ?.let { slotMap[it] }
-                ?.let { slot ->
-                    formatAverageChange(slot.averageTimeListened, slot.previousPeriodAverageTimeListened)
-                        ?.let { changeText ->
-                            stringResource(
-                                R.string.stats_pattern_peak_change,
-                                weekdayPluralNames[slot.slot],
-                                changeText,
-                                label,
-                            )
-                        }
+        peakSlot
+            ?.let { peak -> slotMap[peak] }
+            ?.let { slot ->
+                slot.monthToDateAverageTimeListened?.let { monthToDate ->
+                    formatAverageChange(monthToDate, slot.averageTimeListened)?.let { changeText ->
+                        stringResource(
+                            R.string.stats_pattern_peak_change,
+                            weekdayPluralNames[slot.slot],
+                            changeText,
+                        )
+                    }
                 }
-        }
+            }
 
     ElevatedCard(
         modifier = modifier,
@@ -1795,7 +1763,7 @@ private fun ListeningByDayChart(
             PatternChartMeta(
                 insight = insight,
                 change = change,
-                periodLabel = stringResource(R.string.stats_pattern_avg_per_day, periodTail),
+                periodLabel = stringResource(R.string.stats_pattern_avg_per_day),
             )
             val selected = slotMap[selectedSlot.intValue]
             if (selected != null) {
@@ -1871,8 +1839,6 @@ private fun ListeningByDayChart(
 @Composable
 private fun ListeningByHourChart(
     slots: List<ListeningPatternSlot>,
-    periodTail: String,
-    comparisonLabel: String?,
     modifier: Modifier = Modifier,
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("h a", Locale.getDefault()) }
@@ -1887,23 +1853,22 @@ private fun ListeningByHourChart(
     val insight =
         peakSlot?.let { stringResource(R.string.stats_pattern_insight_hour, hourLabels[it]) }
             ?: stringResource(R.string.stats_pattern_no_history)
-    // The chip describes the highlighted (peak) hour itself, never some other slot.
+    // The chip describes the highlighted (peak) hour only, comparing its month-to-date
+    // average against the monthly baseline; guarded so tiny baselines stay absolute.
     val change =
-        comparisonLabel?.let { label ->
-            peakSlot
-                ?.let { slotMap[it] }
-                ?.let { slot ->
-                    formatAverageChange(slot.averageTimeListened, slot.previousPeriodAverageTimeListened)
-                        ?.let { changeText ->
-                            stringResource(
-                                R.string.stats_pattern_peak_change,
-                                hourLabels[slot.slot],
-                                changeText,
-                                label,
-                            )
-                        }
+        peakSlot
+            ?.let { peak -> slotMap[peak] }
+            ?.let { slot ->
+                slot.monthToDateAverageTimeListened?.let { monthToDate ->
+                    formatAverageChange(monthToDate, slot.averageTimeListened)?.let { changeText ->
+                        stringResource(
+                            R.string.stats_pattern_peak_change,
+                            hourLabels[slot.slot],
+                            changeText,
+                        )
+                    }
                 }
-        }
+            }
 
     ElevatedCard(
         modifier = modifier,
@@ -1919,7 +1884,7 @@ private fun ListeningByHourChart(
             PatternChartMeta(
                 insight = insight,
                 change = change,
-                periodLabel = stringResource(R.string.stats_pattern_avg_per_hour, periodTail),
+                periodLabel = stringResource(R.string.stats_pattern_avg_per_hour),
             )
             val selected = slotMap[selectedSlot.intValue]
             if (selected != null) {

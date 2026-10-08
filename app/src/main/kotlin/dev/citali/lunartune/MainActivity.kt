@@ -45,6 +45,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -85,6 +86,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -186,6 +188,10 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import com.valentinilk.shimmer.LocalShimmerTheme
 import dagger.hilt.android.AndroidEntryPoint
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazePerformanceMode
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
@@ -299,6 +305,8 @@ import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
 import dev.citali.lunartune.ui.component.DISMISSED_ANCHOR
 import dev.citali.lunartune.ui.component.EXPANDED_ANCHOR
 import dev.citali.lunartune.ui.component.FloatingNavigationToolbar
+import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
+import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
@@ -1877,49 +1885,21 @@ class MainActivity : FragmentActivity() {
                                                     }
                                                 },
                                                 actions = {
-                                                    TranslucentTopAppBarIconButton(
-                                                        onClick = { navController.navigate("history") },
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.history),
-                                                            contentDescription = stringResource(R.string.history),
-                                                        )
-                                                    }
-                                                    TranslucentTopAppBarIconButton(
-                                                        onClick = { navController.navigate("settings/music_together") },
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.multi_user),
-                                                            contentDescription = stringResource(R.string.music_together),
-                                                        )
-                                                    }
-                                                    TranslucentTopAppBarIconButton(
-                                                        onClick = { navController.navigate("new_release") },
-                                                    ) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.new_release),
-                                                            contentDescription = stringResource(R.string.new_release_albums),
-                                                        )
-                                                    }
-                                                    TranslucentTopAppBarIconButton(
-                                                        onClick = { navController.navigate("settings") },
-                                                    ) {
-                                                        BadgedBox(badge = {
-                                                            if (
-                                                                BuildConfig.UPDATER_AVAILABLE &&
-                                                                latestUpdateChannel == updateChannel &&
-                                                                Updater.isUpdateAvailable(latestVersionName, BuildConfig.VERSION_NAME)
-                                                            ) {
-                                                                Badge()
-                                                            }
-                                                        }) {
-                                                            Icon(
-                                                                painter = painterResource(R.drawable.settings),
-                                                                contentDescription = stringResource(R.string.settings),
-                                                                modifier = Modifier.size(24.dp),
+                                                    val updateAvailable =
+                                                        BuildConfig.UPDATER_AVAILABLE &&
+                                                            latestUpdateChannel == updateChannel &&
+                                                            Updater.isUpdateAvailable(
+                                                                latestVersionName,
+                                                                BuildConfig.VERSION_NAME,
                                                             )
-                                                        }
-                                                    }
+                                                    FrostedTopBarMenu(
+                                                        hazeState = hazeState,
+                                                        hazeSourceAttached =
+                                                            (isFrostedNavBar || isMiniPlayerFrosted) &&
+                                                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                                                        updateAvailable = updateAvailable,
+                                                        onNavigate = { route -> navController.navigate(route) },
+                                                    )
                                                 },
                                                 scrollBehavior =
                                                     if (navBackStackEntry?.destination?.route == Screens.Library.route ||
@@ -3303,6 +3283,127 @@ private fun TranslucentTopAppBarIconButton(
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ),
         content = content,
+    )
+}
+
+/**
+ * Replaces the top-bar action cluster with a single MD3 overflow trigger that
+ * opens a rounded dropdown menu (History · Music Together | New releases |
+ * Settings). The menu rows paint over a frost layer: Haze's live blur of the
+ * screen behind the bar, dimmed with a surface scrim. The layer sits on top of
+ * the menu's own opaque container, so on devices or configs where the blur has
+ * no source, the menu degrades to a clean solid M3 surface.
+ */
+@Composable
+private fun FrostedTopBarMenu(
+    hazeState: HazeState,
+    hazeSourceAttached: Boolean,
+    updateAvailable: Boolean,
+    onNavigate: (String) -> Unit,
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val menuShape = RoundedCornerShape(26.dp)
+    val frostBase = MaterialTheme.colorScheme.surfaceContainerHigh
+
+    Box {
+        TranslucentTopAppBarIconButton(onClick = { expanded = !expanded }) {
+            BadgedBox(badge = {
+                if (updateAvailable) {
+                    Badge()
+                }
+            }) {
+                Icon(
+                    painter = painterResource(R.drawable.more_vert),
+                    contentDescription = stringResource(R.string.more_options),
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier =
+                Modifier
+                    .then(
+                        if (hazeSourceAttached) {
+                            Modifier.hazeBlur(
+                                input = HazeInput.Sources(hazeState),
+                                style =
+                                    frostedTopMenuStyle(
+                                        scrim = frostBase.copy(alpha = 0.55f),
+                                        fallbackScrim = frostBase.copy(alpha = FrostedFallbackAlpha),
+                                    ),
+                                performanceMode = HazePerformanceMode.Performance,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    ).background(frostBase.copy(alpha = 0.30f)),
+            shape = menuShape,
+            containerColor = frostBase,
+            tonalElevation = 2.dp,
+            shadowElevation = 6.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        ) {
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.history,
+                label = stringResource(R.string.history),
+            ) {
+                expanded = false
+                onNavigate("history")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.multi_user,
+                label = stringResource(R.string.music_together),
+            ) {
+                expanded = false
+                onNavigate("settings/music_together")
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.new_release,
+                label = stringResource(R.string.new_release_albums),
+            ) {
+                expanded = false
+                onNavigate("new_release")
+            }
+            val settingsTrailing: (@Composable () -> Unit)? =
+                if (updateAvailable) {
+                    @Composable { Badge() }
+                } else {
+                    null
+                }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.settings,
+                label = stringResource(R.string.settings),
+                trailing = settingsTrailing,
+            ) {
+                expanded = false
+                onNavigate("settings")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FrostedTopBarMenuRow(
+    @DrawableRes iconRes: Int,
+    label: String,
+    trailing: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        },
+        onClick = onClick,
+        leadingIcon = {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+            )
+        },
+        trailingIcon = trailing,
     )
 }
 
