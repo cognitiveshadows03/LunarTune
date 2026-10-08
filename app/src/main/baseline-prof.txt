@@ -65,6 +65,11 @@ HSPLdev/citali/lunartune/ui/screens/SearchScreenKt;->**(**)**
 HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
 Ldev/citali/lunartune/ui/screens/HomeScreenKt;
 Ldev/citali/lunartune/ui/screens/SearchScreenKt;
+# ChartsScreenKt was matched only by the Ldev/citali/lunartune/ui/screens/**;
+# load rule above, so its composables ran interpreted while Home and Search
+# were AOT-compiled.
+HSPLdev/citali/lunartune/ui/screens/ChartsScreenKt;->**(**)**
+Ldev/citali/lunartune/ui/screens/ChartsScreenKt;
 
 # ---- Library / playlists / search ------------------------------------------
 HSPLdev/citali/lunartune/viewmodels/**;->**(**)**
@@ -95,9 +100,15 @@ HSPLdev/citali/lunartune/playback/MusicService;->**(**)**
 Ldev/citali/lunartune/playback/**;
 HSPLdev/citali/lunartune/playback/PlayerConnection;->**(**)**
 
-# ---- InnerTube networking + models (core module) ---------------------------
+# ---- InnerTube networking + models (core and app-side) ---------------------
 Lmoe/rukamori/archivetune/innertube/**;
 HSPLmoe/rukamori/archivetune/innertube/**;->**(**)**
+# App-side charts fetcher: ChartsApi plus its converters parse the entire
+# charts browse on the load path, and had no rule at all - not even a class
+# load - so every convertToChartItem / convertMusicTwoRowItem call ran
+# interpreted on first open.
+Ldev/citali/lunartune/innertube/**;
+HSPLdev/citali/lunartune/innertube/**;->**(**)**
 Ldev/citali/lunartune/models/**;
 
 # ---- Room database ----------------------------------------------------------

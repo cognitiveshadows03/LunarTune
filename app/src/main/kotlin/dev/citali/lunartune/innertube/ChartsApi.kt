@@ -8,7 +8,10 @@
 package dev.citali.lunartune.innertube
 
 import io.ktor.client.call.body
+import dev.citali.lunartune.constants.HideExplicitKey
+import dev.citali.lunartune.utils.PreferenceStore
 import moe.rukamori.archivetune.innertube.InnerTube
+import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.AlbumItem
 import moe.rukamori.archivetune.innertube.models.Artist
 import moe.rukamori.archivetune.innertube.models.ArtistItem
@@ -37,12 +40,66 @@ import moe.rukamori.archivetune.innertube.pages.ChartsPage
  * `YouTube.getChartsPage` with the extra `isPlaylist` / `isArtist` /
  * two-column-row arms and no legacy browse `params` (the year-filter param
  * makes the endpoint respond with a page that carries no chart sections).
+ *
+ * Being a second client is not free: a fresh [InnerTube] starts with none of
+ * the global configuration, so [syncGlobalClientConfig] mirrors it from
+ * [YouTube] before every browse. Content filters are applied here rather than
+ * by the callers so the Charts screen and Home discovery cannot drift apart.
  */
 object ChartsApi {
     private val innerTube = InnerTube()
 
+    /**
+     * Mirrors the global InnerTube configuration onto this client.
+     *
+     * `App` pushes Content -> Country / Language into `YouTube.locale` (both at
+     * startup and live from the settings screen) and proxy, DNS, PO token,
+     * visitorData and the signed-in state into that same instance. A separate
+     * [InnerTube] sees none of it, so without this the charts browse always went
+     * out for the device locale and always bypassed the user's proxy.
+     *
+     * The proxy and DNS setters close and rebuild the OkHttp client, so they are
+     * assigned only when they actually differ; copying them unconditionally would
+     * tear down the connection pool on every charts fetch. The auth values are
+     * assigned unconditionally so that signing out propagates.
+     *
+     * `InnerTube.proxySelector` is internal to `core`, so IP rotation cannot be
+     * mirrored from the app module.
+     */
+    private fun syncGlobalClientConfig() {
+        innerTube.locale = YouTube.locale
+        innerTube.visitorData = YouTube.visitorData
+        innerTube.dataSyncId = YouTube.dataSyncId
+        innerTube.cookie = YouTube.cookie
+        innerTube.poToken = YouTube.poToken
+        innerTube.useLoginForBrowse = YouTube.useLoginForBrowse
+        if (innerTube.proxy != YouTube.proxy) innerTube.proxy = YouTube.proxy
+        if (innerTube.proxyUsername != YouTube.proxyUsername) {
+            innerTube.proxyUsername = YouTube.proxyUsername
+        }
+        if (innerTube.proxyPassword != YouTube.proxyPassword) {
+            innerTube.proxyPassword = YouTube.proxyPassword
+        }
+        if (innerTube.dns != YouTube.dns) innerTube.dns = YouTube.dns
+    }
+
+    /**
+     * Content -> Hide explicit, applied to a parsed section.
+     *
+     * Read from the [PreferenceStore] snapshot instead of being threaded through
+     * the callers: `PreferenceStore` is started in `App.onCreate` and awaited
+     * before the UI comes up, and reading it here is what keeps the Charts screen
+     * and `SearchDiscoveryRepository` filtering identically without either having
+     * to grow a preference dependency.
+     */
+    private fun List<YTItem>.filterChartContent(hideExplicit: Boolean): List<YTItem> =
+        if (hideExplicit) filterNot { it.explicit } else this
+
     suspend fun getChartsPage(continuation: String? = null): Result<ChartsPage> =
         runCatching {
+            syncGlobalClientConfig()
+            val hideExplicit = PreferenceStore.get(HideExplicitKey) == true
+
             val response =
                 innerTube
                     .browse(
@@ -82,7 +139,7 @@ object ChartsApi {
                                         ?.let { row -> convertToChartItem(row) }
                                         ?: item.musicTwoRowItemRenderer
                                             ?.let { row -> convertMusicTwoRowItem(row) }
-                                }
+                                }.filterChartContent(hideExplicit)
 
                         if (items.isNotEmpty()) {
                             sections.add(
@@ -111,7 +168,7 @@ object ChartsApi {
                                     item.musicTwoRowItemRenderer?.let { renderer ->
                                         convertMusicTwoRowItem(renderer)
                                     }
-                                }
+                                }.filterChartContent(hideExplicit)
 
                         if (items.isNotEmpty()) {
                             sections.add(
