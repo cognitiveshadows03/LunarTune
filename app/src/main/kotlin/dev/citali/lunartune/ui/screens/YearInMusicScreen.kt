@@ -1285,8 +1285,8 @@ private fun ListeningOrbitAtmosphere(modifier: Modifier = Modifier) {
                 }
             paint.asFrameworkPaint().maskFilter =
                 android.graphics.BlurMaskFilter(blurPx, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            // DrawScope exposes no Paint overload; the underlying canvas does.
-            drawIntoCanvas { canvas -> canvas.drawPath(path, paint) }
+            // DrawScope exposes no Paint overload; the scope's own canvas does.
+            drawContext.canvas.drawPath(path, paint)
         }
 
         // Vignette so the swirl settles into dark edges and the totals stay legible.
