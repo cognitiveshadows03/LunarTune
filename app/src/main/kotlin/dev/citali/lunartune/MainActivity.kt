@@ -36,9 +36,7 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -50,7 +48,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
@@ -142,10 +139,10 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Velocity
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onSizeChanged
@@ -1175,56 +1172,56 @@ class MainActivity : FragmentActivity() {
 
                     // Beta: Apple Music-style scroll-driven navigation bar, ported
                     // from 4nx3b/ArchiveTune's canary branch: scrolling a page down
-                    // dissolves the bar's plate and morphs the items into floating
-                    // circular buttons at the edges (canary's plate-less liquid-glass
-                    // look), while the mini player glides into the open centre
-                    // strip. Scrolling back up morphs the plate and the row home.
+                    // slides the bar away and the collapsed mini player drifts into
+                    // the freed footprint; scrolling back up brings the bar home.
                     val navBarHideOnScroll by
                         rememberPreference(NavBarHideOnScrollKey, defaultValue = false)
                     var isNavBarHiddenByScroll by remember { mutableStateOf(false) }
-                    // A freshly opened/re-entered tab always starts with the bar visible.
-                    LaunchedEffect(navBackStackEntry?.destination?.route) {
-                        isNavBarHiddenByScroll = false
-                    }
-                    // Morph progress: 1 = full plate with the icon row, 0 = plate
-                    // dissolved into floating circles. One spring drives the plate
-                    // fade, the item swap and the mini player's drift together.
-                    val navBarPlateFraction by
-                        animateFloatAsState(
-                            targetValue = if (!navBarHideOnScroll || !isNavBarHiddenByScroll) 1f else 0f,
-                            animationSpec =
-                                if (disableAnimations) {
-                                    snap()
-                                } else {
-                                    spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = Spring.StiffnessLow,
-                                    )
-                                },
-                            label = "navBarPlateFraction",
-                        )
-                    val navBarCircleMode = navBarPlateFraction < 0.5f
                     val navBarScrollDensity = LocalDensity.current
                     val navBarHideScrollThresholdPx = with(navBarScrollDensity) { 14.dp.toPx() }
-                    val navBarScrollHideConnection =
+                    val navBarScrollTracker =
                         remember(navBarHideScrollThresholdPx) {
+                            NavBarScrollTracker(navBarHideScrollThresholdPx)
+                        }
+                    // A freshly opened/re-entered tab always starts with the bar
+                    // visible, and with a clean accumulator so the first gesture on
+                    // the new route has to earn the hide all over again.
+                    LaunchedEffect(navBackStackEntry?.destination?.route) {
+                        isNavBarHiddenByScroll = false
+                        navBarScrollTracker.reset()
+                    }
+                    val navBarScrollHideConnection =
+                        remember(navBarScrollTracker) {
                             object : NestedScrollConnection {
                                 override fun onPostScroll(
                                     consumed: Offset,
                                     available: Offset,
                                     source: NestedScrollSource,
                                 ): Offset {
-                                    // Only real user gestures (drag/fling) move the bar;
-                                    // programmatic scrolls (position restore, settings
-                                    // auto-scroll) must not touch it.
-                                    if (navBarHideOnScroll && source == NestedScrollSource.UserInput) {
-                                        if (consumed.y < -navBarHideScrollThresholdPx) {
-                                            isNavBarHiddenByScroll = true
-                                        } else if (consumed.y > navBarHideScrollThresholdPx) {
-                                            isNavBarHiddenByScroll = false
+                                    // Only real user gestures move the bar: the drag
+                                    // itself plus the fling that follows it. The fling
+                                    // is bracketed by pre/post-fling, so programmatic
+                                    // scrolls (position restore, settings auto-scroll)
+                                    // still cannot touch it.
+                                    if (navBarHideOnScroll) {
+                                        navBarScrollTracker.consume(consumed.y, source)?.let {
+                                            isNavBarHiddenByScroll = it
                                         }
                                     }
                                     return Offset.Zero
+                                }
+
+                                override suspend fun onPreFling(available: Velocity): Velocity {
+                                    navBarScrollTracker.beginUserFling()
+                                    return Velocity.Zero
+                                }
+
+                                override suspend fun onPostFling(
+                                    consumed: Velocity,
+                                    available: Velocity,
+                                ): Velocity {
+                                    navBarScrollTracker.endUserFling()
+                                    return Velocity.Zero
                                 }
                             }
                         }
@@ -1236,12 +1233,15 @@ class MainActivity : FragmentActivity() {
                             0.dp
                         }
 
-                    // Scroll-hide never shrinks the slot: the morph keeps the
-                    // bar's footprint reserved so the screen content does not
-                    // reflow while the plate dissolves. Only route changes hide.
+                    // The slot collapses when a route hides the bar or when the
+                    // scroll-to-hide beta slides it away; the mini player drifts
+                    // into the freed footprint on this same spring.
                     val bottomNavigationBarHeight by animateDpAsState(
                         targetValue =
-                            if (shouldShowNavigationBar && !useRail) {
+                            if (
+                                shouldShowNavigationBar && !useRail &&
+                                !(navBarHideOnScroll && isNavBarHiddenByScroll)
+                            ) {
                                 navVisibleHeight
                             } else {
                                 0.dp
@@ -2228,14 +2228,18 @@ class MainActivity : FragmentActivity() {
                                             isMiniPlayerPairedWithNavigation = areBottomBarsPaired,
                                             hazeState = hazeState,
                                             navbarHiddenOffset = {
-                                                // The collapsed mini player drifts into the
-                                                // bar's footprint in lockstep with the
-                                                // plate→circles morph, landing in the open
-                                                // centre strip between the floating circles.
+                                                // While the bar is away (route change or
+                                                // scroll-to-hide) the collapsed mini player
+                                                // drifts down into the freed footprint.
                                                 if (shouldShowNavigationBar && !useRail) {
+                                                    val hideFraction =
+                                                        1f -
+                                                            bottomNavigationBarHeight
+                                                                .coerceAtMost(navVisibleHeight) /
+                                                                navVisibleHeight
                                                     with(navBarScrollDensity) {
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() *
-                                                            (1f - navBarPlateFraction)
+                                                            hideFraction
                                                     }
                                                 } else {
                                                     0f
@@ -2280,108 +2284,84 @@ class MainActivity : FragmentActivity() {
                                                         }
                                                     },
                                         ) {
-                                            if (!navBarCircleMode) {
                                             FloatingNavigationToolbar(
-                                                    items = navigationItems,
-                                                    pureBlack = pureBlack,
-                                                    isPairedWithMiniPlayer = areBottomBarsPaired,
-                                                    style = navigationBarStyle,
-                                                    hazeState = hazeState,
-                                                    modifier =
-                                                        Modifier
-                                                            .align(Alignment.BottomCenter)
-                                                            .alpha(navBarPlateFraction)
-                                                            .padding(
-                                                                start = navBarHorizontalPadding,
-                                                                end = navBarHorizontalPadding,
-                                                                bottom = bottomInset + floatingBarsBottomPadding,
-                                                            ).height(navVisibleHeight),
-                                                    isSelected = { screen ->
-                                                        navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } ==
-                                                            true
-                                                    },
-                                                    onItemClick = { screen, isSelected ->
-                                                        handlePrimaryNavigationClick(screen, isSelected)
-                                                    },
-                                                    onItemLongClick =
-                                                        if (navBarLongPressActions) {
-                                                            { screen ->
-                                                                val action =
-                                                                    when (screen) {
-                                                                        Screens.Home -> homeLongPressAction
-                                                                        Screens.Search -> searchLongPressAction
-                                                                        Screens.Library -> libraryLongPressAction
-                                                                        else -> NavBarLongPressAction.NONE
-                                                                    }
-                                                                when (action) {
-                                                                    NavBarLongPressAction.NONE -> Unit
-                                                                    NavBarLongPressAction.PLAY_RANDOM_SONG -> {
-                                                                        coroutineScope.launch {
-                                                                            val (song, usedOfflineFallback) = selectNavBarLongPressSong()
-                                                                            if (song == null) {
-                                                                                val messageRes =
-                                                                                    if (usedOfflineFallback) {
-                                                                                        R.string.navbar_long_press_no_offline_songs
-                                                                                    } else {
-                                                                                        R.string.navbar_long_press_no_history
-                                                                                    }
-                                                                                Toast
-                                                                                    .makeText(
-                                                                                        this@MainActivity,
-                                                                                        getString(messageRes),
-                                                                                        Toast.LENGTH_SHORT,
-                                                                                    ).show()
-                                                                                return@launch
-                                                                            }
-                                                                            playerConnection?.playQueue(
-                                                                                if (usedOfflineFallback || song.song.isLocal) {
-                                                                                    ListQueue(items = listOf(song.toMediaItem()))
-                                                                                } else {
-                                                                                    YouTubeQueue(
-                                                                                        endpoint =
-                                                                                            moe.rukamori.archivetune.innertube.models
-                                                                                                .WatchEndpoint(videoId = song.id),
-                                                                                        preloadItem = null,
-                                                                                        followAutomixPreview = true,
-                                                                                    )
-                                                                                },
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                    NavBarLongPressAction.MUSIC_RECOGNITION ->
-                                                                        navController.navigate(MusicRecognitionRoute)
+                                                items = navigationItems,
+                                                pureBlack = pureBlack,
+                                                isPairedWithMiniPlayer = areBottomBarsPaired,
+                                                style = navigationBarStyle,
+                                                hazeState = hazeState,
+                                                modifier =
+                                                    Modifier
+                                                        .align(Alignment.BottomCenter)
+                                                        .padding(
+                                                            start = navBarHorizontalPadding,
+                                                            end = navBarHorizontalPadding,
+                                                            bottom = bottomInset + floatingBarsBottomPadding,
+                                                        ).height(navVisibleHeight),
+                                                isSelected = { screen ->
+                                                    navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } ==
+                                                        true
+                                                },
+                                                onItemClick = { screen, isSelected ->
+                                                    handlePrimaryNavigationClick(screen, isSelected)
+                                                },
+                                                onItemLongClick =
+                                                    if (navBarLongPressActions) {
+                                                        { screen ->
+                                                            val action =
+                                                                when (screen) {
+                                                                    Screens.Home -> homeLongPressAction
+                                                                    Screens.Search -> searchLongPressAction
+                                                                    Screens.Library -> libraryLongPressAction
+                                                                    else -> NavBarLongPressAction.NONE
                                                                 }
+                                                            when (action) {
+                                                                NavBarLongPressAction.NONE -> Unit
+                                                                NavBarLongPressAction.PLAY_RANDOM_SONG -> {
+                                                                    coroutineScope.launch {
+                                                                        val (song, usedOfflineFallback) = selectNavBarLongPressSong()
+                                                                        if (song == null) {
+                                                                            val messageRes =
+                                                                                if (usedOfflineFallback) {
+                                                                                    R.string.navbar_long_press_no_offline_songs
+                                                                                } else {
+                                                                                    R.string.navbar_long_press_no_history
+                                                                                }
+                                                                            Toast
+                                                                                .makeText(
+                                                                                    this@MainActivity,
+                                                                                    getString(messageRes),
+                                                                                    Toast.LENGTH_SHORT,
+                                                                                ).show()
+                                                                            return@launch
+                                                                        }
+                                                                        playerConnection?.playQueue(
+                                                                            if (usedOfflineFallback || song.song.isLocal) {
+                                                                                ListQueue(items = listOf(song.toMediaItem()))
+                                                                            } else {
+                                                                                YouTubeQueue(
+                                                                                    endpoint =
+                                                                                        moe.rukamori.archivetune.innertube.models
+                                                                                            .WatchEndpoint(videoId = song.id),
+                                                                                    preloadItem = null,
+                                                                                    followAutomixPreview = true,
+                                                                                )
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                }
+                                                                NavBarLongPressAction.MUSIC_RECOGNITION ->
+                                                                    navController.navigate(MusicRecognitionRoute)
                                                             }
-                                                        } else {
-                                                            null
-                                                        },
-                                                    onSearchItemDoubleClick = {
-                                                        searchSource = SearchSource.ONLINE
-                                                        openSearch()
+                                                        }
+                                                    } else {
+                                                        null
                                                     },
-                                                )
-                                            }
-                                            if (navBarCircleMode) {
-                                                ScrollHideNavCircles(
-                                                    items = navigationItems,
-                                                    isSelected = { screen ->
-                                                        navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } ==
-                                                            true
-                                                    },
-                                                    onItemClick = { screen, isSelected ->
-                                                        handlePrimaryNavigationClick(screen, isSelected)
-                                                    },
-                                                    modifier =
-                                                        Modifier
-                                                            .align(Alignment.BottomCenter)
-                                                            .padding(
-                                                                start = navBarHorizontalPadding,
-                                                                end = navBarHorizontalPadding,
-                                                                bottom = bottomInset + floatingBarsBottomPadding,
-                                                            ).height(navVisibleHeight)
-                                                            .alpha(((0.5f - navBarPlateFraction) * 4f).coerceIn(0f, 1f)),
-                                                )
-                                            }
+                                                onSearchItemDoubleClick = {
+                                                    searchSource = SearchSource.ONLINE
+                                                    openSearch()
+                                                },
+                                            )
                                         }
 
                                         val homeOverflowFabBottomPadding =
@@ -3648,83 +3628,62 @@ private fun Context.isTvDevice(): Boolean {
         packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
 }
 
-
-// Scroll-to-hide beta: the bar's floating-circle form. The plate is gone —
-// each destination hovers as a plain circular button at the edges so the
-// mini player can take over the centre strip, matching the canary branch's
-// plate-less liquid-glass look.
-@Composable
-private fun ScrollHideNavCircles(
-    items: List<Screens>,
-    isSelected: (Screens) -> Boolean,
-    onItemClick: (Screens, Boolean) -> Unit,
-    modifier: Modifier = Modifier,
+/**
+ * Accumulates user-driven vertical scroll for the scroll-to-hide navigation bar.
+ *
+ * Testing each frame's delta against a fixed dp threshold makes the trigger
+ * refresh-rate dependent: the same finger speed is split across twice as many --
+ * and half as large -- deltas on a 120Hz panel as on a 60Hz one, so the bar hides
+ * readily on one device and almost never on another. Summing across frames keeps
+ * the hide distance constant in dp.
+ *
+ * Fling frames are reported as [NestedScrollSource.SideEffect], the same source
+ * used by programmatic animation, so they are honoured only between
+ * [beginUserFling] and [endUserFling] -- the pre/post-fling pair a scrollable
+ * dispatches around a gesture-initiated fling. Scroll-position restore and
+ * settings auto-scroll never dispatch that pair, so they still cannot move the
+ * bar.
+ */
+private class NavBarScrollTracker(
+    private val thresholdPx: Float,
 ) {
-    val first = items.firstOrNull() ?: return
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        NavCircleButton(
-            screen = first,
-            selected = isSelected(first),
-            onClick = { onItemClick(first, isSelected(first)) },
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items.drop(1).forEach { screen ->
-                NavCircleButton(
-                    screen = screen,
-                    selected = isSelected(screen),
-                    onClick = { onItemClick(screen, isSelected(screen)) },
-                )
-            }
-        }
+    private var accumulatedY = 0f
+    private var userFlingActive = false
+
+    /** Drops both the run-up and the gesture window; called on route change. */
+    fun reset() {
+        accumulatedY = 0f
+        userFlingActive = false
     }
-}
 
-@Composable
-private fun NavCircleButton(
-    screen: Screens,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier =
-            Modifier
-                .size(58.dp)
-                .clip(CircleShape)
-                .background(
-                    if (selected) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f)
-                    },
-                    CircleShape,
-                )
-                .border(
-                    width = 1.dp,
-                    color =
-                        if (selected) {
-                            Color.Transparent
-                        } else {
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-                        },
-                    shape = CircleShape,
-                )
-                .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(if (selected) screen.iconIdActive else screen.iconIdInactive),
-            contentDescription = stringResource(screen.titleId),
-            tint =
-                if (selected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            modifier = Modifier.size(26.dp),
-        )
+    fun beginUserFling() {
+        userFlingActive = true
+    }
+
+    fun endUserFling() {
+        userFlingActive = false
+        accumulatedY = 0f
+    }
+
+    /** @return the new hidden state, or null while this run has not crossed the threshold. */
+    fun consume(
+        deltaY: Float,
+        source: NestedScrollSource,
+    ): Boolean? {
+        val userDriven =
+            source == NestedScrollSource.UserInput ||
+                (userFlingActive && source == NestedScrollSource.SideEffect)
+        if (!userDriven || deltaY == 0f) return null
+        // A direction flip is a fresh intent: drop the previous run-up so the
+        // threshold is measured from the reversal, not from the last crossing.
+        if ((deltaY > 0f) != (accumulatedY > 0f)) accumulatedY = 0f
+        // Clamping to one threshold either way is what gives hiding and restoring
+        // symmetric hysteresis, and keeps the running sum bounded.
+        accumulatedY = (accumulatedY + deltaY).coerceIn(-thresholdPx, thresholdPx)
+        return when {
+            accumulatedY <= -thresholdPx -> true
+            accumulatedY >= thresholdPx -> false
+            else -> null
+        }
     }
 }

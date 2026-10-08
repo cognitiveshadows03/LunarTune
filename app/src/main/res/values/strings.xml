@@ -1166,7 +1166,7 @@
     <string name="hide_navigation_bar_labels">Hide labels in navigation bar</string>
     <string name="hide_navigation_bar_labels_desc">Show only icons in the bottom navigation bar</string>
     <string name="nav_bar_hide_on_scroll">Hide bar on scrolling (Beta)</string>
-    <string name="nav_bar_hide_on_scroll_desc">Apple Music style: scrolling down the page dissolves the navigation bar\'s plate into floating circles and the mini player takes over the centre space; the bar morphs back when you scroll up or switch tabs.</string>
+    <string name="nav_bar_hide_on_scroll_desc">Apple Music style: scrolling down the page slides the navigation bar away and the mini player drifts into the freed space; scrolling up or switching tabs brings the bar back.</string>
     <string name="navbar_long_press_actions">Navigation bar long-press</string>
     <string name="navbar_long_press_actions_desc">Enable configurable long-press actions for Home, Search, and Library. Offline random playback uses only local, downloaded, or fully cached songs.</string>
     <string name="navbar_long_press_mappings">Long-press mappings</string>
