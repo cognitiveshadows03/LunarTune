@@ -30,6 +30,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -69,6 +70,7 @@ fun ChartsScreen(
 
     val chartsPage by viewModel.chartsPage.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -103,7 +105,27 @@ fun ChartsScreen(
                     .fillMaxSize()
                     .padding(paddingValues),
         ) {
-            if (isLoading || chartsPage == null) {
+            if (!isLoading && (error != null || chartsPage?.sections.isNullOrEmpty())) {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = error ?: stringResource(R.string.no_results_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = viewModel::loadCharts) {
+                        Text(stringResource(R.string.retry))
+                    }
+                }
+            } else if (isLoading || chartsPage == null) {
                 ShimmerHost(
                     modifier = Modifier.fillMaxSize(),
                 ) {
