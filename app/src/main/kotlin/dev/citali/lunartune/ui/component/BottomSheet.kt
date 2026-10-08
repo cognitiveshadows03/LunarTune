@@ -57,6 +57,7 @@ import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
 import dev.citali.lunartune.ui.screens.settings.MotionMiniKey
 import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -78,6 +79,9 @@ fun BottomSheet(
     onDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = true,
     collapsedGesturesEnabled: Boolean = true,
+    /** Extra downward drift (px) for the collapsed row while the navigation
+     * bar is hidden; scaled down as the sheet expands so the player is untouched. */
+    collapsedOffsetPx: () -> Float = { 0f },
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -123,7 +127,12 @@ fun BottomSheet(
             Box(
                 modifier =
                     Modifier
-                        .graphicsLayer {
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = (collapsedOffsetPx() * (1f - state.progress)).roundToInt(),
+                            )
+                        }.graphicsLayer {
                             alpha = 1f - (state.progress * 4).coerceAtMost(1f)
                         }.then(
                             if (collapsedGesturesEnabled) {

@@ -324,6 +324,8 @@ fun BottomSheetPlayer(
     pureBlack: Boolean,
     isMiniPlayerPairedWithNavigation: Boolean = false,
     hazeState: HazeState? = null,
+    /** Downward drift (px) for the collapsed row while the navigation bar is away. */
+    navbarHiddenOffset: (() -> Float)? = null,
 ) {
     val context = LocalContext.current
     val menuState = LocalMenuState.current
@@ -1147,6 +1149,7 @@ fun BottomSheetPlayer(
             playerConnection.service.stopAndClearPlayback(clearPersistentState = true)
         },
         backHandlerEnabled = !aodModeEnabled,
+        collapsedOffsetPx = { navbarHiddenOffset?.invoke() ?: 0f },
         collapsedContent = {
             MiniPlayer(
                 position = position,

@@ -1026,6 +1026,7 @@ enum class NavigationBarStyle {
 }
 
 val NavigationBarStyleKey = stringPreferencesKey("navigationBarStyle")
+val NavBarHideOnScrollKey = booleanPreferencesKey("navBarHideOnScroll")
 
 val HideNavigationBarLabelsKey = booleanPreferencesKey("hideNavigationBarLabels")
 val NavBarLongPressActionsKey = booleanPreferencesKey("navBarLongPressActions")

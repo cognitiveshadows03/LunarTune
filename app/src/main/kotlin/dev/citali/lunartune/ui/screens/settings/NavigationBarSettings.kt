@@ -69,6 +69,7 @@ import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
 import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NavBarLongPressAction
 import dev.citali.lunartune.constants.NavBarLongPressActionsKey
+import dev.citali.lunartune.constants.NavBarHideOnScrollKey
 import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NAVIGATION_BAR_CORNER_RADIUS_DEFAULT
 import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
@@ -128,6 +129,8 @@ fun NavigationBarSettings(navController: NavController) {
         rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
     val (navBarLongPressActions, onNavBarLongPressActionsChange) =
         rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
+    val (navBarHideOnScroll, onNavBarHideOnScrollChange) =
+        rememberPreference(NavBarHideOnScrollKey, defaultValue = false)
     val (homeLongPressAction, onHomeLongPressActionChange) =
         rememberEnumPreference(
             HomeNavBarLongPressActionKey,
@@ -250,6 +253,16 @@ fun NavigationBarSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.shuffle), null) },
                         checked = navBarLongPressActions,
                         onCheckedChange = onNavBarLongPressActionsChange,
+                    )
+                }
+
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.nav_bar_hide_on_scroll)) },
+                        description = stringResource(R.string.nav_bar_hide_on_scroll_desc),
+                        icon = { Icon(painterResource(R.drawable.animation), null) },
+                        checked = navBarHideOnScroll,
+                        onCheckedChange = onNavBarHideOnScrollChange,
                     )
                 }
             }

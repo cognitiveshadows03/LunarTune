@@ -138,7 +138,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onSizeChanged
@@ -255,6 +258,7 @@ import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
 import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NavBarLongPressAction
 import dev.citali.lunartune.constants.NavBarLongPressActionsKey
+import dev.citali.lunartune.constants.NavBarHideOnScrollKey
 import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
@@ -1165,6 +1169,44 @@ class MainActivity : FragmentActivity() {
                         if (isFloatingNavBar) FloatingNavigationBarHorizontalPadding else NavigationBarHorizontalPadding
                     val navVisibleHeight = NavigationBarHeight * navigationBarHeightMultiplier
 
+                    // Beta: Apple Music-style scroll-driven navigation bar, ported
+                    // from 4nx3b/ArchiveTune's canary branch: scrolling a page down
+                    // hides the bar completely; scrolling back up restores it, and
+                    // the mini player drifts into the freed space. Everything rides
+                    // the existing animated bottomNavigationBarHeight channel, so
+                    // the hide, the restore and the slide share one spring.
+                    val navBarHideOnScroll by
+                        rememberPreference(NavBarHideOnScrollKey, defaultValue = false)
+                    var isNavBarHiddenByScroll by remember { mutableStateOf(false) }
+                    // A freshly opened/re-entered tab always starts with the bar visible.
+                    LaunchedEffect(navBackStackEntry?.destination?.route) {
+                        isNavBarHiddenByScroll = false
+                    }
+                    val navBarScrollDensity = LocalDensity.current
+                    val navBarHideScrollThresholdPx = with(navBarScrollDensity) { 14.dp.toPx() }
+                    val navBarScrollHideConnection =
+                        remember(navBarHideScrollThresholdPx) {
+                            object : NestedScrollConnection {
+                                override fun onPostScroll(
+                                    consumed: Offset,
+                                    available: Offset,
+                                    source: NestedScrollSource,
+                                ): Offset {
+                                    // Only real user gestures (drag/fling) move the bar;
+                                    // programmatic scrolls (position restore, settings
+                                    // auto-scroll) must not touch it.
+                                    if (navBarHideOnScroll && source == NestedScrollSource.UserInput) {
+                                        if (consumed.y < -navBarHideScrollThresholdPx) {
+                                            isNavBarHiddenByScroll = true
+                                        } else if (consumed.y > navBarHideScrollThresholdPx) {
+                                            isNavBarHiddenByScroll = false
+                                        }
+                                    }
+                                    return Offset.Zero
+                                }
+                            }
+                        }
+
                     fun getBottomNavPadding(): Dp =
                         if (shouldShowNavigationBar && !useRail) {
                             navVisibleHeight
@@ -1173,7 +1215,15 @@ class MainActivity : FragmentActivity() {
                         }
 
                     val bottomNavigationBarHeight by animateDpAsState(
-                        targetValue = if (shouldShowNavigationBar && !useRail) navVisibleHeight else 0.dp,
+                        targetValue =
+                            if (
+                                shouldShowNavigationBar && !useRail &&
+                                !(navBarHideOnScroll && isNavBarHiddenByScroll)
+                            ) {
+                                navVisibleHeight
+                            } else {
+                                0.dp
+                            },
                         animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
                         label = "",
                     )
@@ -2155,6 +2205,24 @@ class MainActivity : FragmentActivity() {
                                             pureBlack = pureBlack,
                                             isMiniPlayerPairedWithNavigation = areBottomBarsPaired,
                                             hazeState = hazeState,
+                                            navbarHiddenOffset = {
+                                                // While the bar is away (route change or
+                                                // scroll-to-hide) the collapsed mini player
+                                                // drifts down into the freed footprint.
+                                                if (shouldShowNavigationBar && !useRail) {
+                                                    val hideFraction =
+                                                        1f -
+                                                            bottomNavigationBarHeight
+                                                                .coerceAtMost(navVisibleHeight) /
+                                                                navVisibleHeight
+                                                    with(navBarScrollDensity) {
+                                                        (floatingBarsBottomPadding + navVisibleHeight).toPx() *
+                                                            hideFraction
+                                                    }
+                                                } else {
+                                                    0f
+                                                }
+                                            },
                                         )
 
                                         if (useRail) return@Box
@@ -2494,6 +2562,14 @@ class MainActivity : FragmentActivity() {
                                                 // and OnlineSearchResult is gated by canScroll=false,
                                                 // so routing them through this shared arm is harmless.
                                                 topAppBarScrollBehavior.nestedScrollConnection,
+                                            ).then(
+                                                // Beta scroll-driven bar hide: registered only
+                                                // when enabled so disabled users pay nothing.
+                                                if (navBarHideOnScroll) {
+                                                    Modifier.nestedScroll(navBarScrollHideConnection)
+                                                } else {
+                                                    Modifier
+                                                },
                                             ).then(
                                                 // Frosted glass source: Haze's default Behind
                                                 // selection excludes ancestor sources, so the
