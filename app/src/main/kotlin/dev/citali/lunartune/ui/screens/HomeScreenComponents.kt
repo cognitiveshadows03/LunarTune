@@ -215,18 +215,14 @@ fun Modifier.headerTextDim(
             drawRect(
                 brush =
                     Brush.radialGradient(
-                        colors =
-                            listOf(
-                                color.copy(alpha = 0.55f * alpha),
-                                color.copy(alpha = 0.30f * alpha),
-                                Color.Transparent,
-                            ),
-                        colorStops = floatArrayOf(0f, 0.55f, 1f),
+                        0f to color.copy(alpha = 0.55f * alpha),
+                        0.55f to color.copy(alpha = 0.30f * alpha),
+                        1f to Color.Transparent,
                         center = Offset(size.width / 2f, size.height / 2f),
                         radius = size.width / 2f + halo,
                     ),
                 topLeft = Offset(-halo, -halo),
-                size = size + DimSize(halo * 2f, halo * 2f),
+                size = DimSize(size.width + halo * 2f, size.height + halo * 2f),
             )
         }
     }

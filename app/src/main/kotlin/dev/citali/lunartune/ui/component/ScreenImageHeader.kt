@@ -64,23 +64,26 @@ fun ScreenImageHeader(
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    if (veil) {
-                        listOf(
-                            0f to Color.Black.copy(alpha = .30f),
-                            .45f to Color.Black.copy(alpha = .36f),
-                            .72f to blendColor.copy(alpha = .48f),
-                            1f to blendColor,
-                        )
-                    } else {
-                        // No full-band veil: the header dims only where its text
-                        // sits (see headerTextDim), so the artwork stays clear.
-                        listOf(
-                            0f to Color.Transparent,
-                            .55f to Color.Transparent,
-                            .78f to blendColor.copy(alpha = .48f),
-                            1f to blendColor,
-                        )
-                    },
+                    *(
+                        if (veil) {
+                            arrayOf(
+                                0f to Color.Black.copy(alpha = .30f),
+                                .45f to Color.Black.copy(alpha = .36f),
+                                .72f to blendColor.copy(alpha = .48f),
+                                1f to blendColor,
+                            )
+                        } else {
+                            // No full-band veil: the header dims only where its
+                            // text sits (see headerTextDim), so the artwork
+                            // stays clear.
+                            arrayOf(
+                                0f to Color.Transparent,
+                                .55f to Color.Transparent,
+                                .78f to blendColor.copy(alpha = .48f),
+                                1f to blendColor,
+                            )
+                        }
+                    ),
                 ),
             ),
         )
