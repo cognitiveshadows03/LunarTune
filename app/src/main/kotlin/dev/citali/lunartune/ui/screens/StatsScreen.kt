@@ -140,6 +140,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -373,6 +374,9 @@ fun StatsScreen(
                         StatsListeningPatterns(
                             daySlots = listeningByDayOfWeek,
                             hourSlots = listeningByHour,
+                            periodDays = data.patternPeriodDays,
+                            isAllTime = data.patternIsAllTime,
+                            comparisonLabelResId = data.patternComparisonLabelResId,
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -426,6 +430,9 @@ fun StatsScreen(
                     StatsListeningPatterns(
                         daySlots = listeningByDayOfWeek,
                         hourSlots = listeningByHour,
+                        periodDays = data.patternPeriodDays,
+                        isAllTime = data.patternIsAllTime,
+                        comparisonLabelResId = data.patternComparisonLabelResId,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -801,9 +808,24 @@ private fun StatsSongsHeader(
 private fun StatsListeningPatterns(
     daySlots: List<ListeningPatternSlot>,
     hourSlots: List<ListeningPatternSlot>,
+    periodDays: Long,
+    isAllTime: Boolean,
+    comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
 ) {
     if (daySlots.isEmpty() && hourSlots.isEmpty()) return
+
+    val periodTail =
+        if (isAllTime) {
+            stringResource(R.string.stats_pattern_all_time)
+        } else {
+            pluralStringResource(
+                R.plurals.stats_pattern_last_days,
+                periodDays.toInt().coerceAtLeast(1),
+                periodDays.coerceAtLeast(1L),
+            )
+        }
+    val comparisonLabel = comparisonLabelResId?.let { stringResource(it) }
 
     Column(
         modifier =
@@ -823,10 +845,14 @@ private fun StatsListeningPatterns(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ListeningByDayChart(
                         slots = daySlots,
+                        periodTail = periodTail,
+                        comparisonLabel = comparisonLabel,
                         modifier = Modifier.weight(1f),
                     )
                     ListeningByHourChart(
                         slots = hourSlots,
+                        periodTail = periodTail,
+                        comparisonLabel = comparisonLabel,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -835,12 +861,16 @@ private fun StatsListeningPatterns(
                     if (daySlots.isNotEmpty()) {
                         ListeningByDayChart(
                             slots = daySlots,
+                            periodTail = periodTail,
+                            comparisonLabel = comparisonLabel,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     if (hourSlots.isNotEmpty()) {
                         ListeningByHourChart(
                             slots = hourSlots,
+                            periodTail = periodTail,
+                            comparisonLabel = comparisonLabel,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -1709,6 +1739,8 @@ private fun createDistinctArtistColors(
 @Composable
 private fun ListeningByDayChart(
     slots: List<ListeningPatternSlot>,
+    periodTail: String,
+    comparisonLabel: String?,
     modifier: Modifier = Modifier,
 ) {
     val dayLabels =
@@ -1725,23 +1757,28 @@ private fun ListeningByDayChart(
     val slotMap = remember(slots) { slots.associateBy { it.slot } }
     val maxTime = (slots.maxOfOrNull { it.averageTimeListened } ?: 0L).coerceAtLeast(1L)
     val peakSlot = slots.maxByOrNull { it.averageTimeListened }?.takeIf { it.averageTimeListened > 0L }?.slot
-    val comparisonSlot =
-        slots
-            .filter { it.comparisonPercent != null }
-            .maxByOrNull { it.currentMonthAverageTimeListened }
     val selectedSlot = remember(slots) { mutableIntStateOf(-1) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.secondaryContainer
     val insight =
         peakSlot?.let { stringResource(R.string.stats_pattern_insight_day, weekdayPluralNames[it]) }
             ?: stringResource(R.string.stats_pattern_no_history)
-    val comparison =
-        comparisonSlot?.let { slot ->
-            stringResource(
-                R.string.stats_pattern_comparison,
-                weekdayPluralNames[slot.slot],
-                formatSignedPercent(slot.comparisonPercent ?: 0),
-            )
+    // The chip describes the highlighted (peak) bar itself, never some other slot.
+    val change =
+        comparisonLabel?.let { label ->
+            peakSlot
+                ?.let { slotMap[it] }
+                ?.let { slot ->
+                    formatAverageChange(slot.averageTimeListened, slot.previousPeriodAverageTimeListened)
+                        ?.let { changeText ->
+                            stringResource(
+                                R.string.stats_pattern_peak_change,
+                                weekdayPluralNames[slot.slot],
+                                changeText,
+                                label,
+                            )
+                        }
+                }
         }
 
     ElevatedCard(
@@ -1755,7 +1792,11 @@ private fun ListeningByDayChart(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.secondary,
             )
-            PatternChartMeta(insight = insight, comparison = comparison)
+            PatternChartMeta(
+                insight = insight,
+                change = change,
+                periodLabel = stringResource(R.string.stats_pattern_avg_per_day, periodTail),
+            )
             val selected = slotMap[selectedSlot.intValue]
             if (selected != null) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1830,6 +1871,8 @@ private fun ListeningByDayChart(
 @Composable
 private fun ListeningByHourChart(
     slots: List<ListeningPatternSlot>,
+    periodTail: String,
+    comparisonLabel: String?,
     modifier: Modifier = Modifier,
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("h a", Locale.getDefault()) }
@@ -1838,23 +1881,28 @@ private fun ListeningByHourChart(
     val slotMap = remember(slots) { slots.associateBy { it.slot } }
     val maxTime = (slots.maxOfOrNull { it.averageTimeListened } ?: 0L).coerceAtLeast(1L)
     val peakSlot = slots.maxByOrNull { it.averageTimeListened }?.takeIf { it.averageTimeListened > 0L }?.slot
-    val comparisonSlot =
-        slots
-            .filter { it.comparisonPercent != null }
-            .maxByOrNull { it.currentMonthAverageTimeListened }
     val selectedSlot = remember(slots) { mutableIntStateOf(-1) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val containerColor = MaterialTheme.colorScheme.primaryContainer
     val insight =
         peakSlot?.let { stringResource(R.string.stats_pattern_insight_hour, hourLabels[it]) }
             ?: stringResource(R.string.stats_pattern_no_history)
-    val comparison =
-        comparisonSlot?.let { slot ->
-            stringResource(
-                R.string.stats_pattern_comparison,
-                hourLabels[slot.slot],
-                formatSignedPercent(slot.comparisonPercent ?: 0),
-            )
+    // The chip describes the highlighted (peak) hour itself, never some other slot.
+    val change =
+        comparisonLabel?.let { label ->
+            peakSlot
+                ?.let { slotMap[it] }
+                ?.let { slot ->
+                    formatAverageChange(slot.averageTimeListened, slot.previousPeriodAverageTimeListened)
+                        ?.let { changeText ->
+                            stringResource(
+                                R.string.stats_pattern_peak_change,
+                                hourLabels[slot.slot],
+                                changeText,
+                                label,
+                            )
+                        }
+                }
         }
 
     ElevatedCard(
@@ -1868,7 +1916,11 @@ private fun ListeningByHourChart(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.secondary,
             )
-            PatternChartMeta(insight = insight, comparison = comparison)
+            PatternChartMeta(
+                insight = insight,
+                change = change,
+                periodLabel = stringResource(R.string.stats_pattern_avg_per_hour, periodTail),
+            )
             val selected = slotMap[selectedSlot.intValue]
             if (selected != null) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1946,42 +1998,48 @@ private fun ListeningByHourChart(
     }
 }
 
+/**
+ * One insight line per pattern chart: the change chip when there is a trustworthy one,
+ * otherwise the plain insight text. The period caption rides along as a small subtitle.
+ */
 @Composable
 private fun PatternChartMeta(
     insight: String,
-    comparison: String?,
+    change: String?,
+    periodLabel: String,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = insight,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = stringResource(R.string.stats_pattern_period_label),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        if (comparison != null) {
+        if (change != null) {
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
             ) {
                 Text(
-                    text = comparison,
+                    text = change,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        } else {
+            Text(
+                text = insight,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
+        Text(
+            text = periodLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        )
     }
 }
 
@@ -2010,7 +2068,30 @@ private fun formatAverageListeningTime(durationMs: Long): String {
     }
 }
 
-private fun formatSignedPercent(value: Int): String =
-    if (value > 0) "+$value%" else "$value%"
+/** Per-occurrence baselines below this are too small for a percentage to mean anything. */
+private const val MIN_RELIABLE_PERCENT_BASELINE_MS = 10 * 60_000L
+
+/**
+ * Compact change between two per-occurrence averages. Percentages are only shown when the
+ * previous average passes a minimum baseline (~10 min per occurrence); tiny baselines get
+ * an absolute delta instead, so "3 min → 11 min" never reads as a triumphant "+267%".
+ * Returns null when there is nothing meaningful to say.
+ */
+private fun formatAverageChange(current: Long, previous: Long): String? {
+    val delta = current - previous
+    if (delta == 0L) return null
+    val sign = if (delta > 0) "+" else "-"
+    val percent =
+        if (previous >= MIN_RELIABLE_PERCENT_BASELINE_MS) {
+            (delta.toDouble() * 100.0 / previous).roundToInt()
+        } else {
+            0
+        }
+    return if (abs(percent) >= 1) {
+        "$sign${abs(percent)}%"
+    } else {
+        "$sign${formatAverageListeningTime(abs(delta))}"
+    }
+}
 
 enum class OptionStats { WEEKS, MONTHS, YEARS, CONTINUOUS }

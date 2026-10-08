@@ -44,10 +44,10 @@ import dev.citali.lunartune.utils.reportException
 import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
-import kotlin.math.roundToInt
 
 sealed interface StatsScreenState {
     data object Loading : StatsScreenState
@@ -66,12 +66,11 @@ sealed interface StatsScreenState {
 @Immutable
 data class ListeningPatternSlot(
     val slot: Int,
-    /** Average milliseconds listened per calendar occurrence in the previous full month. */
+    /** Average milliseconds listened per calendar occurrence inside the selected range. */
     val averageTimeListened: Long,
     val occurrenceCount: Int,
-    val currentMonthAverageTimeListened: Long,
-    /** Current month-to-date average change relative to the previous full month. */
-    val comparisonPercent: Int?,
+    /** Average milliseconds per occurrence in the comparable previous period (0 when none). */
+    val previousPeriodAverageTimeListened: Long,
 )
 
 @Immutable
@@ -85,6 +84,12 @@ data class StatsUiData(
     val mostPlayedAlbums: List<Album>,
     val listeningByHour: List<ListeningPatternSlot>,
     val listeningByDayOfWeek: List<ListeningPatternSlot>,
+    /** Days covered by the range the listening-pattern charts aggregate over. */
+    val patternPeriodDays: Long,
+    /** True when the pattern charts aggregate over the whole listening history. */
+    val patternIsAllTime: Boolean,
+    /** Label for the previous period the pattern change chips compare against, if any. */
+    @StringRes val patternComparisonLabelResId: Int?,
     val listeningTrendBuckets: List<ListeningBySlot>,
     val previousPeriodTimeListened: Long?,
     @StringRes val comparisonLabelResId: Int?,
@@ -145,9 +150,6 @@ class StatsViewModel
 
         private fun periodPair() = combine(selectedOption, indexChips) { opt, idx -> Pair(opt, idx) }
 
-        private fun wallClockTimestamp(date: LocalDate): Long =
-            date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
-
         private fun weekdayOccurrenceCounts(
             startInclusive: LocalDate,
             endExclusive: LocalDate,
@@ -162,42 +164,51 @@ class StatsViewModel
         }
 
         private fun buildPatternSlots(
-            previousTotals: List<ListeningBySlot>,
             currentTotals: List<ListeningBySlot>,
-            previousOccurrences: IntArray,
             currentOccurrences: IntArray,
+            previousTotals: List<ListeningBySlot>,
+            previousOccurrences: IntArray,
             slotCount: Int,
         ): List<ListeningPatternSlot> {
-            val previousBySlot = previousTotals.associateBy { it.slot }
             val currentBySlot = currentTotals.associateBy { it.slot }
+            val previousBySlot = previousTotals.associateBy { it.slot }
 
             return (0 until slotCount).map { slot ->
-                val previousCount = previousOccurrences.getOrElse(slot) { 0 }
                 val currentCount = currentOccurrences.getOrElse(slot) { 0 }
+                val previousCount = previousOccurrences.getOrElse(slot) { 0 }
+                val currentTotal = currentBySlot[slot]?.timeListened ?: 0L
                 val previousTotal = previousBySlot[slot]?.timeListened ?: 0L
-                val previousAverage = if (previousCount > 0) previousTotal / previousCount else 0L
-                val currentTotal = currentBySlot[slot]?.timeListened
-                val currentAverage =
-                    if (currentCount > 0 && currentTotal != null) {
-                        currentTotal / currentCount
-                    } else {
-                        0L
-                    }
-                val comparisonPercent =
-                    if (previousAverage > 0L && currentTotal != null && currentCount > 0) {
-                        ((currentAverage - previousAverage).toDouble() * 100.0 / previousAverage).roundToInt()
-                    } else {
-                        null
-                    }
-
                 ListeningPatternSlot(
                     slot = slot,
-                    averageTimeListened = previousAverage,
-                    occurrenceCount = previousCount,
-                    currentMonthAverageTimeListened = currentAverage,
-                    comparisonPercent = comparisonPercent,
+                    averageTimeListened = if (currentCount > 0) currentTotal / currentCount else 0L,
+                    occurrenceCount = currentCount,
+                    previousPeriodAverageTimeListened = if (previousCount > 0) previousTotal / previousCount else 0L,
                 )
             }
+        }
+
+        /** Wall-clock date interpretation of an epoch-millis bound (events store local wall-clock fields as UTC). */
+        private fun wallClockDateTime(timestamp: Long): LocalDateTime =
+            LocalDateTime.ofEpochSecond(
+                Math.floorDiv(timestamp, 1000L),
+                (Math.floorMod(timestamp, 1000L) * 1_000_000).toInt(),
+                ZoneOffset.UTC,
+            )
+
+        /**
+         * First and last-exclusive calendar dates actually covered by a (from, to] query
+         * window, so per-occurrence averages divide by the days that can contain events.
+         */
+        private fun coveredDates(fromTimestamp: Long, toTimestamp: Long): Pair<LocalDate, LocalDate> {
+            val start = wallClockDateTime(fromTimestamp).toLocalDate()
+            val endDateTime = wallClockDateTime(toTimestamp)
+            val endExclusive =
+                if (endDateTime.toLocalTime() <= LocalTime.MIDNIGHT) {
+                    endDateTime.toLocalDate()
+                } else {
+                    endDateTime.toLocalDate().plusDays(1)
+                }
+            return if (endExclusive.isAfter(start)) start to endExclusive else start to start.plusDays(1)
         }
 
         private fun toTimestamp(
@@ -339,51 +350,83 @@ class StatsViewModel
                         ).map { albums -> albums.filter { album -> album.artists.none { it.blockedAt != null } } }
                 }
 
-        // Listening-pattern charts use averages from the last completed calendar month, not
-        // the selected Stats range. Month-to-date averages are used only for the comparison.
-        private val listeningPatterns =
-            refreshRequest.flatMapLatest {
-                val today = LocalDate.now()
-                val currentMonthStart = today.withDayOfMonth(1)
-                val previousMonthStart = currentMonthStart.minusMonths(1)
-                val previousMonthDays =
-                    ChronoUnit.DAYS
-                        .between(previousMonthStart, currentMonthStart)
-                        .toInt()
-                val currentCompletedDays = ChronoUnit.DAYS.between(currentMonthStart, today).toInt()
-                val previousWeekdayOccurrences = weekdayOccurrenceCounts(previousMonthStart, currentMonthStart)
-                val currentWeekdayOccurrences = weekdayOccurrenceCounts(currentMonthStart, today)
-                val previousMonthFrom = wallClockTimestamp(previousMonthStart) - 1L
-                val previousMonthTo = wallClockTimestamp(currentMonthStart) - 1L
-                val currentMonthFrom = wallClockTimestamp(currentMonthStart) - 1L
-                val currentMonthTo = wallClockTimestamp(today) - 1L
+        private val firstEvent =
+            database
+                .firstEvent()
 
-                combine(
-                    database.listeningByHour(previousMonthFrom, previousMonthTo),
-                    database.listeningByHour(currentMonthFrom, currentMonthTo),
-                    database.listeningByDayOfWeek(previousMonthFrom, previousMonthTo),
-                    database.listeningByDayOfWeek(currentMonthFrom, currentMonthTo),
-                ) { previousHours, currentHours, previousDays, currentDays ->
-                    ListeningPatternData(
-                        byHour =
-                            buildPatternSlots(
-                                previousTotals = previousHours,
-                                currentTotals = currentHours,
-                                previousOccurrences = IntArray(24) { previousMonthDays },
-                                currentOccurrences = IntArray(24) { currentCompletedDays },
-                                slotCount = 24,
-                            ),
-                        byDay =
-                            buildPatternSlots(
-                                previousTotals = previousDays,
-                                currentTotals = currentDays,
-                                previousOccurrences = previousWeekdayOccurrences,
-                                currentOccurrences = currentWeekdayOccurrences,
-                                slotCount = 7,
-                            ),
-                    )
+        // The listening-pattern charts follow the selected Stats range: bars average the
+        // range's total per calendar occurrence, and the optional change chip compares the
+        // same per-occurrence averages against the previous period (the one the trend
+        // header already uses, so both cards agree on what "vs last week" means).
+        private val listeningPatterns =
+            combine(
+                combine(refreshRequest, periodPair()) { _, pair -> pair },
+                firstEvent,
+            ) { (selection, index), first -> Triple(selection, index, first) }
+                .flatMapLatest { (selection, index, first) ->
+                    val now = LocalDateTime.now()
+                    val window = periodWindow(selection, index, now)
+                    val toTimestamp = window.toTimestamp
+                    val isAllTime = window.fromTimestamp <= 0L
+                    val historyFrom = first?.event?.timestamp?.toInstant(ZoneOffset.UTC)?.toEpochMilli()
+                    val fromTimestamp =
+                        if (isAllTime) {
+                            (historyFrom ?: toTimestamp).coerceAtMost(toTimestamp)
+                        } else {
+                            window.fromTimestamp
+                        }
+                    val comparison = window.comparison
+                    val (currentStart, currentEndExclusive) = coveredDates(fromTimestamp, toTimestamp)
+                    val periodDays =
+                        ChronoUnit.DAYS.between(currentStart, currentEndExclusive).coerceAtLeast(1L)
+                    val currentWeekdayOccurrences = weekdayOccurrenceCounts(currentStart, currentEndExclusive)
+                    val (previousStart, previousEndExclusive) =
+                        comparison?.let { coveredDates(it.fromTimestamp, it.toTimestamp) }
+                            ?: (currentStart to currentStart)
+                    val previousDays =
+                        if (comparison != null) {
+                            ChronoUnit.DAYS.between(previousStart, previousEndExclusive).coerceAtLeast(1L)
+                        } else {
+                            0L
+                        }
+                    val previousWeekdayOccurrences =
+                        if (comparison != null) {
+                            weekdayOccurrenceCounts(previousStart, previousEndExclusive)
+                        } else {
+                            IntArray(7)
+                        }
+                    val comparisonFrom = comparison?.fromTimestamp ?: toTimestamp
+                    val comparisonTo = comparison?.toTimestamp ?: toTimestamp
+
+                    combine(
+                        database.listeningByHour(fromTimestamp, toTimestamp),
+                        database.listeningByHour(comparisonFrom, comparisonTo),
+                        database.listeningByDayOfWeek(fromTimestamp, toTimestamp),
+                        database.listeningByDayOfWeek(comparisonFrom, comparisonTo),
+                    ) { currentHours, previousHours, currentDays, previousDaysTotals ->
+                        ListeningPatternData(
+                            byHour =
+                                buildPatternSlots(
+                                    currentTotals = currentHours,
+                                    currentOccurrences = IntArray(24) { periodDays.toInt() },
+                                    previousTotals = previousHours,
+                                    previousOccurrences = IntArray(24) { previousDays.toInt() },
+                                    slotCount = 24,
+                                ),
+                            byDay =
+                                buildPatternSlots(
+                                    currentTotals = currentDays,
+                                    currentOccurrences = currentWeekdayOccurrences,
+                                    previousTotals = previousDaysTotals,
+                                    previousOccurrences = previousWeekdayOccurrences,
+                                    slotCount = 7,
+                                ),
+                            periodDays = periodDays,
+                            isAllTime = isAllTime,
+                            comparisonLabelResId = comparison?.labelResId,
+                        )
+                    }
                 }
-            }
 
         private val listeningTotals =
             periodPair()
@@ -421,10 +464,6 @@ class StatsViewModel
                     }
                 }
 
-        private val firstEvent =
-            database
-                .firstEvent()
-
         private val latestEventTimestamp =
             database
                 .latestEventTimestamp()
@@ -455,6 +494,9 @@ class StatsViewModel
                     ListeningStats(
                         byHour = patterns.byHour,
                         byDay = patterns.byDay,
+                        patternPeriodDays = patterns.periodDays,
+                        patternIsAllTime = patterns.isAllTime,
+                        patternComparisonLabelResId = patterns.comparisonLabelResId,
                         totals = totals,
                         firstEvent = first,
                         latestEventTimestamp = latest,
@@ -512,6 +554,9 @@ class StatsViewModel
                                     mostPlayedAlbums = primary.albums,
                                     listeningByHour = listening.byHour,
                                     listeningByDayOfWeek = listening.byDay,
+                                    patternPeriodDays = listening.patternPeriodDays,
+                                    patternIsAllTime = listening.patternIsAllTime,
+                                    patternComparisonLabelResId = listening.patternComparisonLabelResId,
                                     listeningTrendBuckets = listening.listeningTrendBuckets,
                                     previousPeriodTimeListened = listening.previousPeriodTimeListened,
                                     comparisonLabelResId = listening.comparisonLabelResId,
@@ -600,11 +645,17 @@ class StatsViewModel
         private data class ListeningPatternData(
             val byHour: List<ListeningPatternSlot>,
             val byDay: List<ListeningPatternSlot>,
+            val periodDays: Long,
+            val isAllTime: Boolean,
+            @StringRes val comparisonLabelResId: Int?,
         )
 
         private data class ListeningStats(
             val byHour: List<ListeningPatternSlot>,
             val byDay: List<ListeningPatternSlot>,
+            val patternPeriodDays: Long,
+            val patternIsAllTime: Boolean,
+            @StringRes val patternComparisonLabelResId: Int?,
             val totals: ListeningTotals,
             val firstEvent: EventWithSong?,
             val latestEventTimestamp: Long?,
