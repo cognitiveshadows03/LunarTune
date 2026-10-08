@@ -773,7 +773,7 @@ fun LyricsEnhanced(
                                         (nextLine.start - LYRIC_DRIFT_WINDOW_MS)
                                             .coerceAtLeast(currentLine.start + LYRIC_DRIFT_START_PAD_MS)
                                     val windowEnd =
-                                        maxOf(nextLine.start, windowStart + LYRIC_DRIFT_MIN_PROGRESS_MS)
+                                        maxOf(nextLine.start.toLong(), windowStart + LYRIC_DRIFT_MIN_PROGRESS_MS)
                                     val progress =
                                         ((time - windowStart).toFloat() / (windowEnd - windowStart))
                                             .coerceIn(0f, 1f)
