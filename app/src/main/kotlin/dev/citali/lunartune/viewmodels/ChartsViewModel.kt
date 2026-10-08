@@ -13,7 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import moe.rukamori.archivetune.innertube.YouTube
+import dev.citali.lunartune.innertube.ChartsApi
 import moe.rukamori.archivetune.innertube.pages.ChartsPage
 import javax.inject.Inject
 
@@ -35,7 +35,7 @@ class ChartsViewModel
                 _isLoading.value = true
                 _error.value = null
 
-                YouTube
+                ChartsApi
                     .getChartsPage()
                     .onSuccess { page ->
                         _chartsPage.value = page
@@ -51,7 +51,7 @@ class ChartsViewModel
             viewModelScope.launch {
                 _chartsPage.value?.continuation?.let { continuation ->
                     _isLoading.value = true
-                    YouTube
+                    ChartsApi
                         .getChartsPage(continuation)
                         .onSuccess { newPage ->
                             _chartsPage.value =

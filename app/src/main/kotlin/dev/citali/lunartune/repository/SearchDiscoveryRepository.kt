@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.Song
+import dev.citali.lunartune.innertube.ChartsApi
 import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.AlbumItem
 import moe.rukamori.archivetune.innertube.models.ArtistItem
@@ -47,7 +48,7 @@ class SearchDiscoveryRepository
                 try {
                     coroutineScope {
                         val explorePageDeferred = async { YouTube.explore().getOrThrow() }
-                        val chartsPageDeferred = async { YouTube.getChartsPage().getOrThrow() }
+                        val chartsPageDeferred = async { ChartsApi.getChartsPage().getOrThrow() }
                         val suggestedSongsDeferred = async { loadSuggestedSongs() }
                         val searchedAlbumsDeferred =
                             async {
