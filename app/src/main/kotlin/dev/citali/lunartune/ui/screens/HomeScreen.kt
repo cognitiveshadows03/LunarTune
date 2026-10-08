@@ -317,11 +317,16 @@ private fun HomeContent(
             )
         }
 
+        val headerOffset =
+            if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
+        // The header's local text dim rides the same fade as the artwork: once
+        // the image has scrolled away there is nothing left to dim against.
+        val headerDimAlpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
         if (effectiveHeaderImageUri.isNotBlank()) {
-            val headerOffset = if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
                 blendColor = MaterialTheme.colorScheme.surface,
+                veil = false,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .graphicsLayer {
@@ -422,6 +427,7 @@ private fun HomeContent(
                             ) {
                                 HomeSectionHeader(
                                     title = stringResource(R.string.quick_picks),
+                                    dimAlpha = headerDimAlpha,
                                 )
                             }
                             item(
@@ -449,6 +455,7 @@ private fun HomeContent(
                             ) {
                                 HomeSectionHeader(
                                     title = stringResource(R.string.quick_picks),
+                                    dimAlpha = headerDimAlpha,
                                 )
                             }
                             item(

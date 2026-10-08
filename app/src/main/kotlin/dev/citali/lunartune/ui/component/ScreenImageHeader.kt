@@ -45,6 +45,7 @@ fun ScreenImageHeader(
     imageUri: String,
     modifier: Modifier = Modifier,
     blendColor: Color = Color.Black,
+    veil: Boolean = true,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
@@ -63,10 +64,23 @@ fun ScreenImageHeader(
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = .30f),
-                    .45f to Color.Black.copy(alpha = .36f),
-                    .72f to blendColor.copy(alpha = .48f),
-                    1f to blendColor,
+                    if (veil) {
+                        listOf(
+                            0f to Color.Black.copy(alpha = .30f),
+                            .45f to Color.Black.copy(alpha = .36f),
+                            .72f to blendColor.copy(alpha = .48f),
+                            1f to blendColor,
+                        )
+                    } else {
+                        // No full-band veil: the header dims only where its text
+                        // sits (see headerTextDim), so the artwork stays clear.
+                        listOf(
+                            0f to Color.Transparent,
+                            .55f to Color.Transparent,
+                            .78f to blendColor.copy(alpha = .48f),
+                            1f to blendColor,
+                        )
+                    },
                 ),
             ),
         )

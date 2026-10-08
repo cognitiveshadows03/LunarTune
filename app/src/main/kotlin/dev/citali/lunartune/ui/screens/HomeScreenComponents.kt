@@ -70,6 +70,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size as DimSize
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -194,11 +197,46 @@ fun HomeCategoryChips(
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+/**
+ * A soft pool of [color] hugging the text it modifies, for headers that sit on
+ * artwork: the dim exists only where the glyphs and a small halo are, instead
+ * of veiling the whole band. Draws past the node bounds on purpose; the radial
+ * falls to transparent inside the halo so there is no visible edge.
+ */
+fun Modifier.headerTextDim(
+    alpha: Float,
+    color: Color,
+): Modifier =
+    if (alpha <= 0.02f) {
+        this
+    } else {
+        drawBehind {
+            val halo = size.height * 0.9f
+            drawRect(
+                brush =
+                    Brush.radialGradient(
+                        colors =
+                            listOf(
+                                color.copy(alpha = 0.55f * alpha),
+                                color.copy(alpha = 0.30f * alpha),
+                                Color.Transparent,
+                            ),
+                        colorStops = floatArrayOf(0f, 0.55f, 1f),
+                        center = Offset(size.width / 2f, size.height / 2f),
+                        radius = size.width / 2f + halo,
+                    ),
+                topLeft = Offset(-halo, -halo),
+                size = size + DimSize(halo * 2f, halo * 2f),
+            )
+        }
+    }
+
 @Composable
 fun HomeSectionHeader(
     title: String,
     modifier: Modifier = Modifier,
     label: String? = null,
+    dimAlpha: Float = 0f,
     thumbnail: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
@@ -233,6 +271,11 @@ fun HomeSectionHeader(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier =
+                    Modifier.headerTextDim(
+                        alpha = dimAlpha,
+                        color = MaterialTheme.colorScheme.surface,
+                    ),
             )
         }
         if (onClick != null) {
