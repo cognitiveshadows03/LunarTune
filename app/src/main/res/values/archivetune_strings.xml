@@ -627,8 +627,12 @@
     <string name="stats_time_range">Time range</string>
     <string name="stats_listening_patterns">Listening patterns</string>
     <string name="stats_artist_breakdown">Artist breakdown</string>
-    <string name="stats_other">Other</string>
-    <string name="stats_top_artist_time">Top artist: %1$s · %2$s</string>
+    <string name="stats_more_artists">+%1$d more · %2$d%%</string>
+    <string name="stats_top_share_insight">Top %1$d = %2$d%% of your listening</string>
+    <plurals name="stats_artist_count">
+        <item quantity="one">%d artist</item>
+        <item quantity="other">%d artists</item>
+    </plurals>
     <string name="day_sun">Sun</string>
     <string name="day_mon">Mon</string>
     <string name="day_tue">Tue</string>

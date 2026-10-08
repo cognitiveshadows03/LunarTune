@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -391,10 +393,16 @@ fun StatsScreen(
 
                 item(key = "artistDistribution", contentType = "insights") {
                     if (mostPlayedArtists.isNotEmpty()) {
+                        val rankedArtistCount = mostPlayedArtists.count { (it.timeListened ?: 0) > 0 }
                         Column(modifier = Modifier.animateItem()) {
                             StatsSectionHeader(
                                 title = stringResource(R.string.stats_artist_breakdown),
-                                supportingText = mostPlayedArtists.take(5).size.toString(),
+                                supportingText =
+                                    pluralStringResource(
+                                        R.plurals.stats_artist_count,
+                                        rankedArtistCount,
+                                        rankedArtistCount,
+                                    ),
                             )
                             SegmentedArtistChart(
                                 artists = mostPlayedArtists,
@@ -1287,18 +1295,49 @@ private fun StatsHighlightCard(
     }
 }
 
+private const val TOP_ARTIST_SLICES = 5
+private const val AVATAR_STACK_SIZE = 4
+
 private data class ArtistBreakdownSegment(
     val key: String,
-    val artist: Artist?,
+    val artist: Artist,
     val startAngle: Float,
     val sweepAngle: Float,
     val percentage: Int,
 )
 
-private fun buildArtistBreakdownSegments(
+/**
+ * The chart's leading slices plus whatever is left over.
+ *
+ * The ring is deliberately not filled: [segments] cover only the leading
+ * artists, each swept in proportion to [allocationTotal], and the remainder is
+ * drawn as an unfilled track so the chart reads "these few make up N% of your
+ * listening" instead of spending half the ring on an anonymous block.
+ * [remainingArtists] feeds the avatar-stack row and the full-list sheet.
+ */
+private data class ArtistBreakdown(
+    val segments: List<ArtistBreakdownSegment>,
+    val rankedArtists: List<Artist>,
+    val shownTime: Long,
+    val allocationTotal: Long,
+) {
+    val remainingArtists: List<Artist> get() = rankedArtists.drop(segments.size)
+
+    val remainingShare: Int
+        get() =
+            if (allocationTotal > 0L) {
+                (((allocationTotal - shownTime).coerceAtLeast(0L) * 100f) / allocationTotal).roundToInt()
+            } else {
+                0
+            }
+
+    val shownShare: Int get() = 100 - remainingShare
+}
+
+private fun buildArtistBreakdown(
     artists: List<Artist>,
     totalTimeListened: Long,
-): List<ArtistBreakdownSegment> {
+): ArtistBreakdown {
     val rankedArtists =
         artists
             .mapNotNull { artist ->
@@ -1308,52 +1347,39 @@ private fun buildArtistBreakdownSegments(
     val artistTotal = rankedArtists.sumOf { it.second }
     val displayTotal = totalTimeListened.takeIf { it > 0L } ?: artistTotal
     val allocationTotal = maxOf(displayTotal, artistTotal)
-    if (allocationTotal <= 0L) return emptyList()
-
-    val topArtists = rankedArtists.take(5)
-    val topArtistTime = topArtists.sumOf { it.second }
-    val otherTime = (allocationTotal - topArtistTime).coerceAtLeast(0L)
-    val weightedSegments =
-        buildList<Pair<Artist?, Long>> {
-            topArtists.forEach { (artist, time) -> add(artist to time) }
-            if (otherTime > 0L) add(null to otherTime)
-        }
-    val weights = weightedSegments.map { it.second }
-    val percentages = allocatePercentagesToHundred(weights)
-
-    var startAngle = -90f
-    return weightedSegments.mapIndexed { index, (artist, weight) ->
-        val sweep =
-            if (index == weightedSegments.lastIndex) {
-                (270f - startAngle).coerceAtLeast(0f)
-            } else {
-                (weight.toDouble() / allocationTotal.toDouble() * 360.0).toFloat()
-            }
-        ArtistBreakdownSegment(
-            key = artist?.id ?: "other",
-            artist = artist,
-            startAngle = startAngle,
-            sweepAngle = sweep,
-            percentage = percentages[index],
-        ).also {
-            startAngle += sweep
-        }
+    if (allocationTotal <= 0L || rankedArtists.isEmpty()) {
+        return ArtistBreakdown(emptyList(), emptyList(), 0L, 0L)
     }
+
+    val topArtists = rankedArtists.take(TOP_ARTIST_SLICES)
+    val shownTime = topArtists.sumOf { it.second }
+    var startAngle = -90f
+    val segments =
+        topArtists.map { (artist, time) ->
+            ArtistBreakdownSegment(
+                key = artist.id,
+                artist = artist,
+                startAngle = startAngle,
+                sweepAngle = (time.toDouble() / allocationTotal.toDouble() * 360.0).toFloat(),
+                percentage = ((time * 100f) / allocationTotal).roundToInt(),
+            ).also {
+                startAngle += it.sweepAngle
+            }
+        }
+    return ArtistBreakdown(segments, rankedArtists, shownTime, allocationTotal)
 }
 
-private fun allocatePercentagesToHundred(weights: List<Long>): List<Int> {
-    if (weights.isEmpty()) return emptyList()
-    val total = weights.sum().toDouble()
-    if (total <= 0.0) return List(weights.size) { 0 }
-
-    val exactPercentages = weights.map { it.toDouble() * 100.0 / total }
-    val percentages = exactPercentages.map { it.toInt() }.toMutableList()
-    val remainder = 100 - percentages.sum()
-    exactPercentages.indices
-        .sortedByDescending { exactPercentages[it] - percentages[it] }
-        .take(remainder)
-        .forEach { percentages[it] += 1 }
-    return percentages
+/** "2h 0m" style duration for the tight centre readout of the artist ring. */
+private fun makeCompactTimeString(durationMs: Long): String {
+    val totalMinutes = (durationMs / 60_000L).coerceAtLeast(0L)
+    val days = totalMinutes / 1440
+    val hours = (totalMinutes % 1440) / 60
+    val minutes = totalMinutes % 60
+    return when {
+        days > 0 -> "${days}d ${hours}h"
+        hours > 0 -> "${hours}h ${minutes}m"
+        else -> "${minutes}m"
+    }
 }
 
 @Composable
@@ -1363,18 +1389,20 @@ private fun SegmentedArtistChart(
     animationKey: Any,
     modifier: Modifier = Modifier,
 ) {
-    val segmentData = remember(artists, totalTimeListened) { buildArtistBreakdownSegments(artists, totalTimeListened) }
+    val breakdown = remember(artists, totalTimeListened) { buildArtistBreakdown(artists, totalTimeListened) }
+    val segmentData = breakdown.segments
     if (segmentData.isEmpty()) return
 
     val context = LocalContext.current
+    val menuState = LocalMenuState.current
     val photoColors = remember { mutableStateOf<Map<String, Color>>(emptyMap()) }
     val photoSources =
         remember(segmentData) {
             segmentData
                 .mapNotNull { segment ->
-                    segment.artist?.let { artist ->
-                        artist.thumbnailUrl?.takeIf { it.isNotBlank() }?.let { artist.id to it }
-                    }
+                    segment.artist.thumbnailUrl
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { segment.artist.id to it }
                 }.distinctBy { it.first }
         }
     LaunchedEffect(photoSources) {
@@ -1439,19 +1467,13 @@ private fun SegmentedArtistChart(
                 count = segmentData.size,
             )
         }
-    val otherColor = MaterialTheme.colorScheme.tertiary
     val segmentColors =
-        remember(segmentData, photoColors.value, fallbackColors, otherColor) {
+        remember(segmentData, photoColors.value, fallbackColors) {
             segmentData.mapIndexed { index, segment ->
-                if (segment.artist == null) {
-                    otherColor
-                } else {
-                    photoColors.value[segment.key] ?: fallbackColors[index]
-                }
+                photoColors.value[segment.key] ?: fallbackColors[index]
             }
         }
-    val selectedColor = segmentColors[selectedIndex]
-    val topArtist = segmentData.firstOrNull { it.artist != null }?.artist
+    val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
 
     ElevatedCard(
         modifier = modifier,
@@ -1483,6 +1505,18 @@ private fun SegmentedArtistChart(
                                     )
                                 val selectedOffsetPx = 5.dp.toPx()
                                 onDrawBehind {
+                                    // Unfilled remainder: the ring is only painted for the
+                                    // leading slices, so whatever is left reads as an empty
+                                    // track instead of an anonymous "Other" block.
+                                    drawArc(
+                                        color = trackColor,
+                                        startAngle = 0f,
+                                        sweepAngle = 360f,
+                                        useCenter = false,
+                                        topLeft = arcRect.topLeft,
+                                        size = Size(arcRect.width, arcRect.height),
+                                        style = Stroke(width = strokeWidth, cap = StrokeCap.Butt),
+                                    )
                                     val revealEnd = 360f * sweepProgress
                                     segmentData.forEachIndexed { index, segment ->
                                         val segmentStartFromTop = segment.startAngle + 90f
@@ -1557,32 +1591,14 @@ private fun SegmentedArtistChart(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
-                        if (selectedSegment.artist != null) {
-                            AsyncImage(
-                                model = selectedSegment.artist.thumbnailUrl,
-                                contentDescription = null,
-                                placeholder = painterResource(R.drawable.person),
-                                error = painterResource(R.drawable.person),
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(34.dp).clip(CircleShape),
-                            )
-                        } else {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .size(34.dp)
-                                        .clip(CircleShape)
-                                        .background(selectedColor.copy(alpha = 0.18f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.more_horiz),
-                                    contentDescription = null,
-                                    tint = selectedColor,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        }
+                        AsyncImage(
+                            model = selectedSegment.artist.thumbnailUrl,
+                            contentDescription = null,
+                            placeholder = painterResource(R.drawable.person),
+                            error = painterResource(R.drawable.person),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(34.dp).clip(CircleShape),
+                        )
                         Text(
                             text = "${selectedSegment.percentage}%",
                             style = MaterialTheme.typography.labelLarge,
@@ -1590,12 +1606,13 @@ private fun SegmentedArtistChart(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                         )
+                        // The name lives on the highlighted legend row; the centre
+                        // keeps to photo, share and time so nothing ever truncates.
                         Text(
-                            text = selectedSegment.artist?.artist?.name ?: stringResource(R.string.stats_other),
+                            text = makeCompactTimeString(selectedSegment.artist.timeListened?.toLong() ?: 0L),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -1619,38 +1636,20 @@ private fun SegmentedArtistChart(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(7.dp),
                         ) {
-                            if (segment.artist != null) {
-                                AsyncImage(
-                                    model = segment.artist.thumbnailUrl,
-                                    contentDescription = null,
-                                    placeholder = painterResource(R.drawable.person),
-                                    error = painterResource(R.drawable.person),
-                                    contentScale = ContentScale.Crop,
-                                    modifier =
-                                        Modifier
-                                            .size(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .graphicsLayer { this.alpha = alpha },
-                                )
-                            } else {
-                                Box(
-                                    modifier =
-                                        Modifier
-                                            .size(30.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(segmentColors[index].copy(alpha = alpha)),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.more_horiz),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onTertiary.copy(alpha = alpha),
-                                        modifier = Modifier.size(20.dp),
-                                    )
-                                }
-                            }
+                            AsyncImage(
+                                model = segment.artist.thumbnailUrl,
+                                contentDescription = null,
+                                placeholder = painterResource(R.drawable.person),
+                                error = painterResource(R.drawable.person),
+                                contentScale = ContentScale.Crop,
+                                modifier =
+                                    Modifier
+                                        .size(30.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .graphicsLayer { this.alpha = alpha },
+                            )
                             Text(
-                                text = segment.artist?.artist?.name ?: stringResource(R.string.stats_other),
+                                text = segment.artist.artist.name,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
                                 maxLines = 1,
@@ -1664,22 +1663,152 @@ private fun SegmentedArtistChart(
                             )
                         }
                     }
+
+                    if (breakdown.remainingArtists.isNotEmpty()) {
+                        ArtistBreakdownMoreRow(
+                            remainingArtists = breakdown.remainingArtists,
+                            remainingShare = breakdown.remainingShare,
+                            onClick = {
+                                menuState.show {
+                                    ArtistBreakdownSheetContent(
+                                        rankedArtists = breakdown.rankedArtists,
+                                        allocationTotal = breakdown.allocationTotal,
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
 
-            if (topArtist != null) {
+            Text(
+                text =
+                    stringResource(
+                        R.string.stats_top_share_insight,
+                        segmentData.size,
+                        breakdown.shownShare,
+                    ),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtistBreakdownMoreRow(
+    remainingArtists: List<Artist>,
+    remainingShare: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 5.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        // Overlapping avatars so the remainder promises real people; tapping the
+        // row opens the full ranked list.
+        Box(
+            modifier = Modifier.size(30.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            remainingArtists
+                .take(AVATAR_STACK_SIZE)
+                .reversed()
+                .forEachIndexed { stackIndex, artist ->
+                    AsyncImage(
+                        model = artist.thumbnailUrl,
+                        contentDescription = null,
+                        placeholder = painterResource(R.drawable.person),
+                        error = painterResource(R.drawable.person),
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                            Modifier
+                                .offset(x = ((AVATAR_STACK_SIZE - 1 - stackIndex) * 7).dp)
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .border(2.dp, MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                    )
+                }
+        }
+        Text(
+            text = stringResource(R.string.stats_more_artists, remainingArtists.size, remainingShare),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun ArtistBreakdownSheetContent(
+    rankedArtists: List<Artist>,
+    allocationTotal: Long,
+) {
+    Text(
+        text = stringResource(R.string.stats_artist_breakdown),
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 8.dp),
+    )
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        itemsIndexed(rankedArtists, key = { _, artist -> artist.id }) { index, artist ->
+            val time = artist.timeListened?.toLong() ?: 0L
+            val share = if (allocationTotal > 0L) ((time * 100f) / allocationTotal).roundToInt() else 0
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Text(
-                    text =
-                        stringResource(
-                            R.string.stats_top_artist_time,
-                            topArtist.artist.name,
-                            makeTimeString(topArtist.timeListened?.toLong() ?: 0L) ?: "-",
-                        ),
-                    style = MaterialTheme.typography.labelMedium,
+                    text = "${index + 1}",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.width(24.dp),
+                )
+                AsyncImage(
+                    model = artist.thumbnailUrl,
+                    contentDescription = null,
+                    placeholder = painterResource(R.drawable.person),
+                    error = painterResource(R.drawable.person),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = artist.artist.name,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = makeCompactTimeString(time),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                Text(
+                    text = "$share%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
