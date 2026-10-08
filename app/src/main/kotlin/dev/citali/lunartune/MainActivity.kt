@@ -48,6 +48,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -86,7 +87,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -134,15 +134,19 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -1143,6 +1147,10 @@ class MainActivity : FragmentActivity() {
                     val isMiniPlayerFrosted = miniPlayerBackgroundStyle == MiniPlayerBackgroundStyle.FROSTED
                     val hazeState = rememberHazeState()
                     val isFrostedNavBar = navigationBarStyle == NavigationBarStyle.FROSTED
+                    // The top-bar menu owns its frost: while it is open the content source
+                    // is attached just for the menu, and the (static) blur runs on every
+                    // API level instead of only Android 12+.
+                    var topBarMenuExpanded by rememberSaveable { mutableStateOf(false) }
                     val isOutlinedNavBar = navigationBarStyle == NavigationBarStyle.OUTLINED
                     val navigationBarHeightMultiplier by rememberPreference(
                         NavigationBarHeightKey,
@@ -1894,9 +1902,8 @@ class MainActivity : FragmentActivity() {
                                                             )
                                                     FrostedTopBarMenu(
                                                         hazeState = hazeState,
-                                                        hazeSourceAttached =
-                                                            (isFrostedNavBar || isMiniPlayerFrosted) &&
-                                                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
+                                                        expanded = topBarMenuExpanded,
+                                                        onExpandedChange = { topBarMenuExpanded = it },
                                                         updateAvailable = updateAvailable,
                                                         onNavigate = { route -> navController.navigate(route) },
                                                     )
@@ -2495,9 +2502,16 @@ class MainActivity : FragmentActivity() {
                                                 // with empty input (invisible bar, every API).
                                                 // The mini player shares this source for its frosted-glow
                                                 // background. Pre-Android 12 both are static frost with
-                                                // no blur consumer, so no source is attached.
-                                                if ((isFrostedNavBar || isMiniPlayerFrosted) &&
-                                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                                                // no blur consumer, so no source is attached — except
+                                                // while the top-bar menu is open: it is static and
+                                                // short-lived, so the source (and Haze's fallback
+                                                // blur paths) are enabled there on every API level.
+                                                if (
+                                                    topBarMenuExpanded ||
+                                                    (
+                                                        (isFrostedNavBar || isMiniPlayerFrosted) &&
+                                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+                                                    )
                                                 ) {
                                                     Modifier.hazeSource(hazeState)
                                                 } else {
@@ -3287,33 +3301,35 @@ private fun TranslucentTopAppBarIconButton(
 }
 
 /**
- * Replaces the top-bar action cluster with a single MD3 overflow trigger that
- * opens a rounded dropdown menu (History · Music Together | New releases |
- * Settings). The menu rows paint over a frost layer: Haze's live blur of the
- * screen behind the bar, dimmed with a surface scrim. The layer sits on top of
- * the menu's own opaque container, so on devices or configs where the blur has
- * no source, the menu degrades to a clean solid M3 surface.
+ * Replaces the top-bar action cluster with a single trigger that opens an
+ * Android 16-style floating menu: a transparent, blurred sheet (Haze live blur
+ * of the screen behind it) whose actions are separate rounded bars, each
+ * floating on its own with gaps and a soft shadow — the way notifications
+ * stack in Android 16's shade. The sheet keeps a hairline border and shadow
+ * so it reads as one floating panel; on devices where the blur has no pixels
+ * to show, the bars still float over the dimmed fallback tint.
  */
 @Composable
 private fun FrostedTopBarMenu(
     hazeState: HazeState,
-    hazeSourceAttached: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     updateAvailable: Boolean,
     onNavigate: (String) -> Unit,
 ) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val menuShape = RoundedCornerShape(26.dp)
-    val frostBase = MaterialTheme.colorScheme.surfaceContainerHigh
+    val sheetShape = RoundedCornerShape(30.dp)
+    val barShape = RoundedCornerShape(20.dp)
+    val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
 
     Box {
-        TranslucentTopAppBarIconButton(onClick = { expanded = !expanded }) {
+        TranslucentTopAppBarIconButton(onClick = { onExpandedChange(!expanded) }) {
             BadgedBox(badge = {
                 if (updateAvailable) {
                     Badge()
                 }
             }) {
                 Icon(
-                    painter = painterResource(R.drawable.more_vert),
+                    painter = painterResource(R.drawable.grid_view),
                     contentDescription = stringResource(R.string.more_options),
                 )
             }
@@ -3321,51 +3337,79 @@ private fun FrostedTopBarMenu(
 
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = { onExpandedChange(false) },
             modifier =
                 Modifier
-                    .then(
-                        if (hazeSourceAttached) {
-                            Modifier.hazeBlur(
-                                input = HazeInput.Sources(hazeState),
-                                style =
-                                    frostedTopMenuStyle(
-                                        scrim = frostBase.copy(alpha = 0.55f),
-                                        fallbackScrim = frostBase.copy(alpha = FrostedFallbackAlpha),
-                                    ),
-                                performanceMode = HazePerformanceMode.Performance,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ).background(frostBase.copy(alpha = 0.30f)),
-            shape = menuShape,
-            containerColor = frostBase,
-            tonalElevation = 2.dp,
-            shadowElevation = 6.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+                    .width(300.dp)
+                    .hazeBlur(
+                        input = HazeInput.Sources(hazeState),
+                        style =
+                            frostedTopMenuStyle(
+                                scrim = barColor.copy(alpha = 0.55f),
+                                fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
+                            ),
+                        performanceMode = HazePerformanceMode.Performance,
+                    ).background(barColor.copy(alpha = 0.28f))
+                    .padding(7.dp),
+            shape = sheetShape,
+            containerColor = Color.Transparent,
+            tonalElevation = 0.dp,
+            shadowElevation = 14.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         ) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.history,
                 label = stringResource(R.string.history),
+                barShape = barShape,
+                barColor = barColor,
             ) {
-                expanded = false
+                onExpandedChange(false)
                 onNavigate("history")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.stats,
+                label = stringResource(R.string.stats),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate("stats")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.auto_awesome,
+                label = stringResource(R.string.year_in_music),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate("year_in_music")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.trending_up,
+                label = stringResource(R.string.charts),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate("charts_screen")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.new_release,
+                label = stringResource(R.string.new_release_albums),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate("new_release")
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
                 label = stringResource(R.string.music_together),
+                barShape = barShape,
+                barColor = barColor,
             ) {
-                expanded = false
+                onExpandedChange(false)
                 onNavigate("settings/music_together")
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.new_release,
-                label = stringResource(R.string.new_release_albums),
-            ) {
-                expanded = false
-                onNavigate("new_release")
             }
             val settingsTrailing: (@Composable () -> Unit)? =
                 if (updateAvailable) {
@@ -3376,35 +3420,55 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.settings,
                 label = stringResource(R.string.settings),
+                barShape = barShape,
+                barColor = barColor,
                 trailing = settingsTrailing,
             ) {
-                expanded = false
+                onExpandedChange(false)
                 onNavigate("settings")
             }
         }
     }
 }
 
+/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shadowed, on the blurred sheet. */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
     label: String,
+    barShape: Shape,
+    barColor: Color,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    DropdownMenuItem(
-        text = {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-        },
-        onClick = onClick,
-        leadingIcon = {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-            )
-        },
-        trailingIcon = trailing,
-    )
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 3.dp)
+                .shadow(elevation = 5.dp, shape = barShape, clip = false)
+                .clip(barShape)
+                .background(barColor.copy(alpha = 0.95f))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        trailing?.invoke()
+    }
 }
 
 @Composable

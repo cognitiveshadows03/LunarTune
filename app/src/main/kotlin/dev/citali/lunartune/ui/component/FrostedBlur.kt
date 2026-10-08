@@ -107,7 +107,7 @@ fun frostedTopMenuStyle(
 ): HazeBlurStyle =
     HazeBlurStyle {
         blurEnabled(true)
-        blurRadius(14.dp)
+        blurRadius(18.dp)
         backgroundColor(scrim)
         colorEffects(emptyList())
         fallbackColorEffect(HazeColorEffect.tint(fallbackScrim))
