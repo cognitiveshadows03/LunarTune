@@ -38,6 +38,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -1195,7 +1196,10 @@ class MainActivity : FragmentActivity() {
                                 if (disableAnimations) {
                                     snap()
                                 } else {
-                                    NavigationBarAnimationSpec
+                                    spring(
+                                        dampingRatio = Spring.DampingRatioNoBouncy,
+                                        stiffness = Spring.StiffnessLow,
+                                    )
                                 },
                             label = "navBarPlateFraction",
                         )

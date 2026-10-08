@@ -72,20 +72,16 @@ object ChartsApi {
                                 ?.text
                                 ?: return@forEach
 
+                        // Safe-call + let instead of null-comparison smart
+                        // casts: these renderer props are cross-module public
+                        // API, which Kotlin cannot smart-cast here.
                         val items =
                             renderer.contents
                                 .mapNotNull { item ->
-                                    when {
-                                        item.musicResponsiveListItemRenderer != null -> {
-                                            convertToChartItem(item.musicResponsiveListItemRenderer)
-                                        }
-
-                                        item.musicTwoRowItemRenderer != null -> {
-                                            convertMusicTwoRowItem(item.musicTwoRowItemRenderer)
-                                        }
-
-                                        else -> null
-                                    }
+                                    item.musicResponsiveListItemRenderer
+                                        ?.let { row -> convertToChartItem(row) }
+                                        ?: item.musicTwoRowItemRenderer
+                                            ?.let { row -> convertMusicTwoRowItem(row) }
                                 }
 
                         if (items.isNotEmpty()) {
@@ -148,8 +144,9 @@ object ChartsApi {
 
     private fun convertToChartItem(renderer: MusicResponsiveListItemRenderer): YTItem? =
         try {
+            val playlistData = renderer.playlistItemData
             when {
-                renderer.flexColumns.size >= 3 && renderer.playlistItemData?.videoId != null -> {
+                renderer.flexColumns.size >= 3 && playlistData != null -> {
                     // Legacy ranked "Top songs" row: name + artists + position.
                     val firstColumn =
                         renderer.flexColumns
@@ -184,7 +181,7 @@ object ChartsApi {
                             ?.text
                     val thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getBestThumbnail() ?: return null
                     SongItem(
-                        id = renderer.playlistItemData.videoId,
+                        id = playlistData.videoId,
                         title = title,
                         artists = artists,
                         thumbnail = thumbnail.normalizedUrl,
@@ -239,6 +236,9 @@ object ChartsApi {
                         title = name,
                         thumbnail = renderer.thumbnail?.musicThumbnailRenderer?.getBestThumbnail()?.normalizedUrl,
                         channelId = browseId,
+                        playEndpoint = null,
+                        shuffleEndpoint = null,
+                        radioEndpoint = null,
                         subscriberCountText =
                             subtitleColumn
                                 ?.runs
@@ -365,6 +365,9 @@ object ChartsApi {
                                 ?.text ?: return null,
                         thumbnail = renderer.thumbnailRenderer.musicThumbnailRenderer?.getBestThumbnail()?.normalizedUrl,
                         channelId = browseId.takeIf { it.startsWith("UC") },
+                        playEndpoint = null,
+                        shuffleEndpoint = null,
+                        radioEndpoint = null,
                         subscriberCountText =
                             renderer.subtitle
                                 ?.runs
