@@ -1338,20 +1338,20 @@ private fun buildArtistBreakdown(
     artists: List<Artist>,
     totalTimeListened: Long,
 ): ArtistBreakdown {
-    val rankedArtists =
+    val rankedByTime =
         artists
             .mapNotNull { artist ->
                 val time = artist.timeListened?.toLong() ?: 0L
                 if (time <= 0L) null else artist to time
             }.sortedByDescending { it.second }
-    val artistTotal = rankedArtists.sumOf { it.second }
+    val artistTotal = rankedByTime.sumOf { it.second }
     val displayTotal = totalTimeListened.takeIf { it > 0L } ?: artistTotal
     val allocationTotal = maxOf(displayTotal, artistTotal)
-    if (allocationTotal <= 0L || rankedArtists.isEmpty()) {
+    if (allocationTotal <= 0L || rankedByTime.isEmpty()) {
         return ArtistBreakdown(emptyList(), emptyList(), 0L, 0L)
     }
 
-    val topArtists = rankedArtists.take(TOP_ARTIST_SLICES)
+    val topArtists = rankedByTime.take(TOP_ARTIST_SLICES)
     val shownTime = topArtists.sumOf { it.second }
     var startAngle = -90f
     val segments =
@@ -1366,7 +1366,7 @@ private fun buildArtistBreakdown(
                 startAngle += it.sweepAngle
             }
         }
-    return ArtistBreakdown(segments, rankedArtists, shownTime, allocationTotal)
+    return ArtistBreakdown(segments, rankedByTime.map { it.first }, shownTime, allocationTotal)
 }
 
 /** "2h 0m" style duration for the tight centre readout of the artist ring. */
