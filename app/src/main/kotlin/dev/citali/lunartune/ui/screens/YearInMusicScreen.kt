@@ -69,10 +69,8 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -629,13 +627,21 @@ private fun IntroRecapCard(
                 ).then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
                 .padding(24.dp),
     ) {
-        ListeningOrbitGraphic(
+        Box(
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 16.dp, end = 12.dp)
-                    .size(width = 138.dp, height = 210.dp),
-            lightBackground = true,
+                    .size(176.dp)
+                    .graphicsLayer {
+                        rotationZ = -18f
+                        translationX = 44f
+                        translationY = 30f
+                    }.clip(RoundedCornerShape(18.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFFFFE569), RecapPink, Color(0xFFFF8A42)),
+                        ),
+                    ),
         )
 
         Row(
@@ -1094,94 +1100,74 @@ private fun ListeningOrbitRecapCard(
     card: YearInMusicRecapCard.ListeningOrbit,
     applySafeContentInsets: Boolean,
 ) {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                ListeningOrbitAtmosphere(modifier = Modifier.fillMaxSize())
-                ListeningOrbitGraphic(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(20.dp)
-                            .graphicsLayer { alpha = 0.2f },
-                )
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors =
-                                        listOf(
-                                            RecapBlack.copy(alpha = 0.26f),
-                                            Color.Transparent,
-                                            RecapBlack.copy(alpha = 0.44f),
-                                        ),
+    Box(modifier = Modifier.fillMaxSize()) {
+        ListeningOrbitAtmosphere(modifier = Modifier.fillMaxSize())
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    RecapBlack.copy(alpha = 0.26f),
+                                    Color.Transparent,
+                                    RecapBlack.copy(alpha = 0.44f),
                                 ),
-                            ),
+                        ),
+                    ).then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                    .padding(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = card.label,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = RecapCream,
+                    textAlign = TextAlign.Center,
+                    lineHeight = 30.sp,
                 )
+
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween,
+                    verticalArrangement = Arrangement.Center,
                 ) {
-                    Text(
-                        text = card.label,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Black,
-                        color = RecapCream,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 30.sp,
+                    OrbitRecapMetric(
+                        value = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
+                        label = stringResource(R.string.year_in_music_plays_short),
+                        valueColor = RecapLime,
                     )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OrbitRecapMetric(
+                        value = NumberFormat.getIntegerInstance().format(card.activeDays),
+                        label = stringResource(R.string.year_in_music_active_days),
+                        valueColor = RecapCream,
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OrbitRecapMetric(
+                        value = formatListeningMinutes(card.totalListeningTime),
+                        label = stringResource(R.string.year_in_music_minutes_unit),
+                        valueColor = RecapCream,
+                    )
+                }
 
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        OrbitRecapMetric(
-                            value = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
-                            label = stringResource(R.string.year_in_music_plays_short),
-                            valueColor = RecapLime,
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        OrbitRecapMetric(
-                            value = NumberFormat.getIntegerInstance().format(card.activeDays),
-                            label = stringResource(R.string.year_in_music_active_days),
-                            valueColor = RecapCream,
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-                        OrbitRecapMetric(
-                            value = formatListeningMinutes(card.totalListeningTime),
-                            label = stringResource(R.string.year_in_music_minutes_unit),
-                            valueColor = RecapCream,
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        LunarTuneBrand(contentColor = RecapCream)
-                        Text(
-                            text = "${card.year} · ${stringResource(R.string.year_in_music_recap_word)}",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = RecapCream.copy(alpha = 0.78f),
-                        )
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    LunarTuneBrand(contentColor = RecapCream)
+                    Text(
+                        text = "${card.year} · ${stringResource(R.string.year_in_music_recap_word)}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = RecapCream.copy(alpha = 0.78f),
+                    )
                 }
             }
         }
@@ -1253,79 +1239,6 @@ private fun ListeningOrbitAtmosphere(modifier: Modifier = Modifier) {
                 ),
             center = lowerCenter,
             radius = lowerRadius,
-        )
-    }
-}
-
-@Composable
-private fun ListeningOrbitGraphic(
-    modifier: Modifier = Modifier,
-    lightBackground: Boolean = false,
-) {
-    Canvas(modifier = modifier) {
-        val centerX = size.width
-        val centerY = size.height / 2f
-        val outerRadius = minOf(size.width * 0.94f, size.height * 0.47f)
-        if (outerRadius <= 0f) return@Canvas
-
-        val ringColors =
-            if (lightBackground) {
-                listOf(
-                    Color.White.copy(alpha = 0.38f),
-                    RecapInk.copy(alpha = 0.24f),
-                    Color.White.copy(alpha = 0.48f),
-                    RecapPink.copy(alpha = 0.64f),
-                    RecapInk.copy(alpha = 0.38f),
-                    Color.White.copy(alpha = 0.68f),
-                )
-            } else {
-                listOf(
-                    RecapBlue.copy(alpha = 0.28f),
-                    RecapPurple.copy(alpha = 0.36f),
-                    RecapPink.copy(alpha = 0.42f),
-                    RecapRed.copy(alpha = 0.50f),
-                    RecapGreen.copy(alpha = 0.62f),
-                    RecapLime.copy(alpha = 0.78f),
-                )
-            }
-        val accentColor = if (lightBackground) Color.White else RecapLime
-        val secondaryMarkerColor = if (lightBackground) RecapInk else RecapBlue
-        val ringStroke = 1.4.dp.toPx()
-
-        ringColors.forEachIndexed { index, color ->
-            val radius = outerRadius * (1f - index * 0.14f)
-            drawArc(
-                color = color,
-                startAngle = 90f,
-                sweepAngle = 180f,
-                useCenter = false,
-                topLeft = Offset(centerX - radius, centerY - radius),
-                size = Size(radius * 2f, radius * 2f),
-                style = Stroke(width = ringStroke),
-            )
-        }
-
-        val highlightedRadius = outerRadius * 0.84f
-        drawArc(
-            color = accentColor,
-            startAngle = 145f,
-            sweepAngle = 70f,
-            useCenter = false,
-            topLeft = Offset(centerX - highlightedRadius, centerY - highlightedRadius),
-            size = Size(highlightedRadius * 2f, highlightedRadius * 2f),
-            style = Stroke(width = 3.dp.toPx()),
-        )
-        drawCircle(
-            color = accentColor,
-            radius = 4.dp.toPx(),
-            center = Offset(centerX - highlightedRadius * 0.94f, centerY - highlightedRadius * 0.34f),
-        )
-
-        val innerMarkerRadius = outerRadius * 0.58f
-        drawCircle(
-            color = secondaryMarkerColor,
-            radius = 3.dp.toPx(),
-            center = Offset(centerX - innerMarkerRadius * 0.82f, centerY + innerMarkerRadius * 0.57f),
         )
     }
 }
