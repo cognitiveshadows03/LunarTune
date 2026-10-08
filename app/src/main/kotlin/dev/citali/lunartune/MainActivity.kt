@@ -163,6 +163,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
@@ -218,7 +219,6 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
-import dev.citali.lunartune.ui.screens.headerTextDim
 import dev.citali.lunartune.ui.screens.settings.TabTransitionKey
 import dev.citali.lunartune.ui.screens.settings.TabTransitionStyle
 import dev.citali.lunartune.ui.theme.LunarMotion
@@ -1949,6 +1949,7 @@ class MainActivity : FragmentActivity() {
                                                 )
                                             }
 
+                                            val titleShadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
                                             TopAppBar(
                                                 windowInsets =
                                                     WindowInsets.safeDrawing.only(
@@ -1961,19 +1962,7 @@ class MainActivity : FragmentActivity() {
                                                         ) + WindowInsetsSides.Top,
                                                     ),
                                                 title = {
-                                                    Row(
-                                                        modifier =
-                                                            Modifier.headerTextDim(
-                                                                alpha =
-                                                                    if (navBackStackEntry?.destination?.route == Screens.Home.route) {
-                                                                        1f
-                                                                    } else {
-                                                                        0f
-                                                                    },
-                                                                color = MaterialTheme.colorScheme.surface,
-                                                            ),
-                                                        verticalAlignment = Alignment.CenterVertically,
-                                                    ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                                         // app icon
                                                         Icon(
                                                             painter = painterResource(R.drawable.about_appbar),
@@ -1985,7 +1974,19 @@ class MainActivity : FragmentActivity() {
                                                         )
                                                         Text(
                                                             text = stringResource(R.string.app_name),
-                                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                                            style =
+                                                                MaterialTheme.typography.titleLarge.copy(
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    shadow =
+                                                                        if (navBackStackEntry?.destination?.route == Screens.Home.route) {
+                                                                            Shadow(
+                                                                                color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f),
+                                                                                blurRadius = titleShadowBlurPx,
+                                                                            )
+                                                                        } else {
+                                                                            null
+                                                                        },
+                                                                ),
                                                             maxLines = 1,
                                                             overflow = TextOverflow.Ellipsis,
                                                         )

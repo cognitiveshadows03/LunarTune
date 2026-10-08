@@ -71,10 +71,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.PaintingStyle
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -118,8 +114,6 @@ import dev.citali.lunartune.viewmodels.YearInMusicUiState
 import dev.citali.lunartune.viewmodels.YearInMusicViewModel
 import java.text.NumberFormat
 import kotlin.coroutines.resume
-import kotlin.math.cos
-import kotlin.math.sin
 
 private val RecapBlack = Color(0xFF070707)
 private val RecapSurfaceHigh = Color(0xFF1D1D1D)
@@ -1143,17 +1137,17 @@ private fun ListeningOrbitRecapCard(
                         color = RecapCream,
                         textAlign = TextAlign.Center,
                     )
-                    Spacer(modifier = Modifier.height(26.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     OrbitRecapMetric(
                         value = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
                         label = stringResource(R.string.year_in_music_plays_short),
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     OrbitRecapMetric(
                         value = NumberFormat.getIntegerInstance().format(card.activeDays),
                         label = stringResource(R.string.year_in_music_active_days),
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     OrbitRecapMetric(
                         value = formatListeningMinutes(card.totalListeningTime),
                         label = stringResource(R.string.year_in_music_minutes_unit),
@@ -1163,6 +1157,7 @@ private fun ListeningOrbitRecapCard(
                 // Reference-style badge: the mark beside a stacked year and
                 // feature name, rather than the wordmark left and year right.
                 Row(
+                    modifier = Modifier.align(Alignment.Start),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -1209,7 +1204,7 @@ private fun OrbitRecapMetric(
             style =
                 MaterialTheme.typography.displayLarge.copy(
                     fontSize = 54.sp,
-                    lineHeight = 50.sp,
+                    lineHeight = 46.sp,
                     letterSpacing = (-1.5).sp,
                 ),
             fontWeight = FontWeight.Black,
@@ -1219,7 +1214,7 @@ private fun OrbitRecapMetric(
         )
         Text(
             text = label.replaceFirstChar { it.uppercase() },
-            style = MaterialTheme.typography.titleMedium.copy(lineHeight = 20.sp),
+            style = MaterialTheme.typography.titleMedium.copy(lineHeight = 18.sp),
             fontWeight = FontWeight.Bold,
             color = RecapCream,
             maxLines = 1,
@@ -1231,71 +1226,53 @@ private fun OrbitRecapMetric(
 @Composable
 private fun ListeningOrbitAtmosphere(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        val center = Offset(size.width * 0.5f, size.height * 0.47f)
+        // Fully gradient backdrop: a deep green base, two warm glows and a
+        // vignette. The drawn swirl that preceded this read as a cartoon
+        // spiral on real hardware; gradients keep the colour story without
+        // the shape.
+        val baseCenter = Offset(size.width * 0.48f, size.height * 0.46f)
         drawRect(
             brush =
                 Brush.radialGradient(
-                    colors = listOf(Color(0xFF2C3D2C), Color(0xFF131B14), RecapBlack),
-                    center = center,
-                    radius = size.maxDimension * 0.75f,
+                    colors = listOf(Color(0xFF354B35), Color(0xFF172118), RecapBlack),
+                    center = baseCenter,
+                    radius = size.maxDimension * 0.78f,
                 ),
             size = size,
         )
 
-        // A swept vortex instead of static blobs: logarithmic spiral arms in the
-        // recap palette, blurred until they read as turned light rather than
-        // ribbons. This is the backdrop the reference recap card sets its
-        // totals on. BlurMaskFilter rather than Modifier.blur so the effect
-        // survives on every API level and in the share capture.
-        val blurPx = size.minDimension * 0.05f
-        val armWidth = size.minDimension * 0.17f
-        val arms =
-            listOf(
-                Triple(Color(0xE6FF4326), 0.0f, armWidth),
-                Triple(Color(0xB3FF8A38), 2.1f, armWidth * 0.8f),
-                Triple(Color(0x99557055), 4.2f, armWidth * 1.25f),
-            )
-        for ((armColor, phase, width) in arms) {
-            val path = Path()
-            var theta = phase
-            var radius = size.minDimension * 0.05f
-            val maxRadius = size.maxDimension * 0.66f
-            var first = true
-            while (radius < maxRadius) {
-                val point =
-                    Offset(
-                        center.x + radius * cos(theta),
-                        center.y + radius * sin(theta),
-                    )
-                if (first) {
-                    path.moveTo(point.x, point.y)
-                    first = false
-                } else {
-                    path.lineTo(point.x, point.y)
-                }
-                theta += 0.22f
-                radius *= 1.07f
-            }
-            val paint =
-                Paint().apply {
-                    style = PaintingStyle.Stroke
-                    strokeCap = StrokeCap.Round
-                    strokeWidth = width
-                    color = armColor
-                }
-            paint.asFrameworkPaint().maskFilter =
-                android.graphics.BlurMaskFilter(blurPx, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            // DrawScope exposes no Paint overload; the scope's own canvas does.
-            drawContext.canvas.drawPath(path, paint)
-        }
+        val warmCenter = Offset(size.width * 0.82f, size.height * 0.23f)
+        val warmRadius = size.minDimension * 0.52f
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color(0xBFFF4326), Color(0x44FF4B28), Color.Transparent),
+                    center = warmCenter,
+                    radius = warmRadius,
+                ),
+            center = warmCenter,
+            radius = warmRadius,
+        )
 
-        // Vignette so the swirl settles into dark edges and the totals stay legible.
+        val lowerCenter = Offset(size.width * 0.22f, size.height * 0.84f)
+        val lowerRadius = size.minDimension * 0.46f
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color(0x99FF8A38), Color(0x33FF5A2C), Color.Transparent),
+                    center = lowerCenter,
+                    radius = lowerRadius,
+                ),
+            center = lowerCenter,
+            radius = lowerRadius,
+        )
+
         drawRect(
             brush =
                 Brush.radialGradient(
-                    colors = listOf(Color.Transparent, RecapBlack.copy(alpha = 0.5f)),
-                    center = center,
-                    radius = size.maxDimension * 0.72f,
+                    colors = listOf(Color.Transparent, RecapBlack.copy(alpha = 0.42f)),
+                    center = baseCenter,
+                    radius = size.maxDimension * 0.74f,
                 ),
             size = size,
         )
