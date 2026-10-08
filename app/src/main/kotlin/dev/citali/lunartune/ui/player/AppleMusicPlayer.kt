@@ -535,7 +535,6 @@ internal fun AppleMusicPortraitContent(
                                 modifier = Modifier.fillMaxSize(),
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
-                                alwaysFocusActiveLine = true,
                                 appleMusicPlayerMode = true,
                             )
                     }

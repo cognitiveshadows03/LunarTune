@@ -356,7 +356,6 @@ fun buildSettingsGroups(
                 SettingsChild("Telegram browse channels", "telegram_browse_channels", listOf("browse channels", "channels", "telegram channels", "music channels")),
                 SettingsChild("Telegram lossless only", "telegram_lossless_only", listOf("lossless", "flac", "lossless only", "high quality")),
                 SettingsChild("Telegram logout", "telegram_logout", listOf("logout", "log out", "sign out", "disconnect telegram")),
-                SettingsChild("Transfer playlists", "cross_service_import", listOf("transfer playlists", "transfer music", "spotify import", "apple music import", "youtube music playlist", "playlist migration", "public playlist link", "playlist url", "cross service")),
             ),
         )
     val aiIntegration =
@@ -467,6 +466,7 @@ fun buildSettingsGroups(
                 SettingsChild("Replace older cloud backup", "google_drive_sync_overwrite", listOf("overwrite drive backup", "replace cloud backup", "single backup")),
                 SettingsChild("Sync cloud backup now", "google_drive_sync_run_now", listOf("sync now", "backup now", "upload backup")),
                 SettingsChild("Backup", "backup", listOf("backup", "save data", "export backup")),
+                SettingsChild("Transfer your gems", "cross_service_import", listOf("transfer playlists", "transfer music", "spotify import", "apple music import", "youtube music playlist", "playlist migration", "public playlist link", "playlist url", "cross service")),
                 SettingsChild("Restore", "restore", listOf("restore", "import", "recover")),
                 SettingsChild("Import online (m3u)", "import_online", listOf("import online", "m3u", "playlist import")),
                 SettingsChild("Import CSV", "import_csv", listOf("import csv", "csv", "playlist csv")),
