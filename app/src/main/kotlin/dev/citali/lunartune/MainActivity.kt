@@ -3318,7 +3318,7 @@ private fun HomeOverflowFab(
                 colors = menuItemColors,
             )
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.music_together)) },
+                text = { Text(stringResource(R.string.music_together_short)) },
                 onClick = {
                     onExpandedChange(false)
                     onMusicTogetherClick()
@@ -3438,7 +3438,7 @@ private fun FrostedTopBarMenu(
             onDismissRequest = { onExpandedChange(false) },
             modifier =
                 Modifier
-                    .width(300.dp)
+                    .width(250.dp)
                     .hazeBlur(
                         input = HazeInput.Sources(hazeState),
                         style =
@@ -3493,7 +3493,7 @@ private fun FrostedTopBarMenu(
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
-                label = stringResource(R.string.music_together),
+                label = stringResource(R.string.music_together_short),
                 barShape = barShape,
                 barColor = barColor,
             ) {
