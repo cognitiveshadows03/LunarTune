@@ -39,6 +39,23 @@ Ldev/citali/lunartune/MainActivity**;
 HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
 Ldev/citali/lunartune/ui/screens/**;
 
+# ---- Scroll-driven nav bar hide (per-frame hot path) -----------------------
+# NavBarScrollTracker.consume() runs once per scroll frame for the whole of a
+# user gesture, with the NestedScrollConnection's onPostScroll/onPreFling/
+# onPostFling overrides running alongside it, so both need AOT compilation and
+# not merely class loading: an interpreted consume() at 120Hz is exactly the
+# jank this feature exists to avoid. The tracker is a top-level class in the
+# root dev.citali.lunartune package, which the App** and MainActivity** rules
+# above do not reach, so it needs its own entry. The connection is MainActivity's
+# single anonymous NestedScrollConnection, addressed through the MainActivity$**
+# inner-class wildcard with the method names pinned so the rule does not drag in
+# every lambda class of a 3.7k-line composable.
+Ldev/citali/lunartune/NavBarScrollTracker;
+HSPLdev/citali/lunartune/NavBarScrollTracker;->**(**)**
+HSPLdev/citali/lunartune/MainActivity$**;->onPostScroll(**)**
+HSPLdev/citali/lunartune/MainActivity$**;->onPreFling(**)**
+HSPLdev/citali/lunartune/MainActivity$**;->onPostFling(**)**
+
 # ---- Home screen ------------------------------------------------------------
 # HomeScreen and the main SearchScreen live directly in ui/screens in LunarTune,
 # not in ArchiveTune's old ui/screens/home package.

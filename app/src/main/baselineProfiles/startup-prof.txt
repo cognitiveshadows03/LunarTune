@@ -33,6 +33,13 @@ Ldev/citali/lunartune/ui/component/CapsuleNavigationBarKt;
 Ldev/citali/lunartune/ui/component/FloatingNavigationToolbarKt;
 Ldev/citali/lunartune/ui/player/MiniPlayerKt;
 Ldev/citali/lunartune/ui/player/MiniPlayerComponentsKt;
+# Constructed on the first composition regardless of the toggle, and reset()
+# fires from the route LaunchedEffect in the same frame. The anonymous
+# NestedScrollConnection is deliberately absent: its generated inner-class name
+# is not stable enough to pin, and this file admits no wildcards.
+Ldev/citali/lunartune/NavBarScrollTracker;
+HSPLdev/citali/lunartune/NavBarScrollTracker;-><init>(F)V
+HSPLdev/citali/lunartune/NavBarScrollTracker;->reset()V
 
 # Database and playback state touched while restoring the session
 Ldev/citali/lunartune/playback/PlayerConnection;
