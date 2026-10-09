@@ -73,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
@@ -205,6 +206,10 @@ fun HomeSectionHeader(
     onClick: (() -> Unit)? = null,
 ) {
     val shadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
+    // scrim is black in both themes; derive the shadow polarity from the text
+    // itself so light mode gets a light shadow behind dark glyphs.
+    val shadowColor =
+        if (MaterialTheme.colorScheme.onSurface.luminance() > 0.5f) Color.Black else Color.White
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -238,9 +243,7 @@ fun HomeSectionHeader(
                         shadow =
                             if (dimAlpha > 0.02f) {
                                 Shadow(
-                                    color =
-                                        MaterialTheme.colorScheme.scrim
-                                            .copy(alpha = 0.72f * dimAlpha),
+                                    color = shadowColor.copy(alpha = 0.72f * dimAlpha),
                                     blurRadius = shadowBlurPx,
                                 )
                             } else {

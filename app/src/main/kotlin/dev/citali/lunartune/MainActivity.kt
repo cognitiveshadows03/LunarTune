@@ -38,12 +38,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Transition
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -154,7 +150,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -164,12 +159,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastAny
@@ -177,9 +169,6 @@ import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
@@ -1950,6 +1939,15 @@ class MainActivity : FragmentActivity() {
                                             }
 
                                             val titleShadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
+                                            // scrim is black in both themes, so derive the shadow
+                                            // polarity from the text itself: dark glyphs get a
+                                            // light shadow, light glyphs a dark one.
+                                            val titleShadowColor =
+                                                if (MaterialTheme.colorScheme.onSurface.luminance() > 0.5f) {
+                                                    Color.Black
+                                                } else {
+                                                    Color.White
+                                                }
                                             TopAppBar(
                                                 windowInsets =
                                                     WindowInsets.safeDrawing.only(
@@ -1980,7 +1978,7 @@ class MainActivity : FragmentActivity() {
                                                                     shadow =
                                                                         if (navBackStackEntry?.destination?.route == Screens.Home.route) {
                                                                             Shadow(
-                                                                                color = MaterialTheme.colorScheme.scrim.copy(alpha = 0.72f),
+                                                                                color = titleShadowColor.copy(alpha = 0.72f),
                                                                                 blurRadius = titleShadowBlurPx,
                                                                             )
                                                                         } else {
@@ -3434,11 +3432,6 @@ private fun TranslucentTopAppBarIconButton(
  * stack in Android 16's shade. The sheet keeps a hairline border and shadow
  * so it reads as one floating panel; on devices where the blur has no pixels
  * to show, the bars still float over the dimmed fallback tint.
- *
- * The open motion is a corner scale: the panel grows out of the top-right
- * corner its trigger sits in while the bars fade down into place one after
- * another, a staggered cascade. That motion is why the panel lives in a plain
- * [Popup] rather than a DropdownMenu, whose built-in expand would fight it.
  */
 @Composable
 private fun FrostedTopBarMenu(
@@ -3466,138 +3459,28 @@ private fun FrostedTopBarMenu(
             }
         }
 
-        // The popup stays composed while the exit transition plays and leaves
-        // once it has finished, so closing gets the corner scale in reverse
-        // instead of a popup window vanishing mid-frame.
-        var popupPresent by remember { mutableStateOf(false) }
-        LaunchedEffect(expanded) {
-            if (expanded) popupPresent = true
-        }
-        val anchorDensity = LocalDensity.current
-        val positionProvider =
-            remember(anchorDensity) {
-                TopEndAnchoredMenuPositionProvider(with(anchorDensity) { 8.dp.toPx() })
-            }
-        if (popupPresent) {
-            Popup(
-                onDismissRequest = { onExpandedChange(false) },
-                popupPositionProvider = positionProvider,
-                properties = PopupProperties(focusable = true),
-            ) {
-                FrostedTopBarMenuPanel(
-                    hazeState = hazeState,
-                    expanded = expanded,
-                    onExitEnd = { popupPresent = false },
-                    sheetShape = sheetShape,
-                    barShape = barShape,
-                    barColor = barColor,
-                    updateAvailable = updateAvailable,
-                    onExpandedChange = onExpandedChange,
-                    onNavigate = onNavigate,
-                )
-            }
-        }
-    }
-}
-
-/** Panel open duration and per-bar stagger of the top-bar menu motion. */
-private const val FrostedMenuOpenMs = 420
-private const val FrostedMenuStaggerMs = 45
-private const val FrostedMenuStaggerBaseMs = 90
-
-/** Slight overshoot so the corner scale lands with a snap instead of a crawl. */
-private val FrostedMenuCornerScaleEasing = CubicBezierEasing(0.34f, 1.36f, 0.64f, 1f)
-
-/**
- * Anchors the menu panel below its trigger with the right edges flush — the
- * corner the panel scales from — clamped inside the window, flipping above the
- * trigger when there is no room below.
- */
-private class TopEndAnchoredMenuPositionProvider(
-    private val verticalGapPx: Float,
-) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize,
-    ): IntOffset {
-        val gap = verticalGapPx.roundToInt()
-        val x =
-            (anchorBounds.right - popupContentSize.width).coerceIn(
-                0,
-                (windowSize.width - popupContentSize.width).coerceAtLeast(0),
-            )
-        val below = anchorBounds.bottom + gap
-        val y =
-            if (below + popupContentSize.height <= windowSize.height) {
-                below
-            } else {
-                (anchorBounds.top - popupContentSize.height - gap).coerceAtLeast(0)
-            }
-        return IntOffset(x, y)
-    }
-}
-
-@Composable
-private fun FrostedTopBarMenuPanel(
-    hazeState: HazeState,
-    expanded: Boolean,
-    onExitEnd: () -> Unit,
-    sheetShape: Shape,
-    barShape: Shape,
-    barColor: Color,
-    updateAvailable: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    onNavigate: (String) -> Unit,
-) {
-    val transition = updateTransition(expanded, label = "frostedTopBarMenu")
-    val panelScale by
-        transition.animateFloat(
-            transitionSpec = {
-                if (targetState) {
-                    tween(FrostedMenuOpenMs, easing = FrostedMenuCornerScaleEasing)
-                } else {
-                    tween(170, easing = FastOutSlowInEasing)
-                }
-            },
-            label = "panelScale",
-        ) { if (it) 1f else 0.72f }
-    val panelAlpha by
-        transition.animateFloat(
-            transitionSpec = { if (targetState) tween(140) else tween(160) },
-            label = "panelAlpha",
-        ) { if (it) 1f else 0f }
-
-    LaunchedEffect(transition.currentState) {
-        if (!expanded && !transition.currentState) onExitEnd()
-    }
-
-    Column(
-        modifier =
-            Modifier
-                .graphicsLayer {
-                    scaleX = panelScale
-                    scaleY = panelScale
-                    alpha = panelAlpha
-                    // Grow from the corner the trigger sits in: the top-right.
-                    transformOrigin = TransformOrigin(1f, 0f)
-                }.width(250.dp)
-                .shadow(elevation = 14.dp, shape = sheetShape, clip = false)
-                .clip(sheetShape)
-                .hazeBlur(
-                    input = HazeInput.Sources(hazeState),
-                    style =
-                        frostedTopMenuStyle(
-                            scrim = barColor.copy(alpha = 0.55f),
-                            fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
-                        ),
-                    performanceMode = HazePerformanceMode.Performance,
-                ).background(barColor.copy(alpha = 0.28f))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), sheetShape)
-                .padding(7.dp),
-    ) {
-        FrostedTopBarMenuStaggeredItem(transition, 0) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onExpandedChange(false) },
+            modifier =
+                Modifier
+                    .width(250.dp)
+                    .hazeBlur(
+                        input = HazeInput.Sources(hazeState),
+                        style =
+                            frostedTopMenuStyle(
+                                scrim = barColor.copy(alpha = 0.55f),
+                                fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
+                            ),
+                        performanceMode = HazePerformanceMode.Performance,
+                    ).background(barColor.copy(alpha = 0.28f))
+                    .padding(7.dp),
+            shape = sheetShape,
+            containerColor = Color.Transparent,
+            tonalElevation = 0.dp,
+            shadowElevation = 14.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        ) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.history,
                 label = stringResource(R.string.history),
@@ -3607,8 +3490,6 @@ private fun FrostedTopBarMenuPanel(
                 onExpandedChange(false)
                 onNavigate("history")
             }
-        }
-        FrostedTopBarMenuStaggeredItem(transition, 1) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.stats,
                 label = stringResource(R.string.stats),
@@ -3618,8 +3499,6 @@ private fun FrostedTopBarMenuPanel(
                 onExpandedChange(false)
                 onNavigate("stats")
             }
-        }
-        FrostedTopBarMenuStaggeredItem(transition, 2) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
@@ -3629,8 +3508,6 @@ private fun FrostedTopBarMenuPanel(
                 onExpandedChange(false)
                 onNavigate("charts_screen")
             }
-        }
-        FrostedTopBarMenuStaggeredItem(transition, 3) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.new_release,
                 label = stringResource(R.string.new_release_albums),
@@ -3640,8 +3517,6 @@ private fun FrostedTopBarMenuPanel(
                 onExpandedChange(false)
                 onNavigate("new_release")
             }
-        }
-        FrostedTopBarMenuStaggeredItem(transition, 4) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
                 label = stringResource(R.string.music_together_short),
@@ -3651,14 +3526,12 @@ private fun FrostedTopBarMenuPanel(
                 onExpandedChange(false)
                 onNavigate("settings/music_together")
             }
-        }
-        val settingsTrailing: (@Composable () -> Unit)? =
-            if (updateAvailable) {
-                @Composable { Badge() }
-            } else {
-                null
-            }
-        FrostedTopBarMenuStaggeredItem(transition, 5) {
+            val settingsTrailing: (@Composable () -> Unit)? =
+                if (updateAvailable) {
+                    @Composable { Badge() }
+                } else {
+                    null
+                }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.settings,
                 label = stringResource(R.string.settings),
@@ -3670,43 +3543,6 @@ private fun FrostedTopBarMenuPanel(
                 onNavigate("settings")
             }
         }
-    }
-}
-
-/**
- * One bar of the menu cascade: fades in while settling a few dp downward,
- * [index] times the stagger delay after the panel starts opening. On the way
- * out every bar leaves together with the panel, no reverse cascade.
- */
-@Composable
-private fun FrostedTopBarMenuStaggeredItem(
-    transition: Transition<Boolean>,
-    index: Int,
-    content: @Composable () -> Unit,
-) {
-    val delay = FrostedMenuStaggerBaseMs + index * FrostedMenuStaggerMs
-    val itemAlpha by
-        transition.animateFloat(
-            transitionSpec = {
-                if (targetState) tween(240, delayMillis = delay) else tween(110)
-            },
-            label = "frostedMenuItemAlpha$index",
-        ) { if (it) 1f else 0f }
-    val itemDrop by
-        transition.animateFloat(
-            transitionSpec = {
-                if (targetState) tween(280, delayMillis = delay) else tween(110)
-            },
-            label = "frostedMenuItemDrop$index",
-        ) { if (it) 0f else -1f }
-    Box(
-        modifier =
-            Modifier.graphicsLayer {
-                alpha = itemAlpha
-                translationY = itemDrop * 6.dp.toPx()
-            },
-    ) {
-        content()
     }
 }
 
