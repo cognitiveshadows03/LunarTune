@@ -2279,6 +2279,21 @@ class MainActivity : FragmentActivity() {
                                         val navSlideDistance =
                                             bottomInset + floatingBarsBottomPadding + navVisibleHeight
 
+                                        // The slot the bar lives in must never expose whatever
+                                        // sits behind the scaffold content: paint it with the page
+                                        // colour in both bar states, so hiding the bar cannot reveal
+                                        // a black band across the bottom (seen on Library, idle).
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .align(Alignment.BottomCenter)
+                                                    .fillMaxWidth()
+                                                    .height(navSlideDistance)
+                                                    .background(
+                                                        if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface,
+                                                    ),
+                                        )
+
                                         Box(
                                             modifier =
                                                 Modifier
