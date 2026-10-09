@@ -159,6 +159,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
@@ -2287,7 +2288,9 @@ class MainActivity : FragmentActivity() {
                                                         if (bottomNavigationBarHeight == 0.dp) {
                                                             IntOffset(
                                                                 x = 0,
-                                                                y = navSlideDistance.roundToPx(),
+                                                                // margin beyond the slot so no plate,
+                                                                // shadow or frost edge can peek back
+                                                                y = (navSlideDistance + 24.dp).roundToPx(),
                                                             )
                                                         } else {
                                                             val slideOffset =
@@ -2310,6 +2313,11 @@ class MainActivity : FragmentActivity() {
                                                         }
                                                     },
                                         ) {
+                                            val navHideFraction =
+                                                1f -
+                                                    bottomNavigationBarHeight
+                                                        .coerceAtMost(navVisibleHeight) /
+                                                        navVisibleHeight
                                             FloatingNavigationToolbar(
                                                 items = navigationItems,
                                                 pureBlack = pureBlack,
@@ -2319,7 +2327,12 @@ class MainActivity : FragmentActivity() {
                                                 modifier =
                                                     Modifier
                                                         .align(Alignment.BottomCenter)
-                                                        .padding(
+                                                        // fade with the hide spring: whatever the
+                                                        // bar paints (plate, shadow, frost) leaves
+                                                        // with its alpha instead of lingering
+                                                        .graphicsLayer {
+                                                            alpha = (1f - navHideFraction * 1.6f).coerceIn(0f, 1f)
+                                                        }.padding(
                                                             start = navBarHorizontalPadding,
                                                             end = navBarHorizontalPadding,
                                                             bottom = bottomInset + floatingBarsBottomPadding,
