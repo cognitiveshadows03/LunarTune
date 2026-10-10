@@ -1188,6 +1188,13 @@ class MainActivity : FragmentActivity() {
                         remember(navBarHideScrollThresholdPx) {
                             NavBarScrollTracker(navBarHideScrollThresholdPx)
                         }
+                    // Library opts out of the hide beta outright: the idle bottom
+                    // seam only ever appeared while the bar was away on this tab,
+                    // and no amount of slot surgery closed it, so the bar stays
+                    // home here. Every other route keeps the beta behaviour.
+                    val navBarHideRouteDisabled =
+                        navBackStackEntry?.destination?.route == Screens.Library.route
+
                     // A freshly opened/re-entered tab always starts with the bar
                     // visible, and with a clean accumulator so the first gesture on
                     // the new route has to earn the hide all over again.
@@ -1196,7 +1203,7 @@ class MainActivity : FragmentActivity() {
                         navBarScrollTracker.reset()
                     }
                     val navBarScrollHideConnection =
-                        remember(navBarScrollTracker) {
+                        remember(navBarScrollTracker, navBarHideRouteDisabled) {
                             object : NestedScrollConnection {
                                 override fun onPostScroll(
                                     consumed: Offset,
@@ -1208,7 +1215,7 @@ class MainActivity : FragmentActivity() {
                                     // is bracketed by pre/post-fling, so programmatic
                                     // scrolls (position restore, settings auto-scroll)
                                     // still cannot touch it.
-                                    if (navBarHideOnScroll) {
+                                    if (navBarHideOnScroll && !navBarHideRouteDisabled) {
                                         navBarScrollTracker.consume(consumed.y, source)?.let {
                                             isNavBarHiddenByScroll = it
                                         }
@@ -1245,7 +1252,10 @@ class MainActivity : FragmentActivity() {
                         targetValue =
                             if (
                                 shouldShowNavigationBar && !useRail &&
-                                !(navBarHideOnScroll && isNavBarHiddenByScroll)
+                                (
+                                    !(navBarHideOnScroll && isNavBarHiddenByScroll) ||
+                                        navBarHideRouteDisabled
+                                )
                             ) {
                                 navVisibleHeight
                             } else {
