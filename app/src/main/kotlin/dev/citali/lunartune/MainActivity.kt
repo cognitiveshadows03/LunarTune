@@ -2275,6 +2275,10 @@ class MainActivity : FragmentActivity() {
                                             1f -
                                                 bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
                                                     navVisibleHeight
+                                        // captured here: the drift lambda below runs
+                                        // outside composition, where LocalDensity is
+                                        // not readable
+                                        val navDriftDensity = LocalDensity.current
 
                                         BottomSheetPlayer(
                                             state = playerBottomSheetState,
@@ -2290,7 +2294,7 @@ class MainActivity : FragmentActivity() {
                                                     shouldShowNavigationBar && !useRail &&
                                                     !playerBottomSheetState.isDismissed
                                                 ) {
-                                                    with(LocalDensity.current) {
+                                                    with(navDriftDensity) {
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() *
                                                             maxOf(routeHideFraction, navHideAnim.value)
                                                     }
