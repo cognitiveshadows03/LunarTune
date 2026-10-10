@@ -2257,8 +2257,12 @@ class MainActivity : FragmentActivity() {
                                             navbarHiddenOffset = {
                                                 // While the bar is away (route change or
                                                 // scroll-to-hide) the collapsed mini player
-                                                // drifts down into the freed footprint.
-                                                if (shouldShowNavigationBar && !useRail) {
+                                                // drifts down into the freed footprint. Idle,
+                                                // there is no row to drift and no geometry to add.
+                                                if (
+                                                    shouldShowNavigationBar && !useRail &&
+                                                    !playerBottomSheetState.isDismissed
+                                                ) {
                                                     val hideFraction =
                                                         1f -
                                                             bottomNavigationBarHeight
@@ -2283,7 +2287,13 @@ class MainActivity : FragmentActivity() {
                                             modifier =
                                                 Modifier
                                                     .align(Alignment.BottomCenter)
-                                                    .height(navSlideDistance)
+                                                    .height(
+                                                        if (bottomNavigationBarHeight == 0.dp) {
+                                                            0.dp
+                                                        } else {
+                                                            navSlideDistance
+                                                        },
+                                                    )
                                                     .offset {
                                                         if (bottomNavigationBarHeight == 0.dp) {
                                                             IntOffset(
