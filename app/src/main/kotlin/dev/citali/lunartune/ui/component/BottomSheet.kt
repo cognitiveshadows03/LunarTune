@@ -107,6 +107,8 @@ fun BottomSheet(
                     ),
                 ),
     ) {
+        // DIAG(seam): sheet outer box = red
+        Box(Modifier.matchParentSize().background(Color.Red.copy(alpha = 0.45f)))
         if (state.isExpandedOrExpanding && backHandlerEnabled) {
             BackHandler(onBack = state::collapseSoft)
         }
@@ -145,6 +147,8 @@ fun BottomSheet(
                                 Modifier
                             },
                         ).fillMaxWidth()
+                        // DIAG(seam): collapsed row = blue
+                        .background(Color.Blue.copy(alpha = 0.45f))
                         .height(state.collapsedBound),
                 content = collapsedContent,
             )

@@ -2251,7 +2251,8 @@ class MainActivity : FragmentActivity() {
                                     }
                                 },
                                 bottomBar = {
-                                    Box {
+                                    // DIAG(seam): bottomBar wrapper = yellow
+                                    Box(modifier = Modifier.background(Color.Yellow.copy(alpha = 0.45f))) {
                                         val areBottomBarsPaired =
                                             shouldShowNavigationBar &&
                                                 !useRail &&
@@ -2296,6 +2297,8 @@ class MainActivity : FragmentActivity() {
                                         Box(
                                             modifier =
                                                 Modifier
+                                                    // DIAG(seam): nav slot box = green
+                                                    .background(Color.Green.copy(alpha = 0.45f))
                                                     .align(Alignment.BottomCenter)
                                                     .height(
                                                         if (bottomNavigationBarHeight == 0.dp) {
