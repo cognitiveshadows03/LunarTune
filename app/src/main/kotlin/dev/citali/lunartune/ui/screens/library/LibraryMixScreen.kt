@@ -935,6 +935,27 @@ private fun TopMixesForYouSection(
                 }
             }
         }
+        // The feed reserves the floating bar's footprint as content padding so
+        // the last row can rest clear of the pill. With no mini player that
+        // reserved strip is flat empty page, and its hard top edge reads as a
+        // bar; fade the content edge into the page tone so no seam remains.
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(playerAwareBottomPadding + 96.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.background,
+                                    MaterialTheme.colorScheme.background,
+                                ),
+                        ),
+                    ),
+        )
     }
 }
 
