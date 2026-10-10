@@ -35,6 +35,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -1175,35 +1176,30 @@ class MainActivity : FragmentActivity() {
                         if (isFloatingNavBar) FloatingNavigationBarHorizontalPadding else NavigationBarHorizontalPadding
                     val navVisibleHeight = NavigationBarHeight * navigationBarHeightMultiplier
 
-                    // Beta: Apple Music-style scroll-driven navigation bar, ported
-                    // from 4nx3b/ArchiveTune's canary branch: scrolling a page down
-                    // slides the bar away and the collapsed mini player drifts into
-                    // the freed footprint; scrolling back up brings the bar home.
+                    // Beta: scroll-driven navigation bar hide, reimplemented from
+                    // scratch after the ArchiveTune port proved unsound: hiding now
+                    // changes no layout at all. One Animatable progress (0 visible,
+                    // 1 away) is dragged 1:1 by consumed scroll over a fixed travel,
+                    // settled by a spring at fling end, and read only by graphics
+                    // layers (bar translation + fade, mini player drift), so the
+                    // slot, the sheet and every content padding stay frozen while
+                    // the bar moves - nothing can seam, jump or repaint.
                     val navBarHideOnScroll by
                         rememberPreference(NavBarHideOnScrollKey, defaultValue = false)
-                    var isNavBarHiddenByScroll by remember { mutableStateOf(false) }
-                    val navBarScrollDensity = LocalDensity.current
-                    val navBarHideScrollThresholdPx = with(navBarScrollDensity) { 14.dp.toPx() }
-                    val navBarScrollTracker =
-                        remember(navBarHideScrollThresholdPx) {
-                            NavBarScrollTracker(navBarHideScrollThresholdPx)
-                        }
-                    // Library opts out of the hide beta outright: the idle bottom
-                    // seam only ever appeared while the bar was away on this tab,
-                    // and no amount of slot surgery closed it, so the bar stays
-                    // home here. Every other route keeps the beta behaviour.
-                    val navBarHideRouteDisabled =
-                        navBackStackEntry?.destination?.route == Screens.Library.route
+                    val navHideAnim = remember { Animatable(0f) }
+                    val navHideScope = rememberCoroutineScope()
+                    val navHideTravelPx = with(LocalDensity.current) { 140.dp.toPx() }
+                    var navHideFlingWindow by remember { mutableStateOf(false) }
+                    var navHideDragJob by remember { mutableStateOf<Job?>(null) }
 
                     // A freshly opened/re-entered tab always starts with the bar
-                    // visible, and with a clean accumulator so the first gesture on
-                    // the new route has to earn the hide all over again.
+                    // home; the spring back becomes part of the route transition.
                     LaunchedEffect(navBackStackEntry?.destination?.route) {
-                        isNavBarHiddenByScroll = false
-                        navBarScrollTracker.reset()
+                        navHideAnim.animateTo(0f)
                     }
+
                     val navBarScrollHideConnection =
-                        remember(navBarScrollTracker, navBarHideRouteDisabled) {
+                        remember(navHideAnim, navHideTravelPx) {
                             object : NestedScrollConnection {
                                 override fun onPostScroll(
                                     consumed: Offset,
@@ -1211,20 +1207,28 @@ class MainActivity : FragmentActivity() {
                                     source: NestedScrollSource,
                                 ): Offset {
                                     // Only real user gestures move the bar: the drag
-                                    // itself plus the fling that follows it. The fling
-                                    // is bracketed by pre/post-fling, so programmatic
-                                    // scrolls (position restore, settings auto-scroll)
-                                    // still cannot touch it.
-                                    if (navBarHideOnScroll && !navBarHideRouteDisabled) {
-                                        navBarScrollTracker.consume(consumed.y, source)?.let {
-                                            isNavBarHiddenByScroll = it
+                                    // itself plus the fling that follows it, bracketed
+                                    // by pre/post-fling so programmatic scrolls
+                                    // (position restore, settings auto-scroll) cannot.
+                                    val userDriven =
+                                        source == NestedScrollSource.UserInput ||
+                                            (navHideFlingWindow && source == NestedScrollSource.SideEffect)
+                                    if (navBarHideOnScroll && userDriven && consumed.y != 0f) {
+                                        // Scrolling down consumes negative y: map the
+                                        // travel 1:1 so the bar tracks the finger.
+                                        val next =
+                                            (navHideAnim.value - consumed.y / navHideTravelPx)
+                                                .coerceIn(0f, 1f)
+                                        navHideDragJob?.cancel()
+                                        navHideDragJob = navHideScope.launch {
+                                            navHideAnim.snapTo(next)
                                         }
                                     }
                                     return Offset.Zero
                                 }
 
                                 override suspend fun onPreFling(available: Velocity): Velocity {
-                                    navBarScrollTracker.beginUserFling()
+                                    navHideFlingWindow = true
                                     return Velocity.Zero
                                 }
 
@@ -1232,7 +1236,20 @@ class MainActivity : FragmentActivity() {
                                     consumed: Velocity,
                                     available: Velocity,
                                 ): Velocity {
-                                    navBarScrollTracker.endUserFling()
+                                    navHideFlingWindow = false
+                                    // Settle with the fling: a decisive downward fling
+                                    // hides, upward restores, timid ones snap to the
+                                    // nearer end so the bar never rests half-way.
+                                    val target =
+                                        when {
+                                            consumed.y < -navHideTravelPx -> 1f
+                                            consumed.y > navHideTravelPx -> 0f
+                                            else -> if (navHideAnim.value > 0.5f) 1f else 0f
+                                        }
+                                    navHideDragJob?.cancel()
+                                    navHideDragJob = navHideScope.launch {
+                                        navHideAnim.animateTo(target)
+                                    }
                                     return Velocity.Zero
                                 }
                             }
@@ -1245,18 +1262,11 @@ class MainActivity : FragmentActivity() {
                             0.dp
                         }
 
-                    // The slot collapses when a route hides the bar or when the
-                    // scroll-to-hide beta slides it away; the mini player drifts
-                    // into the freed footprint on this same spring.
+                    // The slot collapses only when a route hides the bar; scroll
+                    // hiding never touches layout (see navHideAnim above).
                     val bottomNavigationBarHeight by animateDpAsState(
                         targetValue =
-                            if (
-                                shouldShowNavigationBar && !useRail &&
-                                (
-                                    !(navBarHideOnScroll && isNavBarHiddenByScroll) ||
-                                        navBarHideRouteDisabled
-                                )
-                            ) {
+                            if (shouldShowNavigationBar && !useRail) {
                                 navVisibleHeight
                             } else {
                                 0.dp
@@ -2258,6 +2268,14 @@ class MainActivity : FragmentActivity() {
                                                 !isFloatingNavBar &&
                                                 playerBottomSheetState.isCollapsed
 
+                                        // Routes that hide the bar entirely still slide it
+                                        // out on their own spring; the scroll beta adds its
+                                        // progress on top, and the larger of the two wins.
+                                        val routeHideFraction =
+                                            1f -
+                                                bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
+                                                    navVisibleHeight
+
                                         BottomSheetPlayer(
                                             state = playerBottomSheetState,
                                             navController = navController,
@@ -2265,22 +2283,16 @@ class MainActivity : FragmentActivity() {
                                             isMiniPlayerPairedWithNavigation = areBottomBarsPaired,
                                             hazeState = hazeState,
                                             navbarHiddenOffset = {
-                                                // While the bar is away (route change or
-                                                // scroll-to-hide) the collapsed mini player
-                                                // drifts down into the freed footprint. Idle,
-                                                // there is no row to drift and no geometry to add.
+                                                // While the bar is away the collapsed mini
+                                                // player drifts down into its footprint on
+                                                // the same progress; idle there is no row.
                                                 if (
                                                     shouldShowNavigationBar && !useRail &&
                                                     !playerBottomSheetState.isDismissed
                                                 ) {
-                                                    val hideFraction =
-                                                        1f -
-                                                            bottomNavigationBarHeight
-                                                                .coerceAtMost(navVisibleHeight) /
-                                                                navVisibleHeight
-                                                    with(navBarScrollDensity) {
+                                                    with(LocalDensity.current) {
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() *
-                                                            hideFraction
+                                                            maxOf(routeHideFraction, navHideAnim.value)
                                                     }
                                                 } else {
                                                     0f
@@ -2297,47 +2309,29 @@ class MainActivity : FragmentActivity() {
                                             modifier =
                                                 Modifier
                                                     .align(Alignment.BottomCenter)
-                                                    .height(
-                                                        if (bottomNavigationBarHeight == 0.dp) {
-                                                            0.dp
-                                                        } else {
-                                                            navSlideDistance
-                                                        },
-                                                    )
+                                                    .height(navSlideDistance)
                                                     .offset {
-                                                        if (bottomNavigationBarHeight == 0.dp) {
-                                                            IntOffset(
-                                                                x = 0,
-                                                                // margin beyond the slot so no plate,
-                                                                // shadow or frost edge can peek back
-                                                                y = (navSlideDistance + 24.dp).roundToPx(),
-                                                            )
-                                                        } else {
-                                                            val slideOffset =
-                                                                navSlideDistance *
-                                                                    playerBottomSheetState.progress.coerceIn(
-                                                                        0f,
-                                                                        1f,
-                                                                    )
-                                                            val hideOffset =
-                                                                navSlideDistance *
-                                                                    (
-                                                                        1 -
-                                                                            bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
-                                                                            navVisibleHeight
-                                                                    )
-                                                            IntOffset(
-                                                                x = 0,
-                                                                y = (slideOffset + hideOffset).roundToPx(),
-                                                            )
-                                                        }
+                                                        // Only the player expansion slides the
+                                                        // slot in layout; the hide progress lives
+                                                        // in the graphics layer below, so hiding
+                                                        // never re-layouts anything.
+                                                        val slideOffset =
+                                                            navSlideDistance *
+                                                                playerBottomSheetState.progress.coerceIn(
+                                                                    0f,
+                                                                    1f,
+                                                                )
+                                                        IntOffset(x = 0, y = slideOffset.roundToPx())
+                                                    }.graphicsLayer {
+                                                        // The whole hide motion: translate out and
+                                                        // fade a little ahead of arrival so no
+                                                        // edge of plate, shadow or frost lingers.
+                                                        val hide =
+                                                            maxOf(routeHideFraction, navHideAnim.value)
+                                                        translationY = navSlideDistance.toPx() * 1.15f * hide
+                                                        alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
                                                     },
                                         ) {
-                                            val navHideFraction =
-                                                1f -
-                                                    bottomNavigationBarHeight
-                                                        .coerceAtMost(navVisibleHeight) /
-                                                        navVisibleHeight
                                             FloatingNavigationToolbar(
                                                 items = navigationItems,
                                                 pureBlack = pureBlack,
@@ -2347,12 +2341,7 @@ class MainActivity : FragmentActivity() {
                                                 modifier =
                                                     Modifier
                                                         .align(Alignment.BottomCenter)
-                                                        // fade with the hide spring: whatever the
-                                                        // bar paints (plate, shadow, frost) leaves
-                                                        // with its alpha instead of lingering
-                                                        .graphicsLayer {
-                                                            alpha = (1f - navHideFraction * 1.6f).coerceIn(0f, 1f)
-                                                        }.padding(
+                                                        .padding(
                                                             start = navBarHorizontalPadding,
                                                             end = navBarHorizontalPadding,
                                                             bottom = bottomInset + floatingBarsBottomPadding,
@@ -3687,62 +3676,3 @@ private fun Context.isTvDevice(): Boolean {
         packageManager.hasSystemFeature(PackageManager.FEATURE_TELEVISION)
 }
 
-/**
- * Accumulates user-driven vertical scroll for the scroll-to-hide navigation bar.
- *
- * Testing each frame's delta against a fixed dp threshold makes the trigger
- * refresh-rate dependent: the same finger speed is split across twice as many --
- * and half as large -- deltas on a 120Hz panel as on a 60Hz one, so the bar hides
- * readily on one device and almost never on another. Summing across frames keeps
- * the hide distance constant in dp.
- *
- * Fling frames are reported as [NestedScrollSource.SideEffect], the same source
- * used by programmatic animation, so they are honoured only between
- * [beginUserFling] and [endUserFling] -- the pre/post-fling pair a scrollable
- * dispatches around a gesture-initiated fling. Scroll-position restore and
- * settings auto-scroll never dispatch that pair, so they still cannot move the
- * bar.
- */
-private class NavBarScrollTracker(
-    private val thresholdPx: Float,
-) {
-    private var accumulatedY = 0f
-    private var userFlingActive = false
-
-    /** Drops both the run-up and the gesture window; called on route change. */
-    fun reset() {
-        accumulatedY = 0f
-        userFlingActive = false
-    }
-
-    fun beginUserFling() {
-        userFlingActive = true
-    }
-
-    fun endUserFling() {
-        userFlingActive = false
-        accumulatedY = 0f
-    }
-
-    /** @return the new hidden state, or null while this run has not crossed the threshold. */
-    fun consume(
-        deltaY: Float,
-        source: NestedScrollSource,
-    ): Boolean? {
-        val userDriven =
-            source == NestedScrollSource.UserInput ||
-                (userFlingActive && source == NestedScrollSource.SideEffect)
-        if (!userDriven || deltaY == 0f) return null
-        // A direction flip is a fresh intent: drop the previous run-up so the
-        // threshold is measured from the reversal, not from the last crossing.
-        if ((deltaY > 0f) != (accumulatedY > 0f)) accumulatedY = 0f
-        // Clamping to one threshold either way is what gives hiding and restoring
-        // symmetric hysteresis, and keeps the running sum bounded.
-        accumulatedY = (accumulatedY + deltaY).coerceIn(-thresholdPx, thresholdPx)
-        return when {
-            accumulatedY <= -thresholdPx -> true
-            accumulatedY >= thresholdPx -> false
-            else -> null
-        }
-    }
-}
