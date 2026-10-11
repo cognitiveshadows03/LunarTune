@@ -81,7 +81,7 @@ import dev.citali.lunartune.ui.screens.settings.PrivacySettings
 import dev.citali.lunartune.ui.screens.settings.SettingsScreen
 import dev.citali.lunartune.ui.screens.settings.StorageSettings
 import dev.citali.lunartune.ui.screens.settings.StreamSourcesSettings
-import dev.citali.lunartune.ui.screens.settings.TabTransitionStyle
+import dev.citali.lunartune.constants.TabTransitionStyle
 import dev.citali.lunartune.ui.screens.settings.ThemeCreatorScreen
 import dev.citali.lunartune.ui.screens.settings.UpdateScreen
 import dev.citali.lunartune.ui.theme.LunarMotion

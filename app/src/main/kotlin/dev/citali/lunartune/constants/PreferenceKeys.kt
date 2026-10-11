@@ -1111,3 +1111,12 @@ enum class UpdateChannel {
             }
     }
 }
+
+/** Tab switch transition style (survivor of the removed Motion Lab screen). */
+enum class TabTransitionStyle {
+    FADE,
+    BLOOM,
+    SPRING_SLIDE,
+}
+
+val TabTransitionKey = stringPreferencesKey("tabTransition")

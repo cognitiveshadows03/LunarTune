@@ -210,8 +210,8 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
-import dev.citali.lunartune.ui.screens.settings.TabTransitionKey
-import dev.citali.lunartune.ui.screens.settings.TabTransitionStyle
+import dev.citali.lunartune.constants.TabTransitionKey
+import dev.citali.lunartune.constants.TabTransitionStyle
 import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
