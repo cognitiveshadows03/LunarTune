@@ -767,6 +767,7 @@ private fun AppleMusicBackground(
         ArtworkFade(
             artwork = blurredArt,
             durationMillis = BACKDROP_FADE_MS,
+            hasArtwork = thumbnailUrl != null,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -820,17 +821,28 @@ private const val HEADER_ART_FADE_MS = 350
  *
  * A `null` [artwork] keeps the last one on screen: the callers hand over `null` while the next
  * cover is still being decoded and blurred, and that gap is exactly when a hole would flash.
+ * That hold must not outlive the track it belongs to, though: with [hasArtwork] false the caller
+ * knows the current track has no cover at all (its metadata url is null, not merely unresolved),
+ * and the outgoing layer is dropped instead of lingering as the previous song's art.
  */
 @Composable
 private fun <T : Any> ArtworkFade(
     artwork: T?,
     durationMillis: Int,
     modifier: Modifier = Modifier,
+    hasArtwork: Boolean = true,
     content: @Composable (T) -> Unit,
 ) {
     var current by remember { mutableStateOf(artwork) }
     var previous by remember { mutableStateOf<T?>(null) }
     val progress = remember { Animatable(1f) }
+
+    LaunchedEffect(hasArtwork) {
+        if (hasArtwork) return@LaunchedEffect
+        previous = null
+        current = null
+        progress.snapTo(1f)
+    }
 
     LaunchedEffect(artwork) {
         val incoming = artwork ?: return@LaunchedEffect
@@ -869,6 +881,10 @@ private fun <T : Any> ArtworkFade(
  * [ArtworkFade] for a Coil request: the incoming layer is mounted invisibly, and the fade only
  * starts on `onSuccess` — once there is a decoded bitmap to fade. Until then the previous artwork
  * holds the frame, so a slow network never shows an empty or half-loaded layer.
+ *
+ * A `null` [request] is different from an unloaded one: callers build the request straight from
+ * the track's metadata url, so null means the current track has no cover and the held layer is
+ * dropped — otherwise the previous song's art would sit there forever.
  */
 @Composable
 private fun LoadedArtworkFade(
@@ -883,7 +899,13 @@ private fun LoadedArtworkFade(
     val progress = remember { Animatable(0f) }
 
     LaunchedEffect(request) {
-        val incoming = request ?: return@LaunchedEffect
+        val incoming = request ?: run {
+            previous = null
+            current = null
+            currentLoaded = false
+            progress.snapTo(0f)
+            return@LaunchedEffect
+        }
         if (incoming.data == current?.data) return@LaunchedEffect
         // Only a layer that is fully on screen becomes the outgoing one; a still-loading or
         // half-faded current is simply replaced.
@@ -1038,6 +1060,7 @@ private fun MovingBlurBackground(
                 ArtworkFade(
                     artwork = blurredArt,
                     durationMillis = BACKDROP_FADE_MS,
+                    hasArtwork = thumbnailUrl != null,
                     modifier = Modifier.fillMaxSize(),
                 ) { art ->
                     Image(
