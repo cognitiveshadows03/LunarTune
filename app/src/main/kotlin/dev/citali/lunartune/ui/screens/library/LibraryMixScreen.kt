@@ -114,7 +114,7 @@ import dev.citali.lunartune.viewmodels.MostPlayedAlbumUiState
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryMixScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     filterContent: (@Composable () -> Unit)?,
     selectedTagIds: Set<String>,
@@ -206,13 +206,11 @@ fun LibraryMixScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 contentPadding =
                     PaddingValues(
+                        top = topContentPadding,
                         bottom = playerAwareBottomPadding,
                     ),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                item(key = "library_shell_header", contentType = "shell_header") {
-                    header()
-                }
                 item(key = "most_played_album_spotlight", contentType = "spotlight") {
                     val state = mostPlayedAlbumUiState
                     if (state is MostPlayedAlbumUiState.Success) {

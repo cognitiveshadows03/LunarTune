@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,7 +40,7 @@ import dev.citali.lunartune.ui.component.SpotifyLibraryPlaylistListItem
 
 @Composable
 fun LibrarySpotifyPlaylistsScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     viewModel: SpotifyLibraryViewModel = hiltViewModel(),
 ) {
@@ -62,22 +63,13 @@ fun LibrarySpotifyPlaylistsScreen(
             contentPadding =
                 PaddingValues(
                     start = 24.dp,
+                    top = topContentPadding,
                     end = 24.dp,
                     bottom = playerAwareBottomPadding,
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "library_shell_header", contentType = "shell_header") {
-                BoxWithConstraints {
-                    Box(
-                        modifier =
-                            Modifier
-                                .offset(x = -24.dp)
-                                .requiredWidth(maxWidth + 48.dp),
-                    ) { header() }
-                }
-            }
             if (playlists.isEmpty()) {
                 item(key = "spotify_empty", contentType = "spotify_empty") {
                     Text(

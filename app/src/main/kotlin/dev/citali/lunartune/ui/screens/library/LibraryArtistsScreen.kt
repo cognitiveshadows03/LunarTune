@@ -66,6 +66,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -97,7 +98,7 @@ import dev.citali.lunartune.viewmodels.LibraryArtistsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryArtistsScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibraryArtistsViewModel = hiltViewModel(),
@@ -149,6 +150,7 @@ fun LibraryArtistsScreen(
             contentPadding =
                 PaddingValues(
                     start = 24.dp,
+                    top = topContentPadding,
                     end = 24.dp,
                     bottom = playerAwareBottomPadding,
                 ),
@@ -156,16 +158,6 @@ fun LibraryArtistsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "library_shell_header", contentType = "shell_header") {
-                BoxWithConstraints {
-                    Box(
-                        modifier =
-                            Modifier
-                                .offset(x = -24.dp)
-                                .requiredWidth(maxWidth + 48.dp),
-                    ) { header() }
-                }
-            }
             // Featured Spotlight Row
             item(span = { GridItemSpan(2) }, key = "spotlight_row") {
                 Row(

@@ -74,6 +74,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.ColorUtils
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -119,7 +120,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryPlaylistsScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     filterContent: (@Composable () -> Unit)?,
     selectedTagIds: Set<String>,
@@ -220,7 +221,7 @@ fun LibraryPlaylistsScreen(
             if (isGridView) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
@@ -507,20 +508,10 @@ fun LibraryPlaylistsScreen(
                 val showDragHandles = sortType == PlaylistSortType.CUSTOM && !locked
                 LazyColumn(
                     state = lazyListState,
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    item(key = "library_shell_header", contentType = "shell_header") {
-                        BoxWithConstraints {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .offset(x = -24.dp)
-                                        .requiredWidth(maxWidth + 48.dp),
-                            ) { header() }
-                        }
-                    }
                     item(key = "playlist_controls", contentType = "controls") {
             Row(
                 modifier =

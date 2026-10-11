@@ -61,6 +61,8 @@ import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -147,96 +149,15 @@ fun LibraryScreen(
     val currentFilter = libraryFilters.getOrElse(pagerState.targetPage) { LibraryFilter.LIBRARY }
 
     val density = LocalDensity.current
+    var chipsHeightPx by remember { mutableStateOf(0) }
+    val chipsZoneHeight = if (chipsHeightPx == 0) 64.dp else with(density) { chipsHeightPx.toDp() }
+    val pageTopPad =
+        WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight + chipsZoneHeight + 4.dp
     val configuration = LocalConfiguration.current
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
     val tabListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-
-    val shellHeader: @Composable () -> Unit = {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            if (effectiveHeaderImageUri.isNotBlank()) {
-                ScreenImageHeader(
-                    imageUri = effectiveHeaderImageUri,
-                    blendColor = MaterialTheme.colorScheme.background,
-                    // The banner leads the scroll as the first item of every
-                    // page (rukamori shell, adapted): nothing stays pinned.
-                    modifier = Modifier.align(Alignment.TopCenter),
-                )
-            } else if (!disableBlur) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(430.dp)
-                            .align(Alignment.TopCenter)
-                            .drawWithCache {
-                                val brush =
-                                    Brush.verticalGradient(
-                                        0f to tonalStart.copy(alpha = 0.30f),
-                                        0.42f to tonalMiddle.copy(alpha = 0.14f),
-                                        1f to Color.Transparent,
-                                    )
-                                onDrawBehind { drawRect(brush) }
-                            },
-                )
-            }
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = AppBarHeight),
-            ) {
-                LazyRow(
-                    state = tabListState,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                        items(
-                            items = libraryFilters,
-                            key = { filter -> filter.name },
-                            contentType = { "library_filter_chip" },
-                        ) { filter ->
-                            val page = libraryFilters.indexOf(filter)
-                            val label =
-                                when (filter) {
-                                    LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
-                                    LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
-                                    LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
-                                    LibraryFilter.SONGS -> stringResource(R.string.songs)
-                                    LibraryFilter.ARTISTS -> stringResource(R.string.artists)
-                                    LibraryFilter.ALBUMS -> stringResource(R.string.albums)
-                                }
-                            val iconRes =
-                                when (filter) {
-                                    LibraryFilter.LIBRARY -> R.drawable.graphic_eq
-                                    LibraryFilter.PLAYLISTS -> R.drawable.queue_music
-                                    LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
-                                    LibraryFilter.SONGS -> R.drawable.music_note
-                                    LibraryFilter.ARTISTS -> R.drawable.person
-                                    LibraryFilter.ALBUMS -> R.drawable.album
-                                }
-                            ExpressiveTabChip(
-                                label = label,
-                                iconRes = iconRes,
-                                selected = currentFilter == filter,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(page)
-                                    }
-                                },
-                            )
-                        }
-                }
-            }
-        }
-    }
 
     Box(
         modifier =
@@ -245,6 +166,32 @@ fun LibraryScreen(
                 .clipToBounds()
                 .background(MaterialTheme.colorScheme.background),
     ) {
+        if (effectiveHeaderImageUri.isNotBlank()) {
+            ScreenImageHeader(
+                imageUri = effectiveHeaderImageUri,
+                blendColor = MaterialTheme.colorScheme.background,
+                // The banner leads the scroll as the first item of every
+                // page (rukamori shell, adapted): nothing stays pinned.
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
+        } else if (!disableBlur) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(430.dp)
+                        .align(Alignment.TopCenter)
+                        .drawWithCache {
+                            val brush =
+                                Brush.verticalGradient(
+                                    0f to tonalStart.copy(alpha = 0.30f),
+                                    0.42f to tonalMiddle.copy(alpha = 0.14f),
+                                    1f to Color.Transparent,
+                                )
+                            onDrawBehind { drawRect(brush) }
+                        },
+            )
+        }
             LaunchedEffect(defaultFilter, libraryFilters) {
                 val selectedFilter = defaultFilter.takeIf { it in libraryFilters } ?: LibraryFilter.LIBRARY
                 val selectedPage = libraryFilters.indexOf(selectedFilter).takeIf { it >= 0 } ?: 0
@@ -286,7 +233,7 @@ fun LibraryScreen(
                     LibraryFilter.LIBRARY -> {
                         LibraryMixScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                             filterContent =
                                 if (showTagsInLibrary) {
                                     {
@@ -313,7 +260,7 @@ fun LibraryScreen(
                     LibraryFilter.PLAYLISTS -> {
                         LibraryPlaylistsScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                             filterContent =
                                 if (showTagsInLibrary) {
                                     {
@@ -334,14 +281,14 @@ fun LibraryScreen(
                     LibraryFilter.SPOTIFY -> {
                         LibrarySpotifyPlaylistsScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                         )
                     }
 
                     LibraryFilter.SONGS -> {
                         LibrarySongsScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -353,7 +300,7 @@ fun LibraryScreen(
                     LibraryFilter.ARTISTS -> {
                         LibraryArtistsScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -365,7 +312,7 @@ fun LibraryScreen(
                     LibraryFilter.ALBUMS -> {
                         LibraryAlbumsScreen(
                             navController = navController,
-                            header = shellHeader,
+                            topContentPadding = pageTopPad,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -376,6 +323,62 @@ fun LibraryScreen(
                 }
                 }
 
+
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = AppBarHeight),
+        ) {
+            LazyRow(
+                state = tabListState,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .onSizeChanged { chipsHeightPx = it.height },
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                    items(
+                        items = libraryFilters,
+                        key = { filter -> filter.name },
+                        contentType = { "library_filter_chip" },
+                    ) { filter ->
+                        val page = libraryFilters.indexOf(filter)
+                        val label =
+                            when (filter) {
+                                LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
+                                LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
+                                LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
+                                LibraryFilter.SONGS -> stringResource(R.string.songs)
+                                LibraryFilter.ARTISTS -> stringResource(R.string.artists)
+                                LibraryFilter.ALBUMS -> stringResource(R.string.albums)
+                            }
+                        val iconRes =
+                            when (filter) {
+                                LibraryFilter.LIBRARY -> R.drawable.graphic_eq
+                                LibraryFilter.PLAYLISTS -> R.drawable.queue_music
+                                LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
+                                LibraryFilter.SONGS -> R.drawable.music_note
+                                LibraryFilter.ARTISTS -> R.drawable.person
+                                LibraryFilter.ALBUMS -> R.drawable.album
+                            }
+                        ExpressiveTabChip(
+                            label = label,
+                            iconRes = iconRes,
+                            selected = currentFilter == filter,
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(page)
+                                }
+                            },
+                        )
+                    }
+            }
+        }
     }
 }
 

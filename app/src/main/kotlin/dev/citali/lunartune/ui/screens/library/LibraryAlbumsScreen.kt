@@ -67,6 +67,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -99,7 +100,7 @@ import dev.citali.lunartune.viewmodels.LibraryAlbumsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryAlbumsScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibraryAlbumsViewModel = hiltViewModel(),
@@ -163,7 +164,7 @@ fun LibraryAlbumsScreen(
             if (isGridView) {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(4), // 4-column albums grid
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
@@ -585,20 +586,10 @@ fun LibraryAlbumsScreen(
             } else {
                 // List View
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    item(key = "library_shell_header", contentType = "shell_header") {
-                        BoxWithConstraints {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .offset(x = -24.dp)
-                                        .requiredWidth(maxWidth + 48.dp),
-                            ) { header() }
-                        }
-                    }
                     item(key = "album_controls", contentType = "controls") {
             Row(
                 modifier =

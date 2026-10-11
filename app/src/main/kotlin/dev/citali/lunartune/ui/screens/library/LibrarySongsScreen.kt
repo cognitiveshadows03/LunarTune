@@ -65,6 +65,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -96,7 +97,7 @@ import dev.citali.lunartune.viewmodels.LibrarySongsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibrarySongsScreen(
-    header: @Composable () -> Unit,
+    topContentPadding: Dp,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibrarySongsViewModel = hiltViewModel(),
@@ -175,20 +176,10 @@ fun LibrarySongsScreen(
             LazyColumn(
                 state = lazyListState,
                 // Issue 2: use player-aware window insets for bottom padding
-                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-            item(key = "library_shell_header", contentType = "shell_header") {
-                BoxWithConstraints {
-                    Box(
-                        modifier =
-                            Modifier
-                                .offset(x = -24.dp)
-                                .requiredWidth(maxWidth + 48.dp),
-                    ) { header() }
-                }
-            }
             item(key = "song_subfilters", contentType = "subfilters") {
             Row(
                 modifier =
