@@ -211,7 +211,7 @@ fun LibraryPlaylistsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(top = LibraryHeaderContentPadding),
+                    .padding(top = LibraryContentTopPadding),
         ) {
             // Control row (Sort dropdown, grid/list layout toggle, + add button)
             Row(

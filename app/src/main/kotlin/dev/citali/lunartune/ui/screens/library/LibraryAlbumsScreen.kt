@@ -157,7 +157,7 @@ fun LibraryAlbumsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(top = LibraryHeaderContentPadding),
+                    .padding(top = LibraryContentTopPadding),
         ) {
             // Sub-header controls (Sort dropdown, genres/filters, list/grid toggle)
             Row(

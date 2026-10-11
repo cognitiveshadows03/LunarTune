@@ -171,7 +171,7 @@ fun LibrarySongsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(top = LibraryHeaderContentPadding),
+                    .padding(top = LibraryContentTopPadding),
         ) {
             // Sub-Filters Row (All Songs, Downloaded, Liked)
             Row(

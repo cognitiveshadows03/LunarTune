@@ -57,7 +57,7 @@ fun LibrarySpotifyPlaylistsScreen(
             contentPadding =
                 PaddingValues(
                     start = 24.dp,
-                    top = LibraryHeaderContentPadding,
+                    top = LibraryContentTopPadding,
                     end = 24.dp,
                     bottom = playerAwareBottomPadding,
                 ),

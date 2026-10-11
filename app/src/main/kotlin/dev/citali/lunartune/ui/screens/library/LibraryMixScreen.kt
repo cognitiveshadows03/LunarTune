@@ -205,7 +205,7 @@ fun LibraryMixScreen(
                 verticalArrangement = Arrangement.spacedBy(24.dp),
                 contentPadding =
                     PaddingValues(
-                        top = LibraryHeaderContentPadding,
+                        top = LibraryContentTopPadding,
                         bottom = playerAwareBottomPadding,
                     ),
                 modifier = Modifier.fillMaxSize(),

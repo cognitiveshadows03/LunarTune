@@ -93,7 +93,10 @@ import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
-internal val LibraryHeaderContentPadding = 64.dp
+// The chips band above the pager already reserves the header space, so pages
+// only need a small breathing gap before their first item (was 64.dp when the
+// header floated over scrolling content).
+internal val LibraryContentTopPadding = 8.dp
 internal val LibraryPullToRefreshIndicatorOffset = 0.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
