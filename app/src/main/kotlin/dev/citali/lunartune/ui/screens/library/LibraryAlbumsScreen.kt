@@ -169,16 +169,6 @@ fun LibraryAlbumsScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    item(span = { GridItemSpan(4) }, key = "library_shell_header", contentType = "shell_header") {
-                        BoxWithConstraints {
-                            Box(
-                                modifier =
-                                    Modifier
-                                        .offset(x = -24.dp)
-                                        .requiredWidth(maxWidth + 48.dp),
-                            ) { header() }
-                        }
-                    }
                     item(span = { GridItemSpan(4) }, key = "album_controls", contentType = "controls") {
             Row(
                 modifier =
