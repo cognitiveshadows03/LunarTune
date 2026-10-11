@@ -56,13 +56,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -93,10 +96,11 @@ import dev.citali.lunartune.utils.rememberPreference
 internal val LibraryHeaderContentPadding = 64.dp
 internal val LibraryPullToRefreshIndicatorOffset = 0.dp
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     navController: NavController,
-    shellHeaderOffset: () -> Float = { 0f },
+    scrollBehavior: TopAppBarScrollBehavior,
 ) {
     val defaultFilter by rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
     val database = LocalDatabase.current
@@ -151,19 +155,17 @@ fun LibraryScreen(
         modifier =
             Modifier
                 .fillMaxSize()
+                .clipToBounds()
                 .background(MaterialTheme.colorScheme.background),
     ) {
         if (effectiveHeaderImageUri.isNotBlank()) {
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
                 blendColor = MaterialTheme.colorScheme.background,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .graphicsLayer {
-                        val offset = shellHeaderOffset()
-                        translationY = offset
-                        alpha = (1f + offset / with(density) { AppBarHeight.toPx() }).coerceIn(0f, 1f)
-                    },
+                // The banner is the fixed header backdrop (rukamori shell,
+                // adapted): the column below reclaims the collapse offset
+                // while banner and top bar stay put.
+                modifier = Modifier.align(Alignment.TopCenter),
             )
         } else if (!disableBlur) {
             Box(
@@ -188,9 +190,25 @@ fun LibraryScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = AppBarHeight)
-                    .offset { IntOffset(0, shellHeaderOffset().roundToInt()) },
+                    .layout { measurable, constraints ->
+                        // Rukamori shell, adapted for the banner: as the top bar
+                        // collapses, the column slides up and measures into the
+                        // reclaimed space, so banner and bar stay fixed while
+                        // the feed viewport grows instead of scrolling away.
+                        val offset =
+                            scrollBehavior.state.heightOffset.roundToInt().coerceAtMost(0)
+                        val placeable =
+                            measurable.measure(
+                                constraints.copy(
+                                    minHeight = (constraints.minHeight - offset).coerceAtLeast(0),
+                                    maxHeight = (constraints.maxHeight - offset).coerceAtLeast(0),
+                                ),
+                            )
+                        layout(placeable.width, constraints.maxHeight) {
+                            placeable.placeRelative(0, offset)
+                        }
+                    }.windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = AppBarHeight),
         ) {
             val tabListState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
@@ -205,6 +223,7 @@ fun LibraryScreen(
 
             // Sync Pager -> Preference & lazy list centering
             LaunchedEffect(pagerState.settledPage, libraryFilters) {
+                scrollBehavior.state.resetHeightOffset()
                 val targetPage = pagerState.settledPage.coerceIn(0, libraryFilters.lastIndex)
                 val targetFilter = libraryFilters.getOrElse(targetPage) { LibraryFilter.LIBRARY }
 

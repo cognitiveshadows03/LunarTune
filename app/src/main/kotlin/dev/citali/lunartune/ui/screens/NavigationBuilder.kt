@@ -98,7 +98,6 @@ fun NavGraphBuilder.navigationBuilder(
     onClearUpdateBadge: () -> Unit = {},
     homeScrollConnection: NestedScrollConnection? = null,
     searchScrollConnection: NestedScrollConnection? = null,
-    libraryShellHeaderOffset: () -> Float = { 0f },
     onlineSearchSort: OnlineSearchSort = OnlineSearchSort.DEFAULT,
 ) {
     composable(Screens.Home.route) {
@@ -109,7 +108,7 @@ fun NavGraphBuilder.navigationBuilder(
     ) {
         LibraryScreen(
             navController = navController,
-            shellHeaderOffset = libraryShellHeaderOffset,
+            scrollBehavior = scrollBehavior,
         )
     }
     composable(Screens.Search.route) {

@@ -2678,11 +2678,6 @@ class MainActivity : FragmentActivity() {
                                         onClearUpdateBadge = { latestVersionName = BuildConfig.VERSION_NAME },
                                         homeScrollConnection = homeScrollBehavior.nestedScrollConnection,
                                         searchScrollConnection = searchScrollBehavior.nestedScrollConnection,
-                                        // The Library shell (banner + tab chips) stays
-                                        // fixed while the feed scrolls in its own
-                                        // viewport; parallaxing it with the shared
-                                        // scroll behaviour made the banner scroll away.
-                                        libraryShellHeaderOffset = { 0f },
                                         onlineSearchSort = onlineSearchSort,
                                     )
                                 }
