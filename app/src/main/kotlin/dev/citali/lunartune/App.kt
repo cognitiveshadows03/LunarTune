@@ -55,7 +55,6 @@ import dev.citali.lunartune.storage.StorageFolderKind
 import dev.citali.lunartune.storage.StorageLocationRepository
 import dev.citali.lunartune.ui.player.CanvasArtworkPlaybackCache
 import dev.citali.lunartune.ui.screens.settings.ThemePalettes
-import dev.citali.lunartune.ui.theme.MotionTuning
 import dev.citali.lunartune.ui.theme.ThemeSeedPalette
 import dev.citali.lunartune.ui.theme.ThemeSeedPaletteCodec
 import dev.citali.lunartune.utils.MoriCipherUpdateScheduler
@@ -185,7 +184,6 @@ class App :
     }
 
     private fun initializeDeferredAsync() {
-        MotionTuning.startSync(applicationScope, dataStore)
         applicationScope.launch(Dispatchers.IO) {
             MoriCipherRuntime
                 .refresh(force = false)

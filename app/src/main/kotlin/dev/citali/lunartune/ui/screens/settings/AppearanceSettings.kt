@@ -1272,16 +1272,6 @@ fun AppearanceSettings(navController: NavController) {
 
             }
 
-            PreferenceGroup(title = stringResource(R.string.experimental_features)) {
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.motion_settings_title)) },
-                        description = stringResource(R.string.motion_settings_subtitle),
-                        icon = { Icon(painterResource(R.drawable.animation), null) },
-                        onClick = { navController.navigate("settings/appearance/motion") },
-                    )
-                }
-            }
         }
     }
 }

@@ -54,8 +54,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
-import dev.citali.lunartune.ui.screens.settings.MotionMiniKey
-import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
@@ -367,7 +365,6 @@ fun rememberBottomSheetState(
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val animationsDisabled = LocalAnimationsDisabled.current
-    val (motionMini) = rememberPreference(MotionMiniKey, defaultValue = false)
 
     var previousAnchor by rememberSaveable {
         mutableIntStateOf(initialAnchor)
@@ -388,7 +385,7 @@ fun rememberBottomSheetState(
 
         animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(initialValue, if (animationsDisabled) snap() else if (motionMini) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
+            animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
         }
 
         BottomSheetState(
@@ -402,7 +399,8 @@ fun rememberBottomSheetState(
             coroutineScope = coroutineScope,
             animatable = animatable,
             animationsDisabled = animationsDisabled,
-            motionMiniBounce = motionMini,
+            // LunarMotion is gone; the mini player keeps its bounce.
+            motionMiniBounce = true,
             collapsedBound = collapsedBound,
             initialAnchor = previousAnchor,
         )
