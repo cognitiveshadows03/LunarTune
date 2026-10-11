@@ -193,24 +193,7 @@ fun LibraryScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .layout { measurable, constraints ->
-                        // Rukamori shell, adapted for the banner: as the top bar
-                        // collapses, the column slides up and measures into the
-                        // reclaimed space, so banner and bar stay fixed while
-                        // the feed viewport grows instead of scrolling away.
-                        val offset =
-                            scrollBehavior.state.heightOffset.roundToInt().coerceAtMost(0)
-                        val placeable =
-                            measurable.measure(
-                                constraints.copy(
-                                    minHeight = (constraints.minHeight - offset).coerceAtLeast(0),
-                                    maxHeight = (constraints.maxHeight - offset).coerceAtLeast(0),
-                                ),
-                            )
-                        layout(placeable.width, constraints.maxHeight) {
-                            placeable.placeRelative(0, offset)
-                        }
-                    }.windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = AppBarHeight),
         ) {
 
@@ -245,6 +228,53 @@ fun LibraryScreen(
                 val targetOffsetPx = with(density) { targetOffsetDp.roundToPx() }
 
                 tabListState.animateScrollToItem(targetPage, scrollOffset = -targetOffsetPx)
+            }
+
+            LazyRow(
+                state = tabListState,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                    items(
+                        items = libraryFilters,
+                        key = { filter -> filter.name },
+                        contentType = { "library_filter_chip" },
+                    ) { filter ->
+                        val page = libraryFilters.indexOf(filter)
+                        val label =
+                            when (filter) {
+                                LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
+                                LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
+                                LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
+                                LibraryFilter.SONGS -> stringResource(R.string.songs)
+                                LibraryFilter.ARTISTS -> stringResource(R.string.artists)
+                                LibraryFilter.ALBUMS -> stringResource(R.string.albums)
+                            }
+                        val iconRes =
+                            when (filter) {
+                                LibraryFilter.LIBRARY -> R.drawable.graphic_eq
+                                LibraryFilter.PLAYLISTS -> R.drawable.queue_music
+                                LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
+                                LibraryFilter.SONGS -> R.drawable.music_note
+                                LibraryFilter.ARTISTS -> R.drawable.person
+                                LibraryFilter.ALBUMS -> R.drawable.album
+                            }
+                        ExpressiveTabChip(
+                            label = label,
+                            iconRes = iconRes,
+                            selected = currentFilter == filter,
+                            onClick = {
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(page)
+                                }
+                            },
+                        )
+                    }
             }
 
             Box(
@@ -344,57 +374,6 @@ fun LibraryScreen(
                 }
 
             }
-        }
-        // Pinned filter chips: sibling of the sliding shell column so they
-        // stay put in the top bar zone while banner and feed move beneath.
-        LazyRow(
-            state = tabListState,
-            modifier =
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = AppBarHeight)
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-                    items(
-                        items = libraryFilters,
-                        key = { filter -> filter.name },
-                        contentType = { "library_filter_chip" },
-                    ) { filter ->
-                        val page = libraryFilters.indexOf(filter)
-                        val label =
-                            when (filter) {
-                                LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
-                                LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
-                                LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
-                                LibraryFilter.SONGS -> stringResource(R.string.songs)
-                                LibraryFilter.ARTISTS -> stringResource(R.string.artists)
-                                LibraryFilter.ALBUMS -> stringResource(R.string.albums)
-                            }
-                        val iconRes =
-                            when (filter) {
-                                LibraryFilter.LIBRARY -> R.drawable.graphic_eq
-                                LibraryFilter.PLAYLISTS -> R.drawable.queue_music
-                                LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
-                                LibraryFilter.SONGS -> R.drawable.music_note
-                                LibraryFilter.ARTISTS -> R.drawable.person
-                                LibraryFilter.ALBUMS -> R.drawable.album
-                            }
-                        ExpressiveTabChip(
-                            label = label,
-                            iconRes = iconRes,
-                            selected = currentFilter == filter,
-                            onClick = {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(page)
-                                }
-                            },
-                        )
-                    }
         }
     }
 }
