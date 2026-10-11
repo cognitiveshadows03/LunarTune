@@ -115,6 +115,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryPlaylistsScreen(
+    header: @Composable () -> Unit,
     navController: NavController,
     filterContent: (@Composable () -> Unit)?,
     selectedTagIds: Set<String>,
@@ -207,13 +208,23 @@ fun LibraryPlaylistsScreen(
         modifier = Modifier.fillMaxSize(),
         indicatorOffset = LibraryPullToRefreshIndicatorOffset,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = LibraryContentTopPadding),
-        ) {
-            // Control row (Sort dropdown, grid/list layout toggle, + add button)
+
+
+
+
+            // Main Content
+            if (isGridView) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item(span = { GridItemSpan(2) }, key = "library_shell_header", contentType = "shell_header") {
+                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                    }
+                    item(span = { GridItemSpan(2) }, key = "playlist_controls", contentType = "controls") {
             Row(
                 modifier =
                     Modifier
@@ -441,23 +452,15 @@ fun LibraryPlaylistsScreen(
                     }
                 }
             }
-
+                    }
+                    item(span = { GridItemSpan(2) }, key = "playlist_tag_filter", contentType = "tag_filter") {
             val playlistTagFilterContent = filterContent
             if (playlistTagFilterContent != null) {
                 playlistTagFilterContent()
             }
 
             Spacer(modifier = Modifier.height(8.dp))
-
-            // Main Content
-            if (isGridView) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
+                    }
                     items(
                         items = visiblePlaylists,
                         key = { playlist -> playlist.id },
@@ -497,6 +500,246 @@ fun LibraryPlaylistsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    item(key = "library_shell_header", contentType = "shell_header") {
+                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                    }
+                    item(key = "playlist_controls", contentType = "controls") {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Left: Sort dropdown
+                var showSortMenu by remember { mutableStateOf(false) }
+                val currentSortLabel =
+                    when (sortType) {
+                        PlaylistSortType.CREATE_DATE -> {
+                            stringResource(R.string.recently_added)
+                        }
+
+                        PlaylistSortType.NAME -> {
+                            if (sortDescending) stringResource(R.string.sort_z_to_a) else stringResource(R.string.sort_a_to_z)
+                        }
+
+                        PlaylistSortType.SONG_COUNT -> {
+                            stringResource(R.string.tracks_count_label)
+                        }
+
+                        PlaylistSortType.LAST_UPDATED -> {
+                            stringResource(R.string.recently_updated)
+                        }
+
+                        PlaylistSortType.CUSTOM -> {
+                            stringResource(R.string.custom_order)
+                        }
+                    }
+
+                val showSortDirection = sortType != PlaylistSortType.CUSTOM
+                val sortDirectionRotation by animateFloatAsState(
+                    targetValue = if (sortDescending) 0f else 180f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+                    label = "PlaylistSortDirectionRotation",
+                )
+
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box {
+                        Row(
+                            modifier =
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable { showSortMenu = true }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = currentSortLabel,
+                                modifier = Modifier.weight(1f, fill = false),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                painter = painterResource(id = R.drawable.expand_more),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                        ) {
+                            PlaylistSortType.entries.forEach { type ->
+                                val label =
+                                    when (type) {
+                                        PlaylistSortType.CREATE_DATE -> stringResource(R.string.recently_added)
+                                        PlaylistSortType.NAME -> stringResource(R.string.sort_a_to_z)
+                                        PlaylistSortType.SONG_COUNT -> stringResource(R.string.tracks_count_label)
+                                        PlaylistSortType.LAST_UPDATED -> stringResource(R.string.recently_updated)
+                                        PlaylistSortType.CUSTOM -> stringResource(R.string.custom_order)
+                                    }
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        onSortTypeChange(type)
+                                        if (type == PlaylistSortType.NAME) {
+                                            onSortDescendingChange(false)
+                                        }
+                                        showSortMenu = false
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.hidden_playlists)) },
+                                onClick = {
+                                    showHidden = !showHidden
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.visibility_off),
+                                        contentDescription = null,
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (showHidden) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.check),
+                                            contentDescription = null,
+                                        )
+                                    }
+                                },
+                            )
+                        }
+                    }
+
+                    if (showSortDirection) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = { onSortDescendingChange(!sortDescending) },
+                            colors =
+                                IconButtonDefaults.iconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.arrow_downward),
+                                contentDescription =
+                                    stringResource(
+                                        if (sortDescending) {
+                                            R.string.sort_order_descending
+                                        } else {
+                                            R.string.sort_order_ascending
+                                        },
+                                    ),
+                                modifier =
+                                    Modifier
+                                        .size(16.dp)
+                                        .graphicsLayer { rotationZ = sortDirectionRotation },
+                            )
+                        }
+                    }
+                }
+
+                // Right: list/grid toggle & add button
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (sortType == PlaylistSortType.CUSTOM) {
+                        IconButton(
+                            onClick = { locked = !locked },
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(if (locked) R.drawable.lock else R.drawable.lock_open),
+                                contentDescription = null,
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    // List/Grid Toggle
+                    Row(
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (!isGridView) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { isGridView = false },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.queue_music),
+                                contentDescription = stringResource(R.string.list_view),
+                                tint = if (!isGridView) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                        Box(
+                            modifier =
+                                Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isGridView) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { isGridView = true },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.album),
+                                contentDescription = stringResource(R.string.grid_view),
+                                tint = if (isGridView) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    IconButton(
+                        onClick = { showCreatePlaylistDialog = true },
+                        colors =
+                            IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
+                        modifier = Modifier.size(40.dp),
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.add),
+                            contentDescription = stringResource(R.string.create_playlist),
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+            }
+                    }
+                    item(key = "playlist_tag_filter", contentType = "tag_filter") {
+            val playlistTagFilterContent = filterContent
+            if (playlistTagFilterContent != null) {
+                playlistTagFilterContent()
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+                    }
                     itemsIndexed(
                         items = listPlaylists,
                         key = { _, playlist -> playlist.id },
@@ -541,7 +784,6 @@ fun LibraryPlaylistsScreen(
                     }
                 }
             }
-        }
     }
 }
 

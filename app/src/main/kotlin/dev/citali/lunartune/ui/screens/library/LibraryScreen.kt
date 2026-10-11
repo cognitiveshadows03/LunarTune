@@ -93,10 +93,6 @@ import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
-// The chips band above the pager already reserves the header space, so pages
-// only need a small breathing gap before their first item (was 64.dp when the
-// header floated over scrolling content).
-internal val LibraryContentTopPadding = 8.dp
 internal val LibraryPullToRefreshIndicatorOffset = 0.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -157,6 +153,91 @@ fun LibraryScreen(
     val tabListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
+    val shellHeader: @Composable () -> Unit = {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (effectiveHeaderImageUri.isNotBlank()) {
+                ScreenImageHeader(
+                    imageUri = effectiveHeaderImageUri,
+                    blendColor = MaterialTheme.colorScheme.background,
+                    // The banner leads the scroll as the first item of every
+                    // page (rukamori shell, adapted): nothing stays pinned.
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            } else if (!disableBlur) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(430.dp)
+                            .align(Alignment.TopCenter)
+                            .drawWithCache {
+                                val brush =
+                                    Brush.verticalGradient(
+                                        0f to tonalStart.copy(alpha = 0.30f),
+                                        0.42f to tonalMiddle.copy(alpha = 0.14f),
+                                        1f to Color.Transparent,
+                                    )
+                                onDrawBehind { drawRect(brush) }
+                            },
+                )
+            }
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = AppBarHeight),
+            ) {
+                LazyRow(
+                    state = tabListState,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                        items(
+                            items = libraryFilters,
+                            key = { filter -> filter.name },
+                            contentType = { "library_filter_chip" },
+                        ) { filter ->
+                            val page = libraryFilters.indexOf(filter)
+                            val label =
+                                when (filter) {
+                                    LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
+                                    LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
+                                    LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
+                                    LibraryFilter.SONGS -> stringResource(R.string.songs)
+                                    LibraryFilter.ARTISTS -> stringResource(R.string.artists)
+                                    LibraryFilter.ALBUMS -> stringResource(R.string.albums)
+                                }
+                            val iconRes =
+                                when (filter) {
+                                    LibraryFilter.LIBRARY -> R.drawable.graphic_eq
+                                    LibraryFilter.PLAYLISTS -> R.drawable.queue_music
+                                    LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
+                                    LibraryFilter.SONGS -> R.drawable.music_note
+                                    LibraryFilter.ARTISTS -> R.drawable.person
+                                    LibraryFilter.ALBUMS -> R.drawable.album
+                                }
+                            ExpressiveTabChip(
+                                label = label,
+                                iconRes = iconRes,
+                                selected = currentFilter == filter,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(page)
+                                    }
+                                },
+                            )
+                        }
+                }
+            }
+        }
+    }
+
     Box(
         modifier =
             Modifier
@@ -164,42 +245,6 @@ fun LibraryScreen(
                 .clipToBounds()
                 .background(MaterialTheme.colorScheme.background),
     ) {
-        if (effectiveHeaderImageUri.isNotBlank()) {
-            ScreenImageHeader(
-                imageUri = effectiveHeaderImageUri,
-                blendColor = MaterialTheme.colorScheme.background,
-                // The banner is the fixed header backdrop (rukamori shell,
-                // adapted): the column below reclaims the collapse offset
-                // while banner and top bar stay put.
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        } else if (!disableBlur) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(430.dp)
-                        .align(Alignment.TopCenter)
-                        .drawWithCache {
-                            val brush =
-                                Brush.verticalGradient(
-                                    0f to tonalStart.copy(alpha = 0.30f),
-                                    0.42f to tonalMiddle.copy(alpha = 0.14f),
-                                    1f to Color.Transparent,
-                                )
-                            onDrawBehind { drawRect(brush) }
-                        },
-            )
-        }
-
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = AppBarHeight),
-        ) {
-
             LaunchedEffect(defaultFilter, libraryFilters) {
                 val selectedFilter = defaultFilter.takeIf { it in libraryFilters } ?: LibraryFilter.LIBRARY
                 val selectedPage = libraryFilters.indexOf(selectedFilter).takeIf { it >= 0 } ?: 0
@@ -233,67 +278,15 @@ fun LibraryScreen(
                 tabListState.animateScrollToItem(targetPage, scrollOffset = -targetOffsetPx)
             }
 
-            LazyRow(
-                state = tabListState,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                    items(
-                        items = libraryFilters,
-                        key = { filter -> filter.name },
-                        contentType = { "library_filter_chip" },
-                    ) { filter ->
-                        val page = libraryFilters.indexOf(filter)
-                        val label =
-                            when (filter) {
-                                LibraryFilter.LIBRARY -> stringResource(R.string.filter_library)
-                                LibraryFilter.PLAYLISTS -> stringResource(R.string.playlists)
-                                LibraryFilter.SPOTIFY -> stringResource(R.string.spotify_playlists)
-                                LibraryFilter.SONGS -> stringResource(R.string.songs)
-                                LibraryFilter.ARTISTS -> stringResource(R.string.artists)
-                                LibraryFilter.ALBUMS -> stringResource(R.string.albums)
-                            }
-                        val iconRes =
-                            when (filter) {
-                                LibraryFilter.LIBRARY -> R.drawable.graphic_eq
-                                LibraryFilter.PLAYLISTS -> R.drawable.queue_music
-                                LibraryFilter.SPOTIFY -> R.drawable.spotify_icon
-                                LibraryFilter.SONGS -> R.drawable.music_note
-                                LibraryFilter.ARTISTS -> R.drawable.person
-                                LibraryFilter.ALBUMS -> R.drawable.album
-                            }
-                        ExpressiveTabChip(
-                            label = label,
-                            iconRes = iconRes,
-                            selected = currentFilter == filter,
-                            onClick = {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(page)
-                                }
-                            },
-                        )
-                    }
-            }
-
-            Box(
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-            ) {
-                HorizontalPager(
-                    state = pagerState,
-                    modifier = Modifier.fillMaxSize(),
-                ) { page ->
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
                 when (libraryFilters.getOrElse(page) { LibraryFilter.LIBRARY }) {
                     LibraryFilter.LIBRARY -> {
                         LibraryMixScreen(
                             navController = navController,
+                            header = shellHeader,
                             filterContent =
                                 if (showTagsInLibrary) {
                                     {
@@ -320,6 +313,7 @@ fun LibraryScreen(
                     LibraryFilter.PLAYLISTS -> {
                         LibraryPlaylistsScreen(
                             navController = navController,
+                            header = shellHeader,
                             filterContent =
                                 if (showTagsInLibrary) {
                                     {
@@ -338,12 +332,16 @@ fun LibraryScreen(
                     }
 
                     LibraryFilter.SPOTIFY -> {
-                        LibrarySpotifyPlaylistsScreen(navController = navController)
+                        LibrarySpotifyPlaylistsScreen(
+                            navController = navController,
+                            header = shellHeader,
+                        )
                     }
 
                     LibraryFilter.SONGS -> {
                         LibrarySongsScreen(
                             navController = navController,
+                            header = shellHeader,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -355,6 +353,7 @@ fun LibraryScreen(
                     LibraryFilter.ARTISTS -> {
                         LibraryArtistsScreen(
                             navController = navController,
+                            header = shellHeader,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -366,6 +365,7 @@ fun LibraryScreen(
                     LibraryFilter.ALBUMS -> {
                         LibraryAlbumsScreen(
                             navController = navController,
+                            header = shellHeader,
                             onDeselect = {
                                 coroutineScope.launch {
                                     pagerState.animateScrollToPage(0)
@@ -376,8 +376,6 @@ fun LibraryScreen(
                 }
                 }
 
-            }
-        }
     }
 }
 

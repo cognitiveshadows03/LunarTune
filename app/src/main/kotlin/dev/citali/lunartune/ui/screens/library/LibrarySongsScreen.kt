@@ -93,6 +93,7 @@ import dev.citali.lunartune.viewmodels.LibrarySongsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibrarySongsScreen(
+    header: @Composable () -> Unit,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibrarySongsViewModel = hiltViewModel(),
@@ -167,13 +168,10 @@ fun LibrarySongsScreen(
         modifier = Modifier.fillMaxSize(),
         indicatorOffset = LibraryPullToRefreshIndicatorOffset,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = LibraryContentTopPadding),
-        ) {
-            // Sub-Filters Row (All Songs, Downloaded, Liked)
+            item(key = "library_shell_header", contentType = "shell_header") {
+                Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+            }
+            item(key = "song_subfilters", contentType = "subfilters") {
             Row(
                 modifier =
                     Modifier
@@ -315,6 +313,7 @@ fun LibrarySongsScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
+            }
 
             LazyColumn(
                 state = lazyListState,
@@ -581,7 +580,6 @@ fun LibrarySongsScreen(
                     }
                 }
             }
-        }
     }
 }
 

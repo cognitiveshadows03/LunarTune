@@ -94,6 +94,7 @@ import dev.citali.lunartune.viewmodels.LibraryArtistsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryArtistsScreen(
+    header: @Composable () -> Unit,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibraryArtistsViewModel = hiltViewModel(),
@@ -145,7 +146,6 @@ fun LibraryArtistsScreen(
             contentPadding =
                 PaddingValues(
                     start = 24.dp,
-                    top = LibraryContentTopPadding,
                     end = 24.dp,
                     bottom = playerAwareBottomPadding,
                 ),
@@ -153,6 +153,9 @@ fun LibraryArtistsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
+            item(key = "library_shell_header", contentType = "shell_header") {
+                Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+            }
             // Featured Spotlight Row
             item(span = { GridItemSpan(2) }, key = "spotlight_row") {
                 Row(

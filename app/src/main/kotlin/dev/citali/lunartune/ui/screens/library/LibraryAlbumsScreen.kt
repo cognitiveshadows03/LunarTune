@@ -96,6 +96,7 @@ import dev.citali.lunartune.viewmodels.LibraryAlbumsViewModel
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryAlbumsScreen(
+    header: @Composable () -> Unit,
     navController: NavController,
     onDeselect: () -> Unit,
     viewModel: LibraryAlbumsViewModel = hiltViewModel(),
@@ -153,13 +154,21 @@ fun LibraryAlbumsScreen(
         modifier = Modifier.fillMaxSize(),
         indicatorOffset = LibraryPullToRefreshIndicatorOffset,
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = LibraryContentTopPadding),
-        ) {
-            // Sub-header controls (Sort dropdown, genres/filters, list/grid toggle)
+
+
+            // Main albums list or grid layout
+            if (isGridView) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(4), // 4-column albums grid
+                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    item(span = { GridItemSpan(4) }, key = "library_shell_header", contentType = "shell_header") {
+                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                    }
+                    item(span = { GridItemSpan(4) }, key = "album_controls", contentType = "controls") {
             Row(
                 modifier =
                     Modifier
@@ -366,16 +375,7 @@ fun LibraryAlbumsScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-
-            // Main albums list or grid layout
-            if (isGridView) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4), // 4-column albums grid
-                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
+                    }
                     // Featured Album spotlight card span all 4 columns
                     item(span = { GridItemSpan(4) }, key = "featured_album_card") {
                         featuredAlbum?.let { album ->
@@ -579,6 +579,217 @@ fun LibraryAlbumsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
+                    item(key = "library_shell_header", contentType = "shell_header") {
+                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                    }
+                    item(key = "album_controls", contentType = "controls") {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                var showSortMenu by remember { mutableStateOf(false) }
+                val currentSortLabel =
+                    if (filter == AlbumFilter.DOWNLOADED_FULL) {
+                        stringResource(R.string.filter_downloaded)
+                    } else {
+                        when (sortType) {
+                            AlbumSortType.CREATE_DATE -> {
+                                if (sortDescending) {
+                                    stringResource(
+                                        R.string.newest_first,
+                                    )
+                                } else {
+                                    stringResource(R.string.oldest_first)
+                                }
+                            }
+
+                            AlbumSortType.NAME -> {
+                                if (sortDescending) stringResource(R.string.sort_z_to_a) else stringResource(R.string.sort_a_to_z)
+                            }
+
+                            AlbumSortType.ARTIST -> {
+                                stringResource(R.string.sort_artist)
+                            }
+
+                            AlbumSortType.YEAR -> {
+                                if (sortDescending) stringResource(R.string.newest_year) else stringResource(R.string.oldest_year)
+                            }
+
+                            AlbumSortType.SONG_COUNT -> {
+                                if (sortDescending) {
+                                    stringResource(
+                                        R.string.most_tracks,
+                                    )
+                                } else {
+                                    stringResource(R.string.least_tracks)
+                                }
+                            }
+
+                            AlbumSortType.LENGTH -> {
+                                if (sortDescending) {
+                                    stringResource(
+                                        R.string.longest_duration,
+                                    )
+                                } else {
+                                    stringResource(R.string.shortest_duration)
+                                }
+                            }
+
+                            AlbumSortType.PLAY_TIME -> {
+                                stringResource(R.string.most_played_sort)
+                            }
+                        }
+                    }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box {
+                        Row(
+                            modifier =
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable { showSortMenu = true }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = currentSortLabel,
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Icon(
+                                painter = painterResource(id = R.drawable.expand_more),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                        ) {
+                            AlbumSortType.entries.forEach { type ->
+                                val label =
+                                    when (type) {
+                                        AlbumSortType.CREATE_DATE -> stringResource(R.string.recently_added)
+                                        AlbumSortType.NAME -> stringResource(R.string.sort_a_to_z)
+                                        AlbumSortType.ARTIST -> stringResource(R.string.sort_artist)
+                                        AlbumSortType.YEAR -> stringResource(R.string.year_sort)
+                                        AlbumSortType.SONG_COUNT -> stringResource(R.string.tracks_count_label)
+                                        AlbumSortType.LENGTH -> stringResource(R.string.duration_sort)
+                                        AlbumSortType.PLAY_TIME -> stringResource(R.string.most_played_sort)
+                                    }
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        filter = AlbumFilter.LIKED
+                                        onSortTypeChange(type)
+                                        // Issue 4: A-Z sort defaults to ascending
+                                        if (type == AlbumSortType.NAME) onSortDescendingChange(false)
+                                        showSortMenu = false
+                                    },
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.filter_downloaded)) },
+                                onClick = {
+                                    filter = AlbumFilter.DOWNLOADED_FULL
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.offline),
+                                        contentDescription = null,
+                                    )
+                                },
+                            )
+                        }
+                    }
+
+                    // Sort direction toggle button
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Box(
+                        modifier =
+                            Modifier
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .clickable { onSortDescendingChange(!sortDescending) }
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        Icon(
+                            painter =
+                                painterResource(
+                                    id = if (sortDescending) R.drawable.arrow_downward else R.drawable.arrow_upward,
+                                ),
+                            contentDescription =
+                                if (sortDescending) {
+                                    stringResource(
+                                        R.string.sort_descending,
+                                    )
+                                } else {
+                                    stringResource(R.string.sort_ascending)
+                                },
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+
+                // Grid / List Toggle layout controls
+                Row(
+                    modifier =
+                        Modifier
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (!isGridView) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { isGridView = false },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.queue_music),
+                            contentDescription = stringResource(R.string.list_view),
+                            tint = if (!isGridView) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(if (isGridView) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                .clickable { isGridView = true },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.album),
+                            contentDescription = stringResource(R.string.grid_view),
+                            tint = if (isGridView) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+                    }
                     items(filteredAlbums, key = { it.id }) { album ->
                         Row(
                             modifier =
@@ -654,6 +865,5 @@ fun LibraryAlbumsScreen(
                     }
                 }
             }
-        }
     }
 }

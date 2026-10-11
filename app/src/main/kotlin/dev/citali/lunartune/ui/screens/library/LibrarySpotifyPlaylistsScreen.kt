@@ -35,6 +35,7 @@ import dev.citali.lunartune.ui.component.SpotifyLibraryPlaylistListItem
 
 @Composable
 fun LibrarySpotifyPlaylistsScreen(
+    header: @Composable () -> Unit,
     navController: NavController,
     viewModel: SpotifyLibraryViewModel = hiltViewModel(),
 ) {
@@ -57,13 +58,15 @@ fun LibrarySpotifyPlaylistsScreen(
             contentPadding =
                 PaddingValues(
                     start = 24.dp,
-                    top = LibraryContentTopPadding,
                     end = 24.dp,
                     bottom = playerAwareBottomPadding,
                 ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
+            item(key = "library_shell_header", contentType = "shell_header") {
+                Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+            }
             if (playlists.isEmpty()) {
                 item(key = "spotify_empty", contentType = "spotify_empty") {
                     Text(
