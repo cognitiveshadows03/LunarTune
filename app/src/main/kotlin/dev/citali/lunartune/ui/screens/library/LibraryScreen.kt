@@ -151,6 +151,9 @@ fun LibraryScreen(
     val configuration = LocalConfiguration.current
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
+    val tabListState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
     Box(
         modifier =
             Modifier
@@ -210,8 +213,6 @@ fun LibraryScreen(
                     }.windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = AppBarHeight),
         ) {
-            val tabListState = rememberLazyListState()
-            val coroutineScope = rememberCoroutineScope()
 
             LaunchedEffect(defaultFilter, libraryFilters) {
                 val selectedFilter = defaultFilter.takeIf { it in libraryFilters } ?: LibraryFilter.LIBRARY
