@@ -52,7 +52,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.screens.OptionStats
-import dev.citali.lunartune.ui.screens.settings.MotionMicroKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -122,11 +121,10 @@ fun <Int> ChoiceChipsRow(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
 ) {
-    val (motionMicro) = rememberPreference(MotionMicroKey, defaultValue = false)
     var expandIconDegree by remember { mutableFloatStateOf(0f) }
     val rotationAnimation by animateFloatAsState(
         targetValue = expandIconDegree,
-        animationSpec = if (motionMicro) LunarMotion.bouncy() else tween(durationMillis = 400),
+        animationSpec = tween(durationMillis = 400),
         label = "",
     )
 

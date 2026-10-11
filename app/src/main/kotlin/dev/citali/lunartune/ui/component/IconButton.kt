@@ -41,7 +41,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.LocalAnimationsDisabled
-import dev.citali.lunartune.ui.screens.settings.MotionPressKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -54,12 +53,11 @@ fun ResizableIconButton(
     indication: Indication? = null,
     onClick: () -> Unit = {},
 ) {
-    val (motionPress) = rememberPreference(MotionPressKey, defaultValue = false)
     val resizableInteractionSource = remember { MutableInteractionSource() }
     val resizablePressed by resizableInteractionSource.collectIsPressedAsState()
     val resizableAnimationsDisabled = LocalAnimationsDisabled.current
     val resizablePressScale by animateFloatAsState(
-        targetValue = if (resizablePressed && !resizableAnimationsDisabled && motionPress) LunarMotion.PressedScale else 1f,
+        targetValue = 1f,
         animationSpec = LunarMotion.press(),
         label = "pressScale",
     )
@@ -93,11 +91,10 @@ fun IconButton(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     content: @Composable () -> Unit,
 ) {
-    val (motionPress) = rememberPreference(MotionPressKey, defaultValue = false)
     val pressed by interactionSource.collectIsPressedAsState()
     val animationsDisabled = LocalAnimationsDisabled.current
     val pressScale by animateFloatAsState(
-        targetValue = if (pressed && !animationsDisabled && motionPress) LunarMotion.PressedScale else 1f,
+        targetValue = 1f,
         animationSpec = LunarMotion.press(),
         label = "pressScale",
     )

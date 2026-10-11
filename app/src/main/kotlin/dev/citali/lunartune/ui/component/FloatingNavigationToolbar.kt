@@ -21,7 +21,6 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
-import dev.citali.lunartune.ui.screens.settings.MotionBarKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.animation.core.Animatable
@@ -120,7 +119,6 @@ fun FloatingNavigationToolbar(
     onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
 ) {
-    val (motionBar) = rememberPreference(MotionBarKey, defaultValue = false)
     if (style == NavigationBarStyle.CAPSULE) {
         CapsuleNavigationBar(
             items = items,
@@ -230,7 +228,7 @@ fun FloatingNavigationToolbar(
         } else {
             indicatorX.animateTo(
                 targetValue = targetX,
-                animationSpec = if (motionBar) LunarMotion.bouncy() else spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
             )
         }
     }
@@ -362,14 +360,10 @@ fun FloatingNavigationToolbar(
                                     iconScale.snapTo(0.8f)
                                     iconScale.animateTo(
                                         1f,
-                                        if (motionBar) {
-                                            LunarMotion.press()
-                                        } else {
-                                            spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow,
-                                            )
-                                        },
+                                        spring(
+                                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                                            stiffness = Spring.StiffnessMediumLow,
+                                        ),
                                     )
                                 } else {
                                     iconScale.snapTo(1f)

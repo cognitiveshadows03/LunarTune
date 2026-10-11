@@ -73,7 +73,6 @@ import androidx.media3.exoplayer.offline.Download.STATE_STOPPED
 import androidx.media3.exoplayer.offline.DownloadService
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import dev.citali.lunartune.ui.screens.settings.MotionMicroKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -158,12 +157,11 @@ fun AlbumMenu(
         }
     }
 
-    val (motionMicro) = rememberPreference(MotionMicroKey, defaultValue = false)
     var refetchIconDegree by remember { mutableFloatStateOf(0f) }
 
     val rotationAnimation by animateFloatAsState(
         targetValue = refetchIconDegree,
-        animationSpec = if (motionMicro) LunarMotion.bouncy() else tween(durationMillis = 800),
+        animationSpec = tween(durationMillis = 800),
         label = "",
     )
 
