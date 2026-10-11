@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -149,10 +150,13 @@ fun LibraryScreen(
     val currentFilter = libraryFilters.getOrElse(pagerState.targetPage) { LibraryFilter.LIBRARY }
 
     val density = LocalDensity.current
-    var chipsHeightPx by remember { mutableStateOf(0) }
-    val chipsZoneHeight = if (chipsHeightPx == 0) 64.dp else with(density) { chipsHeightPx.toDp() }
+    var shellHeightPx by remember { mutableStateOf(0) }
     val pageTopPad =
-        WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight + chipsZoneHeight + 4.dp
+        if (shellHeightPx == 0) {
+            WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight + 64.dp + 4.dp
+        } else {
+            with(density) { shellHeightPx.toDp() } + 4.dp
+        }
     val configuration = LocalConfiguration.current
     val tonalStart = MaterialTheme.colorScheme.primaryContainer
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
@@ -328,6 +332,10 @@ fun LibraryScreen(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .onSizeChanged { shellHeightPx = it.height }
+                    // Ride the shared header slide: the chips leave with the
+                    // top bar on scroll down and return with it on scroll up.
+                    .offset { IntOffset(0, scrollBehavior.state.heightOffset.roundToInt()) }
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = AppBarHeight),
         ) {
@@ -336,8 +344,7 @@ fun LibraryScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
-                        .onSizeChanged { chipsHeightPx = it.height },
+                        .padding(vertical = 8.dp),
                 contentPadding = PaddingValues(horizontal = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
