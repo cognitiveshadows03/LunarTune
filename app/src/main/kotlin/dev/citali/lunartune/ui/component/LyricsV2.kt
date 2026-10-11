@@ -153,12 +153,16 @@ import kotlin.math.abs
 // ──────────────────────────────────────────────────────────────────────
 
 /** Lead time offset for LRC-style line-synced lyrics (ms). */
-private const val LRC_LEAD_MS = 300L
+// Lines flip exactly at their onset: any lead made the pane scroll (and the
+// line light up) before the vocal arrived - reported as "scrolls a bit early
+// even when the line is active". The glide that follows the flip is the only
+// motion budget the reader needs.
+private const val LRC_LEAD_MS = 0L
 
 /** Lead time offset for TTML word-synced lyrics (ms). */
 private const val TTML_LEAD_MS = 0L
 
-private const val LYRIC_VISUAL_TUNING_OFFSET_MS = 150L
+private const val LYRIC_VISUAL_TUNING_OFFSET_MS = 0L
 
 /** Seconds to wait before auto-scroll resumes after manual scroll. */
 private const val MANUAL_SCROLL_TIMEOUT_MS = 3000L
