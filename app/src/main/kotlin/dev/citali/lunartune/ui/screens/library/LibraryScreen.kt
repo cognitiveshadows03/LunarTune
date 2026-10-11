@@ -223,7 +223,8 @@ fun LibraryScreen(
 
             // Sync Pager -> Preference & lazy list centering
             LaunchedEffect(pagerState.settledPage, libraryFilters) {
-                scrollBehavior.state.resetHeightOffset()
+                // public setter clamps to the limit, same effect
+                scrollBehavior.state.heightOffset = 0f
                 val targetPage = pagerState.settledPage.coerceIn(0, libraryFilters.lastIndex)
                 val targetFilter = libraryFilters.getOrElse(targetPage) { LibraryFilter.LIBRARY }
 
