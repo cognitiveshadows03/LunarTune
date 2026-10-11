@@ -168,6 +168,14 @@ fun LibrarySongsScreen(
         modifier = Modifier.fillMaxSize(),
         indicatorOffset = LibraryPullToRefreshIndicatorOffset,
     ) {
+
+            LazyColumn(
+                state = lazyListState,
+                // Issue 2: use player-aware window insets for bottom padding
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
             item(key = "library_shell_header", contentType = "shell_header") {
                 Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
             }
@@ -314,14 +322,6 @@ fun LibrarySongsScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
             }
-
-            LazyColumn(
-                state = lazyListState,
-                // Issue 2: use player-aware window insets for bottom padding
-                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = playerAwareBottomPadding),
-                verticalArrangement = Arrangement.spacedBy(0.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
                 // Spotlight Collection Card
                 item(key = "collection_spotlight") {
                     Box(
