@@ -18,6 +18,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -223,7 +226,14 @@ fun LibraryPlaylistsScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(span = { GridItemSpan(2) }, key = "library_shell_header", contentType = "shell_header") {
-                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                        BoxWithConstraints {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .offset(x = -24.dp)
+                                        .requiredWidth(maxWidth + 48.dp),
+                            ) { header() }
+                        }
                     }
                     item(span = { GridItemSpan(2) }, key = "playlist_controls", contentType = "controls") {
             Row(
@@ -502,7 +512,14 @@ fun LibraryPlaylistsScreen(
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     item(key = "library_shell_header", contentType = "shell_header") {
-                        Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                        BoxWithConstraints {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .offset(x = -24.dp)
+                                        .requiredWidth(maxWidth + 48.dp),
+                            ) { header() }
+                        }
                     }
                     item(key = "playlist_controls", contentType = "controls") {
             Row(

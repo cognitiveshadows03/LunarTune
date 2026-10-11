@@ -8,6 +8,9 @@
 package dev.citali.lunartune.ui.screens.library
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -66,7 +69,14 @@ fun LibrarySpotifyPlaylistsScreen(
             modifier = Modifier.fillMaxSize(),
         ) {
             item(key = "library_shell_header", contentType = "shell_header") {
-                Box(modifier = Modifier.padding(horizontal = -24.dp)) { header() }
+                BoxWithConstraints {
+                    Box(
+                        modifier =
+                            Modifier
+                                .offset(x = -24.dp)
+                                .requiredWidth(maxWidth + 48.dp),
+                    ) { header() }
+                }
             }
             if (playlists.isEmpty()) {
                 item(key = "spotify_empty", contentType = "spotify_empty") {
