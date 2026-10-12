@@ -96,7 +96,6 @@ import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
-internal val LibraryPullToRefreshIndicatorOffset = 0.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -143,7 +143,7 @@ fun LibraryArtistsScreen(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.sync() },
         modifier = Modifier.fillMaxSize(),
-        indicatorOffset = LibraryPullToRefreshIndicatorOffset,
+        indicatorOffset = topContentPadding - 24.dp,
     ) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),

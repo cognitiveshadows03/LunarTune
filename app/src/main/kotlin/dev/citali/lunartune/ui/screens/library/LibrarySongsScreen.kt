@@ -170,7 +170,7 @@ fun LibrarySongsScreen(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.refresh(filter) },
         modifier = Modifier.fillMaxSize(),
-        indicatorOffset = LibraryPullToRefreshIndicatorOffset,
+        indicatorOffset = topContentPadding - 24.dp,
     ) {
 
             LazyColumn(

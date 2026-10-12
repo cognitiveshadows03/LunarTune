@@ -156,7 +156,7 @@ fun LibraryAlbumsScreen(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.sync() },
         modifier = Modifier.fillMaxSize(),
-        indicatorOffset = LibraryPullToRefreshIndicatorOffset,
+        indicatorOffset = topContentPadding - 24.dp,
     ) {
 
 
