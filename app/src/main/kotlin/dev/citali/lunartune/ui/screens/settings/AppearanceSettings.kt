@@ -1333,7 +1333,7 @@ internal fun ApplyForcedRefreshRate(enabled: Boolean) {
  * them. It also costs nothing while nothing is happening: no draw, no callback, no request.
  */
 @Composable
-private fun BoostRefreshRateWhileAnimating(enabled: Boolean) {
+internal fun BoostRefreshRateWhileAnimating(enabled: Boolean) {
     val view = LocalView.current
     val targetFps = rememberSupportedHighestFps()
 

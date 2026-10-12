@@ -126,6 +126,7 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.BlurRadiusKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
+import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.LyricsAutoHidePlayerControlsKey
 import dev.citali.lunartune.constants.LyricsBackgroundStyle
 import dev.citali.lunartune.constants.LyricsBackgroundStyleKey
@@ -150,6 +151,7 @@ import dev.citali.lunartune.ui.component.LyricsV2EdgeFade
 import dev.citali.lunartune.ui.component.PlayerSliderTrack
 import dev.citali.lunartune.ui.menu.LyricsMenu
 import dev.citali.lunartune.ui.utils.SmoothFadingEdgeStops
+import dev.citali.lunartune.ui.screens.settings.BoostRefreshRateWhileAnimating
 import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import dev.citali.lunartune.utils.LyricsArtBlurCache
 import dev.citali.lunartune.utils.makeTimeString
@@ -301,6 +303,17 @@ fun LyricsScreen(
     // Auto-hide implies the controls exist (and then fade), so it overrides a switched-off
     // "Show player controls" without touching the stored preference.
     val controlsEnabled = showPlayerControls || autoHidePlayerControls
+
+    // This is the most animation-heavy screen in the app: the karaoke fill redraws the focused
+    // line on every frame of every song, so the pane drives the frame clock for as long as it is
+    // playing. Where a per-view rate request exists (Android 15+) the screen asks for the
+    // display's fastest rate for as long as it is actually drawing - the hold is released after
+    // under a second of stillness, and on the way out, so an idle page costs nothing. Older
+    // releases can only reach a higher rate by switching the window's display mode, which would
+    // flicker every time this page opened; there the app-wide "Force high refresh rate" setting
+    // stays the user's decision, and this leaves it alone.
+    val forceHighRefreshRate by rememberPreference(ForceHighRefreshRateKey, false)
+    LyricsRefreshRateBoost(enabled = !forceHighRefreshRate)
 
     // Apple Music style auto-hide: the controls stay for a few seconds after the last
     // interaction and then fade away; any tap on the page brings them back and restarts
@@ -664,6 +677,14 @@ fun LyricsScreen(
                 )
             }
         }
+    }
+}
+
+/** Lyrics-page scope for the app's frame-rate boost: see the call site in [LyricsScreen]. */
+@Composable
+private fun LyricsRefreshRateBoost(enabled: Boolean) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        BoostRefreshRateWhileAnimating(enabled = enabled)
     }
 }
 
