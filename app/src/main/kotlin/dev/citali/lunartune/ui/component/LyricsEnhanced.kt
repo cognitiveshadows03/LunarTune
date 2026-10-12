@@ -18,6 +18,8 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -154,6 +156,16 @@ private const val MIN_KARAOKE_SYLLABLE_DURATION_MS = 1
  * scroll animation; the pane only follows manual scrolling through the library.
  */
 private const val LYRICS_VIEWPORT_OFFSET_RATIO = 0.38f
+
+/**
+ * How long the anchor takes to reach a new pane height. The pane itself changes size in one step
+ * - LyricsWithControls deliberately never animates its own resize - so this glide is what
+ * carries the focused line into the space the player controls gave up. It runs at the same 520 ms
+ * as that screen's reveal edge, on the stock ArchiveTune curve for this glide, so the line moves
+ * with the sweep instead of arriving before it. An eased ramp, not a jump: a curve that sets off
+ * quickly still reads as the old snap.
+ */
+private const val LYRICS_ANCHOR_GLIDE_MS = 520
 
 /** Keep-alive band [KaraokeLyricsView] inflates its items with. */
 private val LyricsKeepAliveZone = 72.dp
@@ -635,7 +647,23 @@ fun LyricsEnhanced(
                     // The library owns the scroll animation from here: it keeps the focused line
                     // on this anchor and eases into the next line itself, exactly as the stock
                     // ArchiveTune pane does. The pane stays out of its way.
-                    val lyricsViewportOffset = remember(maxHeight) { maxHeight * LYRICS_VIEWPORT_OFFSET_RATIO }
+                    //
+                    // The anchor itself eases, though. The pane changes height in a single step
+                    // when the controls come or go, and the library re-scrolls instantly whenever
+                    // the anchor moves - handing it the finished value yanked the focused line
+                    // down the whole freed distance in one frame. Gliding the anchor lets the
+                    // library's own scroll follow it frame by frame instead, so the line settles
+                    // into the space at the pace of the edge that uncovers it.
+                    val lyricsViewportOffset by
+                        animateDpAsState(
+                            targetValue = maxHeight * LYRICS_VIEWPORT_OFFSET_RATIO,
+                            animationSpec =
+                                tween(
+                                    durationMillis = LYRICS_ANCHOR_GLIDE_MS,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                            label = "lyricsViewportOffset",
+                        )
 
                     CompositionLocalProvider(LocalLayoutDirection provides lyricsLayoutDirection) {
                         key(lyricsSessionKey, syncedLyricsRenderVersion) {

@@ -173,7 +173,10 @@ private const val LYRICS_CONTROLS_AUTO_HIDE_DELAY_MS = 5_000L
  * re-anchor its focused line on every one of those frames, which is heavy enough on weaker phones
  * to swallow the whole fade (most visibly while an instrumental section keeps the breathing dots
  * redrawing). Instead the pane changes size in a single step and a soft edge sweeps across the
- * space the controls give up or take back; see [LyricsWithControls]. The opacity still runs
+ * space the controls give up or take back; see [LyricsWithControls]. The lyrics list itself
+ * eases its focused line to the anchor that new height implies, over the same 520 ms as that
+ * edge (see the anchor glide in LyricsEnhanced), so the text moves with the sweep instead of
+ * being yanked into place while it plays. The opacity still runs
  * ahead of the edge on the way out (the edge sets off once the controls have started to thin) and
  * behind it on the way back, so the hand-off reads as one motion in both directions.
  */
@@ -1377,8 +1380,9 @@ private class LyricsWithControlsGeometry {
  * shrink-and-fade into a stutter and an instant cut on slower phones.
  *
  * The pane itself is told nothing about the controls. It keeps its own list, and the lyrics view
- * inside it re-anchors the focused line against whatever height it is given, exactly as the stock
- * ArchiveTune pane does when the player controls come and go.
+ * inside it re-anchors the focused line against whatever height it is given — the Enhanced list
+ * glides to that anchor so the text lands softly, while the V2 list simply holds its line and
+ * reveals more of the song below it.
  *
  * Controls on their way out stop taking touches and leave the composition once faded, so the lines
  * that now occupy their space can be scrolled and tapped like any others.
