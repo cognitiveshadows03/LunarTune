@@ -18,7 +18,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +62,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -95,7 +93,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -170,7 +167,7 @@ private const val MANUAL_SCROLL_TIMEOUT_MS = 3000L
 /** Sentinel entry prepended so auto-scroll has headroom above the first line. */
 private val HEAD_LYRICS_ENTRY = LyricsEntry(time = 0L, text = "")
 
-/** How far down the pane the focused line sits. */
+/** How far down the pane the focused line sits, as a fraction of the viewport. */
 private const val LYRICS_FOCUS_HEIGHT_RATIO = 0.35f
 
 /** Height of the fade drawn over the top and bottom of the V2 list. */
@@ -198,11 +195,6 @@ private fun isRtlText(text: String): Boolean {
 // Main Composable
 // ──────────────────────────────────────────────────────────────────────
 
-/**
- * @param focusAnchorHeight Pane height the focused line is positioned against; defaults to the
- * pane's own height. The lyrics page passes the height the pane has while the player controls are
- * shown, so the line does not move when they hide or come back.
- */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun LyricsV2(
@@ -211,7 +203,6 @@ fun LyricsV2(
     modifier: Modifier = Modifier,
     textColorOverride: Color? = null,
     lyricsLineBlurOverride: Boolean? = null,
-    focusAnchorHeight: Dp? = null,
     /** Enables Apple Music player-only romanization stability work; all other callers keep their defaults. */
     appleMusicPlayerMode: Boolean = false,
 ) {
@@ -219,15 +210,6 @@ fun LyricsV2(
     val player = playerConnection.player
     val context = LocalContext.current
     val density = LocalDensity.current
-    val focusAnchorHeightPx =
-        remember(density, focusAnchorHeight) {
-            focusAnchorHeight?.let { with(density) { (it - LyricsPaneBottomPadding).coerceAtLeast(0.dp).roundToPx() } }
-        }
-    // Where the focused line is scrolled to, measured from the top of the list.
-    val focusOffsetPx: (viewportHeight: Int) -> Int =
-        remember(focusAnchorHeightPx) {
-            { viewportHeight -> ((focusAnchorHeightPx ?: viewportHeight) * LYRICS_FOCUS_HEIGHT_RATIO).toInt() }
-        }
     val scope = rememberCoroutineScope()
 
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
@@ -442,42 +424,29 @@ fun LyricsV2(
         }
     }
 
-    // Auto-scroll to active line. Also re-runs when the focus anchor changes (the player
-    // controls hide or return) so the line glides into the space they give up or take back.
-    LaunchedEffect(currentLineIndex, isManualScrolling, lyricsScroll, focusAnchorHeightPx) {
+    // Auto-scroll to the active line, the way stock ArchiveTune does it: a far jump snaps
+    // two lines above the target first, then one animated scroll lands the line on the
+    // focus anchor. No per-frame driving — the list animation is Compose's own.
+    LaunchedEffect(currentLineIndex, isManualScrolling, lyricsScroll) {
         if (!lyricsScroll || isManualScrolling || !isSynced) return@LaunchedEffect
         if (currentLineIndex < 0 || currentLineIndex >= entriesWithWords.size) return@LaunchedEffect
 
-        var layoutInfo = listState.layoutInfo
-        val targetOffset = focusOffsetPx(layoutInfo.viewportSize.height)
-        var targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
+        val visibleInfo = listState.layoutInfo
+        val viewportHeight = visibleInfo.viewportSize.height
+        val targetOffset = (viewportHeight * LYRICS_FOCUS_HEIGHT_RATIO).toInt()
 
-        if (targetItem == null) {
-            // Bring distant lines into the viewport without running Compose's default spring.
-            // That spring can overshoot while lyric rows are also animating their scale/height,
-            // which makes the Apple Music lyrics appear to jump or stutter.
+        val distance = abs(currentLineIndex - listState.firstVisibleItemIndex)
+        if (distance > 15) {
+            // Far jump — snap first, then settle.
             listState.scrollToItem(
                 (currentLineIndex - 2).coerceAtLeast(0),
                 0,
             )
-            withFrameNanos { }
-            layoutInfo = listState.layoutInfo
-            targetItem = layoutInfo.visibleItemsInfo.firstOrNull { it.index == currentLineIndex }
         }
-
-        targetItem?.let { item ->
-            val scrollDelta = item.offset - targetOffset
-            if (abs(scrollDelta) > 1) {
-                listState.animateScrollBy(
-                    value = scrollDelta.toFloat(),
-                    animationSpec =
-                        androidx.compose.animation.core.tween(
-                            durationMillis = 600,
-                            easing = androidx.compose.animation.core.CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f),
-                        ),
-                )
-            }
-        }
+        listState.animateScrollToItem(
+            index = currentLineIndex,
+            scrollOffset = -targetOffset,
+        )
     }
 
     BackHandler(enabled = isSelectionModeActive) {
@@ -1009,9 +978,10 @@ fun LyricsV2(
                 onClick = {
                     isManualScrolling = false
                     scope.launch {
+                        val viewportHeight = listState.layoutInfo.viewportSize.height
                         listState.animateScrollToItem(
                             index = currentLineIndex,
-                            scrollOffset = -focusOffsetPx(listState.layoutInfo.viewportSize.height),
+                            scrollOffset = -(viewportHeight * LYRICS_FOCUS_HEIGHT_RATIO).toInt(),
                         )
                     }
                 },

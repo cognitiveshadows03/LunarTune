@@ -607,13 +607,12 @@ fun LyricsScreen(
                         Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                    lyrics = { focusAnchorHeight ->
+                    lyrics = {
                         AppleMusicLyricsPane(
                             lyricsMode = lyricsMode,
                             foregroundColor = foregroundColor,
                             sliderPositionProvider = { sliderPosition },
                             lyricsSyncOffset = lyricsSyncOffset,
-                            focusAnchorHeight = focusAnchorHeight,
                         )
                     },
                     controls = {
@@ -1344,7 +1343,6 @@ private fun AppleMusicLyricsPane(
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
-    focusAnchorHeight: Dp? = null,
 ) {
     LyricsContent(
         lyricsMode = lyricsMode,
@@ -1355,7 +1353,6 @@ private fun AppleMusicLyricsPane(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp),
         textColor = foregroundColor,
-        focusAnchorHeight = focusAnchorHeight,
     )
 }
 
@@ -1379,11 +1376,9 @@ private class LyricsWithControlsGeometry {
  * frame, which is what let the breathing dots of an instrumental section turn the old
  * shrink-and-fade into a stutter and an instant cut on slower phones.
  *
- * While the controls are up, the pane positions its current line against the height it has then
- * (the `focusAnchorHeight` handed to [lyrics]). Once they leave, the line re-anchors against the
- * full height and glides down into the space the controls gave up — the way the original
- * ArchiveTune player hands the freed space to the line in focus — and glides back when they
- * return.
+ * The pane itself is told nothing about the controls. It keeps its own list, and the lyrics view
+ * inside it re-anchors the focused line against whatever height it is given, exactly as the stock
+ * ArchiveTune pane does when the player controls come and go.
  *
  * Controls on their way out stop taking touches and leave the composition once faded, so the lines
  * that now occupy their space can be scrolled and tapped like any others.
@@ -1393,7 +1388,7 @@ private fun LyricsWithControls(
     controlsVisible: Boolean,
     paneEdge: LyricsPaneEdge,
     modifier: Modifier = Modifier,
-    lyrics: @Composable (focusAnchorHeight: Dp?) -> Unit,
+    lyrics: @Composable () -> Unit,
     controls: @Composable () -> Unit,
 ) {
     val controlsAlpha = remember { Animatable(if (controlsVisible) 1f else 0f) }
@@ -1441,21 +1436,11 @@ private fun LyricsWithControls(
 
         val reservedHeight = if (controlsHoldSpace) controlsHeightPx else 0
         val lyricsConstraints: Constraints
-        val focusAnchorHeight: Dp?
         if (constraints.hasBoundedHeight) {
             val lyricsHeight = (constraints.maxHeight - reservedHeight).coerceAtLeast(0)
             lyricsConstraints = constraints.copy(minHeight = lyricsHeight, maxHeight = lyricsHeight)
-            // Controls up: anchor against the shortened pane. Controls gone: no override, so
-            // the focused line anchors against the full pane and takes over the freed space.
-            focusAnchorHeight =
-                if (controlsVisible) {
-                    (constraints.maxHeight - controlsHeightPx).coerceAtLeast(0).toDp()
-                } else {
-                    null
-                }
         } else {
             lyricsConstraints = constraints.copy(minHeight = 0)
-            focusAnchorHeight = null
         }
         val lyricsPlaceable =
             subcompose(LyricsWithControlsSlot.Lyrics) {
@@ -1504,7 +1489,7 @@ private fun LyricsWithControls(
                             }
                         },
                 ) {
-                    lyrics(focusAnchorHeight)
+                    lyrics()
                 }
             }.first().measure(lyricsConstraints)
 
@@ -1736,7 +1721,6 @@ private fun LyricsContent(
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
-    focusAnchorHeight: Dp? = null,
 ) {
     when (lyricsMode) {
         LyricsMode.V2 -> {
@@ -1745,7 +1729,6 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
-                focusAnchorHeight = focusAnchorHeight,
             )
         }
 
@@ -1755,7 +1738,6 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
-                focusAnchorHeight = focusAnchorHeight,
             )
         }
     }
