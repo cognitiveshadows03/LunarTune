@@ -38,6 +38,7 @@ import dev.citali.lunartune.db.entities.EventWithSong
 import dev.citali.lunartune.db.entities.FormatEntity
 import dev.citali.lunartune.db.entities.LibraryTopMixEntity
 import dev.citali.lunartune.db.entities.LibraryTopMixSongMap
+import dev.citali.lunartune.db.entities.ListeningByDate
 import dev.citali.lunartune.db.entities.ListeningBySlot
 import dev.citali.lunartune.db.entities.ListeningTotals
 import dev.citali.lunartune.db.entities.LyricsEntity
@@ -1500,6 +1501,27 @@ interface DatabaseDao {
         fromTimestamp: Long,
         toTimestamp: Long,
     ): Flow<ListeningTotals>
+
+    /**
+     * Per-calendar-day totals for the listening calendar. Days without plays simply do not
+     * appear, so the UI treats a missing key as "nothing listened" instead of zero-filling
+     * a year of rows in SQL.
+     */
+    @Query(
+        """
+        SELECT date(timestamp / 1000, 'unixepoch') AS day,
+               COALESCE(SUM(playTime), 0) AS timeListened,
+               COUNT(1) AS playCount
+        FROM event
+        WHERE timestamp > :fromTimestamp AND timestamp <= :toTimestamp
+        GROUP BY day
+        ORDER BY day
+        """,
+    )
+    fun listeningByDate(
+        fromTimestamp: Long,
+        toTimestamp: Long,
+    ): Flow<List<ListeningByDate>>
 
     @Query(
         """

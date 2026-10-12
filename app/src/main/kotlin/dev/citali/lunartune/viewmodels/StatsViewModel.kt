@@ -33,6 +33,7 @@ import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.EventWithSong
+import dev.citali.lunartune.db.entities.ListeningByDate
 import dev.citali.lunartune.db.entities.ListeningBySlot
 import dev.citali.lunartune.db.entities.ListeningSummary
 import dev.citali.lunartune.db.entities.ListeningTotals
@@ -76,6 +77,33 @@ data class ListeningPatternSlot(
 )
 
 @Immutable
+data class ListeningCalendarDay(
+    val date: LocalDate,
+    val timeListened: Long,
+    val playCount: Int,
+)
+
+/**
+ * A year-scale view of listening activity: every day in the queried window that has plays,
+ * plus the derived facts the calendar card reports (active days, best day, longest streak).
+ */
+@Immutable
+data class ListeningCalendarData(
+    /** First day of the window (inclusive). Days before it are never drawn. */
+    val start: LocalDate,
+    /** Last day of the window (inclusive). */
+    val endInclusive: LocalDate,
+    /** Only days that actually have listening history, ordered oldest first. */
+    val days: List<ListeningCalendarDay>,
+    val activeDays: Int,
+    val bestDay: ListeningCalendarDay?,
+    /** Longest run of consecutive days with listening inside the window. */
+    val longestStreak: Int,
+    /** True when the window is exactly one calendar year, so the caption can read "2026". */
+    val isSingleYear: Boolean,
+)
+
+@Immutable
 data class StatsUiData(
     val selectedOption: OptionStats,
     val selectedPeriodIndex: Int,
@@ -87,6 +115,7 @@ data class StatsUiData(
     val listeningByHour: List<ListeningPatternSlot>,
     val listeningByDayOfWeek: List<ListeningPatternSlot>,
     val listeningTrendBuckets: List<ListeningBySlot>,
+    val listeningCalendar: ListeningCalendarData,
     val previousPeriodTimeListened: Long?,
     @StringRes val comparisonLabelResId: Int?,
     val listeningSummary: ListeningSummary,
@@ -201,6 +230,70 @@ class StatsViewModel
             } else {
                 statToPeriod(selection, t - 1, now)
             }
+
+        /** Jan 1 of the browsed year, or the start of the rolling window for every other range. */
+        private fun calendarWindowStart(
+            selection: OptionStats,
+            index: Int,
+            today: LocalDate,
+        ): LocalDate =
+            when (selection) {
+                OptionStats.YEARS -> today.withDayOfMonth(1).withMonth(1).minusYears(index.coerceAtLeast(0).toLong())
+                else -> today.minusDays(CALENDAR_WINDOW_DAYS - 1L)
+            }
+
+        /** Dec 31 of the browsed year (capped at today), or today for the rolling window. */
+        private fun calendarWindowEnd(
+            selection: OptionStats,
+            index: Int,
+            today: LocalDate,
+        ): LocalDate =
+            when (selection) {
+                OptionStats.YEARS -> {
+                    val start = calendarWindowStart(selection, index, today)
+                    val yearEnd = start.plusYears(1).minusDays(1)
+                    if (yearEnd.isAfter(today)) today else yearEnd
+                }
+
+                else -> today
+            }
+
+        private fun buildListeningCalendar(
+            start: LocalDate,
+            endInclusive: LocalDate,
+            rows: List<ListeningByDate>,
+            selection: OptionStats,
+        ): ListeningCalendarData {
+            // Rows arrive ordered, but a corrupt wall-clock key must not crash the grid.
+            val days =
+                rows.mapNotNull { row ->
+                    val date = runCatching { LocalDate.parse(row.day) }.getOrNull() ?: return@mapNotNull null
+                    if (date.isBefore(start) || date.isAfter(endInclusive)) return@mapNotNull null
+                    ListeningCalendarDay(
+                        date = date,
+                        timeListened = row.timeListened.coerceAtLeast(0L),
+                        playCount = row.playCount,
+                    )
+                }
+            val activeDays = days.filter { it.timeListened > 0L }
+            var longestStreak = 0
+            var streak = 0
+            var previous: LocalDate? = null
+            activeDays.forEach { day ->
+                streak = if (previous != null && previous == day.date.minusDays(1)) streak + 1 else 1
+                if (streak > longestStreak) longestStreak = streak
+                previous = day.date
+            }
+            return ListeningCalendarData(
+                start = start,
+                endInclusive = endInclusive,
+                days = days,
+                activeDays = activeDays.size,
+                bestDay = activeDays.maxByOrNull { it.timeListened },
+                longestStreak = longestStreak,
+                isSingleYear = selection == OptionStats.YEARS,
+            )
+        }
 
         private fun periodWindow(
             selection: OptionStats,
@@ -414,6 +507,25 @@ class StatsViewModel
                     }
                 }
 
+        /**
+         * The listening calendar is deliberately a year-scale view: the selected calendar year
+         * while the user browses years, otherwise a rolling twelve months ending today. Shorter
+         * ranges would only ever colour a corner of the grid, so they share the rolling window
+         * and the card captions its own range.
+         */
+        private val listeningCalendar =
+            combine(periodPair(), refreshRequest) { pair, _ -> pair }
+                .flatMapLatest { (selection, t) ->
+                    val today = LocalDate.now()
+                    val start = calendarWindowStart(selection, t, today)
+                    val endInclusive = calendarWindowEnd(selection, t, today)
+                    database
+                        .listeningByDate(
+                            fromTimestamp = wallClockTimestamp(start) - 1L,
+                            toTimestamp = wallClockTimestamp(endInclusive.plusDays(1)) - 1L,
+                        ).map { rows -> buildListeningCalendar(start, endInclusive, rows, selection) }
+                }
+
         private val firstEvent =
             database
                 .firstEvent()
@@ -444,13 +556,15 @@ class StatsViewModel
                     listeningTotals,
                     firstEvent,
                     latestEventTimestamp,
-                ) { patterns, totals, first, latest ->
+                    listeningCalendar,
+                ) { patterns, totals, first, latest, calendar ->
                     ListeningStats(
                         byHour = patterns.byHour,
                         byDay = patterns.byDay,
                         totals = totals,
                         firstEvent = first,
                         latestEventTimestamp = latest,
+                        calendar = calendar,
                     )
                 },
                 listeningTrendStats,
@@ -506,6 +620,7 @@ class StatsViewModel
                                     listeningByHour = listening.byHour,
                                     listeningByDayOfWeek = listening.byDay,
                                     listeningTrendBuckets = listening.listeningTrendBuckets,
+                                    listeningCalendar = listening.calendar,
                                     previousPeriodTimeListened = listening.previousPeriodTimeListened,
                                     comparisonLabelResId = listening.comparisonLabelResId,
                                     listeningSummary = summary,
@@ -601,6 +716,7 @@ class StatsViewModel
             val totals: ListeningTotals,
             val firstEvent: EventWithSong?,
             val latestEventTimestamp: Long?,
+            val calendar: ListeningCalendarData,
             val listeningTrendBuckets: List<ListeningBySlot> = emptyList(),
             val previousPeriodTimeListened: Long? = null,
             @StringRes val comparisonLabelResId: Int? = null,
@@ -627,5 +743,8 @@ class StatsViewModel
         private companion object {
             const val COLLAPSED_SONG_COUNT = 5
             const val LISTENING_TREND_BUCKET_COUNT = 7
+
+            /** Rolling window for the listening calendar: 53 whole weeks, ending today. */
+            const val CALENDAR_WINDOW_DAYS = 365L
         }
     }

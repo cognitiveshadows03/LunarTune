@@ -21,6 +21,18 @@ data class ListeningTotals(
     val totalTimeListened: Long,
 )
 
+/**
+ * One calendar day of listening, as stored in [Event] — the `day` key is the wall-clock
+ * `yyyy-MM-dd` the event timestamps resolve to, so the calendar never has to re-derive
+ * timezones on the UI side.
+ */
+@Immutable
+data class ListeningByDate(
+    val day: String,
+    val timeListened: Long,
+    val playCount: Int,
+)
+
 @Immutable
 data class ListeningSummary(
     val totalPlayCount: Int,

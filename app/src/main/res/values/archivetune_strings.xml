@@ -625,6 +625,21 @@
     <string name="stats_period_empty_title">No plays in this time range</string>
     <string name="stats_period_empty_message">Choose a longer range above to see your listening stats.</string>
     <string name="stats_time_range">Time range</string>
+    <string name="stats_listening_calendar">Listening calendar</string>
+    <string name="stats_calendar_best_day">Best day · %1$s</string>
+    <string name="stats_calendar_no_history">No listening recorded in this stretch</string>
+    <string name="stats_calendar_tooltip">%1$s · %2$s · %3$s</string>
+    <string name="stats_calendar_tooltip_empty">%1$s · nothing listened</string>
+    <string name="stats_calendar_legend_less">Less</string>
+    <string name="stats_calendar_legend_more">More</string>
+    <plurals name="stats_calendar_active_days">
+        <item quantity="one">%d day with plays</item>
+        <item quantity="other">%d days with plays</item>
+    </plurals>
+    <plurals name="stats_calendar_streak">
+        <item quantity="one">%d-day streak</item>
+        <item quantity="other">%d-day streak</item>
+    </plurals>
     <string name="stats_listening_patterns">Listening patterns</string>
     <string name="stats_artist_breakdown">Artist breakdown</string>
     <string name="stats_more_artists">+%1$d more · %2$d%%</string>

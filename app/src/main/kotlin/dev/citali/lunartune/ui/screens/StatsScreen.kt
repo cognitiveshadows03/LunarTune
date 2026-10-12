@@ -10,6 +10,7 @@ package dev.citali.lunartune.ui.screens
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,10 +68,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -89,7 +93,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -134,17 +140,21 @@ import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.joinByBullet
 import dev.citali.lunartune.utils.makeTimeString
+import dev.citali.lunartune.viewmodels.ListeningCalendarData
 import dev.citali.lunartune.viewmodels.ListeningPatternSlot
 import dev.citali.lunartune.viewmodels.StatsScreenState
 import dev.citali.lunartune.viewmodels.StatsViewModel
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -212,6 +222,7 @@ fun StatsScreen(
     val selectedOption = data.selectedOption
     val listeningByHour = data.listeningByHour
     val listeningByDayOfWeek = data.listeningByDayOfWeek
+    val listeningCalendar = data.listeningCalendar
     val listeningSummary = data.listeningSummary
     val songsById = remember(mostPlayedSongs) { mostPlayedSongs.associateBy { it.id } }
 
@@ -379,6 +390,12 @@ fun StatsScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
+                    item(key = "listeningCalendarEmptyPeriod", contentType = "insights") {
+                        StatsListeningCalendar(
+                            calendar = listeningCalendar,
+                            modifier = Modifier.animateItem(),
+                        )
+                    }
                     return@LazyColumn
                 }
 
@@ -435,6 +452,13 @@ fun StatsScreen(
                     StatsListeningPatterns(
                         daySlots = listeningByDayOfWeek,
                         hourSlots = listeningByHour,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
+                item(key = "listeningCalendar", contentType = "insights") {
+                    StatsListeningCalendar(
+                        calendar = listeningCalendar,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -2093,6 +2117,211 @@ private fun ListeningByHourChart(
 }
 
 /**
+ * Year-at-a-glance listening calendar: one row per month, one column per day of that month,
+ * shaded by how long the day was listened to. It answers a different question than the
+ * pattern charts above — those average habits per weekday/hour, this one shows the shape of
+ * the year: streaks, quiet weeks, and the one day that carried the month.
+ */
+@Composable
+private fun StatsListeningCalendar(
+    calendar: ListeningCalendarData,
+    modifier: Modifier = Modifier,
+) {
+    val monthFormatter = remember { DateTimeFormatter.ofPattern("MMM", Locale.getDefault()) }
+    val dayFormatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()) }
+    val months =
+        remember(calendar.start, calendar.endInclusive) {
+            buildList {
+                var month = YearMonth.from(calendar.start)
+                val lastMonth = YearMonth.from(calendar.endInclusive)
+                while (!month.isAfter(lastMonth)) {
+                    add(month)
+                    month = month.plusMonths(1)
+                }
+            }
+        }
+    val byDate = remember(calendar.days) { calendar.days.associateBy { it.date } }
+    val peakTime = (calendar.days.maxOfOrNull { it.timeListened } ?: 0L).coerceAtLeast(1L)
+    var selectedDate by remember(calendar.days) { mutableStateOf<LocalDate?>(null) }
+
+    val emptyColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val accentColor = MaterialTheme.colorScheme.primary
+    // Quartile shading, GitHub-style: four steps between "a little" and the range's best day.
+    val levelColors =
+        remember(emptyColor, accentColor) {
+            listOf(
+                emptyColor,
+                accentColor.copy(alpha = 0.28f),
+                accentColor.copy(alpha = 0.52f),
+                accentColor.copy(alpha = 0.76f),
+                accentColor,
+            )
+        }
+    val labelStyle =
+        MaterialTheme.typography.labelSmall.copy(
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+        )
+    val textMeasurer = rememberTextMeasurer()
+
+    val rangeLabel =
+        remember(calendar.start, calendar.endInclusive, calendar.isSingleYear, monthFormatter) {
+            if (calendar.isSingleYear) {
+                calendar.start.year.toString()
+            } else {
+                "${monthFormatter.format(calendar.start)} – ${monthFormatter.format(calendar.endInclusive)}"
+            }
+        }
+    val activeDaysLabel =
+        pluralStringResource(R.plurals.stats_calendar_active_days, calendar.activeDays, calendar.activeDays)
+    val periodLabel =
+        if (calendar.longestStreak > 1) {
+            val streakLabel =
+                pluralStringResource(R.plurals.stats_calendar_streak, calendar.longestStreak, calendar.longestStreak)
+            "$activeDaysLabel · $streakLabel · $rangeLabel"
+        } else {
+            "$activeDaysLabel · $rangeLabel"
+        }
+    val insight =
+        calendar.bestDay?.let { best ->
+            stringResource(
+                R.string.stats_calendar_best_day,
+                "${dayFormatter.format(best.date)} · ${makeTimeString(best.timeListened)}",
+            )
+        } ?: stringResource(R.string.stats_calendar_no_history)
+
+    ElevatedCard(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.elevatedCardColors(),
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                text = stringResource(R.string.stats_listening_calendar),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.secondary,
+            )
+            PatternChartMeta(
+                insight = insight,
+                change = null,
+                periodLabel = periodLabel,
+            )
+            val pinned = selectedDate
+            if (pinned != null) {
+                val selected = byDate[pinned]
+                Spacer(modifier = Modifier.height(8.dp))
+                PatternTooltip(
+                    text =
+                        if (selected == null) {
+                            stringResource(R.string.stats_calendar_tooltip_empty, dayFormatter.format(pinned))
+                        } else {
+                            stringResource(
+                                R.string.stats_calendar_tooltip,
+                                dayFormatter.format(selected.date),
+                                makeTimeString(selected.timeListened),
+                                pluralStringResource(R.plurals.n_time, selected.playCount, selected.playCount),
+                            )
+                        },
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val labelWidth = 34.dp
+                val gap = 2.dp
+                val maxDays = 31
+                val available = (maxWidth - labelWidth).coerceAtLeast(1.dp)
+                val cellSize = ((available - gap * (maxDays - 1)) / maxDays).coerceAtLeast(4.dp)
+                Canvas(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(cellSize * months.size + gap * (months.size - 1).coerceAtLeast(0))
+                            .pointerInput(calendar.days, months, cellSize) {
+                                detectTapGestures { offset ->
+                                    val step = cellSize.toPx() + gap.toPx()
+                                    val column = floor((offset.x - labelWidth.toPx()) / step).toInt()
+                                    val row = floor(offset.y / step).toInt()
+                                    val tapped =
+                                        months
+                                            .getOrNull(row)
+                                            ?.takeIf { column in 0 until it.lengthOfMonth() }
+                                            ?.atDay(column + 1)
+                                            ?.takeIf {
+                                                !it.isBefore(calendar.start) && !it.isAfter(calendar.endInclusive)
+                                            }
+                                    selectedDate = if (tapped == null || tapped == selectedDate) null else tapped
+                                }
+                            },
+                ) {
+                    val step = cellSize.toPx() + gap.toPx()
+                    val cellPx = Size(cellSize.toPx(), cellSize.toPx())
+                    val corner = CornerRadius(cellSize.toPx() * 0.3f)
+                    val labelWidthPx = labelWidth.toPx()
+                    months.forEachIndexed { row, month ->
+                        val y = row * step
+                        for (day in 1..month.lengthOfMonth()) {
+                            val date = month.atDay(day)
+                            if (date.isBefore(calendar.start) || date.isAfter(calendar.endInclusive)) continue
+                            val time = byDate[date]?.timeListened ?: 0L
+                            val x = labelWidthPx + (day - 1) * step
+                            drawRoundRect(
+                                color = levelColors[calendarLevel(time, peakTime)],
+                                topLeft = Offset(x, y),
+                                size = cellPx,
+                                cornerRadius = corner,
+                            )
+                            if (date == selectedDate) {
+                                drawRoundRect(
+                                    color = outlineColor,
+                                    topLeft = Offset(x, y),
+                                    size = cellPx,
+                                    cornerRadius = corner,
+                                    style = Stroke(width = 1.5.dp.toPx()),
+                                )
+                            }
+                        }
+                        val measured = textMeasurer.measure(monthFormatter.format(month), labelStyle)
+                        drawText(
+                            textLayoutResult = measured,
+                            topLeft =
+                                Offset(
+                                    x = (labelWidthPx - measured.size.width - 6.dp.toPx()).coerceAtLeast(0f),
+                                    y = y + (cellSize.toPx() - measured.size.height) / 2f,
+                                ),
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.stats_calendar_legend_less),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                levelColors.forEach { color ->
+                    Box(
+                        modifier =
+                            Modifier
+                                .size(10.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(color),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.stats_calendar_legend_more),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
  * One insight line per pattern chart: the change chip when there is a trustworthy one,
  * otherwise the plain insight text. The period caption rides along as a small subtitle.
  */
@@ -2149,6 +2378,21 @@ private fun PatternTooltip(text: String) {
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             style = MaterialTheme.typography.bodySmall,
         )
+    }
+}
+
+/** Zero when the day has no plays, otherwise one of four shading steps against the peak day. */
+private fun calendarLevel(
+    timeListened: Long,
+    peakTime: Long,
+): Int {
+    if (timeListened <= 0L) return 0
+    val fraction = timeListened.toFloat() / peakTime.toFloat()
+    return when {
+        fraction >= 0.75f -> 4
+        fraction >= 0.50f -> 3
+        fraction >= 0.25f -> 2
+        else -> 1
     }
 }
 
