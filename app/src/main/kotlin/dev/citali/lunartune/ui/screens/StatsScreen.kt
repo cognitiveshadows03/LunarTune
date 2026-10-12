@@ -43,8 +43,12 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -140,6 +144,7 @@ import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.joinByBullet
 import dev.citali.lunartune.utils.makeTimeString
+import dev.citali.lunartune.viewmodels.CalendarRange
 import dev.citali.lunartune.viewmodels.ListeningCalendarData
 import dev.citali.lunartune.viewmodels.ListeningPatternSlot
 import dev.citali.lunartune.viewmodels.StatsScreenState
@@ -183,6 +188,7 @@ fun StatsScreen(
 
     val screenState by viewModel.screenState.collectAsStateWithLifecycle()
     val isYearPickerOpen by viewModel.yearPickerOpen.collectAsStateWithLifecycle()
+    val selectedCalendarRange by viewModel.selectedCalendarRange.collectAsStateWithLifecycle()
 
     val data =
         when (val state = screenState) {
@@ -393,6 +399,8 @@ fun StatsScreen(
                     item(key = "listeningCalendarEmptyPeriod", contentType = "insights") {
                         StatsListeningCalendar(
                             calendar = listeningCalendar,
+                            selectedRange = selectedCalendarRange,
+                            onRangeSelected = viewModel::onCalendarRangeSelected,
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -459,6 +467,8 @@ fun StatsScreen(
                 item(key = "listeningCalendar", contentType = "insights") {
                     StatsListeningCalendar(
                         calendar = listeningCalendar,
+                        selectedRange = selectedCalendarRange,
+                        onRangeSelected = viewModel::onCalendarRangeSelected,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -2117,17 +2127,82 @@ private fun ListeningByHourChart(
 }
 
 /**
- * Year-at-a-glance listening calendar: one row per month, one column per day of that month,
- * shaded by how long the day was listened to. It answers a different question than the
+ * Chip label for a preset window: months everywhere, except the twelve-month one, which reads
+ * better as a year and matches how the page-level range chips already word it.
+ */
+@Composable
+private fun CalendarRange.label(): String =
+    when (this) {
+        CalendarRange.TWELVE_MONTHS -> pluralStringResource(R.plurals.n_year, 1, 1)
+        else -> pluralStringResource(R.plurals.n_month, months, months)
+    }
+
+/**
+ * The calendar's own window picker: a chip naming the current preset that opens the rest. It
+ * lives on the card instead of borrowing the page-level range chips so the grid can be narrowed
+ * without disturbing the range every other chart on the screen is showing.
+ */
+@Composable
+private fun CalendarRangeChip(
+    selectedRange: CalendarRange,
+    onRangeSelected: (CalendarRange) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        AssistChip(
+            onClick = { expanded = true },
+            label = { Text(selectedRange.label()) },
+            trailingIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.expand_more),
+                    contentDescription = null,
+                )
+            },
+            shape = RoundedCornerShape(16.dp),
+            border = null,
+            colors =
+                AssistChipDefaults.assistChipColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    labelColor = MaterialTheme.colorScheme.onSurface,
+                ),
+        )
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            CalendarRange.entries.forEach { range ->
+                DropdownMenuItem(
+                    text = { Text(range.label()) },
+                    onClick = {
+                        expanded = false
+                        onRangeSelected(range)
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Listening calendar: one row per month in the selected window, one column per day of that
+ * month, shaded by how long the day was listened to. It answers a different question than the
  * pattern charts above — those average habits per weekday/hour, this one shows the shape of
- * the year: streaks, quiet weeks, and the one day that carried the month.
+ * the last stretch of listening: streaks, quiet weeks, and the one day that carried the month.
+ * The window is picked by the presets on the card itself, so the grid never has to render a
+ * whole year just to say what the last few weeks looked like.
  */
 @Composable
 private fun StatsListeningCalendar(
     calendar: ListeningCalendarData,
+    selectedRange: CalendarRange,
+    onRangeSelected: (CalendarRange) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val monthFormatter = remember { DateTimeFormatter.ofPattern("MMM", Locale.getDefault()) }
+    val monthYearFormatter = remember { DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()) }
     val dayFormatter = remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()) }
     val months =
         remember(calendar.start, calendar.endInclusive) {
@@ -2165,11 +2240,16 @@ private fun StatsListeningCalendar(
     val textMeasurer = rememberTextMeasurer()
 
     val rangeLabel =
-        remember(calendar.start, calendar.endInclusive, calendar.isSingleYear, monthFormatter) {
-            if (calendar.isSingleYear) {
-                calendar.start.year.toString()
-            } else {
-                "${monthFormatter.format(calendar.start)} – ${monthFormatter.format(calendar.endInclusive)}"
+        remember(calendar.start, calendar.endInclusive, monthFormatter, monthYearFormatter) {
+            val startMonth = YearMonth.from(calendar.start)
+            val endMonth = YearMonth.from(calendar.endInclusive)
+            when {
+                startMonth == endMonth -> monthYearFormatter.format(calendar.endInclusive)
+                startMonth.year == endMonth.year ->
+                    "${monthFormatter.format(calendar.start)} – ${monthYearFormatter.format(calendar.endInclusive)}"
+
+                else ->
+                    "${monthYearFormatter.format(calendar.start)} – ${monthYearFormatter.format(calendar.endInclusive)}"
             }
         }
     val activeDaysLabel =
@@ -2196,11 +2276,24 @@ private fun StatsListeningCalendar(
         colors = CardDefaults.elevatedCardColors(),
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = stringResource(R.string.stats_listening_calendar),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.secondary,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.stats_listening_calendar),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.secondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                CalendarRangeChip(
+                    selectedRange = selectedRange,
+                    onRangeSelected = onRangeSelected,
+                )
+            }
             PatternChartMeta(
                 insight = insight,
                 change = null,

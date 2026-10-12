@@ -76,6 +76,20 @@ data class ListeningPatternSlot(
     val monthToDateAverageTimeListened: Long?,
 )
 
+/**
+ * Window offered by the calendar's preset chips: whole calendar months ending with today, so
+ * the grid starts on the first of a month and never shows a ragged half-row. A full year of
+ * twelve rows is a lot of tiny cells, so the shorter windows are the ones worth reaching for.
+ */
+enum class CalendarRange(
+    val months: Int,
+) {
+    ONE_MONTH(1),
+    THREE_MONTHS(3),
+    SIX_MONTHS(6),
+    TWELVE_MONTHS(12),
+}
+
 @Immutable
 data class ListeningCalendarDay(
     val date: LocalDate,
@@ -99,8 +113,6 @@ data class ListeningCalendarData(
     val bestDay: ListeningCalendarDay?,
     /** Longest run of consecutive days with listening inside the window. */
     val longestStreak: Int,
-    /** True when the window is exactly one calendar year, so the caption can read "2026". */
-    val isSingleYear: Boolean,
 )
 
 @Immutable
@@ -138,11 +150,19 @@ class StatsViewModel
         private val isSongListExpanded = MutableStateFlow(false)
         private val isYearPickerOpen = MutableStateFlow(false)
         private val refreshRequest = MutableStateFlow(0L)
+        private val calendarRange = MutableStateFlow(CalendarRange.THREE_MONTHS)
 
         /** Set once the opening time range has been chosen from the actual history. */
         private val initialPeriodResolved = MutableStateFlow(false)
 
         val yearPickerOpen: StateFlow<Boolean> = isYearPickerOpen
+
+        /** Window the listening calendar is showing; driven by the card's preset chips. */
+        val selectedCalendarRange: StateFlow<CalendarRange> = calendarRange
+
+        fun onCalendarRangeSelected(range: CalendarRange) {
+            calendarRange.value = range
+        }
 
         fun onOptionSelected(option: OptionStats) {
             if (selectedOption.value == option) return
@@ -231,38 +251,10 @@ class StatsViewModel
                 statToPeriod(selection, t - 1, now)
             }
 
-        /** Jan 1 of the browsed year, or the start of the rolling window for every other range. */
-        private fun calendarWindowStart(
-            selection: OptionStats,
-            index: Int,
-            today: LocalDate,
-        ): LocalDate =
-            when (selection) {
-                OptionStats.YEARS -> today.withDayOfMonth(1).withMonth(1).minusYears(index.coerceAtLeast(0).toLong())
-                else -> today.minusDays(CALENDAR_WINDOW_DAYS - 1L)
-            }
-
-        /** Dec 31 of the browsed year (capped at today), or today for the rolling window. */
-        private fun calendarWindowEnd(
-            selection: OptionStats,
-            index: Int,
-            today: LocalDate,
-        ): LocalDate =
-            when (selection) {
-                OptionStats.YEARS -> {
-                    val start = calendarWindowStart(selection, index, today)
-                    val yearEnd = start.plusYears(1).minusDays(1)
-                    if (yearEnd.isAfter(today)) today else yearEnd
-                }
-
-                else -> today
-            }
-
         private fun buildListeningCalendar(
             start: LocalDate,
             endInclusive: LocalDate,
             rows: List<ListeningByDate>,
-            selection: OptionStats,
         ): ListeningCalendarData {
             // Rows arrive ordered, but a corrupt wall-clock key must not crash the grid.
             val days =
@@ -291,7 +283,6 @@ class StatsViewModel
                 activeDays = activeDays.size,
                 bestDay = activeDays.maxByOrNull { it.timeListened },
                 longestStreak = longestStreak,
-                isSingleYear = selection == OptionStats.YEARS,
             )
         }
 
@@ -508,22 +499,22 @@ class StatsViewModel
                 }
 
         /**
-         * The listening calendar is deliberately a year-scale view: the selected calendar year
-         * while the user browses years, otherwise a rolling twelve months ending today. Shorter
-         * ranges would only ever colour a corner of the grid, so they share the rolling window
-         * and the card captions its own range.
+         * The calendar keeps its own window rather than following the range chips above it: the
+         * grid reads by month, so it spans whole calendar months ending today, and the presets on
+         * the card decide how many of them. Twelve rows of cells is what made the card feel busy;
+         * a quarter is the default.
          */
         private val listeningCalendar =
-            combine(periodPair(), refreshRequest) { pair, _ -> pair }
-                .flatMapLatest { (selection, t) ->
+            combine(refreshRequest, calendarRange) { _, range -> range }
+                .flatMapLatest { range ->
                     val today = LocalDate.now()
-                    val start = calendarWindowStart(selection, t, today)
-                    val endInclusive = calendarWindowEnd(selection, t, today)
+                    val start = today.minusMonths(range.months - 1L).withDayOfMonth(1)
+                    val endInclusive = today
                     database
                         .listeningByDate(
                             fromTimestamp = wallClockTimestamp(start) - 1L,
                             toTimestamp = wallClockTimestamp(endInclusive.plusDays(1)) - 1L,
-                        ).map { rows -> buildListeningCalendar(start, endInclusive, rows, selection) }
+                        ).map { rows -> buildListeningCalendar(start, endInclusive, rows) }
                 }
 
         private val firstEvent =
@@ -743,8 +734,5 @@ class StatsViewModel
         private companion object {
             const val COLLAPSED_SONG_COUNT = 5
             const val LISTENING_TREND_BUCKET_COUNT = 7
-
-            /** Rolling window for the listening calendar: 53 whole weeks, ending today. */
-            const val CALENDAR_WINDOW_DAYS = 365L
         }
     }
