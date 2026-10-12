@@ -92,6 +92,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -2369,8 +2370,9 @@ private fun StatsListeningCalendar(
                             .coerceAtLeast(4.dp)
                             .coerceAtMost(MAX_CALENDAR_WEEK_CELL)
                     val step = cellSize + gap
-                    val stepPx = step.toPx()
-                    val monthStripPx = monthStrip.toPx()
+                    val density = LocalDensity.current
+                    val stepPx = with(density) { step.toPx() }
+                    val monthStripPx = with(density) { monthStrip.toPx() }
                     Canvas(
                         modifier =
                             Modifier
