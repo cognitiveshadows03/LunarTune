@@ -154,6 +154,8 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.abs
@@ -1329,6 +1331,20 @@ private fun StatsHighlightCard(
     }
 }
 
+/**
+ * The wide [StatsListeningCalendar] grid switches to a week-column layout when the window fits in
+ * this many columns. Past it the cells would be smaller than the month-row grid's, which is the
+ * thing the switch exists to avoid - twelve months land on 53 columns, so a year is exactly the
+ * window that keeps the month rows.
+ */
+private const val MAX_CALENDAR_WEEK_COLUMNS = 27
+
+/**
+ * A ceiling on the week-column cell, in dp. Below it the grid always fills the card's width; at a
+ * month or so it would otherwise stretch into oversized squares.
+ */
+private val MAX_CALENDAR_WEEK_CELL = 22.dp
+
 private const val TOP_ARTIST_SLICES = 5
 private const val AVATAR_STACK_SIZE = 4
 
@@ -2318,45 +2334,116 @@ private fun StatsListeningCalendar(
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val labelWidth = 34.dp
-                val gap = 2.dp
-                val maxDays = 31
-                val available = (maxWidth - labelWidth).coerceAtLeast(1.dp)
-                val cellSize = ((available - gap * (maxDays - 1)) / maxDays).coerceAtLeast(4.dp)
-                Canvas(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(cellSize * months.size + gap * (months.size - 1).coerceAtLeast(0))
-                            .pointerInput(calendar.days, months, cellSize) {
-                                detectTapGestures { offset ->
-                                    val step = cellSize.toPx() + gap.toPx()
-                                    val column = floor((offset.x - labelWidth.toPx()) / step).toInt()
-                                    val row = floor(offset.y / step).toInt()
-                                    val tapped =
-                                        months
-                                            .getOrNull(row)
-                                            ?.takeIf { column in 0 until it.lengthOfMonth() }
-                                            ?.atDay(column + 1)
-                                            ?.takeIf {
-                                                !it.isBefore(calendar.start) && !it.isAfter(calendar.endInclusive)
-                                            }
-                                    selectedDate = if (tapped == null || tapped == selectedDate) null else tapped
+            val weekFields = remember { WeekFields.of(Locale.getDefault()) }
+            // A day-per-column grid can only ever be as wide as the longest month it shows, so a
+            // window shorter than a year came out as a thin strip of tiny cells: 31 columns of
+            // about 9dp, one row per month. Anything up to half a year is laid out the other way
+            // round instead - a column per week, a row per weekday - which packs the same days
+            // into half the columns and so roughly doubles the cell. A year keeps the month-row
+            // grid: 53 week columns would come out smaller than the one it already has.
+            val gridWeeks =
+                remember(calendar.start, calendar.endInclusive, weekFields) {
+                    val gridStart = calendar.start.with(weekFields.dayOfWeek(), 1)
+                    val columns =
+                        ((calendar.endInclusive.toEpochDay() - gridStart.toEpochDay()) / 7L).toInt() + 1
+                    if (columns <= MAX_CALENDAR_WEEK_COLUMNS) gridStart to columns else null
+                }
+            if (gridWeeks != null) {
+                val (gridStart, columns) = gridWeeks
+                val weekdayLabels =
+                    remember(weekFields) {
+                        val locale = Locale.getDefault()
+                        (0..6).map { index ->
+                            weekFields.firstDayOfWeek
+                                .plus(index.toLong())
+                                .getDisplayName(TextStyle.SHORT, locale)
+                        }
+                    }
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val labelWidth = 34.dp
+                    val gap = 2.dp
+                    val monthStrip = 18.dp
+                    val available = (maxWidth - labelWidth).coerceAtLeast(1.dp)
+                    val cellSize =
+                        ((available - gap * (columns - 1)) / columns)
+                            .coerceAtLeast(4.dp)
+                            .coerceAtMost(MAX_CALENDAR_WEEK_CELL)
+                    val step = cellSize + gap
+                    val stepPx = step.toPx()
+                    val monthStripPx = monthStrip.toPx()
+                    Canvas(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(monthStrip + step * 7 - gap)
+                                .pointerInput(calendar.days, gridStart, columns, cellSize) {
+                                    detectTapGestures { offset ->
+                                        val column =
+                                            floor((offset.x - labelWidth.toPx()) / stepPx).toInt()
+                                        val row =
+                                            floor((offset.y - monthStripPx) / stepPx).toInt()
+                                        val tapped =
+                                            gridStart
+                                                .plusDays((column * 7 + row).toLong())
+                                                .takeIf {
+                                                    column in 0 until columns &&
+                                                        row in 0 until 7 &&
+                                                        !it.isBefore(calendar.start) &&
+                                                        !it.isAfter(calendar.endInclusive)
+                                                }
+                                        selectedDate =
+                                            if (tapped == null || tapped == selectedDate) null else tapped
+                                    }
+                                },
+                    ) {
+                        val cellPx = Size(cellSize.toPx(), cellSize.toPx())
+                        val corner = CornerRadius(cellSize.toPx() * 0.3f)
+                        val labelWidthPx = labelWidth.toPx()
+                        // Month names ride above the column their first day falls in, and take the
+                        // year along when the window crosses into a new one.
+                        months.forEach { month ->
+                            val firstDay = month.atDay(1).coerceAtLeast(calendar.start)
+                            val column = ((firstDay.toEpochDay() - gridStart.toEpochDay()) / 7L).toInt()
+                            val label =
+                                if (month.monthValue == 1) {
+                                    monthYearFormatter.format(month)
+                                } else {
+                                    monthFormatter.format(month)
                                 }
-                            },
-                ) {
-                    val step = cellSize.toPx() + gap.toPx()
-                    val cellPx = Size(cellSize.toPx(), cellSize.toPx())
-                    val corner = CornerRadius(cellSize.toPx() * 0.3f)
-                    val labelWidthPx = labelWidth.toPx()
-                    months.forEachIndexed { row, month ->
-                        val y = row * step
-                        for (day in 1..month.lengthOfMonth()) {
-                            val date = month.atDay(day)
-                            if (date.isBefore(calendar.start) || date.isAfter(calendar.endInclusive)) continue
+                            val measured = textMeasurer.measure(label, labelStyle)
+                            drawText(
+                                textLayoutResult = measured,
+                                topLeft =
+                                    Offset(
+                                        x =
+                                            (labelWidthPx + column * stepPx)
+                                                .coerceIn(
+                                                    0f,
+                                                    (size.width - measured.size.width).coerceAtLeast(0f),
+                                                ),
+                                        y = 0f,
+                                    ),
+                            )
+                        }
+                        weekdayLabels.forEachIndexed { row, label ->
+                            val measured = textMeasurer.measure(label, labelStyle)
+                            drawText(
+                                textLayoutResult = measured,
+                                topLeft =
+                                    Offset(
+                                        x = (labelWidthPx - measured.size.width - 6.dp.toPx()).coerceAtLeast(0f),
+                                        y =
+                                            monthStripPx + row * stepPx +
+                                                (cellSize.toPx() - measured.size.height) / 2f,
+                                    ),
+                            )
+                        }
+                        var date = calendar.start
+                        while (!date.isAfter(calendar.endInclusive)) {
+                            val offsetDays = (date.toEpochDay() - gridStart.toEpochDay()).toInt()
+                            val x = labelWidthPx + (offsetDays / 7) * stepPx
+                            val y = monthStripPx + (offsetDays % 7) * stepPx
                             val time = byDate[date]?.timeListened ?: 0L
-                            val x = labelWidthPx + (day - 1) * step
                             drawRoundRect(
                                 color = levelColors[calendarLevel(time, peakTime)],
                                 topLeft = Offset(x, y),
@@ -2372,19 +2459,80 @@ private fun StatsListeningCalendar(
                                     style = Stroke(width = 1.5.dp.toPx()),
                                 )
                             }
+                            date = date.plusDays(1)
                         }
-                        val measured = textMeasurer.measure(monthFormatter.format(month), labelStyle)
-                        drawText(
-                            textLayoutResult = measured,
-                            topLeft =
-                                Offset(
-                                    x = (labelWidthPx - measured.size.width - 6.dp.toPx()).coerceAtLeast(0f),
-                                    y = y + (cellSize.toPx() - measured.size.height) / 2f,
-                                ),
-                        )
+                    }
+                }
+            } else {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val labelWidth = 34.dp
+                    val gap = 2.dp
+                    val maxDays = 31
+                    val available = (maxWidth - labelWidth).coerceAtLeast(1.dp)
+                    val cellSize = ((available - gap * (maxDays - 1)) / maxDays).coerceAtLeast(4.dp)
+                    Canvas(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(cellSize * months.size + gap * (months.size - 1).coerceAtLeast(0))
+                                .pointerInput(calendar.days, months, cellSize) {
+                                    detectTapGestures { offset ->
+                                        val step = cellSize.toPx() + gap.toPx()
+                                        val column = floor((offset.x - labelWidth.toPx()) / step).toInt()
+                                        val row = floor(offset.y / step).toInt()
+                                        val tapped =
+                                            months
+                                                .getOrNull(row)
+                                                ?.takeIf { column in 0 until it.lengthOfMonth() }
+                                                ?.atDay(column + 1)
+                                                ?.takeIf {
+                                                    !it.isBefore(calendar.start) && !it.isAfter(calendar.endInclusive)
+                                                }
+                                        selectedDate = if (tapped == null || tapped == selectedDate) null else tapped
+                                    }
+                                },
+                    ) {
+                        val step = cellSize.toPx() + gap.toPx()
+                        val cellPx = Size(cellSize.toPx(), cellSize.toPx())
+                        val corner = CornerRadius(cellSize.toPx() * 0.3f)
+                        val labelWidthPx = labelWidth.toPx()
+                        months.forEachIndexed { row, month ->
+                            val y = row * step
+                            for (day in 1..month.lengthOfMonth()) {
+                                val date = month.atDay(day)
+                                if (date.isBefore(calendar.start) || date.isAfter(calendar.endInclusive)) continue
+                                val time = byDate[date]?.timeListened ?: 0L
+                                val x = labelWidthPx + (day - 1) * step
+                                drawRoundRect(
+                                    color = levelColors[calendarLevel(time, peakTime)],
+                                    topLeft = Offset(x, y),
+                                    size = cellPx,
+                                    cornerRadius = corner,
+                                )
+                                if (date == selectedDate) {
+                                    drawRoundRect(
+                                        color = outlineColor,
+                                        topLeft = Offset(x, y),
+                                        size = cellPx,
+                                        cornerRadius = corner,
+                                        style = Stroke(width = 1.5.dp.toPx()),
+                                    )
+                                }
+                            }
+                            val measured = textMeasurer.measure(monthFormatter.format(month), labelStyle)
+                            drawText(
+                                textLayoutResult = measured,
+                                topLeft =
+                                    Offset(
+                                        x = (labelWidthPx - measured.size.width - 6.dp.toPx()).coerceAtLeast(0f),
+                                        y = y + (cellSize.toPx() - measured.size.height) / 2f,
+                                    ),
+                            )
+                        }
                     }
                 }
             }
+
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 verticalAlignment = Alignment.CenterVertically,
