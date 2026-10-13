@@ -46,11 +46,58 @@ jobs:
           python ./.github/workflows/notify_telegram.py
         continue-on-error: true
 
+  # A merged icon pack sends a dispatch carrying the pack commit it published. Advancing the
+  # submodule pin here, before anything is built, is what carries a new icon from the icon pack
+  # into the next nightly: the pack repository notifies this one, and this one moves the pin
+  # itself rather than waiting for someone to do it by hand.
+  bumpIconPack:
+    name: Update icon pack pin
+    if: github.event_name == 'repository_dispatch' && github.event.client_payload.sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Advance the IconPack submodule
+        env:
+          PACK_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          current="$(git ls-tree HEAD IconPack | awk '{print $3}')"
+          if [ "$current" = "$PACK_SHA" ]; then
+            echo "Icon pack already at ${PACK_SHA:0:9}; nothing to advance."
+            exit 0
+          fi
+          git submodule update --init --depth 1 IconPack
+          # The dispatched commit when the server hands it over, the pack's main otherwise: the
+          # pin should never be left behind because a fetch of one exact commit was refused.
+          if ! git -C IconPack fetch --depth 1 origin "$PACK_SHA" 2>/dev/null; then
+            git -C IconPack fetch --depth 1 origin main
+          fi
+          git -C IconPack checkout --detach FETCH_HEAD
+          actual="$(git -C IconPack rev-parse HEAD)"
+          if [ "$actual" != "$PACK_SHA" ]; then
+            echo "::warning::Dispatched icon pack commit ${PACK_SHA:0:9} could not be fetched; pinned ${actual:0:9} from main instead."
+          fi
+          git add IconPack
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "Icon pack: advance to ${actual:0:9}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
+
   build:
     name: Build Release APKs (${{ matrix.distribution }}-${{ matrix.device }}-${{ matrix.abi }})
-    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    # always() so that the icon pack job being skipped on ordinary runs does not skip this one,
+    # with the result checks spelling out what replaced the old plain dependency.
+    if: >-
+      always()
+      && needs.notifyTelegram.result == 'success'
+      && (needs.bumpIconPack.result == 'success' || needs.bumpIconPack.result == 'skipped')
+      && github.actor != 'dependabot[bot]'
+      && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
-    needs: notifyTelegram
+    needs: [notifyTelegram, bumpIconPack]
 
     strategy:
       matrix:
