@@ -114,9 +114,10 @@ import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.QuickPicksDisplayModeKey
 import dev.citali.lunartune.constants.RandomThemeOnStartupKey
 import dev.citali.lunartune.constants.ShowHomeCategoryChipsKey
-import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
+import dev.citali.lunartune.constants.HeaderImageDimKey
 import dev.citali.lunartune.constants.HomeHeaderImageUriKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
+import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.constants.ShowLibraryCardCachedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLikedKey
 import dev.citali.lunartune.constants.ShowLibraryCardLocalKey
@@ -167,6 +168,7 @@ fun AppearanceSettings(navController: NavController) {
     val (sharedHeaderImageUri, onSharedHeaderImageUriChange) = rememberPreference(SharedScreenHeaderImageUriKey, "")
     val (homeHeaderImageUri, onHomeHeaderImageUriChange) = rememberPreference(HomeHeaderImageUriKey, "")
     val (settingsHeaderImageUri, onSettingsHeaderImageUriChange) = rememberPreference(SettingsHeaderImageUriKey, "")
+    val (headerImageDim, onHeaderImageDimChange) = rememberPreference(HeaderImageDimKey, 1f)
     val defaultDisableAnimations = remember(context) { context.isLowRamDevice() }
     val (dynamicTheme, onDynamicThemeChange) =
         rememberPreference(
@@ -1127,6 +1129,31 @@ fun AppearanceSettings(navController: NavController) {
                         description = stringResource(if (settingsHeaderImageUri.isBlank()) R.string.header_override_shared else R.string.header_override_custom),
                         icon = { Icon(painterResource(R.drawable.settings), null) },
                         onClick = pickSettingsHeader,
+                    )
+                }
+                item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.header_image_dim)) },
+                        description =
+                            if (headerImageDim <= 0f) {
+                                stringResource(R.string.header_image_dim_zero)
+                            } else {
+                                stringResource(
+                                    R.string.header_image_dim_desc,
+                                    (headerImageDim * 100f).roundToInt(),
+                                )
+                            },
+                        icon = { Icon(painterResource(R.drawable.blur_on), null) },
+                        content = {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Slider(
+                                value = headerImageDim,
+                                onValueChange = onHeaderImageDimChange,
+                                valueRange = 0f..1f,
+                                steps = 19,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        },
                     )
                 }
                 if (homeHeaderImageUri.isNotBlank() || settingsHeaderImageUri.isNotBlank()) item {

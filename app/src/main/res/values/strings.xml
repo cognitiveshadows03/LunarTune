@@ -1305,6 +1305,9 @@
     <string name="settings_header_image_override">Settings header image</string>
     <string name="use_shared_header_image">Use shared header image</string>
     <string name="using_shared_header_image">Using the shared image when one is selected</string>
+    <string name="header_image_dim">Banner dim intensity</string>
+    <string name="header_image_dim_desc">Dim intensity: %1$d%%</string>
+    <string name="header_image_dim_zero">Dim off — the image stays bright; the bottom fade remains to blend into the page</string>
     <string name="header_image_selected">Custom image selected</string>
     <string name="header_image_not_selected">Not selected — tap to choose an image</string>
     <string name="header_image_selected_cropped">Custom banner selected — tap to replace</string>

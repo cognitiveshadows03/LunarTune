@@ -300,7 +300,9 @@ jobs:
     name: Send APKs to Telegram
     runs-on: ubuntu-latest
     needs: build
-    if: success()
+    # build deliberately runs even when bumpIconPack is skipped on an ordinary push.
+    # success() here sees that skipped ancestor too, so check the direct dependency instead.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -391,7 +393,8 @@ jobs:
     name: Publish nightly pre-release
     runs-on: ubuntu-latest
     needs: build
-    if: success() && github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    # As above, a skipped bumpIconPack is expected on pushes and must not suppress the nightly.
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]' }}
     permissions:
       contents: write
     steps:
