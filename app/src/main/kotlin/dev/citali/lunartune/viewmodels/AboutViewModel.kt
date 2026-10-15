@@ -28,11 +28,8 @@ import dev.citali.lunartune.about.AboutContributor
 import dev.citali.lunartune.about.AboutContributorCollection
 import dev.citali.lunartune.about.AboutDependencyLicense
 import dev.citali.lunartune.about.AboutDependencyLicenseCollection
-import dev.citali.lunartune.about.AboutTranslationContributor
-import dev.citali.lunartune.about.AboutTranslationContributorCollection
 import dev.citali.lunartune.about.FetchAboutContributorsUseCase
 import dev.citali.lunartune.about.FetchAboutDependencyLicensesUseCase
-import dev.citali.lunartune.about.FetchAboutTranslationContributorsUseCase
 import dev.citali.lunartune.currentBuildHash
 import javax.inject.Inject
 
@@ -64,7 +61,6 @@ data class AboutUiModel(
     val contributorsState: AboutContributorsUiState,
     val contributorsReadMoreUrl: String,
     val activeDialog: AboutDialog,
-    val translationContributorsState: AboutTranslationContributorsUiState,
     val dependencyLicensesState: AboutDependencyLicensesUiState,
 )
 
@@ -133,43 +129,7 @@ sealed interface AboutContributorsUiState {
 
 enum class AboutDialog {
     NONE,
-    TRANSLATION_CONTRIBUTORS,
     DEPENDENCY_LICENSES,
-}
-
-sealed interface AboutTranslationContributorsUiState {
-    data object Loading : AboutTranslationContributorsUiState
-
-    data class Success(
-        val contributors: AboutTranslationContributorUiCollection,
-    ) : AboutTranslationContributorsUiState
-
-    data object Empty : AboutTranslationContributorsUiState
-
-    data class Error(
-        @StringRes val messageResId: Int,
-    ) : AboutTranslationContributorsUiState
-}
-
-@Immutable
-data class AboutTranslationContributorUiModel(
-    val language: String,
-    val contributors: String?,
-)
-
-@Immutable
-data class AboutTranslationContributorUiCollection private constructor(
-    private val values: List<AboutTranslationContributorUiModel>,
-) {
-    val size: Int get() = values.size
-    val isEmpty: Boolean get() = values.isEmpty()
-
-    operator fun get(index: Int): AboutTranslationContributorUiModel = values[index]
-
-    companion object {
-        fun from(values: List<AboutTranslationContributorUiModel>): AboutTranslationContributorUiCollection =
-            AboutTranslationContributorUiCollection(values.toList())
-    }
 }
 
 sealed interface AboutDependencyLicensesUiState {
@@ -246,7 +206,6 @@ class AboutViewModel
     @Inject
     constructor(
         private val fetchAboutContributors: FetchAboutContributorsUseCase,
-        private val fetchTranslationContributors: FetchAboutTranslationContributorsUseCase,
         private val fetchDependencyLicenses: FetchAboutDependencyLicensesUseCase,
     ) : ViewModel() {
         private val _state = MutableStateFlow<AboutScreenState>(AboutScreenState.Loading)
@@ -256,11 +215,8 @@ class AboutViewModel
         val effects = _effects.asSharedFlow()
 
         private var contributorsJob: Job? = null
-        private var translationContributorsJob: Job? = null
         private var dependencyLicensesJob: Job? = null
         private var contributorsState: AboutContributorsUiState = AboutContributorsUiState.Loading
-        private var translationContributorsState: AboutTranslationContributorsUiState =
-            AboutTranslationContributorsUiState.Loading
         private var dependencyLicensesState: AboutDependencyLicensesUiState = AboutDependencyLicensesUiState.Loading
         private var activeDialog = AboutDialog.NONE
 
@@ -272,12 +228,6 @@ class AboutViewModel
             loadContributors(force = true)
         }
 
-        fun openTranslationContributors() {
-            activeDialog = AboutDialog.TRANSLATION_CONTRIBUTORS
-            updateState()
-            loadTranslationContributors()
-        }
-
         fun openDependencyLicenses() {
             activeDialog = AboutDialog.DEPENDENCY_LICENSES
             updateState()
@@ -287,10 +237,6 @@ class AboutViewModel
         fun dismissDialog() {
             activeDialog = AboutDialog.NONE
             updateState()
-        }
-
-        fun retryTranslationContributors() {
-            loadTranslationContributors(force = true)
         }
 
         fun retryDependencyLicenses() {
@@ -331,38 +277,6 @@ class AboutViewModel
                         } catch (throwable: Throwable) {
                             if (throwable is CancellationException) throw throwable
                             AboutContributorsUiState.Error(R.string.error_unknown)
-                        }
-                    updateState()
-                }
-        }
-
-        private fun loadTranslationContributors(force: Boolean = false) {
-            if (!force && translationContributorsJob?.isActive == true) return
-            if (!force && translationContributorsState is AboutTranslationContributorsUiState.Success) return
-            translationContributorsJob?.cancel()
-            translationContributorsState = AboutTranslationContributorsUiState.Loading
-            updateState()
-            translationContributorsJob =
-                viewModelScope.launch(Dispatchers.IO) {
-                    translationContributorsState =
-                        try {
-                            fetchTranslationContributors()
-                                .fold(
-                                    onSuccess = { contributors ->
-                                        val contributorUiModels = contributors.toUiCollection()
-                                        if (contributorUiModels.isEmpty) {
-                                            AboutTranslationContributorsUiState.Empty
-                                        } else {
-                                            AboutTranslationContributorsUiState.Success(contributorUiModels)
-                                        }
-                                    },
-                                    onFailure = {
-                                        AboutTranslationContributorsUiState.Error(R.string.error_unknown)
-                                    },
-                                )
-                        } catch (throwable: Throwable) {
-                            if (throwable is CancellationException) throw throwable
-                            AboutTranslationContributorsUiState.Error(R.string.error_unknown)
                         }
                     updateState()
                 }
@@ -541,7 +455,6 @@ class AboutViewModel
                 contributorsState = contributorsState,
                 contributorsReadMoreUrl = ContributorsReadMoreUrl,
                 activeDialog = activeDialog,
-                translationContributorsState = translationContributorsState,
                 dependencyLicensesState = dependencyLicensesState,
             )
 
@@ -558,20 +471,6 @@ class AboutViewModel
                 login = login,
                 avatarUrl = avatarUrl,
                 profileUrl = profileUrl,
-            )
-
-        private fun AboutTranslationContributorCollection.toUiCollection(): AboutTranslationContributorUiCollection {
-            val contributors = ArrayList<AboutTranslationContributorUiModel>(size)
-            for (index in 0 until size) {
-                contributors.add(this[index].toUiModel())
-            }
-            return AboutTranslationContributorUiCollection.from(contributors)
-        }
-
-        private fun AboutTranslationContributor.toUiModel(): AboutTranslationContributorUiModel =
-            AboutTranslationContributorUiModel(
-                language = language,
-                contributors = contributors.joinToString().takeIf(String::isNotBlank),
             )
 
         private fun AboutDependencyLicenseCollection.toUiCollection(): AboutDependencyLicenseUiCollection {

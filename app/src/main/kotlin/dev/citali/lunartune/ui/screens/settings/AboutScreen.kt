@@ -89,8 +89,6 @@ import dev.citali.lunartune.viewmodels.AboutDialog
 import dev.citali.lunartune.viewmodels.AboutLinkCollection
 import dev.citali.lunartune.viewmodels.AboutScreenEffect
 import dev.citali.lunartune.viewmodels.AboutScreenState
-import dev.citali.lunartune.viewmodels.AboutTranslationContributorUiCollection
-import dev.citali.lunartune.viewmodels.AboutTranslationContributorsUiState
 import dev.citali.lunartune.viewmodels.AboutUiModel
 import dev.citali.lunartune.viewmodels.AboutViewModel
 import dev.citali.lunartune.viewmodels.TeamMember
@@ -121,10 +119,8 @@ fun AboutScreen(
         onNavigateHome = navController::backToMain,
         onOpenUri = viewModel::openUri,
         onRetryContributors = viewModel::retryContributors,
-        onOpenTranslationContributors = viewModel::openTranslationContributors,
         onOpenDependencyLicenses = viewModel::openDependencyLicenses,
         onDismissDialog = viewModel::dismissDialog,
-        onRetryTranslationContributors = viewModel::retryTranslationContributors,
         onRetryDependencyLicenses = viewModel::retryDependencyLicenses,
     )
 }
@@ -138,10 +134,8 @@ private fun AboutScreenContent(
     onNavigateHome: () -> Unit,
     onOpenUri: (String) -> Unit,
     onRetryContributors: () -> Unit,
-    onOpenTranslationContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
     onDismissDialog: () -> Unit,
-    onRetryTranslationContributors: () -> Unit,
     onRetryDependencyLicenses: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -224,7 +218,6 @@ private fun AboutScreenContent(
                     model = state.model,
                     onOpenUri = onOpenUri,
                     onRetryContributors = onRetryContributors,
-                    onOpenTranslationContributors = onOpenTranslationContributors,
                     onOpenDependencyLicenses = onOpenDependencyLicenses,
                     modifier =
                         Modifier
@@ -245,7 +238,6 @@ private fun AboutScreenContent(
         AboutFullScreenDialogs(
             model = state.model,
             onDismiss = onDismissDialog,
-            onRetryTranslationContributors = onRetryTranslationContributors,
             onRetryDependencyLicenses = onRetryDependencyLicenses,
         )
     }
@@ -282,25 +274,11 @@ private fun AboutMessageContent(
 private fun AboutFullScreenDialogs(
     model: AboutUiModel,
     onDismiss: () -> Unit,
-    onRetryTranslationContributors: () -> Unit,
     onRetryDependencyLicenses: () -> Unit,
 ) {
     when (model.activeDialog) {
         AboutDialog.NONE -> {
             Unit
-        }
-
-        AboutDialog.TRANSLATION_CONTRIBUTORS -> {
-            AboutFullScreenDialog(
-                title = stringResource(R.string.about_contributor_translation),
-                onDismiss = onDismiss,
-            ) { modifier ->
-                TranslationContributorsDialogContent(
-                    state = model.translationContributorsState,
-                    onRetry = onRetryTranslationContributors,
-                    modifier = modifier,
-                )
-            }
         }
 
         AboutDialog.DEPENDENCY_LICENSES -> {
@@ -371,49 +349,6 @@ private fun AboutFullScreenDialog(
                             WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
                         ),
                     ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun TranslationContributorsDialogContent(
-    state: AboutTranslationContributorsUiState,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    when (state) {
-        AboutTranslationContributorsUiState.Loading -> {
-            DialogStatusContent(
-                message = stringResource(R.string.loading),
-                showRetry = false,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        AboutTranslationContributorsUiState.Empty -> {
-            DialogStatusContent(
-                message = stringResource(R.string.no_results_found),
-                showRetry = true,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        is AboutTranslationContributorsUiState.Error -> {
-            DialogStatusContent(
-                message = stringResource(state.messageResId),
-                showRetry = true,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        is AboutTranslationContributorsUiState.Success -> {
-            TranslationContributorList(
-                contributors = state.contributors,
-                modifier = modifier,
             )
         }
     }
@@ -492,83 +427,6 @@ private fun DialogStatusContent(
             }
         }
     }
-}
-
-@Composable
-private fun TranslationContributorList(
-    contributors: AboutTranslationContributorUiCollection,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        LazyColumn(
-            modifier =
-                Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = AboutDimensions.DialogContentMaxWidth)
-                    .fillMaxWidth(),
-            contentPadding = AboutDimensions.DialogListPadding,
-            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-        ) {
-            items(
-                count = contributors.size,
-                key = { index -> contributors[index].language },
-                contentType = { "translation_contributor" },
-            ) { index ->
-                val contributor = contributors[index]
-                TranslationContributorListItem(
-                    language = contributor.language,
-                    contributors = contributor.contributors,
-                    index = index,
-                    itemCount = contributors.size,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TranslationContributorListItem(
-    language: String,
-    contributors: String?,
-    index: Int,
-    itemCount: Int,
-    modifier: Modifier = Modifier,
-) {
-    SegmentedListItem(
-        onClick = NoOpAction,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = if (contributors == null) 64.dp else 76.dp),
-        colors = AboutListItemDefaults.colors(),
-        leadingContent = {
-            AboutLeadingIcon(iconResId = R.drawable.language)
-        },
-        supportingContent =
-            contributors?.let { contributorNames ->
-                {
-                    Text(
-                        text = contributorNames,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            },
-        content = {
-            Text(
-                text = language,
-                style = MaterialTheme.typography.titleMediumEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    )
 }
 
 @Composable
@@ -665,7 +523,6 @@ private fun AboutSuccessContent(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
     onRetryContributors: () -> Unit,
-    onOpenTranslationContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues,
@@ -692,7 +549,6 @@ private fun AboutSuccessContent(
         item(key = "project_information", contentType = "about_actions") {
             AboutContentContainer {
                 AboutProjectInformationSection(
-                    onOpenTranslationContributors = onOpenTranslationContributors,
                     onOpenDependencyLicenses = onOpenDependencyLicenses,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -937,29 +793,17 @@ private fun LinkChipRow(
 
 @Composable
 private fun AboutProjectInformationSection(
-    onOpenTranslationContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    AboutActionListItem(
+        title = stringResource(R.string.about_license),
+        iconResId = R.drawable.info,
+        index = 0,
+        itemCount = 1,
+        onClick = onOpenDependencyLicenses,
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-    ) {
-        AboutActionListItem(
-            title = stringResource(R.string.about_contributor_translation),
-            iconResId = R.drawable.translate,
-            index = 0,
-            itemCount = 2,
-            onClick = onOpenTranslationContributors,
-        )
-        AboutActionListItem(
-            title = stringResource(R.string.about_license),
-            iconResId = R.drawable.info,
-            index = 1,
-            itemCount = 2,
-            onClick = onOpenDependencyLicenses,
-        )
-    }
+    )
 }
 
 @Composable
