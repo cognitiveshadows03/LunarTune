@@ -143,7 +143,7 @@ private fun BannerScrim(
                         color = color,
                         clear = clear,
                         height = heightPx,
-                        alphaAt = { t -> dim * (if (veil) 0.14f else 0.28f) * (1f - smoothStep(t / 0.26f)) },
+                        alphaAt = { t -> dim * (if (veil) 0.14f else 0.28f) * (1f - smoothStep(t / 0.26f, 0f)) },
                     )
 
                 // The join: fixed, unscaled. Full [blendColor] at the foot of the banner, gone by
