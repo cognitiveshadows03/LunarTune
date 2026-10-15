@@ -118,6 +118,7 @@ import dev.citali.lunartune.constants.PlayerBackgroundStyle
 import dev.citali.lunartune.constants.PlayerBackgroundStyleKey
 import dev.citali.lunartune.db.entities.LyricsEntity
 import dev.citali.lunartune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
+import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
 import dev.citali.lunartune.lyrics.LyricsEntry
 import dev.citali.lunartune.lyrics.LyricsRomanizationPreferences
 import dev.citali.lunartune.lyrics.LyricsUtils.isLineSyncedLrc
@@ -193,6 +194,13 @@ internal val LyricsPaneBottomPadding = 12.dp
 /** Height of the fade the lyrics library draws over the bottom of the Enhanced list. */
 internal val LyricsEnhancedBottomFade = 100.dp
 
+private data class LyricsEnhancedRomanizationInputs(
+    val lyricsEntries: List<LyricsEntry>,
+    val preferences: LyricsRomanizationPreferences,
+    val appleMusicPlayerMode: Boolean,
+    val japaneseLanguagePackInstalled: Boolean,
+)
+
 @Composable
 fun LyricsEnhanced(
     sliderPositionProvider: () -> Long?,
@@ -219,6 +227,7 @@ fun LyricsEnhanced(
     val (romanizeJapanese) = rememberPreference(LyricsRomanizeJapaneseKey, defaultValue = true)
     val (romanizeKorean) = rememberPreference(LyricsRomanizeKoreanKey, defaultValue = true)
     val (romanizeOtherLanguages) = rememberPreference(LyricsRomanizeOtherLanguagesKey, defaultValue = true)
+    val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
 
     val romanizationPreferences =
         remember(
@@ -302,10 +311,36 @@ fun LyricsEnhanced(
     var syncedLyricsRenderVersion by remember(lyricsEntries, isTtmlFormat) {
         mutableIntStateOf(0)
     }
+    var previousRomanizationInputs by remember {
+        mutableStateOf(
+            LyricsEnhancedRomanizationInputs(
+                lyricsEntries = lyricsEntries,
+                preferences = romanizationPreferences,
+                appleMusicPlayerMode = appleMusicPlayerMode,
+                japaneseLanguagePackInstalled = isJapaneseLanguagePackInstalled,
+            ),
+        )
+    }
 
-    LaunchedEffect(lyricsEntries, romanizationPreferences, appleMusicPlayerMode) {
-        syncedLyrics = buildSyncedLyrics(lyricsEntries, isTtmlFormat, emptyMap())
-        syncedLyricsRenderVersion += 1
+    LaunchedEffect(lyricsEntries, romanizationPreferences, appleMusicPlayerMode, isJapaneseLanguagePackInstalled) {
+        val currentInputs =
+            LyricsEnhancedRomanizationInputs(
+                lyricsEntries = lyricsEntries,
+                preferences = romanizationPreferences,
+                appleMusicPlayerMode = appleMusicPlayerMode,
+                japaneseLanguagePackInstalled = isJapaneseLanguagePackInstalled,
+            )
+        val languagePackOnlyChanged =
+            previousRomanizationInputs.lyricsEntries === lyricsEntries &&
+                previousRomanizationInputs.preferences == romanizationPreferences &&
+                previousRomanizationInputs.appleMusicPlayerMode == appleMusicPlayerMode &&
+                previousRomanizationInputs.japaneseLanguagePackInstalled != isJapaneseLanguagePackInstalled
+        previousRomanizationInputs = currentInputs
+
+        if (!languagePackOnlyChanged) {
+            syncedLyrics = buildSyncedLyrics(lyricsEntries, isTtmlFormat, emptyMap())
+            syncedLyricsRenderVersion += 1
+        }
         if (!romanizationPreferences.isEnabled) return@LaunchedEffect
 
         val toRomanize =
@@ -365,7 +400,7 @@ fun LyricsEnhanced(
             tempMap[index] = romanized
         }
         syncedLyrics = buildSyncedLyrics(lyricsEntries, isTtmlFormat, tempMap)
-        syncedLyricsRenderVersion += 1
+        if (!languagePackOnlyChanged) syncedLyricsRenderVersion += 1
     }
 
     val leadMs = if (isTtmlFormat) TTML_LEAD_MS else LRC_LEAD_MS

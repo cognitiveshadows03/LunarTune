@@ -238,6 +238,7 @@ android {
             excludes += "META-INF/NOTICE.md"
             excludes += "META-INF/CONTRIBUTORS.md"
             excludes += "META-INF/LICENSE.md"
+            excludes += "com/atilika/kuromoji/ipadic/*.bin"
         }
     }
 

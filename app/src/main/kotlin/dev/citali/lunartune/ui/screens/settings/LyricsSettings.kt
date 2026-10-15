@@ -9,6 +9,7 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
+import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -65,6 +67,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
+import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
+import dev.citali.lunartune.lyrics.JapaneseLanguagePackState
 import dev.citali.lunartune.constants.EnableBetterLyricsKey
 import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.constants.EnableKugouKey
@@ -122,6 +126,23 @@ fun LyricsSettings(
 ) {
     var showClearLyricsDialog by remember { mutableStateOf(false) }
     var showPaxsenixStatsDialog by remember { mutableStateOf(false) }
+    val japaneseLanguagePackState by JapaneseLanguagePackManager.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val japaneseLanguagePackDescription =
+        when (val packState = japaneseLanguagePackState) {
+            JapaneseLanguagePackState.NotInstalled -> stringResource(R.string.japanese_language_pack_not_installed)
+            is JapaneseLanguagePackState.Downloading ->
+                packState.progressPercent?.let {
+                    stringResource(R.string.japanese_language_pack_downloading, it)
+                } ?: stringResource(R.string.japanese_language_pack_downloading_unknown)
+            JapaneseLanguagePackState.Removing -> stringResource(R.string.japanese_language_pack_removing)
+            is JapaneseLanguagePackState.Installed ->
+                stringResource(
+                    R.string.japanese_language_pack_installed,
+                    Formatter.formatFileSize(context, packState.sizeBytes),
+                )
+            JapaneseLanguagePackState.Failed -> stringResource(R.string.japanese_language_pack_failed)
+        }
 
     if (showClearLyricsDialog) {
         ActionPromptDialog(
@@ -594,9 +615,48 @@ fun LyricsSettings(
             item {
                 SwitchPreference(
                     title = { Text(stringResource(R.string.lyrics_romanize_japanese)) },
+                    description =
+                        if (japaneseLanguagePackState is JapaneseLanguagePackState.Installed) {
+                            null
+                        } else {
+                            stringResource(R.string.japanese_language_pack_required)
+                        },
                     icon = { Icon(painterResource(R.drawable.lyrics), null) },
                     checked = lyricsRomanizeJapanese,
                     onCheckedChange = onLyricsRomanizeJapaneseChange,
+                )
+            }
+
+            item {
+                PreferenceEntry(
+                    title = { Text(stringResource(R.string.japanese_language_pack_title)) },
+                    description = japaneseLanguagePackDescription,
+                    icon = { Icon(painterResource(R.drawable.download), null) },
+                    trailingContent = {
+                        when (japaneseLanguagePackState) {
+                            JapaneseLanguagePackState.NotInstalled ->
+                                TextButton(onClick = { JapaneseLanguagePackManager.install() }) {
+                                    Text(stringResource(R.string.download))
+                                }
+                            is JapaneseLanguagePackState.Downloading ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    LoadingIndicator(modifier = Modifier.size(22.dp))
+                                    Spacer(Modifier.size(4.dp))
+                                    TextButton(onClick = { JapaneseLanguagePackManager.cancelDownload() }) {
+                                        Text(stringResource(R.string.cancel))
+                                    }
+                                }
+                            JapaneseLanguagePackState.Removing -> LoadingIndicator(modifier = Modifier.size(22.dp))
+                            is JapaneseLanguagePackState.Installed ->
+                                TextButton(onClick = { JapaneseLanguagePackManager.remove() }) {
+                                    Text(stringResource(R.string.remove_japanese_language_pack))
+                                }
+                            JapaneseLanguagePackState.Failed ->
+                                TextButton(onClick = { JapaneseLanguagePackManager.install() }) {
+                                    Text(stringResource(R.string.retry))
+                                }
+                        }
+                    },
                 )
             }
 

@@ -9,7 +9,6 @@ package dev.citali.lunartune.lyrics
 
 import android.icu.text.Transliterator
 import android.text.format.DateUtils
-import com.atilika.kuromoji.ipadic.Tokenizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.rukamori.archivetune.betterlyrics.QRCParser
@@ -378,11 +377,6 @@ object LyricsUtils {
                 ),
         )
 
-    // Lazy initialized Tokenizer
-    private val kuromojiTokenizer: Tokenizer by lazy {
-        Tokenizer()
-    }
-
     fun isTtml(lyrics: String): Boolean {
         val trimmed = normalizeLyricsText(lyrics)
         if (!trimmed.startsWith("<")) return false
@@ -741,15 +735,13 @@ object LyricsUtils {
     }
 
     /**
-     * Romanizes Japanese text using Kuromoji Tokenizer and the optimized katakanaToRomaji function.
-     * Runs on Dispatchers.Default for CPU-intensive work.
-     * Expected impact: Faster tokenization due to reused Tokenizer instance and faster
-     * per-token romanization.
+     * Romanizes Japanese text with the optional downloaded Kuromoji dictionary and the optimized
+     * katakanaToRomaji function. Returns the original text when the language pack is unavailable.
      */
     suspend fun romanizeJapanese(text: String): String =
         withContext(Dispatchers.Default) {
-            // Use the lazily initialized tokenizer
-            val tokens = kuromojiTokenizer.tokenize(text)
+            val tokenizer = JapaneseLanguagePackManager.tokenizerOrNull() ?: return@withContext text
+            val tokens = tokenizer.tokenize(text)
 
             val romanizedTokens =
                 tokens.mapIndexed { index, token ->

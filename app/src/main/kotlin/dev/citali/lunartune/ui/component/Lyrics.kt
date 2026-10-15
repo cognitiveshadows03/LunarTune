@@ -145,6 +145,7 @@ import dev.citali.lunartune.constants.LyricsTextSizeKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
 import dev.citali.lunartune.constants.PlayerBackgroundStyleKey
 import dev.citali.lunartune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
+import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
 import dev.citali.lunartune.lyrics.LyricsEntry
 import dev.citali.lunartune.lyrics.LyricsRomanizationPreferences
 import dev.citali.lunartune.lyrics.LyricsUtils.findCurrentLineIndex
@@ -442,6 +443,7 @@ fun Lyrics(
     val romanizeJapaneseLyrics by rememberPreference(LyricsRomanizeJapaneseKey, true)
     val romanizeKoreanLyrics by rememberPreference(LyricsRomanizeKoreanKey, true)
     val romanizeOtherLanguagesLyrics by rememberPreference(LyricsRomanizeOtherLanguagesKey, true)
+    val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
     val romanizationPreferences =
         remember(
             romanizeJapaneseLyrics,
@@ -491,7 +493,7 @@ fun Lyrics(
             }
         }
 
-    LaunchedEffect(lines, romanizationPreferences) {
+    LaunchedEffect(lines, romanizationPreferences, isJapaneseLanguagePackInstalled) {
         if (!romanizationPreferences.isEnabled) {
             lines.forEach { entry ->
                 if (entry.romanizedTextFlow.value != null) {

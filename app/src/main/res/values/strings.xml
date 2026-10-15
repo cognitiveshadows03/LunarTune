@@ -704,6 +704,15 @@
     <string name="queue_songs_preload_count">Number of upcoming songs to preload</string>
     <string name="display">Display</string>
     <string name="romanization">Romanization</string>
+    <string name="japanese_language_pack_title">Japanese language pack</string>
+    <string name="japanese_language_pack_required">Built-in offline Japanese romanization requires this language pack.</string>
+    <string name="japanese_language_pack_not_installed">Download the approximately 13 MB pack for offline Japanese romanization.</string>
+    <string name="japanese_language_pack_downloading">Downloading Japanese language pack (%1$d%%)</string>
+    <string name="japanese_language_pack_downloading_unknown">Downloading Japanese language pack…</string>
+    <string name="japanese_language_pack_removing">Removing Japanese language pack…</string>
+    <string name="japanese_language_pack_installed">Installed (%1$s); offline Japanese romanization is ready.</string>
+    <string name="japanese_language_pack_failed">Couldn’t download or load the pack. Check your connection and retry.</string>
+    <string name="remove_japanese_language_pack">Remove</string>
     <string name="hide_explicit">Hide explicit content</string>
     <string name="hide_video">Hide music videos</string>
     <string name="ai_content_filter">AI content filter</string>
