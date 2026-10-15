@@ -18,11 +18,14 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -78,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -97,6 +101,7 @@ import com.mocharealm.accompanist.lyrics.core.model.synced.SyncedLine
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.KaraokeLyricsView
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Semaphore
@@ -135,6 +140,7 @@ import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.utils.reportException
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -169,6 +175,34 @@ private const val LYRICS_ANCHOR_GLIDE_MS = 520
 
 /** Keep-alive band [KaraokeLyricsView] inflates its items with. */
 private val LyricsKeepAliveZone = 72.dp
+
+/** How close to the anchor a line counts as placed, in pixels. */
+private const val LYRICS_ANCHOR_TOLERANCE_PX = 2f
+
+/** How long before a line change the list sets off towards the line that is about to take over. */
+private const val LYRICS_ANCHOR_LEAD_MS = 220
+
+/** The pre-scroll is timed to be over this long before the change, so it never runs late. */
+private const val LYRICS_ANCHOR_LEAD_TAIL_MS = 30
+
+/** Shortest pre-scroll: a change that is already due still gets a move rather than a cut. */
+private const val LYRICS_ANCHOR_MIN_SCROLL_MS = 120
+
+/** How long the gentle corrections take when a line has to be drawn back to the anchor. */
+private const val LYRICS_ANCHOR_CORRECTION_MS = 120
+
+/** How long after a placement the anchor keeps being checked against the pane's real layout. */
+private const val LYRICS_ANCHOR_VERIFY_MS = 450L
+
+/** How long a line may stay out of view before the pane asks the list to bring it in. */
+private const val LYRICS_ANCHOR_BRING_INTO_VIEW_MS = 400L
+
+/** A target that moved at least this far since the last pass counts as the anchor gliding. */
+private const val LYRICS_ANCHOR_GLIDE_STEP_PX = 0.5f
+
+/** How often the anchor is checked while a song plays, and while it is paused. */
+private const val LYRICS_ANCHOR_TICK_MS = 16L
+private const val LYRICS_ANCHOR_IDLE_TICK_MS = 100L
 
 /** Space both lyrics panes keep below their list; the lyrics page relies on it matching. */
 internal val LyricsPaneBottomPadding = 12.dp
@@ -665,6 +699,193 @@ fun LyricsEnhanced(
                             label = "lyricsViewportOffset",
                         )
 
+                    // ── Anchor control ───────────────────────────────────────────────────────
+                    // The library moves the list itself and reacts to a *line change*: the moment
+                    // the focused index flips it scrolls the anchor in one step and lets a spring
+                    // per item smooth the jump, each item easing in on its own stiffness. Two
+                    // things fall outside that.
+                    //
+                    // The first is how a change looks. A spring settles far slower than the change
+                    // itself, so the list is still drifting when the next line arrives, and the
+                    // farther rows - where the springs are softest - never catch up at all. The
+                    // library's rigid path, a plain scroll, runs only while a scroll is already in
+                    // flight; so shortly before each change the pane opens one of its own and
+                    // carries the list to where the library is about to want it. The library's
+                    // own move then lands on a list already in place and the springs have nothing
+                    // left to pull. The scroll is deliberately still running across the moment of
+                    // the change - that is what keeps the placement rigid.
+                    //
+                    // The second is where the line ends up when the list has nothing to measure,
+                    // which is what a pane opening mid-song or a seek off screen leaves it with:
+                    // the library has to place the item blind, and its guess sits the focused line
+                    // low in the pane until the next change happens to correct it. So the
+                    // placement is also checked against the pane's real layout, and corrected
+                    // whenever it is the pane's business and not the reader's: a fresh pane, a
+                    // seek, or the resize the anchor is gliding through. Nothing here fights a
+                    // finger - every move waits for the list to be still.
+                    val anchorDensity = LocalDensity.current
+                    val anchorOffset = rememberUpdatedState(lyricsViewportOffset)
+                    LaunchedEffect(
+                        syncedLyrics,
+                        syncedLyricsRenderVersion,
+                        listState,
+                        animationsDisabled,
+                    ) {
+                        if (animationsDisabled) return@LaunchedEffect
+                        val anchorLines = syncedLyrics.lines
+                        if (anchorLines.isEmpty()) return@LaunchedEffect
+                        val focusEnds =
+                            IntArray(anchorLines.size) { index -> lyricsFocusEndOf(anchorLines[index]) }
+
+                        var placed = false
+                        var lastFocus = -1
+                        var handledFlip = -1
+                        var verifyUntilMs = 0L
+                        var unplacedSinceMs = 0L
+                        var previousTargetPx = Float.NaN
+
+                        // A scroll here is routinely interrupted - by the reader, or by the
+                        // library making its own move - and that interruption arrives as a
+                        // cancellation. Only a cancelled effect is worth propagating.
+                        suspend fun scrollAnchor(action: suspend () -> Unit) {
+                            try {
+                                action()
+                            } catch (cancellation: CancellationException) {
+                                if (!currentCoroutineContext().isActive) throw cancellation
+                            }
+                        }
+
+                        while (isActive) {
+                            val layout = listState.layoutInfo
+                            val targetPx =
+                                layout.viewportStartOffset +
+                                    with(anchorDensity) {
+                                        (anchorOffset.value + LyricsKeepAliveZone).toPx()
+                                    }
+                            val timeMs = playbackSyncPosition()
+                            val focus = lyricsFocusIndexAt(anchorLines, focusEnds, timeMs)
+                            val flipAt = focusEnds[focus]
+                            val remainingMs = flipAt - timeMs
+                            val focusItem =
+                                layout.visibleItemsInfo.firstOrNull { item -> item.index == focus }
+                            val placementError = focusItem?.let { item -> item.offset.toFloat() - targetPx }
+                            val nowMs = System.currentTimeMillis()
+                            val idle = !listState.isScrollInProgress
+                            val playing = player.isPlaying
+                            val anchorMoving = abs(targetPx - previousTargetPx) > LYRICS_ANCHOR_GLIDE_STEP_PX
+                            if (focus != lastFocus) {
+                                placed = false
+                                handledFlip = -1
+                            }
+
+                            when {
+                                // No line on the anchor yet: a pane that has just opened, a seek,
+                                // or a change the library has not caught up with. Placed in one
+                                // step, not animated - the pane is still fading in, and a scroll
+                                // nobody asked for reads worse than a cut nobody sees.
+                                !placed -> {
+                                    if (placementError != null && idle) {
+                                        if (abs(placementError) > LYRICS_ANCHOR_TOLERANCE_PX) {
+                                            scrollAnchor { listState.scrollBy(placementError) }
+                                        }
+                                        placed = true
+                                        lastFocus = focus
+                                        verifyUntilMs = nowMs + LYRICS_ANCHOR_VERIFY_MS
+                                        unplacedSinceMs = 0L
+                                    } else if (placementError == null && idle) {
+                                        // Not laid out, or the library's own move for it never
+                                        // landed. Ask the list itself to bring the line into view,
+                                        // then place it exactly on a later pass.
+                                        if (unplacedSinceMs == 0L) {
+                                            unplacedSinceMs = nowMs
+                                        } else if (nowMs - unplacedSinceMs > LYRICS_ANCHOR_BRING_INTO_VIEW_MS) {
+                                            unplacedSinceMs = nowMs
+                                            scrollAnchor {
+                                                listState.scrollToItem(focus, -targetPx.roundToInt())
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // The change is due: carry the incoming line to the anchor while the
+                                // current one is still being sung, so the move the library is about
+                                // to make has nothing to spring into place.
+                                playing &&
+                                    idle &&
+                                    handledFlip != flipAt &&
+                                    remainingMs in 1..LYRICS_ANCHOR_LEAD_MS -> {
+                                    val nextFocus = lyricsFocusIndexAt(anchorLines, focusEnds, flipAt)
+                                    val nextItem =
+                                        layout.visibleItemsInfo.firstOrNull { item -> item.index == nextFocus }
+                                    val nextError = nextItem?.let { item -> item.offset.toFloat() - targetPx }
+                                    if (nextFocus != focus && nextError != null) {
+                                        handledFlip = flipAt
+                                        // The list is about to leave this line behind on purpose,
+                                        // so the check that guards the last placement has to let go
+                                        // of it - otherwise the two would pull against each other
+                                        // on songs whose lines are shorter than the check's window.
+                                        verifyUntilMs = 0L
+                                        if (abs(nextError) > LYRICS_ANCHOR_TOLERANCE_PX) {
+                                            val duration =
+                                                (remainingMs - LYRICS_ANCHOR_LEAD_TAIL_MS)
+                                                    .coerceIn(
+                                                        LYRICS_ANCHOR_MIN_SCROLL_MS,
+                                                        LYRICS_ANCHOR_LEAD_MS,
+                                                    )
+                                            scrollAnchor {
+                                                listState.animateScrollBy(
+                                                    nextError,
+                                                    tween(
+                                                        durationMillis = duration,
+                                                        easing = LinearOutSlowInEasing,
+                                                    ),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // The pane changed height and the anchor is gliding to its new
+                                // place: ride with it, moving as the gliding value moves rather
+                                // than snapping to the end. This is the library's own way of
+                                // following the anchor, at the anchor's own pace.
+                                idle &&
+                                    anchorMoving &&
+                                    placementError != null &&
+                                    abs(placementError) > LYRICS_ANCHOR_TOLERANCE_PX -> {
+                                    scrollAnchor { listState.scrollBy(placementError) }
+                                }
+
+                                // A moment after a placement, in case the library's move for the
+                                // same line only finished landing after it. Eased, so a correction
+                                // reads as the line settling rather than as a jump.
+                                idle &&
+                                    nowMs < verifyUntilMs &&
+                                    placementError != null &&
+                                    abs(placementError) > LYRICS_ANCHOR_TOLERANCE_PX -> {
+                                    scrollAnchor {
+                                        listState.animateScrollBy(
+                                            placementError,
+                                            tween(durationMillis = LYRICS_ANCHOR_CORRECTION_MS),
+                                        )
+                                    }
+                                }
+                            }
+
+                            previousTargetPx = targetPx
+                            // While the anchor is on the move the pane has to keep up with it, so
+                            // the check runs at the frame rate; once everything is still, it drops
+                            // to a rate that costs nothing to leave running.
+                            val tick =
+                                if (playing || anchorMoving) {
+                                    LYRICS_ANCHOR_TICK_MS
+                                } else {
+                                    LYRICS_ANCHOR_IDLE_TICK_MS
+                                }
+                            delay(tick)
+                        }
+                    }
+
                     CompositionLocalProvider(LocalLayoutDirection provides lyricsLayoutDirection) {
                         key(lyricsSessionKey, syncedLyricsRenderVersion) {
                             KaraokeLyricsView(
@@ -1118,6 +1339,35 @@ private fun List<WordTimestamp>.toKaraokeSyllables(phonetics: List<String?>): Li
     }
 
 private fun Double.toMilliseconds(): Int = (this * 1000.0).roundToInt().coerceAtLeast(0)
+
+/**
+ * The library's own focus rule, mirrored: the line being sung, or - between lines - the one about
+ * to be. Kept in step with `KaraokeLyricsView` on purpose: the anchor's whole job is to be wrong
+ * at the moment the library is, so that the library's own move lands on a list already in place.
+ */
+private fun lyricsFocusIndexAt(
+    lines: List<ISyncedLine>,
+    focusEnds: IntArray,
+    timeMs: Int,
+): Int {
+    val current =
+        lines.indices.firstOrNull { index ->
+            timeMs >= lines[index].start && timeMs < focusEnds[index]
+        }
+    if (current != null) return current
+    val upcoming = lines.indexOfFirst { line -> line.start > timeMs }
+    return if (upcoming != -1) upcoming else lines.lastIndex
+}
+
+/**
+ * When the library's focus leaves a line: its end, but no earlier than the end of an accompaniment
+ * riding on it - an ad-lib over the last word keeps the main line focused.
+ */
+private fun lyricsFocusEndOf(line: ISyncedLine): Int {
+    val accompanimentEnd =
+        (line as? KaraokeLine.MainKaraokeLine)?.accompanimentLines?.maxOfOrNull { it.end }
+    return maxOf(line.end, accompanimentEnd ?: line.end)
+}
 
 private fun buildSyncedLyrics(
     entries: List<LyricsEntry>,
