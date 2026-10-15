@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -206,6 +207,8 @@ fun LyricsV2(
     lyricsLineBlurOverride: Boolean? = null,
     /** Enables Apple Music player-only romanization stability work; all other callers keep their defaults. */
     appleMusicPlayerMode: Boolean = false,
+    /** Parent-owned state for hosts that temporarily remove this pane from composition. */
+    rememberedListState: LazyListState? = null,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -402,7 +405,7 @@ fun LyricsV2(
     }
 
     // ── Scroll State ──
-    val listState = rememberLazyListState()
+    val listState = rememberedListState ?: rememberLazyListState()
     var isManualScrolling by remember { mutableStateOf(false) }
     var lastManualScrollTime by remember { mutableLongStateOf(0L) }
 

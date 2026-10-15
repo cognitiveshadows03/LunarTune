@@ -183,7 +183,7 @@ private const val LYRICS_ANCHOR_TOLERANCE_PX = 2f
  * Long enough to cover the pane fading in and the library's own first scroll finishing, short
  * enough that it is over before anything else on the page has settled.
  */
-private const val LYRICS_OPEN_ANCHOR_WINDOW_MS = 900L
+private const val LYRICS_OPEN_ANCHOR_WINDOW_MS = 980L
 
 /** How often that check runs while the window lasts. */
 private const val LYRICS_OPEN_ANCHOR_TICK_MS = 16L
@@ -210,6 +210,10 @@ fun LyricsEnhanced(
     lyricsLineBlurOverride: Boolean? = null,
     /** Enables Apple Music player-only romanization stability work; all other callers keep their defaults. */
     appleMusicPlayerMode: Boolean = false,
+    /** Parent-owned state for hosts that temporarily remove this pane from composition. */
+    rememberedListState: LazyListState? = null,
+    /** Increments only when the host opens its lyrics page. */
+    pageOpenGeneration: Int = 0,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -413,7 +417,7 @@ fun LyricsEnhanced(
         remember(player) {
             mutableLongStateOf(player.currentPosition.coerceAtLeast(0L))
         }
-    val listState = key(lyricsSessionKey) { rememberLazyListState() }
+    val listState = rememberedListState ?: key(lyricsSessionKey) { rememberLazyListState() }
 
     LaunchedEffect(lyricsSessionKey) {
         playbackPositionMs.longValue = player.currentPosition.coerceAtLeast(0L)
@@ -717,44 +721,45 @@ fun LyricsEnhanced(
                             label = "lyricsViewportOffset",
                         )
 
-                    // A pane that opens mid-song has to be told where the song is, and the library
-                    // only gets that right while it still has the list to measure. It scrolls to
-                    // the focused line once, the moment the list is first laid out - which is while
-                    // the pane is still settling to its height - and the guess it is left with is
-                    // what parks the line low in the pane, under the player controls, until some
-                    // later change happens to move it. That is the reopened page in one sentence.
-                    //
-                    // So the line is checked against what the layout actually says for the moment
-                    // the pane is appearing, and put where the anchor says it belongs. It is the
-                    // only moment any of this runs: the check gives up after
-                    // [LYRICS_OPEN_ANCHOR_WINDOW_MS] and never comes back, so nothing here runs
-                    // while a song is playing and nothing here can touch the pane's own animation.
-                    // The move is made in one step, not animated: the pane is still fading in, so
-                    // a position nobody can see landing beats a scroll nobody asked for.
+                    // The library owns normal lyric scrolling. This one-shot opening correction
+                    // only waits for its initial scroll (and any anchor-size glide) to settle, then
+                    // aligns the opening focus once. It never follows line changes frame by frame,
+                    // is bounded by [LYRICS_OPEN_ANCHOR_WINDOW_MS], and does not touch the ongoing
+                    // 520 ms anchor glide or the library-owned animation.
                     val openAnchorDensity = LocalDensity.current
                     val openAnchorOffset = rememberUpdatedState(lyricsViewportOffset)
-                    LaunchedEffect(listState, syncedLyrics, animationsDisabled) {
+                    LaunchedEffect(pageOpenGeneration) {
                         if (animationsDisabled) return@LaunchedEffect
                         val openLines = syncedLyrics.lines
                         if (openLines.isEmpty()) return@LaunchedEffect
                         val openFocusEnds =
                             IntArray(openLines.size) { index -> lyricsFocusEndOf(openLines[index]) }
-                        val deadlineMs = System.currentTimeMillis() + LYRICS_OPEN_ANCHOR_WINDOW_MS
+                        val openFocus = lyricsFocusIndexAt(openLines, openFocusEnds, playbackSyncPosition())
+                        val deadlineNanos =
+                            System.nanoTime() + LYRICS_OPEN_ANCHOR_WINDOW_MS * 1_000_000L
+                        var lastTargetPx = Float.NaN
+                        var targetStableSinceNanos = System.nanoTime()
 
-                        while (isActive && System.currentTimeMillis() < deadlineMs) {
+                        while (isActive && System.nanoTime() < deadlineNanos) {
                             val layout = listState.layoutInfo
                             val targetPx =
                                 layout.viewportStartOffset +
                                     with(openAnchorDensity) {
                                         (openAnchorOffset.value + LyricsKeepAliveZone).toPx()
                                     }
-                            val focus = lyricsFocusIndexAt(openLines, openFocusEnds, playbackSyncPosition())
+                            val nowNanos = System.nanoTime()
+                            if (lastTargetPx.isNaN() || abs(targetPx - lastTargetPx) > 0.25f) {
+                                lastTargetPx = targetPx
+                                targetStableSinceNanos = nowNanos
+                            }
+                            val focusStillCurrent =
+                                lyricsFocusIndexAt(openLines, openFocusEnds, playbackSyncPosition()) == openFocus
+                            if (!focusStillCurrent) return@LaunchedEffect
+
                             val focusItem =
-                                layout.visibleItemsInfo.firstOrNull { item -> item.index == focus }
-                            // Left alone while the library is still making its own move for the
-                            // line - its scroll is the one placing it, and this only has to catch
-                            // where that one ends up.
-                            if (focusItem != null && !listState.isScrollInProgress) {
+                                layout.visibleItemsInfo.firstOrNull { item -> item.index == openFocus }
+                            val anchorHasSettled = nowNanos - targetStableSinceNanos >= 48_000_000L
+                            if (focusItem != null && !listState.isScrollInProgress && anchorHasSettled) {
                                 val error = focusItem.offset.toFloat() - targetPx
                                 if (abs(error) > LYRICS_ANCHOR_TOLERANCE_PX) {
                                     try {
@@ -763,6 +768,7 @@ fun LyricsEnhanced(
                                         if (!currentCoroutineContext().isActive) throw cancellation
                                     }
                                 }
+                                return@LaunchedEffect
                             }
                             delay(LYRICS_OPEN_ANCHOR_TICK_MS)
                         }

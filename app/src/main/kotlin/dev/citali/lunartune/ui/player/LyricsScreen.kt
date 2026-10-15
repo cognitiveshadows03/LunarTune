@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularWavyProgressIndicator
@@ -245,6 +246,9 @@ fun LyricsScreen(
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     backHandlerEnabled: Boolean = true,
+    rememberedEnhancedListState: LazyListState? = null,
+    rememberedV2ListState: LazyListState? = null,
+    pageOpenGeneration: Int = 0,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -551,6 +555,9 @@ fun LyricsScreen(
                         foregroundColor = foregroundColor,
                         sliderPositionProvider = { sliderPosition },
                         lyricsSyncOffset = lyricsSyncOffset,
+                        rememberedEnhancedListState = rememberedEnhancedListState,
+                        rememberedV2ListState = rememberedV2ListState,
+                        pageOpenGeneration = pageOpenGeneration,
                         modifier =
                             Modifier
                                 .weight(1.15f)
@@ -629,6 +636,9 @@ fun LyricsScreen(
                             foregroundColor = foregroundColor,
                             sliderPositionProvider = { sliderPosition },
                             lyricsSyncOffset = lyricsSyncOffset,
+                            rememberedEnhancedListState = rememberedEnhancedListState,
+                            rememberedV2ListState = rememberedV2ListState,
+                            pageOpenGeneration = pageOpenGeneration,
                         )
                     },
                     controls = {
@@ -1367,11 +1377,17 @@ private fun AppleMusicLyricsPane(
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
+    rememberedEnhancedListState: LazyListState? = null,
+    rememberedV2ListState: LazyListState? = null,
+    pageOpenGeneration: Int = 0,
 ) {
     LyricsContent(
         lyricsMode = lyricsMode,
         sliderPositionProvider = sliderPositionProvider,
         lyricsSyncOffset = lyricsSyncOffset,
+        rememberedEnhancedListState = rememberedEnhancedListState,
+        rememberedV2ListState = rememberedV2ListState,
+        pageOpenGeneration = pageOpenGeneration,
         modifier =
             modifier
                 .fillMaxSize()
@@ -1746,6 +1762,9 @@ private fun LyricsContent(
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
+    rememberedEnhancedListState: LazyListState? = null,
+    rememberedV2ListState: LazyListState? = null,
+    pageOpenGeneration: Int = 0,
 ) {
     when (lyricsMode) {
         LyricsMode.V2 -> {
@@ -1754,6 +1773,7 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
+                rememberedListState = rememberedV2ListState,
             )
         }
 
@@ -1763,6 +1783,8 @@ private fun LyricsContent(
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
+                rememberedListState = rememberedEnhancedListState,
+                pageOpenGeneration = pageOpenGeneration,
             )
         }
     }

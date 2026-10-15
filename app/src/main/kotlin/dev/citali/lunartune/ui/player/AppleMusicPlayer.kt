@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import dev.citali.lunartune.extensions.metadata
 import android.content.Context
 import android.content.Intent
@@ -90,6 +91,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -315,11 +317,17 @@ internal fun AppleMusicPortraitContent(
     val thumbTop = 16.dp
     val miniHeaderHeight = statusTop + thumbTop + thumb + 8.dp
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
+    // AnimatedVisibility removes the lyrics composable when the page closes. Keep its list states
+    // in this always-composed parent so reopening the same song resumes where the reader left off.
+    val enhancedLyricsListState = key(mediaMetadata.id, "enhanced-lyrics") { rememberLazyListState() }
+    val v2LyricsListState = key(mediaMetadata.id, "v2-lyrics") { rememberLazyListState() }
 
     var lyricsContentReady by remember { mutableStateOf(false) }
+    var lyricsOpenGeneration by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     LaunchedEffect(lyricsOpen) {
         lyricsContentReady = false
         if (lyricsOpen) {
+            lyricsOpenGeneration++
             kotlinx.coroutines.delay(160L)
             lyricsContentReady = true
         }
@@ -527,6 +535,7 @@ internal fun AppleMusicPortraitContent(
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
                                 appleMusicPlayerMode = true,
+                                rememberedListState = v2LyricsListState,
                             )
                         LyricsMode.ENHANCED ->
                             LyricsEnhanced(
@@ -536,6 +545,8 @@ internal fun AppleMusicPortraitContent(
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
                                 appleMusicPlayerMode = true,
+                                rememberedListState = enhancedLyricsListState,
+                                pageOpenGeneration = lyricsOpenGeneration,
                             )
                     }
                 }

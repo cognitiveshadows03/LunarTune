@@ -59,6 +59,8 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +80,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -512,6 +515,10 @@ fun BottomSheetPlayer(
     var lyricsSyncOffset by rememberSaveable(mediaMetadata?.id) {
         mutableIntStateOf(0)
     }
+    // The full lyrics overlay is removed after its close transition. Hoist each mode's state so
+    // opening the same song again does not make the library animate from item zero every time.
+    val enhancedLyricsListState = key(mediaMetadata?.id, "enhanced-lyrics") { rememberLazyListState() }
+    val v2LyricsListState = key(mediaMetadata?.id, "v2-lyrics") { rememberLazyListState() }
     var sliderPosition by remember(mediaMetadata?.id) {
         mutableStateOf<Long?>(null)
     }
@@ -931,6 +938,7 @@ fun BottomSheetPlayer(
     var isLyricsScreenVisible by rememberSaveable {
         mutableStateOf(false)
     }
+    var lyricsOpenGeneration by remember { mutableIntStateOf(0) }
     // Apple Music style (portrait): its own inline queue instead of the queue sheet.
     var isAppleQueueOpen by rememberSaveable { mutableStateOf(false) }
     // Lyrics page transition state lives here (not inside MikoLyricsTransition) so it survives the
@@ -939,6 +947,7 @@ fun BottomSheetPlayer(
     val mikoLyricsMounted = remember { mutableStateOf(false) }
     LaunchedEffect(isLyricsScreenVisible) {
         if (isLyricsScreenVisible) {
+            lyricsOpenGeneration++
             mikoLyricsMounted.value = true
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
@@ -2063,6 +2072,9 @@ fun BottomSheetPlayer(
                 navController = navController,
                 lyricsSyncOffset = lyricsSyncOffset,
                 onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
+                enhancedLyricsListState = enhancedLyricsListState,
+                v2LyricsListState = v2LyricsListState,
+                pageOpenGeneration = lyricsOpenGeneration,
                 onDismiss = { isLyricsScreenVisible = false },
                 onQueueClick = openQueue,
             )
@@ -2080,6 +2092,9 @@ fun BottomSheetPlayer(
                 navController = navController,
                 lyricsSyncOffset = lyricsSyncOffset,
                 onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
+                enhancedLyricsListState = enhancedLyricsListState,
+                v2LyricsListState = v2LyricsListState,
+                pageOpenGeneration = lyricsOpenGeneration,
                 onDismiss = { isLyricsScreenVisible = false },
                 onQueueClick = openQueue,
             )
@@ -2153,6 +2168,9 @@ private fun MikoLyricsTransition(
     navController: NavController,
     lyricsSyncOffset: Int,
     onLyricsSyncOffsetChange: (Int) -> Unit,
+    enhancedLyricsListState: LazyListState,
+    v2LyricsListState: LazyListState,
+    pageOpenGeneration: Int,
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2189,6 +2207,9 @@ private fun MikoLyricsTransition(
                 onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
                 onQueueClick = onQueueClick,
                 backHandlerEnabled = backHandlerEnabled,
+                rememberedEnhancedListState = enhancedLyricsListState,
+                rememberedV2ListState = v2LyricsListState,
+                pageOpenGeneration = pageOpenGeneration,
             )
         }
     }
@@ -2203,6 +2224,9 @@ private fun AppleMusicLyricsPageTransition(
     navController: NavController,
     lyricsSyncOffset: Int,
     onLyricsSyncOffsetChange: (Int) -> Unit,
+    enhancedLyricsListState: LazyListState,
+    v2LyricsListState: LazyListState,
+    pageOpenGeneration: Int,
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2257,6 +2281,9 @@ private fun AppleMusicLyricsPageTransition(
                     onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
                     onQueueClick = onQueueClick,
                     backHandlerEnabled = backHandlerEnabled,
+                    rememberedEnhancedListState = enhancedLyricsListState,
+                    rememberedV2ListState = v2LyricsListState,
+                    pageOpenGeneration = pageOpenGeneration,
                 )
             }
         }
