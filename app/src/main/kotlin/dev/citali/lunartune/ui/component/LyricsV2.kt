@@ -115,7 +115,6 @@ import dev.citali.lunartune.constants.LyricsRomanizeKoreanKey
 import dev.citali.lunartune.constants.LyricsRomanizeOtherLanguagesKey
 import dev.citali.lunartune.constants.LyricsScrollKey
 import dev.citali.lunartune.constants.LyricsTextSizeKey
-import dev.citali.lunartune.constants.LyricsUseProvidedRomanizationKey
 import dev.citali.lunartune.constants.LyricsV2BounceFactorKey
 import dev.citali.lunartune.constants.LyricsV2FillTransitionWidthKey
 import dev.citali.lunartune.constants.LyricsV2GlowFactorKey
@@ -133,7 +132,6 @@ import dev.citali.lunartune.lyrics.LyricsUtils.isLineSyncedLrc
 import dev.citali.lunartune.lyrics.LyricsUtils.isTtml
 import dev.citali.lunartune.lyrics.LyricsUtils.parseLyrics
 import dev.citali.lunartune.lyrics.LyricsUtils.parseTtml
-import dev.citali.lunartune.lyrics.LyricsUtils.providedRomanizedTextForEntry
 import dev.citali.lunartune.lyrics.LyricsUtils.providedTranslationTextForEntry
 import dev.citali.lunartune.lyrics.LyricsUtils.romanizeLyricsLine
 import dev.citali.lunartune.lyrics.LyricsUtils.shouldRomanizeLyricsLine
@@ -234,7 +232,6 @@ fun LyricsV2(
     val (romanizeJapanese) = rememberPreference(LyricsRomanizeJapaneseKey, defaultValue = true)
     val (romanizeKorean) = rememberPreference(LyricsRomanizeKoreanKey, defaultValue = true)
     val (romanizeOtherLanguages) = rememberPreference(LyricsRomanizeOtherLanguagesKey, defaultValue = true)
-    val (useProvidedRomanization) = rememberPreference(LyricsUseProvidedRomanizationKey, defaultValue = true)
     val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
     val romanizationPreferences =
         remember(
@@ -243,7 +240,6 @@ fun LyricsV2(
             romanizeChinese,
             romanizeHindi,
             romanizeOtherLanguages,
-            useProvidedRomanization,
         ) {
             LyricsRomanizationPreferences(
                 romanizeJapanese = romanizeJapanese,
@@ -251,7 +247,6 @@ fun LyricsV2(
                 romanizeChinese = romanizeChinese,
                 romanizeHindi = romanizeHindi,
                 romanizeOther = romanizeOtherLanguages,
-                useProvidedRomanization = useProvidedRomanization,
             )
         }
     val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()
@@ -323,9 +318,7 @@ fun LyricsV2(
     val hasRomanizedWordTimedLyrics =
         remember(entriesWithWords, romanizationPreferences) {
             entriesWithWords.any { entry ->
-                !entry.words.isNullOrEmpty() &&
-                    (providedRomanizedTextForEntry(entry, romanizationPreferences) != null ||
-                        shouldRomanizeLyricsLine(entry.text, romanizationPreferences))
+                !entry.words.isNullOrEmpty() && shouldRomanizeLyricsLine(entry.text, romanizationPreferences)
             }
         }
 
@@ -351,14 +344,6 @@ fun LyricsV2(
             Semaphore(if (appleMusicPlayerMode) 1 else entriesWithWords.size.coerceAtLeast(1))
 
         entriesWithWords.forEach { entry ->
-            val providerRomanized = providedRomanizedTextForEntry(entry, romanizationPreferences)
-            if (providerRomanized != null) {
-                if (entry.romanizedTextFlow.value != providerRomanized) {
-                    entry.romanizedTextFlow.value = providerRomanized
-                }
-                return@forEach
-            }
-
             if (!shouldRomanizeLyricsLine(entry.text, romanizationPreferences)) {
                 if (entry.romanizedTextFlow.value != null) {
                     entry.romanizedTextFlow.value = null

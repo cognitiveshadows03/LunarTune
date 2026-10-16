@@ -142,7 +142,6 @@ import dev.citali.lunartune.constants.LyricsRomanizeOtherLanguagesKey
 import dev.citali.lunartune.constants.LyricsScrollKey
 import dev.citali.lunartune.constants.LyricsTextPositionKey
 import dev.citali.lunartune.constants.LyricsTextSizeKey
-import dev.citali.lunartune.constants.LyricsUseProvidedRomanizationKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
 import dev.citali.lunartune.constants.PlayerBackgroundStyleKey
 import dev.citali.lunartune.db.entities.LyricsEntity.Companion.LYRICS_NOT_FOUND
@@ -444,7 +443,6 @@ fun Lyrics(
     val romanizeJapaneseLyrics by rememberPreference(LyricsRomanizeJapaneseKey, true)
     val romanizeKoreanLyrics by rememberPreference(LyricsRomanizeKoreanKey, true)
     val romanizeOtherLanguagesLyrics by rememberPreference(LyricsRomanizeOtherLanguagesKey, true)
-    val useProvidedRomanization by rememberPreference(LyricsUseProvidedRomanizationKey, true)
     val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
     val romanizationPreferences =
         remember(
@@ -453,7 +451,6 @@ fun Lyrics(
             romanizeChineseLyrics,
             romanizeHindiLyrics,
             romanizeOtherLanguagesLyrics,
-            useProvidedRomanization,
         ) {
             LyricsRomanizationPreferences(
                 romanizeJapanese = romanizeJapaneseLyrics,
@@ -461,7 +458,6 @@ fun Lyrics(
                 romanizeChinese = romanizeChineseLyrics,
                 romanizeHindi = romanizeHindiLyrics,
                 romanizeOther = romanizeOtherLanguagesLyrics,
-                useProvidedRomanization = useProvidedRomanization,
             )
         }
     val scope = rememberCoroutineScope()

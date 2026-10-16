@@ -704,8 +704,6 @@
     <string name="queue_songs_preload_count">Number of upcoming songs to preload</string>
     <string name="display">Display</string>
     <string name="romanization">Romanization</string>
-    <string name="lyrics_use_provided_romanization">Use provided romanization</string>
-    <string name="lyrics_use_provided_romanization_summary">Show romanization included by lyrics providers when available. This works without the Japanese language pack.</string>
     <string name="japanese_language_pack_title">Japanese language pack</string>
     <string name="japanese_language_pack_required">Built-in offline Japanese romanization requires this language pack.</string>
     <string name="japanese_language_pack_not_installed">Download the approximately 13 MB pack for offline Japanese romanization.</string>

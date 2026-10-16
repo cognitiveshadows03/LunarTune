@@ -96,7 +96,6 @@ import dev.citali.lunartune.constants.LyricsRomanizeKoreanKey
 import dev.citali.lunartune.constants.LyricsRomanizeOtherLanguagesKey
 import dev.citali.lunartune.constants.LyricsScrollKey
 import dev.citali.lunartune.constants.LyricsTextSizeKey
-import dev.citali.lunartune.constants.LyricsUseProvidedRomanizationKey
 import dev.citali.lunartune.constants.PreferredLyricsProvider
 import dev.citali.lunartune.constants.PreloadQueueLyricsEnabledKey
 import dev.citali.lunartune.constants.QueueLyricsPreloadCountKey
@@ -233,8 +232,6 @@ fun LyricsSettings(
             LyricsRomanizeOtherLanguagesKey,
             defaultValue = true,
         )
-    val (useProvidedRomanization, onUseProvidedRomanizationChange) =
-        rememberPreference(LyricsUseProvidedRomanizationKey, defaultValue = true)
     val (preloadQueueLyricsEnabled, onPreloadQueueLyricsEnabledChange) =
         rememberPreference(
             PreloadQueueLyricsEnabledKey,
@@ -615,16 +612,6 @@ fun LyricsSettings(
         }
 
         PreferenceGroup(title = stringResource(R.string.romanization)) {
-            item {
-                SwitchPreference(
-                    title = { Text(stringResource(R.string.lyrics_use_provided_romanization)) },
-                    description = stringResource(R.string.lyrics_use_provided_romanization_summary),
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = useProvidedRomanization,
-                    onCheckedChange = onUseProvidedRomanizationChange,
-                )
-            }
-
             item {
                 SwitchPreference(
                     title = { Text(stringResource(R.string.lyrics_romanize_japanese)) },
