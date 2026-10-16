@@ -115,6 +115,7 @@ import dev.citali.lunartune.constants.LyricsRomanizeKoreanKey
 import dev.citali.lunartune.constants.LyricsRomanizeOtherLanguagesKey
 import dev.citali.lunartune.constants.LyricsScrollKey
 import dev.citali.lunartune.constants.LyricsTextSizeKey
+import dev.citali.lunartune.constants.LyricsUseProvidedRomanizationKey
 import dev.citali.lunartune.constants.LyricsV2BounceFactorKey
 import dev.citali.lunartune.constants.LyricsV2FillTransitionWidthKey
 import dev.citali.lunartune.constants.LyricsV2GlowFactorKey
@@ -233,6 +234,7 @@ fun LyricsV2(
     val (romanizeJapanese) = rememberPreference(LyricsRomanizeJapaneseKey, defaultValue = true)
     val (romanizeKorean) = rememberPreference(LyricsRomanizeKoreanKey, defaultValue = true)
     val (romanizeOtherLanguages) = rememberPreference(LyricsRomanizeOtherLanguagesKey, defaultValue = true)
+    val (useProvidedRomanization) = rememberPreference(LyricsUseProvidedRomanizationKey, defaultValue = true)
     val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
     val romanizationPreferences =
         remember(
@@ -241,6 +243,7 @@ fun LyricsV2(
             romanizeChinese,
             romanizeHindi,
             romanizeOtherLanguages,
+            useProvidedRomanization,
         ) {
             LyricsRomanizationPreferences(
                 romanizeJapanese = romanizeJapanese,
@@ -248,6 +251,7 @@ fun LyricsV2(
                 romanizeChinese = romanizeChinese,
                 romanizeHindi = romanizeHindi,
                 romanizeOther = romanizeOtherLanguages,
+                useProvidedRomanization = useProvidedRomanization,
             )
         }
     val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()

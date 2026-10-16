@@ -114,6 +114,7 @@ import dev.citali.lunartune.constants.LyricsRomanizeJapaneseKey
 import dev.citali.lunartune.constants.LyricsRomanizeKoreanKey
 import dev.citali.lunartune.constants.LyricsRomanizeOtherLanguagesKey
 import dev.citali.lunartune.constants.LyricsTextSizeKey
+import dev.citali.lunartune.constants.LyricsUseProvidedRomanizationKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
 import dev.citali.lunartune.constants.PlayerBackgroundStyleKey
 import dev.citali.lunartune.db.entities.LyricsEntity
@@ -231,6 +232,7 @@ fun LyricsEnhanced(
     val (romanizeJapanese) = rememberPreference(LyricsRomanizeJapaneseKey, defaultValue = true)
     val (romanizeKorean) = rememberPreference(LyricsRomanizeKoreanKey, defaultValue = true)
     val (romanizeOtherLanguages) = rememberPreference(LyricsRomanizeOtherLanguagesKey, defaultValue = true)
+    val (useProvidedRomanization) = rememberPreference(LyricsUseProvidedRomanizationKey, defaultValue = true)
     val isJapaneseLanguagePackInstalled by JapaneseLanguagePackManager.isInstalled.collectAsState()
 
     val romanizationPreferences =
@@ -240,6 +242,7 @@ fun LyricsEnhanced(
             romanizeChinese,
             romanizeHindi,
             romanizeOtherLanguages,
+            useProvidedRomanization,
         ) {
             LyricsRomanizationPreferences(
                 romanizeJapanese = romanizeJapanese,
@@ -247,6 +250,7 @@ fun LyricsEnhanced(
                 romanizeChinese = romanizeChinese,
                 romanizeHindi = romanizeHindi,
                 romanizeOther = romanizeOtherLanguages,
+                useProvidedRomanization = useProvidedRomanization,
             )
         }
 

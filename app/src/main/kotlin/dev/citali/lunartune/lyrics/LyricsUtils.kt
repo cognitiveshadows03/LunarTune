@@ -22,9 +22,13 @@ data class LyricsRomanizationPreferences(
     val romanizeChinese: Boolean,
     val romanizeHindi: Boolean,
     val romanizeOther: Boolean,
+    val useProvidedRomanization: Boolean = true,
 ) {
-    val isEnabled: Boolean
+    val isLocalRomanizationEnabled: Boolean
         get() = romanizeJapanese || romanizeKorean || romanizeChinese || romanizeHindi || romanizeOther
+
+    val isEnabled: Boolean
+        get() = useProvidedRomanization || isLocalRomanizationEnabled
 }
 
 @Suppress("RegExpRedundantEscape")
@@ -938,7 +942,7 @@ object LyricsUtils {
         text: String,
         preferences: LyricsRomanizationPreferences,
     ): Boolean {
-        if (!preferences.isEnabled || text.isBlank()) return false
+        if (!preferences.isLocalRomanizationEnabled || text.isBlank()) return false
 
         return when {
             preferences.romanizeJapanese && looksJapanese(text) -> true
@@ -953,32 +957,16 @@ object LyricsUtils {
     fun shouldUseProvidedRomanization(
         originalText: String,
         providerRomanizedText: String?,
-        providerRomanizedLanguage: String?,
         preferences: LyricsRomanizationPreferences,
     ): Boolean {
-        if (!preferences.isEnabled || originalText.isBlank()) return false
+        if (!preferences.useProvidedRomanization || originalText.isBlank()) return false
         val normalized =
             providerRomanizedText
                 ?.replace(WHITESPACE_REGEX, " ")
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?: return false
-        if (normalized.equals(originalText.trim(), ignoreCase = true)) return false
-
-        val language =
-            providerRomanizedLanguage
-                ?.substringBefore("-")
-                ?.substringBefore("_")
-                ?.lowercase()
-
-        return when (language) {
-            "ja" -> preferences.romanizeJapanese
-            "ko" -> preferences.romanizeKorean
-            "zh", "cmn", "yue" -> preferences.romanizeChinese
-            "hi", "sa", "mr", "ne" -> preferences.romanizeHindi
-            null, "" -> shouldRomanizeLyricsLine(originalText, preferences)
-            else -> preferences.romanizeOther || shouldRomanizeLyricsLine(originalText, preferences)
-        }
+        return !normalized.equals(originalText.trim(), ignoreCase = true)
     }
 
     fun providedRomanizedTextForEntry(
@@ -992,7 +980,6 @@ object LyricsUtils {
                 shouldUseProvidedRomanization(
                     originalText = entry.text,
                     providerRomanizedText = it,
-                    providerRomanizedLanguage = entry.providerRomanizedLanguage,
                     preferences = preferences,
                 )
             }
