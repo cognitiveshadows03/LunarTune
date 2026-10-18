@@ -15,6 +15,11 @@ import androidx.compose.animation.core.spring
  * Deliberately NOT sprung: color morphs (channels overshoot into flashes), alpha fades, lyric
  * motion, ambient/AOD motion, and loading choreography — tweens remain correct there.
  *
+ * Momentum rule: a drag that is released must never animate from rest. Pass the release
+ * velocity as `initialVelocity` to [settle] (snap-back) or [flingOut] (dismissal) so the
+ * element continues at the speed the finger left at. [clampVelocity] trims flicks that are
+ * too fast for a spring to settle cleanly.
+ *
  * These values are fixed: the user-tunable Motion Lab (LunarMotion tuning) was removed; the
  * stock feel below is the only feel, and the mini player's bounce lives in
  * [dev.citali.lunartune.constants.BottomSheetAnimationSpec].
@@ -53,6 +58,39 @@ object LunarMotion {
     /** Tactile press bounce for [dev.citali.lunartune.ui.component.IconButton]. */
     fun press() = spring<Float>(dampingRatio = 0.62f, stiffness = 900f)
 
+    /**
+     * Snap-back after a drag is released. Intended to be paired with the finger's release
+     * velocity as `initialVelocity`, so the element leaves at the speed it was travelling
+     * rather than restarting from rest. Damping is a touch above [bouncy] because a released
+     * fling already carries energy; adding overshoot on top reads as sloppy, not lively.
+     */
+    fun <T> settle() = spring<T>(dampingRatio = 0.82f, stiffness = 520f)
+
+    /**
+     * Dismissal that continues the flick instead of replaying a fixed exit curve. Critically
+     * damped: the target is off-screen, so any overshoot is invisible work, and bouncing
+     * back off the screen edge reads as a bug.
+     */
+    fun <T> flingOut() = spring<T>(dampingRatio = 1f, stiffness = 700f)
+
     /** Scale target while pressed. */
     const val PressedScale = 0.85f
+
+    /**
+     * Largest stretch, as a fraction of size, applied along the drag axis while a surface is
+     * being pulled. Deliberately tiny — the deformation should be felt during the gesture and
+     * be gone before the eye can name it.
+     */
+    const val MaxStretch = 0.04f
+
+    /**
+     * Ceiling on momentum carried out of a fling, in px/s. A violent swipe can report
+     * 15 000 px/s; fed straight into a spring that overshoots far enough to look like a
+     * glitch. 6 000 px/s still reads as "thrown" while staying settleable.
+     */
+    const val MaxCarriedVelocity = 6_000f
+
+    /** Clamp a raw release velocity into a range a spring can settle from cleanly. */
+    fun clampVelocity(velocity: Float): Float =
+        velocity.coerceIn(-MaxCarriedVelocity, MaxCarriedVelocity)
 }
