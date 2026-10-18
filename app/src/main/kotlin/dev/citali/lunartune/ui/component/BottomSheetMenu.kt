@@ -7,9 +7,7 @@
 
 package dev.citali.lunartune.ui.component
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +21,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -31,8 +31,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -101,11 +104,37 @@ fun BottomSheetMenu(
             },
             modifier = modifier.fillMaxHeight(),
         ) {
+            // The menu's own content settles on a spring instead of simply being there
+            // when the sheet finishes rising. Scale grows out of the bottom edge - where
+            // the sheet comes from - and a light overshoot gives the panel the "settles
+            // into place" feel rather than the flat stop a tween produces.
+            //
+            // The content is already fully composed by the time this runs (menus use a
+            // plain Column now, not a LazyColumn), so nothing pops in mid-spring.
+            val appear = remember { Animatable(0f) }
+            val animationsDisabled = LocalAnimationsDisabled.current
+
+            LaunchedEffect(Unit) {
+                if (animationsDisabled) {
+                    appear.snapTo(1f)
+                } else {
+                    appear.animateTo(1f, LunarMotion.settle())
+                }
+            }
+
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
+                        .padding(horizontal = 20.dp)
+                        .graphicsLayer {
+                            val p = appear.value
+                            val scale = 0.94f + 0.06f * p
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = p.coerceIn(0f, 1f)
+                            transformOrigin = TransformOrigin(0.5f, 1f)
+                        },
             ) {
                 state.content(this)
             }
