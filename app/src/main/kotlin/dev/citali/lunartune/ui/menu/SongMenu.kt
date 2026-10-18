@@ -16,7 +16,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -25,10 +24,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
@@ -548,34 +548,35 @@ fun SongMenu(
             isFromCache ||
             !isLocalSong
 
-    LazyColumn(
-        contentPadding =
-            PaddingValues(
-                start = 0.dp,
-                top = 0.dp,
-                end = 0.dp,
-                bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
-            ),
+    // Column + verticalScroll, not LazyColumn. This menu's item set is fixed and short,
+    // and LazyColumn only composes an item when it lays it out - which happens while the
+    // sheet is still rising. The panel therefore arrived empty and the labels appeared
+    // afterwards. A plain Column composes every child on the first frame, so the text is
+    // already there before the sheet moves, and it skips the lazy-layout machinery for a
+    // menu this small.
+    Column(
+        modifier =
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding(),
+                ),
     ) {
-        item {
             Spacer(modifier = Modifier.height(8.dp))
-        }
+        
 
-        item {
             MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                 NewActionGrid(
                     actions = primaryActions,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
                 )
             }
-        }
+        
 
-        item {
             Spacer(modifier = Modifier.height(12.dp))
-        }
+        
 
         if (!isLocalSong) {
-            item {
                 MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                     ListItem(
                         headlineContent = {
@@ -613,14 +614,12 @@ fun SongMenu(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     )
                 }
-            }
+            
 
-            item {
                 Spacer(modifier = Modifier.height(12.dp))
-            }
+            
         }
 
-        item {
             MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                 ListItem(
                     headlineContent = {
@@ -650,14 +649,12 @@ fun SongMenu(
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                 )
             }
-        }
+        
 
-        item {
             Spacer(modifier = Modifier.height(12.dp))
-        }
+        
 
         if (showMutationSection) {
-            item {
                 MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                     val dividerModifier = Modifier.padding(start = 56.dp)
                     Column {
@@ -929,14 +926,12 @@ fun SongMenu(
                         }
                     }
                 }
-            }
+            
 
-            item {
                 Spacer(modifier = Modifier.height(12.dp))
-            }
+            
         }
 
-        item {
             MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                 Column {
                     ListItem(
@@ -983,13 +978,11 @@ fun SongMenu(
                     }
                 }
             }
-        }
+        
 
-        item {
             Spacer(modifier = Modifier.height(12.dp))
-        }
+        
 
-        item {
             MenuSurfaceSection(modifier = Modifier.padding(vertical = 6.dp)) {
                 Column {
                     if (!isLocalSong) {
@@ -1044,6 +1037,6 @@ fun SongMenu(
                     )
                 }
             }
-        }
+        
     }
 }
