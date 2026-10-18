@@ -62,7 +62,6 @@ HSPLdev/citali/lunartune/MainActivity$**;->onPostFling(**)**
 HSPLdev/citali/lunartune/viewmodels/HomeViewModel;->**(**)**
 HSPLdev/citali/lunartune/ui/screens/HomeScreenKt;->**(**)**
 HSPLdev/citali/lunartune/ui/screens/SearchScreenKt;->**(**)**
-HSPLdev/citali/lunartune/ui/screens/NavigationBuilderKt;->**(**)**
 Ldev/citali/lunartune/ui/screens/HomeScreenKt;
 Ldev/citali/lunartune/ui/screens/SearchScreenKt;
 # ChartsScreenKt was matched only by the Ldev/citali/lunartune/ui/screens/**;
@@ -124,6 +123,52 @@ Lcom/airbnb/lottie/**;
 
 # ---- Coil image pipeline ----------------------------------------------------
 Lcoil3/**;
+
+# ---- Animation runtime (every screen transition and spring on this device) --
+# Only a class-load rule existed for Compose; the animation package had none at
+# all, so the first spring/tween of every session ran interpreted. On a 636 that
+# is exactly the "first swipe is the janky one" feeling.
+Landroidx/compose/animation/**;
+HSPLandroidx/compose/animation/**;->**(**)**
+Landroidx/compose/animation/core/**;
+HSPLandroidx/compose/animation/core/**;->**(**)**
+
+# ---- Lazy lists (the scroll hot path) --------------------------------------
+# foundation was covered by a load rule only. Scrolling is the single most
+# frequent thing this app does, and every scroll frame runs through the lazy
+# layout/measure machinery.
+Landroidx/compose/foundation/lazy/**;
+HSPLandroidx/compose/foundation/lazy/**;->**(**)**
+HSPLandroidx/compose/foundation/lazy/layout/**;->**(**)**
+
+# ---- Gesture / pointer input (drag, fling, swipe) --------------------------
+# Every drag-dispatched delta goes through pointer input; the momentum work in
+# BottomSheet and the banner now relies on release velocity, which is tracked
+# here.
+Landroidx/compose/ui/input/**;
+HSPLandroidx/compose/ui/input/pointer/**;->**(**)**
+
+# ---- Compose UI core draw/layout + material3 compile ------------------------
+# material3 had no HSPL rule, so every Material component's first composition
+# ran interpreted.
+HSPLandroidx/compose/ui/**;->**(**)**
+HSPLandroidx/compose/material3/**;->**(**)**
+
+# ---- Coroutines (structured concurrency on every screen and player op) -----
+Lkotlinx/coroutines/**;
+HSPLkotlinx/coroutines/**;->**(**)**
+
+# ---- DataStore (settings + together endpoint read on startup) -------------
+Landroidx/datastore/**;
+HSPLandroidx/datastore/**;->**(**)**
+
+# ---- Room generated DAOs (library, history, stats queries) ----------------
+Landroidx/room/**;
+HSPLandroidx/room/**;->**(**)**
+
+# ---- media3 / ExoPlayer (playback start is a cold path on a 636) ----------
+Landroidx/media3/**;
+HSPLandroidx/media3/exoplayer/**;->**(**)**
 
 # ---- Compose hot paths (app-side usage; the Compose library ships its own
 # ---- library profile — these cover what it misses for this app) ------------
