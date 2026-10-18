@@ -2227,7 +2227,9 @@ private fun reset(
         animate(
             initialValue = offset.value,
             targetValue = 0f,
-            animationSpec = tween(220),
+            // House spring rather than a fixed 220 ms curve: the row is settling back under a
+            // finger that just let go, and a tween there reads as a canned playback.
+            animationSpec = LunarMotion.smooth(),
         ) { value, _ -> offset.value = value }
     }
 }
