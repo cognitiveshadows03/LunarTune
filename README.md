@@ -8,6 +8,9 @@
     <a href="README.md">
       <img src="https://img.shields.io/badge/🇺🇸%20English-6366f1?style=for-the-badge&labelColor=1e1e2e" />
     </a>
+    <a href="README_JA.md">
+      <img src="https://img.shields.io/badge/🇯🇵%20日本語-6366f1?style=for-the-badge&labelColor=1e1e2e" />
+    </a>
   </p>
 
   <p align="center">

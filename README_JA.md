@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/icon.png" width="160" height="160" alt="LunarTune Logo" style="border-radius: 22%">
+  <img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/icon.png" width="160" height="160" alt="LunarTune Logo" style="border-radius: 22%">
 
   <h1>LunarTune</h1>
 
@@ -29,10 +29,10 @@
   </p>
 
   <div align="center">
-    <img src="https://img.shields.io/github/v/release/archivetuneapp/ArchiveTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="最新バージョン" />
-    <img src="https://img.shields.io/github/downloads/archivetuneapp/ArchiveTune/total?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="ダウンロード数" />
-    <img src="https://img.shields.io/github/stars/archivetuneapp/ArchiveTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="スター数" />
-    <img src="https://img.shields.io/github/license/archivetuneapp/ArchiveTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e" alt="ライセンス" />
+    <img src="https://img.shields.io/github/v/release/cognitiveshadows03/LunarTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="最新バージョン" />
+    <img src="https://img.shields.io/github/downloads/cognitiveshadows03/LunarTune/total?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="ダウンロード数" />
+    <img src="https://img.shields.io/github/stars/cognitiveshadows03/LunarTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e&logo=github" alt="スター数" />
+    <img src="https://img.shields.io/github/license/cognitiveshadows03/LunarTune?style=for-the-badge&color=6366f1&labelColor=1e1e2e" alt="ライセンス" />
     <img src="https://img.shields.io/badge/Architecture-MVVM-6366f1?style=for-the-badge&labelColor=1e1e2e&logo=kotlin" alt="MVVMアーキテクチャ" />
     <img src="https://img.shields.io/badge/Language-Kotlin-7f52ff?style=for-the-badge&logo=kotlin&color=6366f1&labelColor=1e1e2e" alt="Kotlin言語" />
     <img src="https://img.shields.io/badge/Toolkit-Jetpack_Compose-4285f4?style=for-the-badge&logo=jetpack-compose&color=6366f1&labelColor=1e1e2e" alt="Jetpack Compose" />
@@ -64,14 +64,14 @@
 
 <div align="center">
 
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_1.jpg" alt="ブラウズ" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_2.jpg" alt="ライブ歌詞" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_3.jpg" alt="テーマカスタマイズ" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_4.jpg" alt="統計情報" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_5.jpg" alt="アーティスト" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_6.jpg" alt="アルバム" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_7.jpg" alt="プレイヤー" width="30%" />
-<img src="https://github.com/cognitiveshadows03/LunarTune/blob/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_8.jpg" alt="設定" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_1.jpg" alt="ブラウズ" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_2.jpg" alt="ライブ歌詞" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_3.jpg" alt="テーマカスタマイズ" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_4.jpg" alt="統計情報" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_5.jpg" alt="アーティスト" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_6.jpg" alt="アルバム" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_7.jpg" alt="プレイヤー" width="30%" />
+<img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/fastlane/metadata/android/en-US/images/phoneScreenshots/screenshot_8.jpg" alt="設定" width="30%" />
 
 </div>
 
@@ -223,8 +223,8 @@ LunarTuneは独立したサードパーティクライアントです。
 ---
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/archivetuneapp/ArchiveTune/refs/heads/dev/fastlane/metadata/android/en-US/images/ArchiveTuneFull.png" alt="LunarTune Banner" style="width: 100%; max-width: 500px;">
+  <img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/assets/lunartune-icon-rounded.png" alt="LunarTune" style="width: 160px;">
   <p><b>LunarTuneで音楽体験が向上したなら、ぜひ⭐をお願いします</b></p>
   <br />
-  <img src="https://raw.githubusercontent.com/archivetuneapp/ArchiveTune/refs/heads/dev/assets/badge_part.png" alt="LunarTune Banner" style="width: 160px">
+  <img src="https://raw.githubusercontent.com/cognitiveshadows03/LunarTune/main/assets/badge_part.png" alt="LunarTune Banner" style="width: 160px">
 </div>
