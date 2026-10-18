@@ -9,7 +9,6 @@ package dev.citali.lunartune.ui.component
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.network.NetworkBannerUiState
+import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -140,17 +140,30 @@ fun NetworkStatusBanner(
                         translationX = offsetXPx
                         val travel = pillWidthPx.toFloat().coerceAtLeast(1f)
                         alpha = (1f - abs(offsetXPx) / travel * 0.7f).coerceIn(0f, 1f)
+                        // Flexible feedback: stretch along the drag axis, squash across it.
+                        // Derived purely from the offset, so the pill relaxes on the very spring
+                        // that carries it home — no second animation to keep in sync, and the
+                        // read stays in the draw phase so dragging never recomposes.
+                        val stretch =
+                            (abs(offsetXPx) / travel * LunarMotion.MaxStretch)
+                                .coerceIn(0f, LunarMotion.MaxStretch)
+                        scaleX = 1f + stretch
+                        scaleY = 1f - stretch * 0.5f
                     }.draggable(
                         state = dragState,
                         orientation = Orientation.Horizontal,
                         onDragStopped = { velocity ->
                             val travel = pillWidthPx.toFloat().coerceAtLeast(1f)
                             val shouldDismiss = abs(offsetXPx) > travel * 0.28f || abs(velocity) > 900f
+                            // A decisive flick is the reader's intent, so it outranks the
+                            // offset. Preferring the offset sent a hard flick from a few px of
+                            // travel off in the opposite direction — invisible with a tween
+                            // replay, but a visible stutter once the velocity is carried.
                             val direction =
                                 when {
+                                    abs(velocity) > 900f -> if (velocity >= 0f) 1f else -1f
                                     abs(offsetXPx) > 1f -> if (offsetXPx >= 0f) 1f else -1f
-                                    velocity >= 0f -> 1f
-                                    else -> -1f
+                                    else -> 1f
                                 }
                             val target = if (shouldDismiss) travel * 1.35f * direction else 0f
                             settleJob =
@@ -159,10 +172,15 @@ fun NetworkStatusBanner(
                                         targetValue = target,
                                         animationSpec =
                                             if (shouldDismiss) {
-                                                tween(durationMillis = 150)
+                                                LunarMotion.flingOut()
                                             } else {
-                                                spring(dampingRatio = 0.7f, stiffness = 900f)
+                                                LunarMotion.settle()
                                             },
+                                        // Leave at the speed the finger left at, then let friction
+                                        // and the spring bring it to rest. The old tween replay
+                                        // started from zero, so a hard flick and a slow nudge
+                                        // looked identical.
+                                        initialVelocity = LunarMotion.clampVelocity(velocity),
                                     ) { offsetXPx = value }
                                     if (shouldDismiss) dismissedState = state
                                 }
