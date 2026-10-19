@@ -1,17 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Starting window. Android draws this before the Activity has run a single line of
-  Kotlin, which is exactly the empty stretch that showed up as the first frames of a
-  cold start. Painting the brand mark here means the app looks alive from the moment
-  the launcher animation ends, instead of showing a bare background.
+  Starting window: the app's own surface colour, nothing else.
 
-  It is pure framework drawing - no Compose, no allocation, no cost on a slow device.
+  Android draws this before the Activity has run a single line of Kotlin, which is the
+  empty stretch at the start of a cold start.
+
+  Why there is no icon here:
+
+  * The launcher icon is chosen at runtime. GenerateIconPackTask emits one
+    activity-alias per icon, each with its own android:icon, so a static window
+    resource cannot know which one is active - it would always draw the default.
+  * An <adaptive-icon> referenced from a layer-list is NOT masked. Masking happens in
+    the launcher's IconDrawableFactory, not when the drawable is drawn directly, so
+    pointing this at @mipmap/ic_launcher would render the square artwork again.
+
+  Android 12+ already solves this natively: the system splash reads the *active*
+  launcher icon through PackageManager and masks it correctly, for free. This window
+  only matters on API 26-30, where showing a clean surface and getting to content is
+  better than showing a wrongly-shaped icon.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/window_background" />
-    <item
-        android:width="96dp"
-        android:height="96dp"
-        android:gravity="center"
-        android:drawable="@mipmap/ic_launcher_foreground" />
 </layer-list>
