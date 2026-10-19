@@ -85,6 +85,29 @@ object LunarMotion {
      */
     fun scrollHide() = spring<Float>(dampingRatio = 0.72f, stiffness = 800f)
 
+    /**
+     * Tab switches (top-level route to top-level route).
+     *
+     * Stiffness is deliberately high. A spring and a tween cost the same per frame -
+     * both drive the same layer properties - but a spring's duration is emergent, and a
+     * lazy one runs 600ms or more with two full screens being composited every frame.
+     * On a 636 that window, not the curve, is what made an earlier spring-based transition
+     * pass feel worse than the tweens it replaced. 900 settles in roughly a third of a
+     * second: momentum without the compositing bill.
+     */
+    fun <T> tabEnter() = spring<T>(dampingRatio = 0.82f, stiffness = 900f)
+
+    // Generic in the value type on purpose: fadeIn/scaleIn want FiniteAnimationSpec<Float>
+    // while slideInHorizontally wants FiniteAnimationSpec<IntOffset>, and both should share
+    // one spring definition rather than drifting apart.
+    /** The outgoing screen must not overshoot - it is on its way out. */
+    fun <T> tabExit() = spring<T>(dampingRatio = 1f, stiffness = 1100f)
+
+    /** Drill transitions (list to detail, and back out). Travels further, so softer. */
+    fun <T> drillEnter() = spring<T>(dampingRatio = 0.9f, stiffness = 700f)
+
+    fun <T> drillExit() = spring<T>(dampingRatio = 1f, stiffness = 900f)
+
     /** Scale target while pressed. */
     const val PressedScale = 0.85f
 

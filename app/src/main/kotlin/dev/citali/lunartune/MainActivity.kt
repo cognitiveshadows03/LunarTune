@@ -2628,50 +2628,136 @@ class MainActivity : FragmentActivity() {
                                                 else -> Screens.Home.route
                                             }
                                         },
-                                    // Pre-LunarMotion transitions (restored for performance). Only the settings bloom is kept.
+                                    // Route transitions.
+                                    //
+                                    // The three TabTransitionStyle values are honoured here now.
+                                    // FADE and SPRING_SLIDE were previously dead: only BLOOM was
+                                    // ever checked, and only for the settings route, so every tab
+                                    // switch played the same delayed fade-and-scale whatever the
+                                    // setting said.
+                                    //
+                                    // Springs instead of tweens, at high stiffness. A spring and a
+                                    // tween cost the same per frame, but a spring's duration is
+                                    // emergent - the earlier spring pass was reverted because a lazy
+                                    // one kept two full screens composited for well over half a
+                                    // second. These settle in roughly a third.
                                     enterTransition = {
-                                        if (disableAnimations) {
-                                            fadeIn(tween(0))
-                                        } else if (tabTransition == TabTransitionStyle.BLOOM && targetState.destination.route == "settings") {
-                                            fadeIn(tween(220)) +
-                                                scaleIn(
-                                                    animationSpec = androidx.compose.animation.core.spring(dampingRatio = 0.78f, stiffness = 260f),
-                                                    initialScale = 0.6f,
-                                                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
-                                                )
-                                        } else if (initialState.destination.route in topLevelScreens && targetState.destination.route in topLevelScreens) {
-                                            fadeIn(tween(220, delayMillis = 90)) + scaleIn(animationSpec = tween(220, delayMillis = 90), initialScale = 0.92f)
-                                        } else {
-                                            fadeIn(tween(250)) + slideInHorizontally { it / 2 }
+                                        val fromTopLevel = initialState.destination.route in topLevelScreens
+                                        val toTopLevel = targetState.destination.route in topLevelScreens
+                                        // Direction comes from the tab order, so a slide moves the
+                                        // way the content actually is on the bar.
+                                        val fromIndex = topLevelScreens.indexOf(initialState.destination.route)
+                                        val toIndex = topLevelScreens.indexOf(targetState.destination.route)
+                                        val forward = toIndex >= fromIndex
+
+                                        when {
+                                            disableAnimations -> fadeIn(tween(0))
+
+                                            tabTransition == TabTransitionStyle.BLOOM &&
+                                                targetState.destination.route == "settings" ->
+                                                fadeIn(tween(220)) +
+                                                    scaleIn(
+                                                        animationSpec = spring(dampingRatio = 0.78f, stiffness = 260f),
+                                                        initialScale = 0.6f,
+                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
+                                                    )
+
+                                            fromTopLevel && toTopLevel ->
+                                                when (tabTransition) {
+                                                    TabTransitionStyle.FADE ->
+                                                        fadeIn(LunarMotion.tabEnter())
+                                                    TabTransitionStyle.BLOOM ->
+                                                        fadeIn(LunarMotion.tabEnter()) +
+                                                            scaleIn(
+                                                                animationSpec = LunarMotion.tabEnter(),
+                                                                initialScale = 0.92f,
+                                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                                                            )
+                                                    TabTransitionStyle.SPRING_SLIDE ->
+                                                        fadeIn(LunarMotion.tabEnter()) +
+                                                            slideInHorizontally(
+                                                                animationSpec = LunarMotion.tabEnter(),
+                                                                initialOffsetX = { width -> if (forward) width / 5 else -width / 5 },
+                                                            )
+                                                }
+
+                                            else ->
+                                                fadeIn(LunarMotion.drillEnter()) +
+                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnter()) { it / 2 }
                                         }
                                     },
                                     exitTransition = {
-                                        if (disableAnimations) {
-                                            fadeOut(tween(0))
-                                        } else if (initialState.destination.route in topLevelScreens && targetState.destination.route in topLevelScreens) {
-                                            fadeOut(tween(90))
-                                        } else {
-                                            fadeOut(tween(200)) + slideOutHorizontally { -it / 2 }
+                                        val fromTopLevel = initialState.destination.route in topLevelScreens
+                                        val toTopLevel = targetState.destination.route in topLevelScreens
+                                        val fromIndex = topLevelScreens.indexOf(initialState.destination.route)
+                                        val toIndex = topLevelScreens.indexOf(targetState.destination.route)
+                                        val forward = toIndex >= fromIndex
+
+                                        when {
+                                            disableAnimations -> fadeOut(tween(0))
+                                            fromTopLevel && toTopLevel ->
+                                                when (tabTransition) {
+                                                    // The leaving screen gets out of the way and does
+                                                    // not overshoot; only the arriving one carries the
+                                                    // momentum.
+                                                    TabTransitionStyle.FADE -> fadeOut(LunarMotion.tabExit())
+                                                    TabTransitionStyle.BLOOM -> fadeOut(LunarMotion.tabExit())
+                                                    TabTransitionStyle.SPRING_SLIDE ->
+                                                        fadeOut(LunarMotion.tabExit()) +
+                                                            slideOutHorizontally(
+                                                                animationSpec = LunarMotion.tabExit(),
+                                                                targetOffsetX = { width -> if (forward) -width / 5 else width / 5 },
+                                                            )
+                                                }
+                                            else ->
+                                                fadeOut(LunarMotion.drillExit()) +
+                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExit()) { -it / 2 }
                                         }
                                     },
+                                    // Coming back out - playlist or downloads back to Library. This
+                                    // is the mirror of the drill-in, so the screen returns from the
+                                    // side it left towards instead of sliding in from an arbitrary
+                                    // direction, and it lands on a spring rather than a 250ms tween.
                                     popEnterTransition = {
-                                        if (disableAnimations) {
-                                            fadeIn(tween(0))
-                                        } else if ((initialState.destination.route in topLevelScreens || initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) && targetState.destination.route in topLevelScreens) {
-                                            fadeIn(tween(220, delayMillis = 90)) + scaleIn(animationSpec = tween(220, delayMillis = 90), initialScale = 0.92f)
-                                        } else {
-                                            fadeIn(tween(250)) + slideInHorizontally { -it / 2 }
+                                        val fromTopLevel =
+                                            initialState.destination.route in topLevelScreens ||
+                                                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true
+                                        val toTopLevel = targetState.destination.route in topLevelScreens
+
+                                        when {
+                                            disableAnimations -> fadeIn(tween(0))
+                                            fromTopLevel && toTopLevel ->
+                                                fadeIn(LunarMotion.tabEnter()) +
+                                                    scaleIn(
+                                                        animationSpec = LunarMotion.tabEnter(),
+                                                        initialScale = 0.92f,
+                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
+                                                    )
+                                            else ->
+                                                fadeIn(LunarMotion.drillEnter()) +
+                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnter()) { -it / 2 }
                                         }
                                     },
                                     popExitTransition = {
-                                        if (disableAnimations) {
-                                            fadeOut(tween(0))
-                                        } else if (tabTransition == TabTransitionStyle.BLOOM && initialState.destination.route == "settings") {
-                                            fadeOut(tween(220, delayMillis = 60)) + scaleOut(animationSpec = tween(250), targetScale = 0.6f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f))
-                                        } else if ((initialState.destination.route in topLevelScreens || initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) && targetState.destination.route in topLevelScreens) {
-                                            fadeOut(tween(90))
-                                        } else {
-                                            fadeOut(tween(200)) + slideOutHorizontally { it / 2 }
+                                        val fromTopLevel =
+                                            initialState.destination.route in topLevelScreens ||
+                                                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true
+                                        val toTopLevel = targetState.destination.route in topLevelScreens
+
+                                        when {
+                                            disableAnimations -> fadeOut(tween(0))
+                                            tabTransition == TabTransitionStyle.BLOOM &&
+                                                initialState.destination.route == "settings" ->
+                                                fadeOut(tween(220, delayMillis = 60)) +
+                                                    scaleOut(
+                                                        animationSpec = tween(250),
+                                                        targetScale = 0.6f,
+                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
+                                                    )
+                                            fromTopLevel && toTopLevel -> fadeOut(LunarMotion.tabExit())
+                                            else ->
+                                                fadeOut(LunarMotion.drillExit()) +
+                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExit()) { it / 2 }
                                         }
                                     },
                                     modifier =
