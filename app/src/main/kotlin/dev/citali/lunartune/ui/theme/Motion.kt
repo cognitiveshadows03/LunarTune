@@ -2,6 +2,8 @@ package dev.citali.lunartune.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.EmphasizedAccelerate
+import androidx.compose.animation.core.EmphasizedDecelerate
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
