@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Starting window. Android draws this before the Activity has run a single line of
+  Kotlin, which is exactly the empty stretch that showed up as the first frames of a
+  cold start. Painting the brand mark here means the app looks alive from the moment
+  the launcher animation ends, instead of showing a bare background.
+
+  It is pure framework drawing - no Compose, no allocation, no cost on a slow device.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_background" />
+    <item
+        android:width="96dp"
+        android:height="96dp"
+        android:gravity="center"
+        android:drawable="@mipmap/ic_launcher_foreground" />
+</layer-list>
