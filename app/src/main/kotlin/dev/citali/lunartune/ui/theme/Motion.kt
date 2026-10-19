@@ -1,8 +1,14 @@
 package dev.citali.lunartune.ui.theme
 
+androidx.compose.animation.core.FiniteAnimationSpec
+androidx.compose.animation.core.tween
+androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 
 /**
  * Central motion specs for LunarTune.
@@ -88,25 +94,47 @@ object LunarMotion {
     /**
      * Tab switches (top-level route to top-level route).
      *
-     * Stiffness is deliberately high. A spring and a tween cost the same per frame -
-     * both drive the same layer properties - but a spring's duration is emergent, and a
-     * lazy one runs 600ms or more with two full screens being composited every frame.
-     * On a 636 that window, not the curve, is what made an earlier spring-based transition
-     * pass feel worse than the tweens it replaced. 900 settles in roughly a third of a
-     * second: momentum without the compositing bill.
+     * These were springs first, and that was the wrong tool. A spring's duration is
+     * emergent - stiffness, damping and distance all feed into it - so it cannot be
+     * dialled. Worse, a spring covers most of its travel in the first few frames and then
+     * crawls through the last sliver, so even a long-settling one reads as an instant cut.
+     * Two very different stiffness values looked identical on device.
+     *
+     * An explicit duration with a house easing is predictable, and can be tuned by number.
+     * Emphasized decelerate is the MD3 curve for an element arriving: quick to start,
+     * long and soft to settle.
      */
-    fun <T> tabEnter() = spring<T>(dampingRatio = 0.82f, stiffness = 900f)
+    fun tabEnter(): FiniteAnimationSpec<Float> = tween(TabEnterMs, easing = EmphasizedDecelerate)
 
-    // Generic in the value type on purpose: fadeIn/scaleIn want FiniteAnimationSpec<Float>
-    // while slideInHorizontally wants FiniteAnimationSpec<IntOffset>, and both should share
-    // one spring definition rather than drifting apart.
-    /** The outgoing screen must not overshoot - it is on its way out. */
-    fun <T> tabExit() = spring<T>(dampingRatio = 1f, stiffness = 1100f)
+    /** The outgoing screen leaves faster than the incoming one arrives, so it clears out of the way. */
+    fun tabExit(): FiniteAnimationSpec<Float> = tween(TabExitMs, easing = EmphasizedAccelerate)
 
-    /** Drill transitions (list to detail, and back out). Travels further, so softer. */
-    fun <T> drillEnter() = spring<T>(dampingRatio = 0.9f, stiffness = 700f)
+    /** Drill transitions (list to detail, and back out). Travels further, so a touch longer. */
+    fun drillEnter(): FiniteAnimationSpec<Float> = tween(DrillEnterMs, easing = EmphasizedDecelerate)
 
-    fun <T> drillExit() = spring<T>(dampingRatio = 1f, stiffness = 900f)
+    fun drillExit(): FiniteAnimationSpec<Float> = tween(DrillExitMs, easing = EmphasizedAccelerate)
+
+    // Navigation transition durations, in milliseconds. These are the dials: raise them
+    // to slow the motion down, lower them to speed it up. Nothing else needs to change.
+    const val TabEnterMs = 340
+    const val TabExitMs = 220
+    const val DrillEnterMs = 380
+    const val DrillExitMs = 240
+
+    /** Same timing as [tabEnter] and friends, for callers that animate an IntOffset. */
+    fun tabEnterSlide(): FiniteAnimationSpec<IntOffset> = tween(TabEnterMs, easing = EmphasizedDecelerate)
+
+    fun tabExitSlide(): FiniteAnimationSpec<IntOffset> = tween(TabExitMs, easing = EmphasizedAccelerate)
+
+    fun drillEnterSlide(): FiniteAnimationSpec<IntOffset> = tween(DrillEnterMs, easing = EmphasizedDecelerate)
+
+    fun drillExitSlide(): FiniteAnimationSpec<IntOffset> = tween(DrillExitMs, easing = EmphasizedAccelerate)
+
+    /**
+     * BLOOM's scale. Still a spring, and still gentle, so the panel has a hint of life
+     * rather than arriving flat - but short enough not to outlast the fade it rides with.
+     */
+    fun tabEnterScale(): FiniteAnimationSpec<Float> = spring(dampingRatio = 0.85f, stiffness = 420f)
 
     /** Scale target while pressed. */
     const val PressedScale = 0.85f

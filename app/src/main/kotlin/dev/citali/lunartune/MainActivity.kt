@@ -2669,21 +2669,21 @@ class MainActivity : FragmentActivity() {
                                                     TabTransitionStyle.BLOOM ->
                                                         fadeIn(LunarMotion.tabEnter()) +
                                                             scaleIn(
-                                                                animationSpec = LunarMotion.tabEnter(),
+                                                                animationSpec = LunarMotion.tabEnterScale(),
                                                                 initialScale = 0.92f,
                                                                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
                                                             )
                                                     TabTransitionStyle.SPRING_SLIDE ->
                                                         fadeIn(LunarMotion.tabEnter()) +
                                                             slideInHorizontally(
-                                                                animationSpec = LunarMotion.tabEnter(),
+                                                                animationSpec = LunarMotion.tabEnterSlide(),
                                                                 initialOffsetX = { width -> if (forward) width / 5 else -width / 5 },
                                                             )
                                                 }
 
                                             else ->
                                                 fadeIn(LunarMotion.drillEnter()) +
-                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnter()) { it / 2 }
+                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnterSlide()) { it / 2 }
                                         }
                                     },
                                     exitTransition = {
@@ -2705,13 +2705,13 @@ class MainActivity : FragmentActivity() {
                                                     TabTransitionStyle.SPRING_SLIDE ->
                                                         fadeOut(LunarMotion.tabExit()) +
                                                             slideOutHorizontally(
-                                                                animationSpec = LunarMotion.tabExit(),
+                                                                animationSpec = LunarMotion.tabExitSlide(),
                                                                 targetOffsetX = { width -> if (forward) -width / 5 else width / 5 },
                                                             )
                                                 }
                                             else ->
                                                 fadeOut(LunarMotion.drillExit()) +
-                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExit()) { -it / 2 }
+                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExitSlide()) { -it / 2 }
                                         }
                                     },
                                     // Coming back out - playlist or downloads back to Library. This
@@ -2729,13 +2729,13 @@ class MainActivity : FragmentActivity() {
                                             fromTopLevel && toTopLevel ->
                                                 fadeIn(LunarMotion.tabEnter()) +
                                                     scaleIn(
-                                                        animationSpec = LunarMotion.tabEnter(),
+                                                        animationSpec = LunarMotion.tabEnterScale(),
                                                         initialScale = 0.92f,
                                                         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
                                                     )
                                             else ->
                                                 fadeIn(LunarMotion.drillEnter()) +
-                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnter()) { -it / 2 }
+                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnterSlide()) { -it / 2 }
                                         }
                                     },
                                     popExitTransition = {
@@ -2757,7 +2757,7 @@ class MainActivity : FragmentActivity() {
                                             fromTopLevel && toTopLevel -> fadeOut(LunarMotion.tabExit())
                                             else ->
                                                 fadeOut(LunarMotion.drillExit()) +
-                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExit()) { it / 2 }
+                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExitSlide()) { it / 2 }
                                         }
                                     },
                                     modifier =
