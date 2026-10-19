@@ -51,22 +51,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.citali.lunartune.constants.HideNavigationBarLabelsKey
-import dev.citali.lunartune.constants.NAVIGATION_BAR_CORNER_RADIUS_DEFAULT
-import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
-import dev.citali.lunartune.constants.NAVIGATION_BAR_OPACITY_DEFAULT
-import dev.citali.lunartune.constants.NAVIGATION_BAR_TRANSPARENCY_DEFAULT
-import dev.citali.lunartune.constants.NAVIGATION_BAR_WIDTH_DEFAULT
-import dev.citali.lunartune.constants.NavigationBarCornerRadiusKey
-import dev.citali.lunartune.constants.NavigationBarHeightKey
-import dev.citali.lunartune.constants.NavigationBarOpacityKey
-import dev.citali.lunartune.constants.NavigationBarTransparencyKey
-import dev.citali.lunartune.constants.NavigationBarWidthKey
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.theme.LunarMotion
-import dev.citali.lunartune.utils.rememberPreference
 
 /**
  * "Orbit dock": the capsule navbar style.
@@ -87,57 +74,22 @@ fun CapsuleNavigationBar(
     onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
 ) {
-    // The capsule style returns from FloatingNavigationToolbar before any of the user's
-    // navigation-bar preferences are read, so every customisation slider was a no-op in
-    // this style: width, height, opacity, transparency and the label toggle all silently
-    // did nothing. They are read here instead.
-    //
-    // Every mapping is identity at its default value, so a user who never opened the
-    // settings sees exactly the bar they saw before.
-    val (widthFraction) = rememberPreference(NavigationBarWidthKey, NAVIGATION_BAR_WIDTH_DEFAULT)
-    val (heightMultiplier) = rememberPreference(NavigationBarHeightKey, NAVIGATION_BAR_HEIGHT_DEFAULT)
-    val (barOpacity) = rememberPreference(NavigationBarOpacityKey, NAVIGATION_BAR_OPACITY_DEFAULT)
-    val (barTransparency) =
-        rememberPreference(NavigationBarTransparencyKey, NAVIGATION_BAR_TRANSPARENCY_DEFAULT)
-    val (cornerRadius) =
-        rememberPreference(NavigationBarCornerRadiusKey, NAVIGATION_BAR_CORNER_RADIUS_DEFAULT)
-    val (hideLabels) = rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
-
-    // The dock is content-sized, so the width preference scales its ceiling rather than
-    // its fraction: at the default 0.8 the cap stays the tuned 360dp, and the slider
-    // widens or narrows it from there.
-    val maxWidth =
-        (CapsuleBaseWidth * (widthFraction / NAVIGATION_BAR_WIDTH_DEFAULT))
-            .coerceIn(CapsuleBaseWidth * 0.6f, CapsuleBaseWidth * 1.4f)
-    val itemHeight = CapsuleItemHeight * heightMultiplier
-    val containerAlpha = (barOpacity * (1f - barTransparency)).coerceIn(0f, 1f)
-    // The capsule ships with its own tuned radius (32dp) while the shared setting
-    // defaults to 28dp. Honour the setting as soon as it differs from its default, so
-    // moving the slider visibly does something, but leave the tuned look untouched for
-    // anyone who has not touched it.
-    val shapeRadius =
-        if (cornerRadius == NAVIGATION_BAR_CORNER_RADIUS_DEFAULT) {
-            CapsuleTunedRadius
-        } else {
-            cornerRadius.dp
-        }
-
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            shape = RoundedCornerShape(shapeRadius),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = containerAlpha),
+            shape = RoundedCornerShape(32.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 6.dp,
             shadowElevation = 0.dp,
             modifier =
                 Modifier
-                    .widthIn(max = maxWidth)
+                    .widthIn(max = 360.dp)
                     .animateContentSize(LunarMotion.bouncy())
                     .shadow(
                         elevation = 16.dp,
-                        shape = RoundedCornerShape(shapeRadius),
+                        shape = RoundedCornerShape(32.dp),
                         ambientColor = Color.Black.copy(alpha = 0.4f),
                         spotColor = Color.Transparent,
                     ),
@@ -169,8 +121,6 @@ fun CapsuleNavigationBar(
                         DockItem(
                             screen = screen,
                             selected = isSelected(screen),
-                            itemHeight = itemHeight,
-                            hideLabels = hideLabels,
                             onItemClick = onItemClick,
                             onItemLongClick = onItemLongClick,
                             onSearchItemDoubleClick = onSearchItemDoubleClick,
@@ -187,8 +137,6 @@ fun CapsuleNavigationBar(
 private fun DockItem(
     screen: Screens,
     selected: Boolean,
-    itemHeight: Dp,
-    hideLabels: Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onItemLongClick: ((Screens) -> Unit)?,
     onSearchItemDoubleClick: (() -> Unit)?,
@@ -231,7 +179,7 @@ private fun DockItem(
         contentAlignment = Alignment.Center,
         modifier =
             modifier
-                .height(itemHeight)
+                .height(48.dp)
                 .animateContentSize(LunarMotion.bouncy())
                 .graphicsLayer {
                     scaleX = pressScale
@@ -265,7 +213,7 @@ private fun DockItem(
             modifier =
                 Modifier
                     .padding(horizontal = if (selected) 18.dp else 12.dp)
-                    .height(itemHeight),
+                    .height(48.dp),
         ) {
             Icon(
                 painter =
@@ -277,7 +225,7 @@ private fun DockItem(
                 modifier = Modifier.size(24.dp),
             )
             AnimatedVisibility(
-                visible = selected && !hideLabels,
+                visible = selected,
                 enter =
                     fadeIn(LunarMotion.bouncy()) +
                         expandHorizontally(
@@ -304,12 +252,3 @@ private fun DockItem(
         }
     }
 }
-
-/** Tuned dock width ceiling, the value the slider's default maps to. */
-private val CapsuleBaseWidth = 360.dp
-
-/** Tuned dock item height, scaled by the user's height preference. */
-private val CapsuleItemHeight = 48.dp
-
-/** The dock's own radius, used while the shared radius setting sits at its default. */
-private val CapsuleTunedRadius = 32.dp
