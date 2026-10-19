@@ -10,11 +10,19 @@ package dev.citali.lunartune.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,12 +30,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -36,35 +46,38 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import kotlinx.coroutines.CoroutineScope
+import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
-import dev.citali.lunartune.constants.QuickPicks
 import dev.citali.lunartune.constants.HomeHeaderImageUriKey
+import dev.citali.lunartune.constants.QuickPicks
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
-
 import dev.citali.lunartune.home.HomeAction
 import dev.citali.lunartune.home.HomeScreenState
 import dev.citali.lunartune.home.HomeUiState
@@ -74,9 +87,10 @@ import dev.citali.lunartune.ui.component.ExpressivePullToRefreshBox
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.ScreenImageHeader
-import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider
+import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.HomeViewModel
+import kotlinx.coroutines.CoroutineScope
 import moe.rukamori.archivetune.innertube.pages.HomePage
 
 private val HomeFeedMaxWidth = 1_200.dp
@@ -174,11 +188,7 @@ fun HomeScreen(
     ) {
         when (val state = screenState) {
             HomeScreenState.Loading -> {
-                HomeStatePane(
-                    iconResId = null,
-                    messageResId = null,
-                    showLoadingIndicator = true,
-                )
+                HomeLoadingSkeleton()
             }
 
             HomeScreenState.Empty -> {
@@ -733,5 +743,104 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sectionSpacer(key: St
         contentType = "section_spacer",
     ) {
         Spacer(Modifier.height(HomeSectionSpacing))
+    }
+}
+
+@Composable
+private fun SkeletonBlock(
+    width: Dp?,
+    height: Dp,
+    color: Color,
+    shimmer: State<Float>?,
+    shape: Shape = RoundedCornerShape(18.dp),
+) {
+    Box(
+        modifier =
+            Modifier
+                .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
+                .height(height)
+                .clip(shape)
+                .background(color)
+                .graphicsLayer {
+                    // Draw-phase read: the placeholder breathes without recomposing.
+                    shimmer?.let { alpha = it.value }
+                },
+    )
+}
+
+/**
+ * Content-shaped placeholder for the first load.
+ *
+ * The old loading state was a lone spinner centred in an empty screen, so the app
+ * showed nothing where the home content was about to appear and then everything
+ * popped into place at once. Drawing the shape of the real layout instead means the
+ * frame the user is looking at already resembles the screen they are waiting for, so
+ * the swap to real content changes what is inside the boxes rather than the structure
+ * of the page.
+ *
+ * The shimmer is read inside graphicsLayer, which defers it to the draw phase, so the
+ * placeholder animates while the device is busy loading without recomposing anything.
+ * With animations disabled the boxes sit at a fixed alpha.
+ */
+@Composable
+private fun HomeLoadingSkeleton(modifier: Modifier = Modifier) {
+    val animationsDisabled = LocalAnimationsDisabled.current
+    val shimmer =
+        if (animationsDisabled) {
+            null
+        } else {
+            rememberInfiniteTransition(label = "homeSkeleton")
+                .animateFloat(
+                    initialValue = 0.55f,
+                    targetValue = 1f,
+                    animationSpec =
+                        infiniteRepeatable(
+                            animation = tween(durationMillis = 900, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                    label = "homeSkeletonAlpha",
+                )
+        }
+
+    val placeholderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    val titleShape = RoundedCornerShape(9.dp)
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(LocalPlayerAwareWindowInsets.current.asPaddingValues())
+                .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Spacer(Modifier.height(8.dp))
+
+        SkeletonBlock(width = 110.dp, height = 18.dp, color = placeholderColor, shimmer = shimmer, shape = titleShape)
+
+        // "Quick picks" carousel: three cards, as the real row shows
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            repeat(3) {
+                SkeletonBlock(width = 148.dp, height = 148.dp, color = placeholderColor, shimmer = shimmer)
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        SkeletonBlock(width = 92.dp, height = 18.dp, color = placeholderColor, shimmer = shimmer, shape = titleShape)
+
+        // "Speed dial" grid: two rows of three
+        repeat(2) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(3) {
+                    SkeletonBlock(
+                        width = null,
+                        height = 96.dp,
+                        color = placeholderColor,
+                        shimmer = shimmer,
+                        shape = RoundedCornerShape(22.dp),
+                    )
+                }
+            }
+        }
     }
 }
