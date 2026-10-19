@@ -21,14 +21,13 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.SystemClock
 import android.os.IBinder
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.view.View
 import android.view.WindowManager
 import android.webkit.MimeTypeMap
 import android.widget.Toast
-import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.annotation.DrawableRes
@@ -36,10 +35,10 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Transition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -76,6 +75,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -132,26 +132,32 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.layout.width
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -159,10 +165,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -178,11 +180,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.preferences.core.edit
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC
@@ -208,28 +211,11 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
-import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
-import dev.citali.lunartune.constants.TabTransitionKey
-import dev.citali.lunartune.constants.TabTransitionStyle
-import dev.citali.lunartune.ui.theme.LunarMotion
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import dev.citali.lunartune.aod.ACTION_AOD_MODE
+import dev.citali.lunartune.constants.AodModeEnabledKey
 import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.AppFontPreference
 import dev.citali.lunartune.constants.AppLanguageKey
-import dev.citali.lunartune.constants.UseSystemLanguageKey
-import dev.citali.lunartune.constants.CustomFontUriKey
-import dev.citali.lunartune.constants.CustomThemeColorKey
 import dev.citali.lunartune.constants.AppLockBiometricUnlockKey
 import dev.citali.lunartune.constants.AppLockEnabledKey
 import dev.citali.lunartune.constants.AppLockPinHashKey
@@ -239,34 +225,36 @@ import dev.citali.lunartune.constants.AppLockTimeout
 import dev.citali.lunartune.constants.AppLockTimeoutKey
 import dev.citali.lunartune.constants.AppLockType
 import dev.citali.lunartune.constants.AppLockTypeKey
+import dev.citali.lunartune.constants.CustomFontUriKey
+import dev.citali.lunartune.constants.CustomThemeColorKey
 import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DefaultOpenTabKey
 import dev.citali.lunartune.constants.DisableAnimationsKey
-import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.DisableScreenshotKey
 import dev.citali.lunartune.constants.DynamicThemeKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
+import dev.citali.lunartune.constants.FloatingNavigationBarBottomPadding
+import dev.citali.lunartune.constants.FloatingNavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.FontPreferenceKey
+import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.HasPressedStarKey
-import dev.citali.lunartune.constants.AodModeEnabledKey
+import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
 import dev.citali.lunartune.constants.LaunchCountKey
+import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
+import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
+import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
 import dev.citali.lunartune.constants.MiniPlayerBottomSpacing
 import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.MiniPlayerLastAnchorKey
-import dev.citali.lunartune.constants.FloatingNavigationBarBottomPadding
-import dev.citali.lunartune.constants.FloatingNavigationBarHorizontalPadding
+import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
+import dev.citali.lunartune.constants.NavBarHideOnScrollKey
+import dev.citali.lunartune.constants.NavBarLongPressAction
+import dev.citali.lunartune.constants.NavBarLongPressActionsKey
 import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
-import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
-import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
-import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
-import dev.citali.lunartune.constants.NavBarLongPressAction
-import dev.citali.lunartune.constants.NavBarLongPressActionsKey
-import dev.citali.lunartune.constants.NavBarHideOnScrollKey
-import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
 import dev.citali.lunartune.constants.PauseSearchHistoryKey
@@ -278,12 +266,16 @@ import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.PureBlackKey
 import dev.citali.lunartune.constants.RemindAfterKey
 import dev.citali.lunartune.constants.SYSTEM_DEFAULT
+import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.SearchSource
 import dev.citali.lunartune.constants.SearchSourceKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
+import dev.citali.lunartune.constants.TabTransitionKey
+import dev.citali.lunartune.constants.TabTransitionStyle
 import dev.citali.lunartune.constants.UpdateChannel
 import dev.citali.lunartune.constants.UpdateChannelKey
 import dev.citali.lunartune.constants.UseSystemFontKey
+import dev.citali.lunartune.constants.UseSystemLanguageKey
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
@@ -291,11 +283,6 @@ import dev.citali.lunartune.db.entities.Playlist
 import dev.citali.lunartune.db.entities.SearchHistory
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.extensions.toMediaItem
-import moe.rukamori.archivetune.innertube.YouTube
-import moe.rukamori.archivetune.innertube.models.AlbumItem
-import moe.rukamori.archivetune.innertube.models.ArtistItem
-import moe.rukamori.archivetune.innertube.models.PlaylistItem
-import moe.rukamori.archivetune.innertube.models.SongItem
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.musicrecognition.ACTION_MUSIC_RECOGNITION
 import dev.citali.lunartune.musicrecognition.MusicRecognitionRoute
@@ -312,8 +299,6 @@ import dev.citali.lunartune.playback.queues.Queue
 import dev.citali.lunartune.playback.queues.YouTubeAlbumRadio
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.AppLockGate
-import dev.citali.lunartune.ui.component.appLockConfigured
-import dev.citali.lunartune.ui.component.isSensitiveRoute
 import dev.citali.lunartune.ui.component.BottomSheetMenu
 import dev.citali.lunartune.ui.component.BottomSheetPage
 import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
@@ -321,14 +306,17 @@ import dev.citali.lunartune.ui.component.DISMISSED_ANCHOR
 import dev.citali.lunartune.ui.component.EXPANDED_ANCHOR
 import dev.citali.lunartune.ui.component.FloatingNavigationToolbar
 import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
-import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MarkdownText
 import dev.citali.lunartune.ui.component.NetworkStatusBanner
+import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
 import dev.citali.lunartune.ui.component.TvNavigationRail
+import dev.citali.lunartune.ui.component.appLockConfigured
+import dev.citali.lunartune.ui.component.frostedTopMenuStyle
+import dev.citali.lunartune.ui.component.isSensitiveRoute
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
@@ -347,9 +335,10 @@ import dev.citali.lunartune.ui.screens.search.onlineSearchResultRoute
 import dev.citali.lunartune.ui.screens.settings.ApplyForcedRefreshRate
 import dev.citali.lunartune.ui.screens.settings.DarkMode
 import dev.citali.lunartune.ui.screens.settings.NavigationTab
-import dev.citali.lunartune.ui.theme.LunarTuneTheme
 import dev.citali.lunartune.ui.theme.ColorSaver
 import dev.citali.lunartune.ui.theme.DefaultThemeColor
+import dev.citali.lunartune.ui.theme.LunarMotion
+import dev.citali.lunartune.ui.theme.LunarTuneTheme
 import dev.citali.lunartune.ui.theme.extractThemeColor
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
@@ -362,8 +351,8 @@ import dev.citali.lunartune.utils.get
 import dev.citali.lunartune.utils.isLowRamDevice
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
-import dev.citali.lunartune.utils.resolvePlayerDesignStyle
 import dev.citali.lunartune.utils.reportException
+import dev.citali.lunartune.utils.resolvePlayerDesignStyle
 import dev.citali.lunartune.utils.setAppLocale
 import dev.citali.lunartune.viewmodels.BackupCategory
 import dev.citali.lunartune.viewmodels.BackupRestoreViewModel
@@ -376,6 +365,21 @@ import javax.inject.Inject
 import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import moe.rukamori.archivetune.innertube.YouTube
+import moe.rukamori.archivetune.innertube.models.AlbumItem
+import moe.rukamori.archivetune.innertube.models.ArtistItem
+import moe.rukamori.archivetune.innertube.models.PlaylistItem
+import moe.rukamori.archivetune.innertube.models.SongItem
 
 @Suppress("DEPRECATION", "ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 @AndroidEntryPoint
@@ -1009,6 +1013,22 @@ class MainActivity : FragmentActivity() {
                     modifier =
                         Modifier
                             .fillMaxSize()
+                            // Records where the finger went down so menus can grow out of
+                            // the touched point. Reads at Initial (before children) and
+                            // consumes nothing, so gestures underneath are unchanged. Only
+                            // touch-down writes; moves are ignored.
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        if (event.type == PointerEventType.Press) {
+                                            event.changes.firstOrNull()?.let { change ->
+                                                TapAnchor.record(change.position)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             .background(
                                 if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface,
                             ),

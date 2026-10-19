@@ -22,17 +22,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.LocalAnimationsDisabled
@@ -114,6 +117,12 @@ fun BottomSheetMenu(
             val appear = remember { Animatable(0f) }
             val animationsDisabled = LocalAnimationsDisabled.current
 
+            // Where the finger was, in this panel's own coordinate space. The panel
+            // grows outward from that column, the way ColorOS menus unfold from the
+            // element that was touched, falling back to bottom-centre when no touch was
+            // recorded (keyboard, accessibility action, deep link).
+            val contentBounds = remember { mutableStateOf<Rect?>(null) }
+
             LaunchedEffect(Unit) {
                 if (animationsDisabled) {
                     appear.snapTo(1f)
@@ -127,13 +136,26 @@ fun BottomSheetMenu(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
+                        .onGloballyPositioned { contentBounds.value = it.boundsInWindow() }
                         .graphicsLayer {
                             val p = appear.value
                             val scale = 0.94f + 0.06f * p
                             scaleX = scale
                             scaleY = scale
                             alpha = p.coerceIn(0f, 1f)
-                            transformOrigin = TransformOrigin(0.5f, 1f)
+
+                            // Resolved in the draw phase, not in composition: the origin
+                            // is a pure function of the bounds and the recorded touch, so
+                            // nothing needs to be recomposed to find it.
+                            val bounds = contentBounds.value
+                            val tap = TapAnchor.touchDownOrNull()
+                            val originX =
+                                if (bounds != null && tap != null && bounds.width > 0f) {
+                                    ((tap.x - bounds.left) / bounds.width).coerceIn(0.08f, 0.92f)
+                                } else {
+                                    0.5f
+                                }
+                            transformOrigin = TransformOrigin(originX, 1f)
                         },
             ) {
                 state.content(this)
