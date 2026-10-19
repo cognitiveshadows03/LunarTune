@@ -1,8 +1,5 @@
 package dev.citali.lunartune.ui.theme
 
-androidx.compose.animation.core.FiniteAnimationSpec
-androidx.compose.animation.core.tween
-androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
