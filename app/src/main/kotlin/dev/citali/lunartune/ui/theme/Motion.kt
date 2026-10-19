@@ -73,6 +73,18 @@ object LunarMotion {
      */
     fun <T> flingOut() = spring<T>(dampingRatio = 1f, stiffness = 700f)
 
+    /**
+     * Settle for a scroll-driven hide (the navigation bar retreating under the finger).
+     *
+     * Matched to the lyric motion the app already ships - DampingRatioLowBouncy at
+     * StiffnessMedium - but with the ratio pulled back from 0.5 to 0.72. The bar is a
+     * large surface travelling a short distance, so the lyrics bounce would read as a
+     * wobble; 0.72 keeps one visible overshoot on release without the bar springing back
+     * into view. Critically damped (the old default) killed that overshoot entirely,
+     * which is what made the motion look flat.
+     */
+    fun scrollHide() = spring<Float>(dampingRatio = 0.72f, stiffness = 800f)
+
     /** Scale target while pressed. */
     const val PressedScale = 0.85f
 

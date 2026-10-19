@@ -365,6 +365,7 @@ import javax.inject.Inject
 import kotlin.math.roundToInt
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.days
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -1219,7 +1220,9 @@ class MainActivity : FragmentActivity() {
                     }
 
                     val navBarScrollHideConnection =
-                        remember(navHideAnim, navHideTravelPx) {
+                        // disableAnimations is a key so toggling reduced motion takes effect
+                        // on the next fling instead of being baked into the captured lambda.
+                        remember(navHideAnim, navHideTravelPx, disableAnimations) {
                             object : NestedScrollConnection {
                                 override fun onPostScroll(
                                     consumed: Offset,
@@ -1240,9 +1243,15 @@ class MainActivity : FragmentActivity() {
                                             (navHideAnim.value - consumed.y / navHideTravelPx)
                                                 .coerceIn(0f, 1f)
                                         navHideDragJob?.cancel()
-                                        navHideDragJob = navHideScope.launch {
-                                            navHideAnim.snapTo(next)
-                                        }
+                                        // UNDISPATCHED: snapTo is applied inline in the
+                                        // scroll callback instead of being queued to the
+                                        // main dispatcher. Without this the bar tracked the
+                                        // finger a frame or two late, which is half of why
+                                        // the motion felt disconnected from the gesture.
+                                        navHideDragJob =
+                                            navHideScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                                                navHideAnim.snapTo(next)
+                                            }
                                     }
                                     return Offset.Zero
                                 }
@@ -1267,9 +1276,33 @@ class MainActivity : FragmentActivity() {
                                             else -> if (navHideAnim.value > 0.5f) 1f else 0f
                                         }
                                     navHideDragJob?.cancel()
-                                    navHideDragJob = navHideScope.launch {
-                                        navHideAnim.animateTo(target)
-                                    }
+                                    // Carry the fling's own speed into the settle, the way
+                                    // the lyric lines already do. Without this a decisive
+                                    // flick and a hesitant nudge played the exact same
+                                    // animation from a standstill, which is the other half
+                                    // of why the motion read as flat.
+                                    //
+                                    // The Animatable speaks in 0..1 progress, so the
+                                    // velocity is clamped in px/s first (a hard fling can
+                                    // report thousands) and then divided by the travel
+                                    // distance to become progress-per-second. Scrolling
+                                    // down consumes negative y and drives progress toward
+                                    // 1, hence the sign flip.
+                                    val velocityProgress =
+                                        LunarMotion.clampVelocity(-consumed.y) / navHideTravelPx
+                                    navHideDragJob =
+                                        navHideScope.launch {
+                                            navHideAnim.animateTo(
+                                                targetValue = target,
+                                                animationSpec =
+                                                    if (disableAnimations) {
+                                                        snap()
+                                                    } else {
+                                                        LunarMotion.scrollHide()
+                                                    },
+                                                initialVelocity = velocityProgress,
+                                            )
+                                        }
                                     return Velocity.Zero
                                 }
                             }
@@ -2317,6 +2350,7 @@ class MainActivity : FragmentActivity() {
                                                     with(navDriftDensity) {
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() *
                                                             maxOf(routeHideFraction, navHideAnim.value)
+                                                                .coerceIn(0f, 1f)
                                                     }
                                                 } else {
                                                     0f
@@ -2350,8 +2384,14 @@ class MainActivity : FragmentActivity() {
                                                         // The whole hide motion: translate out and
                                                         // fade a little ahead of arrival so no
                                                         // edge of plate, shadow or frost lingers.
+                                                        // Clamped: the settle overshoots on
+                                                        // purpose, and progress below 0 would
+                                                        // lift the bar above its resting
+                                                        // place (a gap at the bottom) while
+                                                        // above 1 is already off-screen.
                                                         val hide =
                                                             maxOf(routeHideFraction, navHideAnim.value)
+                                                                .coerceIn(0f, 1f)
                                                         translationY = navSlideDistance.toPx() * 1.15f * hide
                                                         alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
                                                     },
