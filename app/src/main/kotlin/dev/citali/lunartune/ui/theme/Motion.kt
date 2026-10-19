@@ -83,7 +83,7 @@ object LunarMotion {
      * into view. Critically damped (the old default) killed that overshoot entirely,
      * which is what made the motion look flat.
      */
-    fun scrollHide() = spring<Float>(dampingRatio = 0.72f, stiffness = 500f)
+    fun scrollHide() = spring<Float>(dampingRatio = 0.72f, stiffness = 800f)
 
     /**
      * Tab switches (top-level route to top-level route).
@@ -95,32 +95,18 @@ object LunarMotion {
      * pass feel worse than the tweens it replaced. 900 settles in roughly a third of a
      * second: momentum without the compositing bill.
      */
-    fun <T> tabEnter() = spring<T>(dampingRatio = 0.80f, stiffness = 340f)
+    fun <T> tabEnter() = spring<T>(dampingRatio = 0.82f, stiffness = 900f)
 
     // Generic in the value type on purpose: fadeIn/scaleIn want FiniteAnimationSpec<Float>
     // while slideInHorizontally wants FiniteAnimationSpec<IntOffset>, and both should share
     // one spring definition rather than drifting apart.
-    //
-    // Stiffness is what makes motion readable, not duration. A stiff spring (900+) covers
-    // ~90% of its travel in the first 70ms and then crawls through the last tenth, so it
-    // reads as an instant cut with a stutter on the end rather than as movement. Lowering
-    // stiffness lengthens the natural period, which spreads the same distance over visible
-    // frames. 340 puts ~95% of the travel at around 0.25s and settles near 0.45s.
-    //
-    // The cost is real and worth stating: every extra frame is another frame with two full
-    // screens composited. Below ~300 stiffness that window grows past half a second, which
-    // is where an earlier spring pass on this app was reverted for feeling worse on slow
-    // hardware. These sit just above that line.
     /** The outgoing screen must not overshoot - it is on its way out. */
-    fun <T> tabExit() = spring<T>(dampingRatio = 1f, stiffness = 400f)
+    fun <T> tabExit() = spring<T>(dampingRatio = 1f, stiffness = 1100f)
 
-    /**
-     * Drill transitions (list to detail, and back out). Travels further, so softer still -
-     * a long slide at tab stiffness would look hurried.
-     */
-    fun <T> drillEnter() = spring<T>(dampingRatio = 0.88f, stiffness = 260f)
+    /** Drill transitions (list to detail, and back out). Travels further, so softer. */
+    fun <T> drillEnter() = spring<T>(dampingRatio = 0.9f, stiffness = 700f)
 
-    fun <T> drillExit() = spring<T>(dampingRatio = 1f, stiffness = 320f)
+    fun <T> drillExit() = spring<T>(dampingRatio = 1f, stiffness = 900f)
 
     /** Scale target while pressed. */
     const val PressedScale = 0.85f
