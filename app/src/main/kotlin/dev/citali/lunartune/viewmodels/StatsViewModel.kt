@@ -13,7 +13,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.StatPeriod
 import dev.citali.lunartune.constants.statToPeriod
@@ -137,6 +142,15 @@ data class StatsUiData(
     /** False when the library has listening history but none of it falls inside the selected range. */
     val hasPlaysInPeriod: Boolean,
 )
+
+/**
+ * Total metadata rows the stats screen may refresh per process, and how many requests it
+ * keeps in flight. The screen is opened far more often than library metadata actually goes
+ * stale, so the ceiling matters more than completeness: past it the backfill simply stops
+ * for this visit and picks up where it left off next time.
+ */
+private const val STATS_BACKFILL_LIMIT = 48
+private const val STATS_BACKFILL_PARALLELISM = 4
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -646,45 +660,92 @@ class StatsViewModel
                 }
                 initialPeriodResolved.value = true
             }
-            viewModelScope.launch {
+            // Bounded, convergent metadata backfill.
+            //
+            // Both collectors used to walk the whole list and fire one InnerTube
+            // request per stale row, unthrottled. mostPlayedArtists is read with
+            // limit = -1, so on a real library that is hundreds of artists, and every
+            // successful update writes to the artist table - which re-emits the very
+            // flow being collected. Each pass therefore re-fired every row that had
+            // not been written yet: a quadratic storm of requests that pinned the
+            // network and the writer, and took the stats screen down with it.
+            //
+            // Two things stop it now. `attempted` claims a row before its request
+            // goes out, so a failed lookup is not retried on the next emission and
+            // the head of the list cannot block everything behind it. The cap bounds
+            // total work per visit, and the semaphore bounds requests in flight.
+            viewModelScope.launch(Dispatchers.IO) {
+                val attempted = mutableSetOf<String>()
                 mostPlayedArtists.collect { artists ->
-                    artists
-                        .map { it.artist }
-                        .filter {
-                            it.thumbnailUrl == null || Duration.between(
-                                it.lastUpdateTime,
-                                LocalDateTime.now(),
-                            ) > Duration.ofDays(10)
-                        }.forEach { artist ->
-                            YouTube.artist(artist.id).onSuccess { artistPage ->
-                                database.query {
-                                    update(artist, artistPage)
-                                }
-                            }
-                        }
-                }
-            }
-            viewModelScope.launch {
-                mostPlayedAlbums.collect { albums ->
-                    albums
-                        .filter {
-                            it.album.songCount == 0
-                        }.forEach { album ->
-                            YouTube
-                                .album(album.id)
-                                .onSuccess { albumPage ->
-                                    database.query {
-                                        update(album.album, albumPage, album.artists)
-                                    }
-                                }.onFailure {
-                                    reportException(it)
-                                    if (it.message?.contains("NOT_FOUND") == true) {
+                    val budget = STATS_BACKFILL_LIMIT - attempted.size
+                    if (budget <= 0) return@collect
+                    val staleArtists =
+                        artists
+                            .map { it.artist }
+                            .asSequence()
+                            .filter { artist -> artist.id !in attempted }
+                            .filter {
+                                it.thumbnailUrl == null || Duration.between(
+                                    it.lastUpdateTime,
+                                    LocalDateTime.now(),
+                                ) > Duration.ofDays(10)
+                            }.take(budget)
+                            .toList()
+                    if (staleArtists.isEmpty()) return@collect
+                    attempted += staleArtists.map { it.id }
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(STATS_BACKFILL_PARALLELISM)
+                        staleArtists.map { artist ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube.artist(artist.id).onSuccess { artistPage ->
                                         database.query {
-                                            delete(album.album)
+                                            update(artist, artistPage)
                                         }
                                     }
                                 }
-                        }
+                            }
+                        }.joinAll()
+                    }
+                }
+            }
+            viewModelScope.launch(Dispatchers.IO) {
+                val attempted = mutableSetOf<String>()
+                mostPlayedAlbums.collect { albums ->
+                    val budget = STATS_BACKFILL_LIMIT - attempted.size
+                    if (budget <= 0) return@collect
+                    val staleAlbums =
+                        albums
+                            .asSequence()
+                            .filter { album -> album.id !in attempted }
+                            .filter { it.album.songCount == 0 }
+                            .take(budget)
+                            .toList()
+                    if (staleAlbums.isEmpty()) return@collect
+                    attempted += staleAlbums.map { it.id }
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(STATS_BACKFILL_PARALLELISM)
+                        staleAlbums.map { album ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube
+                                        .album(album.id)
+                                        .onSuccess { albumPage ->
+                                            database.query {
+                                                update(album.album, albumPage, album.artists)
+                                            }
+                                        }.onFailure {
+                                            reportException(it)
+                                            if (it.message?.contains("NOT_FOUND") == true) {
+                                                database.query {
+                                                    delete(album.album)
+                                                }
+                                            }
+                                        }
+                                }
+                            }
+                        }.joinAll()
+                    }
                 }
             }
         }

@@ -758,46 +758,84 @@ class LibraryMixViewModel
                 .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
         init {
+            // Bounded, convergent backfill - the same shape the artists and albums
+            // view models already use, plus an `attempted` claim. Without the claim
+            // every write re-emits the flow and re-fires every row that has not been
+            // written yet, so a large stale library turns into a quadratic storm of
+            // requests that leaves the whole screen unresponsive.
             viewModelScope.launch(Dispatchers.IO) {
+                val attempted = mutableSetOf<String>()
                 albums.collect { albums ->
-                    albums
-                        .filter {
-                            it.album.songCount == 0
-                        }.forEach { album ->
-                            YouTube
-                                .album(album.id)
-                                .onSuccess { albumPage ->
-                                    database.query {
-                                        update(album.album, albumPage, album.artists)
-                                    }
-                                }.onFailure {
-                                    reportException(it)
-                                    if (it.message?.contains("NOT_FOUND") == true) {
-                                        database.query {
-                                            delete(album.album)
+                    val budget = LIBRARY_BACKFILL_MAX_ITEMS - attempted.size
+                    if (budget <= 0) return@collect
+                    val staleAlbums =
+                        albums
+                            .asSequence()
+                            .filter { album -> album.id !in attempted }
+                            .filter { it.album.songCount == 0 }
+                            .take(budget)
+                            .toList()
+                    if (staleAlbums.isEmpty()) return@collect
+                    attempted += staleAlbums.map { it.id }
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(LIBRARY_BACKFILL_PARALLELISM)
+                        staleAlbums.map { album ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube
+                                        .album(album.id)
+                                        .onSuccess { albumPage ->
+                                            database.query {
+                                                update(album.album, albumPage, album.artists)
+                                            }
+                                        }.onFailure {
+                                            reportException(it)
+                                            if (it.message?.contains("NOT_FOUND") == true) {
+                                                database.query {
+                                                    delete(album.album)
+                                                }
+                                            }
                                         }
-                                    }
                                 }
-                        }
+                            }
+                        }.joinAll()
+                    }
                 }
             }
             viewModelScope.launch(Dispatchers.IO) {
+                val attempted = mutableSetOf<String>()
                 artists.collect { artists ->
-                    artists
-                        .map { it.artist }
-                        .filter {
-                            it.thumbnailUrl == null ||
-                                Duration.between(
-                                    it.lastUpdateTime,
-                                    LocalDateTime.now(),
-                                ) > Duration.ofDays(10)
-                        }.forEach { artist ->
-                            YouTube.artist(artist.id).onSuccess { artistPage ->
-                                database.query {
-                                    update(artist, artistPage)
+                    val budget = LIBRARY_BACKFILL_MAX_ITEMS - attempted.size
+                    if (budget <= 0) return@collect
+                    val staleArtists =
+                        artists
+                            .map { it.artist }
+                            .asSequence()
+                            .filter { artist -> artist.id !in attempted }
+                            .filter {
+                                it.thumbnailUrl == null ||
+                                    Duration.between(
+                                        it.lastUpdateTime,
+                                        LocalDateTime.now(),
+                                    ) > Duration.ofDays(10)
+                            }.take(budget)
+                            .toList()
+                    if (staleArtists.isEmpty()) return@collect
+                    attempted += staleArtists.map { it.id }
+                    coroutineScope {
+                        val backfillSemaphore = Semaphore(LIBRARY_BACKFILL_PARALLELISM)
+                        staleArtists.map { artist ->
+                            launch {
+                                backfillSemaphore.withPermit {
+                                    YouTube.artist(artist.id).onSuccess { artistPage ->
+                                        database.query {
+                                            update(artist, artistPage)
+                                        }
+                                    }
                                 }
                             }
-                        }
+                        }.joinAll()
+                    }
                 }
             }
         }
