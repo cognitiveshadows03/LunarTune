@@ -202,6 +202,13 @@ object YTPlayerUtils {
     // id so the behaviour stays literally identical per track, and bounded so it
     // cannot grow without limit.
     private val signatureTimestampCache = ConcurrentHashMap<String, Int>()
+
+    // Video ids that a stalled playback asked to resolve through NewPipe instead.
+    // InnerTube's ciphered formats are deciphered locally but still arrive throttled,
+    // which reads as a stream that never finishes buffering rather than as an error.
+    // NewPipe Extractor returns descrambled, unthrottled URLs, so it is the escape
+    // hatch once a song has actually stalled - never on the first attempt.
+    private val unthrottledResolutionVideoIds = ConcurrentHashMap.newKeySet<String>()
     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
 
     @Volatile private var lastSuccessfulClientKey: String? = null
@@ -210,6 +217,7 @@ object YTPlayerUtils {
         streamUrlCache.clear()
         playbackDataCache.clear()
         signatureTimestampCache.clear()
+        unthrottledResolutionVideoIds.clear()
         failedStreamClientsUntil.clear()
         lastSuccessfulClientKey = null
     }
@@ -677,6 +685,22 @@ object YTPlayerUtils {
         networkMetered: Boolean,
     ): Result<PlaybackData> =
         runCatching {
+            // Asked for only after this track stalled in STATE_BUFFERING. One attempt,
+            // and if NewPipe cannot serve it we fall through to the normal client walk
+            // with nothing lost.
+            if (videoId in unthrottledResolutionVideoIds) {
+                NewPipeStreamResolver.resolve(videoId, audioQuality).onSuccess { playbackData ->
+                    Timber.tag(logTag).w(
+                        "Resolved %s through NewPipe after a buffering stall (unthrottled URL)",
+                        videoId,
+                    )
+                    return@runCatching playbackData
+                }.onFailure { error ->
+                    if (error is CancellationException) throw error
+                    Timber.tag(logTag).w(error, "NewPipe stall recovery failed for %s", videoId)
+                }
+            }
+
             val attempts =
                 when (audioQuality) {
                     AudioQuality.HIGHEST -> listOf(AudioQuality.HIGHEST, AudioQuality.HIGH, AudioQuality.LOW)
@@ -727,6 +751,18 @@ object YTPlayerUtils {
             }
             throw lastError ?: IllegalStateException("Failed to resolve stream")
         }
+
+    /**
+     * Mark a video so the next resolution goes through [NewPipeStreamResolver] first.
+     *
+     * Called by the playback service when a stream has been sitting in STATE_BUFFERING
+     * long enough that it is not going to start on its own.
+     */
+    fun requestUnthrottledResolution(videoId: String) {
+        if (unthrottledResolutionVideoIds.add(videoId)) {
+            Timber.tag(logTag).w("Next resolution for %s will use unthrottled URLs", videoId)
+        }
+    }
 
     private fun buildPlaybackDataCacheKey(
         videoId: String,

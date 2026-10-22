@@ -46,6 +46,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.PowerManager
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
@@ -400,6 +401,9 @@ class MusicService :
     private val playbackUrlCache = ConcurrentHashMap<String, AuthScopedCacheValue>()
     private var nextMediaItemPrefetchJob: Job? = null
     private val prefetchingMediaIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+    // Buffering-stall watchdog state.
+    @Volatile private var bufferingSinceMs = 0L
+    @Volatile private var stallRecoveryMediaId: String? = null
     private val remotePlaybackTrackingUrlCache = ConcurrentHashMap<String, String>()
     private val contentLengthCache = ConcurrentHashMap<String, Long>()
     private val mediaOkHttpClient: OkHttpClient by lazy {
@@ -2663,10 +2667,70 @@ class MusicService :
                 while (isActive && shouldKeepPlaybackAudible()) {
                     ensureAudiblePlaybackVolume("watchdog")
                     refreshAgingPlaybackUrlIfNeeded()
+                    detectBufferingStall()
                     delay(AUDIBLE_PLAYBACK_VOLUME_CHECK_MS)
                 }
                 audiblePlaybackRecoveryJob = null
             }
+    }
+
+    /**
+     * Recover from a stream that resolved successfully but never starts.
+     *
+     * This is the failure mode with no error in it. The URL is minted, the player enters
+     * STATE_BUFFERING, and then nothing arrives, so none of the handlers that key off a
+     * PlaybackException ever run and the track sits there indefinitely. It is what a
+     * throttled stream looks like: the bytes do come, just far too slowly to ever fill
+     * the buffer.
+     *
+     * The retry is deliberately different from the HTTP-failure retry. That one re-walks
+     * the same InnerTube clients; this one asks for the NewPipe resolver, which returns
+     * descrambled, unthrottled URLs and is already trusted on the download path. One
+     * attempt per item: if the unthrottled URL also stalls, the track is not playable from
+     * this network and the configured skip/stop behaviour takes over.
+     */
+    private fun detectBufferingStall() {
+        if (!::player.isInitialized) return
+        if (player.playbackState != Player.STATE_BUFFERING || !player.playWhenReady) {
+            bufferingSinceMs = 0L
+            return
+        }
+        // A crossfade handoff legitimately reports BUFFERING on the primary player.
+        if (isCrossfading || crossfadeHandoffInProgress) {
+            bufferingSinceMs = 0L
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (bufferingSinceMs == 0L) {
+            bufferingSinceMs = now
+            return
+        }
+        if (now - bufferingSinceMs < STALL_RECOVERY_TIMEOUT_MS) return
+
+        val mediaId = player.currentMediaItem?.mediaId?.trim().orEmpty()
+        bufferingSinceMs = 0L
+        if (mediaId.isEmpty() || mediaId.isLocalMediaId()) return
+        // One recovery per item. The tracker is reset when the item changes.
+        if (stallRecoveryMediaId == mediaId) return
+        stallRecoveryMediaId = mediaId
+
+        Timber.tag(TAG).w(
+            "Stream for %s has been buffering for over %dms with no error; retrying with unthrottled URLs",
+            mediaId,
+            STALL_RECOVERY_TIMEOUT_MS,
+        )
+
+        val recoverySnapshot = capturePlaybackRecoverySnapshot()
+        playbackUrlCache.remove(mediaId)
+        YTPlayerUtils.invalidateCachedStreamUrls(mediaId)
+        YTPlayerUtils.requestUnthrottledResolution(mediaId)
+
+        if (preparePlaybackFromSnapshot(recoverySnapshot)) return
+
+        if (player.currentMediaItem?.mediaId == mediaId) {
+            if (dataStore.get(AutoSkipNextOnErrorKey, false)) skipOnError() else stopOnError()
+        }
     }
 
     /**
@@ -6944,6 +7008,9 @@ class MusicService :
             scrobbleManager?.onSongStart(player.currentMetadata, duration = player.duration)
         }
 
+        bufferingSinceMs = 0L
+        stallRecoveryMediaId = null
+
         scope.launch {
             val shouldSave = withContext(Dispatchers.IO) { dataStore.get(PersistentQueueKey, true) }
             if (shouldSave) {
@@ -9219,6 +9286,11 @@ class MusicService :
 
         // How far ahead of the last usable moment a mid-track URL refresh is started.
         const val REFRESH_URL_LEAD_MS = 20_000L
+
+        // How long a stream may sit in STATE_BUFFERING before it is treated as stalled.
+        // Generous on purpose: a slow but working edge connection should be allowed to
+        // finish, and the recovery costs a full re-resolve.
+        const val STALL_RECOVERY_TIMEOUT_MS = 15_000L
         const val CROSSFADE_MIN_BUFFER_MS = 15_000
         const val CROSSFADE_MAX_BUFFER_MS = 45_000
         const val CROSSFADE_FRAME_MS = 32L
