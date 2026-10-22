@@ -8,20 +8,18 @@
 package dev.citali.lunartune.lyrics
 
 import android.content.Context
-import android.util.Log
-import moe.rukamori.archivetune.betterlyrics.BetterLyrics
 import dev.citali.lunartune.constants.EnableBetterLyricsKey
-import dev.citali.lunartune.utils.GlobalLog
 import dev.citali.lunartune.utils.dataStore
 import dev.citali.lunartune.utils.get
 
+/**
+ * Better Lyrics, served by [BetterLyricsClient] rather than the bundled SDK.
+ *
+ * The SDK could not express the three things that decide whether this provider works at
+ * all now: which host to talk to, whether to send album, and how to react to a 401. See
+ * the client for the measurements behind each.
+ */
 object BetterLyricsProvider : LyricsProvider {
-    init {
-        BetterLyrics.logger = { message ->
-            GlobalLog.append(Log.INFO, "BetterLyrics", message)
-        }
-    }
-
     override val name = "BetterLyrics"
 
     override fun isEnabled(context: Context): Boolean = context.dataStore[EnableBetterLyricsKey] ?: true
@@ -32,7 +30,11 @@ object BetterLyricsProvider : LyricsProvider {
         artist: String,
         album: String?,
         duration: Int,
-    ): Result<String> = BetterLyrics.getLyrics(title = title, artist = artist, album = album, durationSeconds = duration)
+    ): Result<String> {
+        val results = BetterLyricsClient.fetch(title = title, artist = artist, durationSeconds = duration)
+        val first = results.firstOrNull() ?: return Result.failure(IllegalStateException("Lyrics unavailable"))
+        return Result.success(first)
+    }
 
     override suspend fun getAllLyrics(
         id: String,
@@ -42,12 +44,8 @@ object BetterLyricsProvider : LyricsProvider {
         duration: Int,
         callback: (String) -> Unit,
     ) {
-        BetterLyrics.getAllLyrics(
-            title = title,
-            artist = artist,
-            album = album,
-            durationSeconds = duration,
-            callback = callback,
-        )
+        BetterLyricsClient
+            .fetch(title = title, artist = artist, durationSeconds = duration)
+            .forEach(callback)
     }
 }

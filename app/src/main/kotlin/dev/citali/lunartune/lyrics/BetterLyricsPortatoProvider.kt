@@ -8,11 +8,18 @@
 package dev.citali.lunartune.lyrics
 
 import android.content.Context
-import moe.rukamori.archivetune.betterlyrics.BetterLyrics
 import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.utils.dataStore
 import dev.citali.lunartune.utils.get
 
+/**
+ * The QQ/Portato endpoint of the Better Lyrics API, kept as its own provider for the
+ * syllable-level QRC timing it returns.
+ *
+ * Routed through [BetterLyricsClient] so it shares the same host and the same 401
+ * backoff as [BetterLyricsProvider]: the key requirement is per host, so if one endpoint
+ * is refusing uncached queries the other one is too.
+ */
 object BetterLyricsPortatoProvider : LyricsProvider {
     override val name = "BetterLyrics Portato"
 
@@ -24,13 +31,17 @@ object BetterLyricsPortatoProvider : LyricsProvider {
         artist: String,
         album: String?,
         duration: Int,
-    ): Result<String> =
-        BetterLyrics.getPortatoLyrics(
-            title = title,
-            artist = artist,
-            album = album,
-            durationSeconds = duration,
-        )
+    ): Result<String> {
+        val results =
+            BetterLyricsClient.fetch(
+                title = title,
+                artist = artist,
+                durationSeconds = duration,
+                endpoints = BetterLyricsClient.portatoEndpoints,
+            )
+        val first = results.firstOrNull() ?: return Result.failure(IllegalStateException("Lyrics unavailable"))
+        return Result.success(first)
+    }
 
     override suspend fun getAllLyrics(
         id: String,
@@ -40,12 +51,12 @@ object BetterLyricsPortatoProvider : LyricsProvider {
         duration: Int,
         callback: (String) -> Unit,
     ) {
-        BetterLyrics.getAllPortatoLyrics(
-            title = title,
-            artist = artist,
-            album = album,
-            durationSeconds = duration,
-            callback = callback,
-        )
+        BetterLyricsClient
+            .fetch(
+                title = title,
+                artist = artist,
+                durationSeconds = duration,
+                endpoints = BetterLyricsClient.portatoEndpoints,
+            ).forEach(callback)
     }
 }
