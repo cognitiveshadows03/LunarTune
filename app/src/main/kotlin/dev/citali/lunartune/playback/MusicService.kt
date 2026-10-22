@@ -154,6 +154,7 @@ import dev.citali.lunartune.constants.CrossfadeCurveKey
 import dev.citali.lunartune.constants.CrossfadeDurationKey
 import dev.citali.lunartune.constants.CrossfadeEnabledKey
 import dev.citali.lunartune.constants.CrossfadeGaplessKey
+import dev.citali.lunartune.constants.FastPlaybackStartKey
 import dev.citali.lunartune.constants.CrossfadeManualSkipKey
 import dev.citali.lunartune.constants.DeviceMutePlaybackRecoveryVolumeKey
 import dev.citali.lunartune.constants.DiscordShowWhenPausedKey
@@ -384,6 +385,9 @@ class MusicService :
         false,
     )
     @Volatile private var preloadNextSongEnabled = false
+    // Developer-options opt-in. Read once in onCreate because it changes how the
+    // ExoPlayer instance is built; toggling it takes effect on the next app start.
+    @Volatile private var fastPlaybackStartEnabled = false
     @Volatile private var preloadQueueSongsCount = 1
     private val nextStreamPreloadLock = Any()
     private var nextStreamPreloadTargetIds: List<String> = emptyList()
@@ -395,6 +399,7 @@ class MusicService :
     )
     private val playbackUrlCache = ConcurrentHashMap<String, AuthScopedCacheValue>()
     private var nextMediaItemPrefetchJob: Job? = null
+    private val prefetchingMediaIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val remotePlaybackTrackingUrlCache = ConcurrentHashMap<String, String>()
     private val contentLengthCache = ConcurrentHashMap<String, Long>()
     private val mediaOkHttpClient: OkHttpClient by lazy {
@@ -1119,6 +1124,11 @@ class MusicService :
         } catch (e: Exception) {
             reportException(e)
         }
+
+        // Read before the ExoPlayer instance exists: the flag changes the load control
+        // (start-buffer depth) and cannot be applied to an already-built player.
+        fastPlaybackStartEnabled =
+            runCatching { dataStore.get(FastPlaybackStartKey, false) }.getOrDefault(false)
 
         localPlayer =
             ExoPlayer
@@ -2652,10 +2662,56 @@ class MusicService :
             scope.launch {
                 while (isActive && shouldKeepPlaybackAudible()) {
                     ensureAudiblePlaybackVolume("watchdog")
+                    refreshAgingPlaybackUrlIfNeeded()
                     delay(AUDIBLE_PLAYBACK_VOLUME_CHECK_MS)
                 }
                 audiblePlaybackRecoveryJob = null
             }
+    }
+
+    /**
+     * Opt-in 2004 prevention.
+     *
+     * A stream URL is only valid for a while, and the safety margin in
+     * resolvePlaybackDataSpec only protects requests that *start* after it expires. A long
+     * track can therefore sit on a URL that dies while it is still playing, and the next
+     * range request - a seek, or simply a read past the buffered region - comes back 403.
+     * That is the 2004 (ERROR_CODE_IO_BAD_HTTP_STATUS) that the retry path then has to
+     * clean up, at the cost of a stall.
+     *
+     * This refreshes in the background once the remaining validity no longer covers the
+     * remaining playback time. It does not extend any expiry and does not change which
+     * URL is in use until it is replaced, so a failure here is a no-op.
+     */
+    private fun refreshAgingPlaybackUrlIfNeeded() {
+        if (!fastPlaybackStartEnabled) return
+        if (!::player.isInitialized) return
+        if (isCrossfading || crossfadeHandoffInProgress) return
+        val mediaId = player.currentMediaItem?.mediaId?.trim().orEmpty()
+        if (mediaId.isEmpty() || mediaId.isLocalMediaId()) return
+        if (mediaId in prefetchingMediaIds) return
+
+        val duration = player.duration
+        if (duration == C.TIME_UNSET || duration <= 0L) return
+        val remainingPlaybackMs = (duration - player.currentPosition).coerceAtLeast(0L)
+        val authFingerprint = YouTube.currentPlaybackAuthState().fingerprint
+        val cached = playbackUrlCache[mediaId] ?: return
+
+        if (cached.isValidFor(
+                authFingerprint = authFingerprint,
+                minimumRemainingMs = remainingPlaybackMs + REFRESH_URL_LEAD_MS,
+            )
+        ) {
+            return
+        }
+
+        Timber.tag(TAG).d(
+            "Refreshing aging stream URL for %s: %dms left on the URL, %dms left to play",
+            mediaId,
+            cached.expiresAtMs - System.currentTimeMillis(),
+            remainingPlaybackMs,
+        )
+        prefetchMediaItemStream(mediaId)
     }
 
     private fun applyCrossfadeVolumes(
@@ -4202,6 +4258,17 @@ class MusicService :
             } else {
                 val items = initialStatus.items
                 val index = initialStatus.mediaItemIndex
+
+                // Opt-in fast start: begin resolving the item the user is about to hear
+                // before the player's loading thread gets to it. The loader blocks on
+                // resolvePlaybackDataSpec, which does a full InnerTube round trip on a
+                // cache miss; starting that here overlaps it with queue hydration and
+                // with the format lookup, and leaves a warm playbackUrlCache entry
+                // behind. Both paths dedupe through YTPlayerUtils' per-video mutex, so
+                // this can never issue a duplicate request.
+                if (fastPlaybackStartEnabled) {
+                    items.getOrNull(index)?.mediaId?.let(::prefetchMediaItemStream)
+                }
 
                 player.setMediaItems(items, index, initialStatus.position)
                 player.prepare()
@@ -6895,46 +6962,70 @@ class MusicService :
      * can hit [playbackUrlCache] instead of waiting on Innertube.
      */
     private fun prefetchNextMediaItemStream() {
-        nextMediaItemPrefetchJob?.cancel()
         if (player.mediaItemCount == 0 || player.currentTimeline.isEmpty) return
         val nextIndex = player.nextMediaItemIndex
         if (nextIndex == C.INDEX_UNSET || nextIndex < 0 || nextIndex >= player.mediaItemCount) return
-        val nextItem = player.getMediaItemAt(nextIndex)
-        val mediaId = nextItem.mediaId.trim().takeIf { it.isNotBlank() } ?: return
+        prefetchMediaItemStream(player.getMediaItemAt(nextIndex).mediaId)
+    }
+
+    /**
+     * Warm [playbackUrlCache] for a media id that is about to be played.
+     *
+     * This is the whole point of the developer-options fast-start path. Without a warm
+     * entry, resolvePlaybackDataSpec has to block the loading thread on a full InnerTube
+     * round trip (signature timestamp, PoToken, client fallback) before the first byte of
+     * audio can be fetched. With one, the same prepare is a cache hit.
+     *
+     * No URL lifetime is extended here - the entry is written with the expiry the server
+     * gave us and re-validated by the usual STREAM_URL_EXPIRY_SAFETY_MS check - so this
+     * cannot on its own cause a 2004.
+     */
+    private fun prefetchMediaItemStream(rawMediaId: String) {
+        val mediaId = rawMediaId.trim().takeIf { it.isNotBlank() } ?: return
         if (mediaId.isLocalMediaId()) return
         val authFingerprint = YouTube.currentPlaybackAuthState().fingerprint
         if (playbackUrlCache[mediaId]?.isValidFor(authFingerprint) == true) return
         if (isLowDataModeActive()) return
+        if (mediaId in prefetchingMediaIds) return
 
+        // Only one job is kept for bookkeeping, but an in-flight resolve is deliberately
+        // NOT cancelled when the queue moves on: it is keyed by media id, so a late result
+        // is still a cache hit if the user comes back, and cancelling a nearly-finished
+        // request just means paying for it twice.
+        prefetchingMediaIds += mediaId
         nextMediaItemPrefetchJob =
             scope.launch(Dispatchers.IO + SilentHandler) {
-                runCatching {
-                    val lowData = isLowDataModeActive()
-                    val result =
-                        retryWithoutPlaybackLoginContext {
-                            YTPlayerUtils.playerResponseForPlayback(
-                                mediaId,
-                                audioQuality = if (lowData) AudioQuality.LOW else audioQuality,
-                                connectivityManager = connectivityManager,
-                                preferredStreamClient = preferredStreamClient,
-                                networkMetered = lowData,
-                            )
+                try {
+                    runCatching {
+                        val lowData = isLowDataModeActive()
+                        val result =
+                            retryWithoutPlaybackLoginContext {
+                                YTPlayerUtils.playerResponseForPlayback(
+                                    mediaId,
+                                    audioQuality = if (lowData) AudioQuality.LOW else audioQuality,
+                                    connectivityManager = connectivityManager,
+                                    preferredStreamClient = preferredStreamClient,
+                                    networkMetered = lowData,
+                                )
+                            }
+                        result.onSuccess { playbackData ->
+                            if (lowData) return@onSuccess
+                            persistResolvedPlaybackFormat(mediaId, playbackData)
+                            playbackUrlCache[mediaId] =
+                                AuthScopedCacheValue(
+                                    url = playbackData.streamUrl,
+                                    expiresAtMs =
+                                        System.currentTimeMillis() +
+                                            (playbackData.streamExpiresInSeconds.coerceAtLeast(1) * 1000L),
+                                    authFingerprint = playbackData.authFingerprint,
+                                )
                         }
-                    result.onSuccess { playbackData ->
-                        if (lowData) return@onSuccess
-                        persistResolvedPlaybackFormat(mediaId, playbackData)
-                        playbackUrlCache[mediaId] =
-                            AuthScopedCacheValue(
-                                url = playbackData.streamUrl,
-                                expiresAtMs =
-                                    System.currentTimeMillis() +
-                                        (playbackData.streamExpiresInSeconds.coerceAtLeast(1) * 1000L),
-                                authFingerprint = playbackData.authFingerprint,
-                            )
+                    }.onFailure { error ->
+                        if (error is CancellationException) throw error
+                        Timber.tag(TAG).d(error, "Prefetch failed for %s", mediaId)
                     }
-                }.onFailure { error ->
-                    if (error is CancellationException) throw error
-                    Timber.tag(TAG).d(error, "Prefetch failed for %s", mediaId)
+                } finally {
+                    prefetchingMediaIds -= mediaId
                 }
             }
     }
@@ -8360,8 +8451,16 @@ class MusicService :
             .setBufferDurationsMs(
                 PRIMARY_MIN_BUFFER_MS,
                 PRIMARY_MAX_BUFFER_MS,
-                PRIMARY_BUFFER_FOR_PLAYBACK_MS,
-                PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+                if (fastPlaybackStartEnabled) {
+                    FAST_START_BUFFER_FOR_PLAYBACK_MS
+                } else {
+                    PRIMARY_BUFFER_FOR_PLAYBACK_MS
+                },
+                if (fastPlaybackStartEnabled) {
+                    FAST_START_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                } else {
+                    PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
+                },
             ).setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
@@ -9110,6 +9209,16 @@ class MusicService :
         const val PRIMARY_MAX_BUFFER_MS = 60_000
         const val PRIMARY_BUFFER_FOR_PLAYBACK_MS = 150
         const val PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 750
+
+        // Opt-in only. 150ms starts audio almost immediately but leaves no cushion at
+        // all, so any read that fails surfaces straight away as a 2000
+        // (ERROR_CODE_IO_UNSPECIFIED). 500ms is still five times faster than the
+        // Media3 default of 2500ms, and hides the ordinary jitter of a mobile link.
+        const val FAST_START_BUFFER_FOR_PLAYBACK_MS = 500
+        const val FAST_START_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
+
+        // How far ahead of the last usable moment a mid-track URL refresh is started.
+        const val REFRESH_URL_LEAD_MS = 20_000L
         const val CROSSFADE_MIN_BUFFER_MS = 15_000
         const val CROSSFADE_MAX_BUFFER_MS = 45_000
         const val CROSSFADE_FRAME_MS = 32L

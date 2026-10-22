@@ -294,6 +294,15 @@ val AudioQualityKey = stringPreferencesKey("audioQuality")
 val NetworkMeteredKey = booleanPreferencesKey("networkMetered")
 val LowDataModeKey = NetworkMeteredKey
 val PreloadNextSongKey = booleanPreferencesKey("preloadNextSong")
+
+/**
+ * Opt-in from Developer options. Warms the stream for the item the user is about to
+ * play, reuses the signature timestamp, and keeps a little more audio buffered before
+ * the first frame - the last part deliberately slows the very start in exchange for
+ * far fewer 2000 (IO_UNSPECIFIED) failures. Read once when the player service is
+ * created, so toggling it takes effect on the next app start.
+ */
+val FastPlaybackStartKey = booleanPreferencesKey("fastPlaybackStart")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
 enum class AudioQuality {

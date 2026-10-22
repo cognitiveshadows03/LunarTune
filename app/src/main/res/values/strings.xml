@@ -876,6 +876,8 @@
     <string name="no_logs">No Logs</string>
     <string name="show_nerd_stats">Show nerd stats</string>
     <string name="description_show_nerd_stats">Display real-time playback statistics (codec, bitrate, buffer)</string>
+    <string name="fast_playback_start">Faster playback start</string>
+    <string name="description_fast_playback_start">Prefetches the stream before you press play and keeps a small buffer ahead, trading a fraction of a second at the start for fewer 2000/2004 stream errors. Takes effect after restarting the app.</string>
     <string name="display_codec_on_player">Display Codec on Player</string>
     <string name="description_display_codec_on_player">Show current audio codec information on the player</string>
     <string name="nerd_stats">Nerd Stats</string>

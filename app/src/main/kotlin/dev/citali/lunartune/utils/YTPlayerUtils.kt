@@ -57,6 +57,7 @@ object YTPlayerUtils {
     private const val DEFAULT_STREAM_EXPIRE_SECONDS = 300
     private const val MAX_PLAYBACK_DATA_CACHE_ENTRIES = 128
     private const val PLAYBACK_DATA_RESOLUTION_MUTEX_COUNT = 32
+    private const val MAX_SIGNATURE_TIMESTAMP_CACHE_ENTRIES = 256
     const val STREAM_URL_EXPIRY_SAFETY_MS = 60_000L
     private val RETRYABLE_STREAM_RESPONSE_CODES = setOf(403, 404, 410, 416)
 
@@ -194,6 +195,13 @@ object YTPlayerUtils {
     private val streamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
     private val playbackDataCache = ConcurrentHashMap<PlaybackDataCacheKey, CachedPlaybackData>()
     private val playbackDataResolutionMutexes = Array(PLAYBACK_DATA_RESOLUTION_MUTEX_COUNT) { Mutex() }
+    // The signature timestamp depends on the player script, not on the track, so the
+    // same value comes back for every video in a session. It was being re-fetched on
+    // every resolution - including every prefetch and every retry - which is a full
+    // round trip sitting directly in front of the first byte of audio. Keyed by video
+    // id so the behaviour stays literally identical per track, and bounded so it
+    // cannot grow without limit.
+    private val signatureTimestampCache = ConcurrentHashMap<String, Int>()
     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
 
     @Volatile private var lastSuccessfulClientKey: String? = null
@@ -201,6 +209,7 @@ object YTPlayerUtils {
     fun clearPlaybackAuthCaches() {
         streamUrlCache.clear()
         playbackDataCache.clear()
+        signatureTimestampCache.clear()
         failedStreamClientsUntil.clear()
         lastSuccessfulClientKey = null
     }
@@ -1552,11 +1561,17 @@ object YTPlayerUtils {
      * Wrapper around the [NewPipeUtils.getSignatureTimestamp] function which reports exceptions
      */
     private suspend fun getSignatureTimestampOrNull(videoId: String): Int? {
+        signatureTimestampCache[videoId]?.let { cached -> return cached }
         Timber.tag(logTag).i("Getting signature timestamp for videoId: $videoId")
         return NewPipeUtils
             .getSignatureTimestamp(videoId)
-            .onSuccess { Timber.tag(logTag).i("Signature timestamp obtained: $it") }
-            .onFailure {
+            .onSuccess { timestamp ->
+                Timber.tag(logTag).i("Signature timestamp obtained: $timestamp")
+                if (signatureTimestampCache.size >= MAX_SIGNATURE_TIMESTAMP_CACHE_ENTRIES) {
+                    signatureTimestampCache.clear()
+                }
+                signatureTimestampCache[videoId] = timestamp
+            }.onFailure {
                 Timber.tag(logTag).e(it, "Failed to get signature timestamp")
                 reportException(it)
             }.getOrNull()

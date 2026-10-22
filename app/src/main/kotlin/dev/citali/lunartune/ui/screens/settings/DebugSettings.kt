@@ -76,6 +76,7 @@ import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.PreferenceEntry
+import dev.citali.lunartune.constants.FastPlaybackStartKey
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
 import dev.citali.lunartune.ui.utils.backToMain
@@ -101,6 +102,12 @@ fun DebugSettings(navController: NavController) {
     val (showCodecOnPlayer, onShowCodecOnPlayerChange) =
         rememberPreference(
             key = booleanPreferencesKey("show_codec_on_player"),
+            defaultValue = false,
+        )
+
+    val (fastPlaybackStart, onFastPlaybackStartChange) =
+        rememberPreference(
+            key = FastPlaybackStartKey,
             defaultValue = false,
         )
 
@@ -168,6 +175,16 @@ fun DebugSettings(navController: NavController) {
                         icon = { Icon(painterResource(R.drawable.graphic_eq), null) },
                         checked = showCodecOnPlayer,
                         onCheckedChange = onShowCodecOnPlayerChange,
+                    )
+                }
+
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.fast_playback_start)) },
+                        description = stringResource(R.string.description_fast_playback_start),
+                        icon = { Icon(painterResource(R.drawable.bolt), null) },
+                        checked = fastPlaybackStart,
+                        onCheckedChange = onFastPlaybackStartChange,
                     )
                 }
 
