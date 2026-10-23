@@ -118,6 +118,8 @@ fun CurrentSongHeader(
     onLockClick: () -> Unit,
     onInfiniteQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Draws the redesign's grouped action tiles instead of the connected toggle group. */
+    newUi: Boolean = false,
 ) {
     val view = LocalView.current
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
@@ -258,19 +260,23 @@ fun CurrentSongHeader(
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                IconButton(
-                    onClick = onClearQueueClick,
-                    modifier = Modifier.size(40.dp),
-                    colors =
-                        IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.delete),
-                        contentDescription = stringResource(R.string.clear),
-                        modifier = Modifier.size(20.dp),
-                    )
+                // The redesign moves "clear queue" into the action tiles, where it can be labelled
+                // instead of being an unlabelled bin beside the overflow menu.
+                if (!newUi) {
+                    IconButton(
+                        onClick = onClearQueueClick,
+                        modifier = Modifier.size(40.dp),
+                        colors =
+                            IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.delete),
+                            contentDescription = stringResource(R.string.clear),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
 
@@ -286,54 +292,23 @@ fun CurrentSongHeader(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val uncheckedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                    contentColor = onBackgroundColor,
-                )
-            val checkedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
-                    checkedContentColor = onBackgroundColor,
-                )
-            val infiniteCheckedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    checkedContainerColor = MaterialTheme.colorScheme.primary,
-                    checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                    contentColor = onBackgroundColor.copy(alpha = 0.5f),
-                )
-
-            ToggleButton(
-                checked = shuffleModeEnabled,
-                onCheckedChange = {
+        if (newUi) {
+            QueueActionGrid(
+                infiniteQueueEnabled = infiniteQueueEnabled,
+                infiniteQueueLoading = infiniteQueueLoading,
+                repeatMode = repeatMode,
+                shuffleModeEnabled = shuffleModeEnabled,
+                onBackgroundColor = onBackgroundColor,
+                onInfiniteQueueClick = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
                             android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
                         )
                     }
-                    onShuffleClick()
+                    onInfiniteQueueClick()
                 },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.shuffle),
-                    contentDescription = stringResource(R.string.action_shuffle_on),
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-
-            ToggleButton(
-                checked = repeatMode != Player.REPEAT_MODE_OFF,
-                onCheckedChange = {
+                onRepeatClick = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
@@ -342,47 +317,124 @@ fun CurrentSongHeader(
                     }
                     onRepeatClick()
                 },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
-                colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
+                onShuffleClick = {
+                    if (enableHapticFeedback) {
+                        view.performHapticFeedback(
+                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                        )
+                    }
+                    onShuffleClick()
+                },
+                onClearQueueClick = {
+                    if (enableHapticFeedback) {
+                        view.performHapticFeedback(
+                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                        )
+                    }
+                    onClearQueueClick()
+                },
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter =
-                        painterResource(
-                            when (repeatMode) {
-                                Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
-                                Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
-                                else -> R.drawable.repeat
-                            },
-                        ),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+                val uncheckedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                        contentColor = onBackgroundColor,
+                    )
+                val checkedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
+                        checkedContentColor = onBackgroundColor,
+                    )
+                val infiniteCheckedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        checkedContainerColor = MaterialTheme.colorScheme.primary,
+                        checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                        contentColor = onBackgroundColor.copy(alpha = 0.5f),
+                    )
 
-            ToggleButton(
-                checked = infiniteQueueEnabled,
-                onCheckedChange = { onInfiniteQueueClick() },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                colors = infiniteCheckedColors,
-                enabled = !infiniteQueueLoading,
-            ) {
-                AnimatedContent(
-                    targetState = infiniteQueueLoading,
-                    label = "InfiniteQueueLoading",
-                ) { loading ->
-                    if (loading) {
-                        CircularWavyProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = LocalContentColor.current,
-                        )
-                    } else {
-                        Icon(
-                            painter = painterResource(R.drawable.all_inclusive),
-                            contentDescription = stringResource(R.string.similar_content),
-                            modifier = Modifier.size(22.dp),
-                        )
+                ToggleButton(
+                    checked = shuffleModeEnabled,
+                    onCheckedChange = {
+                        if (enableHapticFeedback) {
+                            view.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                            )
+                        }
+                        onShuffleClick()
+                    },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                    colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.shuffle),
+                        contentDescription = stringResource(R.string.action_shuffle_on),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                ToggleButton(
+                    checked = repeatMode != Player.REPEAT_MODE_OFF,
+                    onCheckedChange = {
+                        if (enableHapticFeedback) {
+                            view.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                            )
+                        }
+                        onRepeatClick()
+                    },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
+                    colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
+                ) {
+                    Icon(
+                        painter =
+                            painterResource(
+                                when (repeatMode) {
+                                    Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
+                                    Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
+                                    else -> R.drawable.repeat
+                                },
+                            ),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                ToggleButton(
+                    checked = infiniteQueueEnabled,
+                    onCheckedChange = { onInfiniteQueueClick() },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    colors = infiniteCheckedColors,
+                    enabled = !infiniteQueueLoading,
+                ) {
+                    AnimatedContent(
+                        targetState = infiniteQueueLoading,
+                        label = "InfiniteQueueLoading",
+                    ) { loading ->
+                        if (loading) {
+                            CircularWavyProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = LocalContentColor.current,
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(R.drawable.all_inclusive),
+                                contentDescription = stringResource(R.string.similar_content),
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -407,9 +459,164 @@ fun CurrentSongHeader(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        HorizontalDivider(
-            color = onBackgroundColor.copy(alpha = 0.08f),
-            thickness = 1.dp,
+        // In the redesign the rows themselves live in a rounded panel, so a full-width rule here
+        // would double up with the panel's own edge.
+        if (!newUi) {
+            HorizontalDivider(
+                color = onBackgroundColor.copy(alpha = 0.08f),
+                thickness = 1.dp,
+            )
+        }
+    }
+}
+
+/**
+ * The redesign's queue actions: four labelled tiles in two rows — autoplay, repeat, shuffle, and
+ * clear, which is the only destructive one and is the only one that is not a toggle.
+ *
+ * Grouped the way the notification stack groups its rows: tiles of equal size on a soft container,
+ * with the "on" state carrying the colour instead of a border everywhere. Nothing is drawn around
+ * an inactive tile, so a queue whose toggles are all off does not read as a row of empty boxes.
+ */
+@Composable
+private fun QueueActionGrid(
+    infiniteQueueEnabled: Boolean,
+    infiniteQueueLoading: Boolean,
+    repeatMode: Int,
+    shuffleModeEnabled: Boolean,
+    onBackgroundColor: Color,
+    onInfiniteQueueClick: () -> Unit,
+    onRepeatClick: () -> Unit,
+    onShuffleClick: () -> Unit,
+    onClearQueueClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val activeContainer = MaterialTheme.colorScheme.primaryContainer
+    val activeContent = MaterialTheme.colorScheme.onPrimaryContainer
+    val idleContainer = onBackgroundColor.copy(alpha = 0.10f)
+    val idleContent = onBackgroundColor.copy(alpha = 0.88f)
+    val destructiveContainer = MaterialTheme.colorScheme.errorContainer
+    val destructiveContent = MaterialTheme.colorScheme.onErrorContainer
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            QueueActionTile(
+                label = stringResource(R.string.queue_action_autoplay),
+                containerColor = if (infiniteQueueEnabled) activeContainer else idleContainer,
+                contentColor = if (infiniteQueueEnabled) activeContent else idleContent,
+                onClick = { if (!infiniteQueueLoading) onInfiniteQueueClick() },
+                modifier = Modifier.weight(1f),
+            ) {
+                if (infiniteQueueLoading) {
+                    CircularWavyProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = if (infiniteQueueEnabled) activeContent else idleContent,
+                    )
+                } else {
+                    Icon(
+                        painter = painterResource(R.drawable.all_inclusive),
+                        contentDescription = null,
+                        tint = if (infiniteQueueEnabled) activeContent else idleContent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+
+            val repeatOn = repeatMode != Player.REPEAT_MODE_OFF
+            QueueActionTile(
+                label = stringResource(R.string.queue_action_repeat),
+                containerColor = if (repeatOn) activeContainer else idleContainer,
+                contentColor = if (repeatOn) activeContent else idleContent,
+                onClick = onRepeatClick,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    painter =
+                        painterResource(
+                            when (repeatMode) {
+                                Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
+                                Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
+                                else -> R.drawable.repeat
+                            },
+                        ),
+                    contentDescription = null,
+                    tint = if (repeatOn) activeContent else idleContent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            QueueActionTile(
+                label = stringResource(R.string.queue_action_shuffle),
+                containerColor = if (shuffleModeEnabled) activeContainer else idleContainer,
+                contentColor = if (shuffleModeEnabled) activeContent else idleContent,
+                onClick = onShuffleClick,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.shuffle),
+                    contentDescription = null,
+                    tint = if (shuffleModeEnabled) activeContent else idleContent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            QueueActionTile(
+                label = stringResource(R.string.queue_action_clear),
+                containerColor = destructiveContainer,
+                contentColor = destructiveContent,
+                onClick = onClearQueueClick,
+                modifier = Modifier.weight(1f),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.delete),
+                    contentDescription = null,
+                    tint = destructiveContent,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QueueActionTile(
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier =
+            modifier
+                .height(56.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(containerColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp),
+    ) {
+        icon()
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -76,7 +76,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -192,6 +194,10 @@ fun Queue(
     // Rows are taller in the redesign; everything that reserves space at the bottom of the list
     // (the floating toolbar, the snackbar, the reorder scroll threshold) follows the same number.
     val queueRowHeight = if (newUi) NumberedRowHeight else ListItemHeight
+    // New UI draws the queue as one grouped panel: the rows share a rounded surface and are split
+    // by hairlines, the way the notification stack groups its items.
+    val groupColor = onBackgroundColor.copy(alpha = 0.07f)
+    val groupDivider = onBackgroundColor.copy(alpha = 0.09f)
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -946,6 +952,7 @@ fun Queue(
                             locked = !locked
                         }
                     },
+                    newUi = newUi,
                     onInfiniteQueueClick = {
                         val nextInfiniteQueueEnabled = !infiniteQueueEnabled
                         infiniteQueueEnabled = nextInfiniteQueueEnabled
@@ -964,6 +971,8 @@ fun Queue(
                             .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                             .add(
                                 WindowInsets(
+                                    left = if (newUi) 16.dp else 0.dp,
+                                    right = if (newUi) 16.dp else 0.dp,
                                     bottom = queueRowHeight + if (selection) 88.dp else 8.dp,
                                 ),
                             ).asPaddingValues(),
@@ -1108,14 +1117,46 @@ fun Queue(
                                                 .fillMaxWidth()
                                                 .then(
                                                     if (newUi) {
-                                                        // The redesign's rows are flat, so the only
-                                                        // shape they show is the pressed state.
-                                                        Modifier.clip(RoundedCornerShape(16.dp))
-                                                    } else {
+                                                        val groupShape =
+                                                            RoundedCornerShape(
+                                                                topStart = if (index == 0) QueueGroupCorner else 0.dp,
+                                                                topEnd = if (index == 0) QueueGroupCorner else 0.dp,
+                                                                bottomStart =
+                                                                    if (index == mutableQueueWindows.lastIndex) {
+                                                                        QueueGroupCorner
+                                                                    } else {
+                                                                        0.dp
+                                                                    },
+                                                                bottomEnd =
+                                                                    if (index == mutableQueueWindows.lastIndex) {
+                                                                        QueueGroupCorner
+                                                                    } else {
+                                                                        0.dp
+                                                                    },
+                                                            )
                                                         Modifier
+                                                            .clip(groupShape)
+                                                            .background(groupColor)
+                                                            .drawWithContent {
+                                                                drawContent()
+                                                                // Hairline between rows, inset to the
+                                                                // edge of the artwork so the panel reads
+                                                                // as a list and not as a table.
+                                                                if (index != mutableQueueWindows.lastIndex) {
+                                                                    val inset = QueueGroupDividerInset.toPx()
+                                                                    val y = size.height - 0.5.dp.toPx()
+                                                                    drawLine(
+                                                                        color = groupDivider,
+                                                                        start = Offset(inset, y),
+                                                                        end = Offset(size.width, y),
+                                                                        strokeWidth = 1.dp.toPx(),
+                                                                    )
+                                                                }
+                                                            }
+                                                    } else {
+                                                        Modifier.background(backgroundColor)
                                                     },
                                                 )
-                                                .background(backgroundColor)
                                                 .combinedClickable(
                                                     onClick = {
                                                         if (selection) {
@@ -1267,6 +1308,12 @@ fun Queue(
         }
     }
 }
+
+/** Corner radius of the queue's grouped panel in the redesign. */
+private val QueueGroupCorner = 26.dp
+
+/** How far the hairline between rows is inset, lining up with the edge of the artwork. */
+private val QueueGroupDividerInset = 112.dp
 
 private val Timeline.Window.queueItemKey: Long
     get() =

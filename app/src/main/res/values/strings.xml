@@ -915,6 +915,10 @@
     <string name="log_level_error">Error</string>
     <string name="filter_all_logs">All</string>
     <string name="clear">Clear</string>
+    <string name="queue_action_autoplay">Autoplay</string>
+    <string name="queue_action_repeat">Repeat</string>
+    <string name="queue_action_shuffle">Shuffle</string>
+    <string name="queue_action_clear">Clear</string>
     <string name="export">Export</string>
     <string name="logs_empty_message">Logs will appear here when available</string>
     <string name="real_time_playback_stats">Real-time playback statistics</string>
