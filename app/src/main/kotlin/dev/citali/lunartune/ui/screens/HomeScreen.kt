@@ -75,6 +75,7 @@ import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
+import dev.citali.lunartune.constants.EnableNewUiKey
 import dev.citali.lunartune.constants.HomeHeaderImageUriKey
 import dev.citali.lunartune.constants.QuickPicks
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
@@ -302,6 +303,9 @@ private fun HomeContent(
     val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
     val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
     val (homeHeaderImageUri) = rememberPreference(HomeHeaderImageUriKey, "")
+    // Developer preview of the redesign. Every section reads it and keeps its current layout when
+    // it is off, so the home page can be reworked a piece at a time.
+    val (newUi) = rememberPreference(EnableNewUiKey, defaultValue = false)
     val effectiveHeaderImageUri = homeHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val remoteQuickPicks =
         uiState
@@ -444,16 +448,29 @@ private fun HomeContent(
                                 key = "home_remote_quick_picks",
                                 contentType = "quick_picks",
                             ) {
-                                RemoteQuickPicksSection(
-                                    section = remoteQuickPicks,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    displayMode = uiState.quickPicksDisplayMode,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
+                                if (newUi) {
+                                    NewRemoteQuickPicksSection(
+                                        section = remoteQuickPicks,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        displayMode = uiState.quickPicksDisplayMode,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                    )
+                                } else {
+                                    RemoteQuickPicksSection(
+                                        section = remoteQuickPicks,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        displayMode = uiState.quickPicksDisplayMode,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                    )
+                                }
                             }
                         } else if (
                             uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
@@ -472,16 +489,29 @@ private fun HomeContent(
                                 key = "home_quick_picks",
                                 contentType = "quick_picks",
                             ) {
-                                QuickPicksSection(
-                                    quickPicks = uiState.quickPicks,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    displayMode = uiState.quickPicksDisplayMode,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
+                                if (newUi) {
+                                    NewQuickPicksSection(
+                                        quickPicks = uiState.quickPicks,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        displayMode = uiState.quickPicksDisplayMode,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                    )
+                                } else {
+                                    QuickPicksSection(
+                                        quickPicks = uiState.quickPicks,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        displayMode = uiState.quickPicksDisplayMode,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                    )
+                                }
                             }
                         }
 
@@ -499,16 +529,29 @@ private fun HomeContent(
                                 key = "home_speed_dial",
                                 contentType = "speed_dial",
                             ) {
-                                SpeedDialSection(
-                                    speedDialItems = uiState.speedDialItems,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                    scope = scope,
-                                )
+                                if (newUi) {
+                                    NewSpeedDialSection(
+                                        speedDialItems = uiState.speedDialItems,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                        scope = scope,
+                                    )
+                                } else {
+                                    SpeedDialSection(
+                                        speedDialItems = uiState.speedDialItems,
+                                        mediaMetadata = mediaMetadata,
+                                        isPlaying = isPlaying,
+                                        navController = navController,
+                                        playerConnection = playerConnection,
+                                        menuState = menuState,
+                                        haptic = haptic,
+                                        scope = scope,
+                                    )
+                                }
                             }
                         }
 

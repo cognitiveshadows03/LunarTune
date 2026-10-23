@@ -881,6 +881,9 @@
     <string name="display_codec_on_player">Display Codec on Player</string>
     <string name="description_display_codec_on_player">Show current audio codec information on the player</string>
     <string name="new_ui">New UI</string>
+    <string name="speed_dial_artist">Artist</string>
+    <string name="speed_dial_shuffle">Shuffle</string>
+    <string name="speed_dial_shuffle_description">Play something from your speed dial</string>
     <string name="description_new_ui">Turn on the redesigned screens as they land. Each one keeps its current look when this is off, so nothing breaks mid-way. Off by default.</string>
     <string name="nerd_stats">Nerd Stats</string>
     <string name="track_label">Track</string>
