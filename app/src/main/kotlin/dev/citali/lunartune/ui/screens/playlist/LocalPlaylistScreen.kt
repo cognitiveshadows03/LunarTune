@@ -591,14 +591,17 @@ fun LocalPlaylistScreen(
                 } else {
                     if (!isSearching) {
                         item(key = "header") {
+                            // The stored count is the number of rows in the playlist map, which
+                            // is not the number of songs that can actually be played: a map row
+                            // can point at a song that is no longer in the library, or at a song
+                            // already in the list. Showing the resolved list keeps the header
+                            // honest with what the queue will play.
                             val songCount =
-                                if (
-                                    playlist.songCount == 0 &&
-                                    playlist.playlist.remoteSongCount != null
-                                ) {
-                                    playlist.playlist.remoteSongCount
-                                } else {
-                                    playlist.songCount
+                                when {
+                                    songs.isNotEmpty() -> songs.size
+                                    playlist.songCount == 0 && playlist.playlist.remoteSongCount != null ->
+                                        playlist.playlist.remoteSongCount
+                                    else -> playlist.songCount
                                 }
                             val metadata =
                                 listOfNotNull(

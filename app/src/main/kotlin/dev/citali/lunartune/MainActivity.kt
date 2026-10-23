@@ -1182,15 +1182,13 @@ class MainActivity : FragmentActivity() {
                     val isMiniPlayerFrosted = miniPlayerBackgroundStyle == MiniPlayerBackgroundStyle.FROSTED
                     val hazeState = rememberHazeState()
                     val isFrostedNavBar = navigationBarStyle == NavigationBarStyle.FROSTED
-                    // Android 11 and below have no RenderEffect, so the capsule bar can only blur
-                    // by sampling its own content and computing the blur - opt-in, because that
-                    // work is real even when it is small.
+                    // The capsule bar has no RenderEffect path of its own, on any version, so it
+                    // blurs by sampling the content behind it and computing the blur - opt-in,
+                    // because that work is real even when it is small.
                     val (legacyNavBarBlurEnabled, _) =
                         rememberPreference(NavigationBarLegacyLiveBlurKey, defaultValue = false)
                     val capsuleLiveBlurWanted =
-                        legacyNavBarBlurEnabled &&
-                            Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
-                            navigationBarStyle == NavigationBarStyle.CAPSULE
+                        legacyNavBarBlurEnabled && navigationBarStyle == NavigationBarStyle.CAPSULE
                     val navBarBlurState = remember { NavBarBlurState() }
                     val capsuleLiveBlurSource = if (capsuleLiveBlurWanted) navBarBlurState else null
                     // The bar only stops being solid once there is actually a sample to show,

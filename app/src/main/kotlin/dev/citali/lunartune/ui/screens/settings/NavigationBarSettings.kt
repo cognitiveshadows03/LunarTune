@@ -9,7 +9,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -240,7 +239,7 @@ fun NavigationBarSettings(navController: NavController) {
                     )
                 }
 
-                if (navigationBarStyle == NavigationBarStyle.CAPSULE && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                if (navigationBarStyle == NavigationBarStyle.CAPSULE) {
                     item {
                         SwitchPreference(
                             title = { Text(stringResource(R.string.navbar_legacy_live_blur)) },
