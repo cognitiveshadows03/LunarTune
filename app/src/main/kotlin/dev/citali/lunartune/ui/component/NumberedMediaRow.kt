@@ -34,29 +34,29 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
-/** Height the redesigned list row keeps, a little tighter than the shared 72 dp list item. */
-private val NumberedRowHeight = 64.dp
+/** Height the redesigned list row keeps. Exposed so hosts can reserve the same space. */
+internal val NumberedRowHeight = 76.dp
 
-/** Artwork on the redesigned row: smaller than the shared list thumbnail, so the row reads denser. */
-private val NumberedRowThumbnail = 48.dp
-private val NumberedRowThumbnailCorner = 9.dp
+/** Artwork on the redesigned row. */
+private val NumberedRowThumbnail = 56.dp
+private val NumberedRowThumbnailCorner = 13.dp
 
 /** Reserved for the active marker, so a row never shifts when it becomes the playing one. */
 private val NumberedRowMarkerWidth = 3.dp
-private val NumberedRowMarkerHeight = 18.dp
+private val NumberedRowMarkerHeight = 20.dp
 
 /** Position column. Wide enough for three digits before the artwork starts to move. */
-private val NumberedRowPositionWidth = 24.dp
+private val NumberedRowPositionWidth = 26.dp
 
 /**
- * The row the redesign uses wherever a list is read as a plot rather than a menu: the queue, speed
- * dial, and later recommended mixes.
+ * The row the redesign uses wherever a list is read as a plot rather than a menu: the queue, and
+ * the dense variant of the quick picks.
  *
- * The track's place on the left, then artwork, title and subtitle, then whatever the caller puts at
+ * The item's place on the left, then artwork, title and subtitle, then whatever the caller puts at
  * the end. Deliberately quiet: the only colour it spends is the primary colour on the playing
- * item — a short marker beside the position and a tint on the position and title. No containers, no
- * gradients, no per-row elevation. These are long lists read while music plays, so they stay flat
- * and let the artwork do the rest.
+ * item — a short marker beside the position, the position itself, and nothing else. The artwork
+ * carries the playing state on its own, so the row stays legible without a container, a gradient or
+ * per-row elevation; these are long lists read while music plays.
  */
 @Composable
 internal fun NumberedMediaRow(
@@ -64,8 +64,6 @@ internal fun NumberedMediaRow(
     title: String,
     subtitle: String,
     thumbnailUrl: String?,
-    /** Replaces the artwork when the row does not stand for a piece of media, such as shuffle. */
-    thumbnail: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     isActive: Boolean = false,
@@ -81,7 +79,7 @@ internal fun NumberedMediaRow(
             modifier
                 .fillMaxWidth()
                 .heightIn(min = NumberedRowHeight)
-                .padding(start = 6.dp, end = 2.dp),
+                .padding(start = 8.dp, end = 4.dp),
     ) {
         Box(
             modifier =
@@ -91,59 +89,52 @@ internal fun NumberedMediaRow(
                     .clip(CircleShape)
                     .background(if (isActive) accent else Color.Transparent),
         )
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(9.dp))
         Text(
             text = position.toString(),
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.titleSmall,
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (isActive) accent else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            color =
+                if (isActive) {
+                    accent
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                },
             textAlign = TextAlign.Center,
             maxLines = 1,
             modifier = Modifier.width(NumberedRowPositionWidth),
         )
-        Spacer(Modifier.width(8.dp))
-        if (thumbnail != null) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .size(NumberedRowThumbnail)
-                        .clip(RoundedCornerShape(NumberedRowThumbnailCorner)),
-            ) {
-                thumbnail()
-            }
-        } else {
-            ItemThumbnail(
-                thumbnailUrl = thumbnailUrl,
-                albumIndex = null,
-                isSelected = isSelected,
-                isActive = isActive,
-                isPlaying = isPlaying,
-                shouldLoadImage = shouldLoadImage,
-                shape = RoundedCornerShape(NumberedRowThumbnailCorner),
-                modifier = Modifier.size(NumberedRowThumbnail),
-            )
-        }
+        Spacer(Modifier.width(10.dp))
+        ItemThumbnail(
+            thumbnailUrl = thumbnailUrl,
+            albumIndex = null,
+            isSelected = isSelected,
+            isActive = isActive,
+            isPlaying = isPlaying,
+            shouldLoadImage = shouldLoadImage,
+            shape = RoundedCornerShape(NumberedRowThumbnailCorner),
+            modifier = Modifier.size(NumberedRowThumbnail),
+        )
         Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
             modifier =
                 Modifier
                     .weight(1f)
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 14.dp),
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (isActive) accent else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -529,29 +529,16 @@ private fun HomeContent(
                                 key = "home_speed_dial",
                                 contentType = "speed_dial",
                             ) {
-                                if (newUi) {
-                                    NewSpeedDialSection(
-                                        speedDialItems = uiState.speedDialItems,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                        scope = scope,
-                                    )
-                                } else {
-                                    SpeedDialSection(
-                                        speedDialItems = uiState.speedDialItems,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                        scope = scope,
-                                    )
-                                }
+                                SpeedDialSection(
+                                    speedDialItems = uiState.speedDialItems,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                    scope = scope,
+                                )
                             }
                         }
 

@@ -21,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,6 +76,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -104,6 +106,7 @@ import dev.citali.lunartune.constants.AutoLoadMoreKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.EnableNewUiKey
 import dev.citali.lunartune.constants.ListItemHeight
+import dev.citali.lunartune.ui.component.NumberedRowHeight
 import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
@@ -186,6 +189,9 @@ fun Queue(
 
     var locked by rememberPreference(QueueEditLockKey, defaultValue = true)
     val (newUi) = rememberPreference(EnableNewUiKey, defaultValue = false)
+    // Rows are taller in the redesign; everything that reserves space at the bottom of the list
+    // (the floating toolbar, the snackbar, the reorder scroll threshold) follows the same number.
+    val queueRowHeight = if (newUi) NumberedRowHeight else ListItemHeight
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -753,7 +759,7 @@ fun Queue(
                         .only(WindowInsetsSides.Bottom)
                         .add(
                             WindowInsets(
-                                bottom = ListItemHeight,
+                                bottom = queueRowHeight,
                             ),
                         ).asPaddingValues(),
             ) onMove@{ from, to ->
@@ -958,7 +964,7 @@ fun Queue(
                             .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                             .add(
                                 WindowInsets(
-                                    bottom = ListItemHeight + if (selection) 88.dp else 8.dp,
+                                    bottom = queueRowHeight + if (selection) 88.dp else 8.dp,
                                 ),
                             ).asPaddingValues(),
                     modifier =
@@ -1046,7 +1052,12 @@ fun Queue(
                                         isPlaying = isPlaying && isActive,
                                         shouldLoadImage = shouldLoadImages,
                                         trailingContent = {
+                                            // The redesign gives the two trailing actions a tighter,
+                                            // equal pair of targets; the old row keeps its defaults.
+                                            val trailingSize = if (newUi) 42.dp else 48.dp
+                                            val trailingIconSize = if (newUi) 22.dp else 24.dp
                                             IconButton(
+                                                modifier = Modifier.size(trailingSize),
                                                 onClick = {
                                                     menuState.show {
                                                         PlayerMenu(
@@ -1073,16 +1084,21 @@ fun Queue(
                                                 Icon(
                                                     painter = painterResource(R.drawable.more_vert),
                                                     contentDescription = null,
+                                                    modifier = Modifier.size(trailingIconSize),
                                                 )
                                             }
                                             if (!effectiveLocked) {
                                                 IconButton(
                                                     onClick = { },
-                                                    modifier = Modifier.draggableHandle(),
+                                                    modifier =
+                                                        Modifier
+                                                            .size(trailingSize)
+                                                            .draggableHandle(),
                                                 ) {
                                                     Icon(
                                                         painter = painterResource(R.drawable.drag_handle),
                                                         contentDescription = null,
+                                                        modifier = Modifier.size(trailingIconSize),
                                                     )
                                                 }
                                             }
@@ -1090,6 +1106,15 @@ fun Queue(
                                         modifier =
                                             Modifier
                                                 .fillMaxWidth()
+                                                .then(
+                                                    if (newUi) {
+                                                        // The redesign's rows are flat, so the only
+                                                        // shape they show is the pressed state.
+                                                        Modifier.clip(RoundedCornerShape(16.dp))
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                )
                                                 .background(backgroundColor)
                                                 .combinedClickable(
                                                     onClick = {
@@ -1187,7 +1212,7 @@ fun Queue(
                         Modifier
                             .padding(
                                 bottom =
-                                    (if (selection) ListItemHeight * 2 + 16.dp else ListItemHeight) +
+                                    (if (selection) queueRowHeight * 2 + 16.dp else queueRowHeight) +
                                         WindowInsets.systemBars
                                             .asPaddingValues()
                                             .calculateBottomPadding(),
@@ -1203,7 +1228,7 @@ fun Queue(
                             .align(Alignment.BottomCenter)
                             .padding(
                                 bottom =
-                                    ListItemHeight +
+                                    queueRowHeight +
                                         WindowInsets.systemBars
                                             .asPaddingValues()
                                             .calculateBottomPadding(),

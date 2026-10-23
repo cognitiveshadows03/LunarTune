@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,15 +27,11 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PageSize
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -50,10 +44,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -63,10 +55,6 @@ import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.QuickPicksDisplayMode
-import dev.citali.lunartune.db.entities.Album
-import dev.citali.lunartune.db.entities.Artist
-import dev.citali.lunartune.db.entities.LocalItem
-import dev.citali.lunartune.db.entities.Playlist
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
@@ -77,17 +65,11 @@ import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.NumberedMediaRow
-import dev.citali.lunartune.ui.menu.AlbumMenu
-import dev.citali.lunartune.ui.menu.ArtistMenu
-import dev.citali.lunartune.ui.menu.PlaylistMenu
 import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.utils.displayArtworkUrl
-import dev.citali.lunartune.utils.makeTimeString
-import kotlinx.coroutines.CoroutineScope
 import moe.rukamori.archivetune.innertube.models.SongItem
 import moe.rukamori.archivetune.innertube.pages.HomePage
-import kotlin.random.Random
 
 /** Corner radius of the quick-pick cards: large enough to read as a poster, not as a button. */
 private val QuickPickCorner = 26.dp
@@ -98,10 +80,8 @@ private const val QuickPickWidthFraction = 0.72f
 /** Posters, so a touch taller than wide. */
 private const val QuickPickAspectRatio = 1.28f
 
-/** Rows per page in the speed-dial list, matching the old grid's page size. */
-private const val SpeedDialRowsPerPage = 4
-
-private val SpeedDialRowHeight = 64.dp
+/** Height the dense quick-pick rows are laid out at. */
+private val QuickPickRowHeight = 76.dp
 
 /**
  * One entry of a quick-pick carousel, independent of where it came from: the local library or the
@@ -115,19 +95,6 @@ private class QuickPickCardData(
     val isActive: Boolean,
     val onClick: () -> Unit,
     val onLongClick: () -> Unit,
-)
-
-/** One row of the speed-dial list, similarly independent of whether it came from the library. */
-private class SpeedDialRowData(
-    val key: String,
-    val title: String,
-    val subtitle: String,
-    val thumbnailUrl: String?,
-    val isActive: Boolean,
-    val trailing: String?,
-    val isShuffle: Boolean = false,
-    val onClick: () -> Unit,
-    val onLongClick: (() -> Unit)? = null,
 )
 
 /**
@@ -445,7 +412,7 @@ private fun QuickPickRows(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(SpeedDialRowHeight * 4),
+                    .height(QuickPickRowHeight * 4),
         ) {
             itemsIndexed(
                 items = cards,
@@ -486,281 +453,4 @@ private fun QuickPickRows(
             }
         }
     }
-}
-
-/**
- * The redesigned speed dial (New UI): a page of numbered rows on a rounded surface, the next page
- * peeking in from the right. Flat rows, one container per page, numbers carried across pages so the
- * list reads as one sequence.
- */
-@Composable
-internal fun NewSpeedDialSection(
-    speedDialItems: List<LocalItem>,
-    mediaMetadata: MediaMetadata?,
-    isPlaying: Boolean,
-    navController: NavController,
-    playerConnection: PlayerConnection,
-    menuState: MenuState,
-    haptic: HapticFeedback,
-    scope: CoroutineScope,
-    modifier: Modifier = Modifier,
-) {
-    val context = LocalContext.current
-    val artistLabel = stringResource(R.string.speed_dial_artist)
-
-    val distinct =
-        remember(speedDialItems) {
-            speedDialItems
-                .distinctBy {
-                    when (it) {
-                        is Song -> "song_${it.id}"
-                        is Album -> "album_${it.id}"
-                        is Artist -> "artist_${it.id}"
-                        is Playlist -> "playlist_${it.id}"
-                    }
-                }.take(24)
-        }
-    val speedDialSongs = remember(distinct) { distinct.filterIsInstance<Song>() }
-    val songIndexById = remember(speedDialSongs) { speedDialSongs.mapIndexed { index, song -> song.id to index }.toMap() }
-
-    fun playSpeedDialQueue(startIndex: Int) {
-        if (speedDialSongs.isEmpty()) return
-        playerConnection.playQueue(
-            ListQueue(
-                title = context.getString(R.string.speed_dial),
-                items = speedDialSongs.map { it.toMediaItem() },
-                startIndex = startIndex,
-            ),
-        )
-    }
-
-    val rows =
-        distinct.map { item ->
-            val key =
-                when (item) {
-                    is Song -> "song_${item.id}"
-                    is Album -> "album_${item.id}"
-                    is Artist -> "artist_${item.id}"
-                    is Playlist -> "playlist_${item.id}"
-                }
-            val subtitle =
-                when (item) {
-                    is Song -> item.artists.joinToString { it.name }
-                    is Album -> item.artists.joinToString { it.name }
-                    is Artist -> artistLabel
-                    is Playlist ->
-                        context.resources.getQuantityString(R.plurals.n_song, item.songCount, item.songCount)
-                }
-            val trailing =
-                (item as? Song)?.let { makeTimeString(it.song.duration * 1000L) }
-            SpeedDialRowData(
-                key = key,
-                title = item.title,
-                subtitle = subtitle,
-                thumbnailUrl =
-                    when (item) {
-                        is Song -> item.song.thumbnailUrl
-                        is Album -> item.album.thumbnailUrl
-                        is Artist -> item.artist.thumbnailUrl
-                        is Playlist -> item.thumbnails.firstOrNull()
-                    },
-                isActive =
-                    when (item) {
-                        is Song -> item.id == mediaMetadata?.id
-                        is Album -> item.id == mediaMetadata?.album?.id
-                        else -> false
-                    },
-                trailing = trailing,
-                onClick = {
-                    when (item) {
-                        is Song -> {
-                            if (item.id == mediaMetadata?.id) {
-                                playerConnection.player.togglePlayPause()
-                            } else {
-                                playSpeedDialQueue(songIndexById[item.id] ?: 0)
-                            }
-                        }
-
-                        is Album -> navController.navigate("album/${item.id}")
-                        is Artist -> navController.navigate("artist/${item.id}")
-                        is Playlist -> navController.navigate("local_playlist/${item.id}")
-                    }
-                },
-                onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    menuState.show {
-                        when (item) {
-                            is Song -> {
-                                SongMenu(
-                                    originalSong = item,
-                                    navController = navController,
-                                    onDismiss = menuState::dismiss,
-                                )
-                            }
-
-                            is Album -> {
-                                AlbumMenu(
-                                    originalAlbum = item,
-                                    navController = navController,
-                                    onDismiss = menuState::dismiss,
-                                )
-                            }
-
-                            is Artist -> {
-                                ArtistMenu(
-                                    originalArtist = item,
-                                    coroutineScope = scope,
-                                    onDismiss = menuState::dismiss,
-                                )
-                            }
-
-                            is Playlist -> {
-                                PlaylistMenu(
-                                    playlist = item,
-                                    coroutineScope = scope,
-                                    onDismiss = menuState::dismiss,
-                                )
-                            }
-                        }
-                    }
-                },
-            )
-        } +
-            SpeedDialRowData(
-                key = "shuffle",
-                title = context.getString(R.string.speed_dial_shuffle),
-                subtitle = context.getString(R.string.speed_dial_shuffle_description),
-                thumbnailUrl = null,
-                isActive = false,
-                trailing = null,
-                isShuffle = true,
-                onClick = {
-                    if (speedDialSongs.isNotEmpty()) {
-                        playSpeedDialQueue(Random.nextInt(speedDialSongs.size))
-                    }
-                },
-            )
-
-    val pages = rows.chunked(SpeedDialRowsPerPage)
-    val pagerState = rememberPagerState(pageCount = { pages.size })
-    val pageHeight = SpeedDialRowHeight * SpeedDialRowsPerPage + 12.dp
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        HorizontalPager(
-            state = pagerState,
-            pageSize = PageSize.Fill,
-            pageSpacing = 10.dp,
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            verticalAlignment = Alignment.Top,
-            key = { page -> pages[page].firstOrNull()?.key ?: "speed_dial_page_$page" },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(pageHeight),
-        ) { page ->
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shape = RoundedCornerShape(24.dp),
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                Column(
-                    verticalArrangement = Arrangement.Center,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(vertical = 6.dp),
-                ) {
-                    pages[page].forEachIndexed { indexInPage, row ->
-                        SpeedDialRow(
-                            row = row,
-                            position = page * SpeedDialRowsPerPage + indexInPage + 1,
-                            isPlaying = isPlaying && row.isActive,
-                        )
-                    }
-                }
-            }
-        }
-
-        if (pages.size > 1) {
-            Spacer(Modifier.height(10.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                repeat(pages.size) { index ->
-                    val selected = index == pagerState.currentPage
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(if (selected) 7.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.surfaceContainerHighest
-                                    },
-                                ),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SpeedDialRow(
-    row: SpeedDialRowData,
-    position: Int,
-    isPlaying: Boolean,
-) {
-    NumberedMediaRow(
-        position = position,
-        title = row.title,
-        subtitle = row.subtitle,
-        thumbnailUrl = row.thumbnailUrl,
-        thumbnail =
-            if (row.isShuffle) {
-                {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.shuffle),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
-            } else {
-                null
-            },
-        isActive = row.isActive,
-        isPlaying = isPlaying,
-        modifier =
-            Modifier
-                .padding(horizontal = 6.dp)
-                .combinedClickable(
-                    onClick = row.onClick,
-                    onLongClick = row.onLongClick,
-                ),
-        trailingContent = {
-            row.trailing?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.padding(end = 12.dp),
-                )
-            }
-        },
-    )
 }
