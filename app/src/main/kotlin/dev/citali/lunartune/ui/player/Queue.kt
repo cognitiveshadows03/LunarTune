@@ -884,7 +884,19 @@ fun Queue(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(backgroundColor),
+                    .then(
+                        if (newUi) {
+                            // One pane of glass for the whole sheet - header, actions and list -
+                            // with the player's blurred artwork behind it. Not a card per block:
+                            // the sheet itself is the glass, the way the notification shade is.
+                            Modifier.queueSheetGlass(
+                                model = mediaMetadata?.thumbnailUrl,
+                                tint = backgroundColor,
+                            )
+                        } else {
+                            Modifier.background(backgroundColor)
+                        },
+                    ),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 CurrentSongHeader(
@@ -990,8 +1002,11 @@ fun Queue(
                                 if (newUi) {
                                     // The group is the viewport, not the rows: one card that
                                     // stays where it is while the songs scroll through it, so its
-                                    // corners can never scroll away.
+                                    // corners can never scroll away. It sits on the sheet's own
+                                    // glass and only lightly tints it, the way a grouped card in
+                                    // the notification shade sits on the shade.
                                     Modifier
+                                        .padding(top = 10.dp)
                                         .padding(horizontal = 16.dp)
                                         .clip(RoundedCornerShape(QueueGroupCorner))
                                         .background(groupBrush)

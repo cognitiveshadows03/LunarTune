@@ -134,24 +134,9 @@ fun CurrentSongHeader(
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 .bottomSheetDraggable(sheetState)
                 .padding(horizontal = 16.dp)
-                .padding(top = if (newUi) 6.dp else 20.dp, bottom = if (newUi) 10.dp else 8.dp)
-                .then(
-                    if (newUi) {
-                        // Artwork, title, the count pill and the four actions all sit on one
-                        // pane of glass made from this track's cover, tinted with the player's
-                        // own colour - the way the player's header does it.
-                        Modifier
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(backgroundColor.copy(alpha = 0.35f))
-                            .queueAlbumFrost(
-                                model = mediaMetadata?.thumbnailUrl,
-                                scrim = backgroundColor,
-                            )
-                    } else {
-                        Modifier
-                    },
-                ).padding(horizontal = if (newUi) 12.dp else 0.dp)
-                .padding(top = if (newUi) 6.dp else 0.dp, bottom = if (newUi) 10.dp else 0.dp),
+                // No card of its own: the artwork, title, count pill and actions sit straight on
+                // the sheet's glass, which is the pane the whole sheet is made of.
+                .padding(top = if (newUi) 6.dp else 20.dp, bottom = if (newUi) 2.dp else 8.dp),
     ) {
         Box(
             modifier =
