@@ -305,6 +305,13 @@ val PreloadNextSongKey = booleanPreferencesKey("preloadNextSong")
 val FastPlaybackStartKey = booleanPreferencesKey("fastPlaybackStart")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
+/**
+ * Developer preview of the interface redesign. Every screen that has been reworked so far reads
+ * this and keeps its old layout when the switch is off, so the redesign can land piece by piece
+ * instead of in one release. Default off.
+ */
+val EnableNewUiKey = booleanPreferencesKey("enableNewUi")
+
 enum class AudioQuality {
     AUTO,
     HIGH,

@@ -102,6 +102,7 @@ import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AutoLoadMoreKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
+import dev.citali.lunartune.constants.EnableNewUiKey
 import dev.citali.lunartune.constants.ListItemHeight
 import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
@@ -118,7 +119,6 @@ import dev.citali.lunartune.ui.component.BottomSheet
 import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
-import dev.citali.lunartune.ui.component.MediaMetadataListItem
 import dev.citali.lunartune.ui.component.TextFieldDialog
 import dev.citali.lunartune.ui.menu.AddToPlaylistDialog
 import dev.citali.lunartune.ui.menu.PlayerMenu
@@ -185,6 +185,7 @@ fun Queue(
     }
 
     var locked by rememberPreference(QueueEditLockKey, defaultValue = true)
+    val (newUi) = rememberPreference(EnableNewUiKey, defaultValue = false)
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -1036,8 +1037,10 @@ fun Queue(
                                                 null
                                             }
                                         }
-                                    MediaMetadataListItem(
+                                    QueueRow(
+                                        newUi = newUi,
                                         mediaMetadata = trackMetadata,
+                                        position = index + 1,
                                         isSelected = selection && trackMetadata in selectedSongs,
                                         isActive = isActive,
                                         isPlaying = isPlaying && isActive,

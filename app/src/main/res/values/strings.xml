@@ -880,6 +880,8 @@
     <string name="description_fast_playback_start">Prefetches the stream before you press play and keeps a small buffer ahead, trading a fraction of a second at the start for fewer 2000/2004 stream errors. Takes effect after restarting the app.</string>
     <string name="display_codec_on_player">Display Codec on Player</string>
     <string name="description_display_codec_on_player">Show current audio codec information on the player</string>
+    <string name="new_ui">New UI</string>
+    <string name="description_new_ui">Turn on the redesigned screens as they land. Each one keeps its current look when this is off, so nothing breaks mid-way. Off by default.</string>
     <string name="nerd_stats">Nerd Stats</string>
     <string name="track_label">Track</string>
     <string name="no_track_playing">No track playing</string>
