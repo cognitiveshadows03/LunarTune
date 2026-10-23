@@ -118,6 +118,8 @@ fun FloatingNavigationToolbar(
     onItemClick: (Screens, Boolean) -> Unit,
     onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
+    /** Live blur sampled from the content behind the bar, for Android 11 and below. */
+    liveBlur: NavBarBlurState? = null,
 ) {
     if (style == NavigationBarStyle.CAPSULE) {
         CapsuleNavigationBar(
@@ -127,6 +129,7 @@ fun FloatingNavigationToolbar(
             onItemClick = onItemClick,
             onItemLongClick = onItemLongClick,
             onSearchItemDoubleClick = onSearchItemDoubleClick,
+            liveBlur = liveBlur,
         )
         return
     }
