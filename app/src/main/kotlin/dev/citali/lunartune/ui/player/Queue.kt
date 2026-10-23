@@ -77,6 +77,9 @@ import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -192,9 +195,16 @@ fun Queue(
     // Rows are taller in the redesign; everything that reserves space at the bottom of the list
     // (the floating toolbar, the snackbar, the reorder scroll threshold) follows the same number.
     val queueRowHeight = if (newUi) NumberedRowHeight else ListItemHeight
-    // New UI draws the queue as a stack of rounded cards: the same surface on every row, a small
-    // gap between them, the way the notification stack groups its items.
-    val groupColor = onBackgroundColor.copy(alpha = 0.07f)
+    // New UI draws the queue as one rounded group with its own surface; the rows scroll inside it
+    // and it never moves, the way the notification stack groups its items.
+    val groupDivider = onBackgroundColor.copy(alpha = 0.09f)
+    val groupBrush =
+        Brush.verticalGradient(
+            listOf(
+                onBackgroundColor.copy(alpha = 0.10f),
+                onBackgroundColor.copy(alpha = 0.06f),
+            ),
+        )
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -968,15 +978,27 @@ fun Queue(
                             .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                             .add(
                                 WindowInsets(
-                                    left = if (newUi) 16.dp else 0.dp,
-                                    right = if (newUi) 16.dp else 0.dp,
+                                    left = if (newUi) 6.dp else 0.dp,
+                                    right = if (newUi) 6.dp else 0.dp,
                                     bottom = queueRowHeight + if (selection) 88.dp else 8.dp,
                                 ),
                             ).asPaddingValues(),
                     modifier =
                         Modifier
                             .weight(1f)
-                            .nestedScroll(state.preUpPostDownNestedScrollConnection),
+                            .then(
+                                if (newUi) {
+                                    // The group is the viewport, not the rows: one card that
+                                    // stays where it is while the songs scroll through it, so its
+                                    // corners can never scroll away.
+                                    Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .clip(RoundedCornerShape(QueueGroupCorner))
+                                        .background(groupBrush)
+                                } else {
+                                    Modifier
+                                },
+                            ).nestedScroll(state.preUpPostDownNestedScrollConnection),
                 ) {
                     item(
                         key = "queue_selection_spacer",
@@ -1051,6 +1073,8 @@ fun Queue(
                                         }
                                     QueueRow(
                                         newUi = newUi,
+                                        textFrost =
+                                            if (newUi) onBackgroundColor.copy(alpha = 0.10f) else null,
                                         mediaMetadata = trackMetadata,
                                         position = index + 1,
                                         isSelected = selection && trackMetadata in selectedSongs,
@@ -1114,15 +1138,22 @@ fun Queue(
                                                 .fillMaxWidth()
                                                 .then(
                                                     if (newUi) {
-                                                        // Every row is its own card. A single panel
-                                                        // split by hairlines lost its corners as soon
-                                                        // as it scrolled, which made the top row look
-                                                        // cut off; stacked cards keep their rounding
-                                                        // wherever the list happens to be.
-                                                        Modifier
-                                                            .padding(vertical = QueueGroupGap / 2)
-                                                            .clip(RoundedCornerShape(QueueGroupCorner))
-                                                            .background(groupColor)
+                                                        Modifier.drawWithContent {
+                                                            drawContent()
+                                                            // Hairline between rows, inset to the
+                                                            // edge of the artwork so the group
+                                                            // reads as a list and not as a table.
+                                                            if (index != mutableQueueWindows.lastIndex) {
+                                                                val inset = QueueGroupDividerInset.toPx()
+                                                                val y = size.height - 0.5.dp.toPx()
+                                                                drawLine(
+                                                                    color = groupDivider,
+                                                                    start = Offset(inset, y),
+                                                                    end = Offset(size.width, y),
+                                                                    strokeWidth = 1.dp.toPx(),
+                                                                )
+                                                            }
+                                                        }
                                                     } else {
                                                         Modifier.background(backgroundColor)
                                                     },
@@ -1279,11 +1310,11 @@ fun Queue(
     }
 }
 
-/** Corner radius of each queue card in the redesign. */
-private val QueueGroupCorner = 22.dp
+/** Corner radius of the queue's group card in the redesign. */
+private val QueueGroupCorner = 26.dp
 
-/** Gap between two queue cards, cut in half above and below each row. */
-private val QueueGroupGap = 5.dp
+/** How far the hairline between rows is inset, lining up with the edge of the artwork. */
+private val QueueGroupDividerInset = 112.dp
 
 private val Timeline.Window.queueItemKey: Long
     get() =

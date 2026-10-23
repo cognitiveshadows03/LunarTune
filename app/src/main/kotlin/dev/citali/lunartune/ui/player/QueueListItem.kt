@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.MediaMetadataListItem
 import dev.citali.lunartune.ui.component.NumberedMediaRow
@@ -30,6 +31,8 @@ internal fun QueueRow(
     isPlaying: Boolean,
     shouldLoadImage: Boolean,
     modifier: Modifier = Modifier,
+    /** Soft wash drawn behind the title and artist, so they stay legible over the artwork. */
+    textFrost: Color? = null,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     if (newUi) {
@@ -54,6 +57,7 @@ internal fun QueueRow(
             isPlaying = isPlaying,
             shouldLoadImage = shouldLoadImage,
             modifier = modifier,
+            textFrost = textFrost,
             trailingContent = trailingContent,
         )
     } else {

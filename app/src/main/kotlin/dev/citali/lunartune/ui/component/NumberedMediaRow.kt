@@ -28,6 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +72,8 @@ internal fun NumberedMediaRow(
     isActive: Boolean = false,
     isPlaying: Boolean = false,
     shouldLoadImage: Boolean = true,
+    /** When set, a soft wash fades out behind the title and artist from this colour. */
+    textFrost: Color? = null,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
     val accent = MaterialTheme.colorScheme.primary
@@ -120,7 +125,20 @@ internal fun NumberedMediaRow(
             modifier =
                 Modifier
                     .weight(1f)
-                    .padding(horizontal = 14.dp),
+                    .then(
+                        if (textFrost != null) {
+                            // Apple-Music style: the text sits on its own soft pane of glass
+                            // rather than straight on the artwork.
+                            Modifier.drawBehind {
+                                drawRoundRect(
+                                    brush = Brush.horizontalGradient(listOf(textFrost, Color.Transparent)),
+                                    cornerRadius = CornerRadius(14.dp.toPx()),
+                                )
+                            }
+                        } else {
+                            Modifier
+                        },
+                    ).padding(horizontal = 14.dp),
         ) {
             Text(
                 text = title,
