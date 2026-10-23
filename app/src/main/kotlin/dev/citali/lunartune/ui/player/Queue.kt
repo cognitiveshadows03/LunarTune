@@ -76,9 +76,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -194,10 +192,9 @@ fun Queue(
     // Rows are taller in the redesign; everything that reserves space at the bottom of the list
     // (the floating toolbar, the snackbar, the reorder scroll threshold) follows the same number.
     val queueRowHeight = if (newUi) NumberedRowHeight else ListItemHeight
-    // New UI draws the queue as one grouped panel: the rows share a rounded surface and are split
-    // by hairlines, the way the notification stack groups its items.
+    // New UI draws the queue as a stack of rounded cards: the same surface on every row, a small
+    // gap between them, the way the notification stack groups its items.
     val groupColor = onBackgroundColor.copy(alpha = 0.07f)
-    val groupDivider = onBackgroundColor.copy(alpha = 0.09f)
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -1117,42 +1114,15 @@ fun Queue(
                                                 .fillMaxWidth()
                                                 .then(
                                                     if (newUi) {
-                                                        val groupShape =
-                                                            RoundedCornerShape(
-                                                                topStart = if (index == 0) QueueGroupCorner else 0.dp,
-                                                                topEnd = if (index == 0) QueueGroupCorner else 0.dp,
-                                                                bottomStart =
-                                                                    if (index == mutableQueueWindows.lastIndex) {
-                                                                        QueueGroupCorner
-                                                                    } else {
-                                                                        0.dp
-                                                                    },
-                                                                bottomEnd =
-                                                                    if (index == mutableQueueWindows.lastIndex) {
-                                                                        QueueGroupCorner
-                                                                    } else {
-                                                                        0.dp
-                                                                    },
-                                                            )
+                                                        // Every row is its own card. A single panel
+                                                        // split by hairlines lost its corners as soon
+                                                        // as it scrolled, which made the top row look
+                                                        // cut off; stacked cards keep their rounding
+                                                        // wherever the list happens to be.
                                                         Modifier
-                                                            .clip(groupShape)
+                                                            .padding(vertical = QueueGroupGap / 2)
+                                                            .clip(RoundedCornerShape(QueueGroupCorner))
                                                             .background(groupColor)
-                                                            .drawWithContent {
-                                                                drawContent()
-                                                                // Hairline between rows, inset to the
-                                                                // edge of the artwork so the panel reads
-                                                                // as a list and not as a table.
-                                                                if (index != mutableQueueWindows.lastIndex) {
-                                                                    val inset = QueueGroupDividerInset.toPx()
-                                                                    val y = size.height - 0.5.dp.toPx()
-                                                                    drawLine(
-                                                                        color = groupDivider,
-                                                                        start = Offset(inset, y),
-                                                                        end = Offset(size.width, y),
-                                                                        strokeWidth = 1.dp.toPx(),
-                                                                    )
-                                                                }
-                                                            }
                                                     } else {
                                                         Modifier.background(backgroundColor)
                                                     },
@@ -1309,11 +1279,11 @@ fun Queue(
     }
 }
 
-/** Corner radius of the queue's grouped panel in the redesign. */
-private val QueueGroupCorner = 26.dp
+/** Corner radius of each queue card in the redesign. */
+private val QueueGroupCorner = 22.dp
 
-/** How far the hairline between rows is inset, lining up with the edge of the artwork. */
-private val QueueGroupDividerInset = 112.dp
+/** Gap between two queue cards, cut in half above and below each row. */
+private val QueueGroupGap = 5.dp
 
 private val Timeline.Window.queueItemKey: Long
     get() =

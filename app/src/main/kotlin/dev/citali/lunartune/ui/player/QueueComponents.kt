@@ -51,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -60,6 +61,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
@@ -440,28 +442,30 @@ fun CurrentSongHeader(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // The redesign lets the cards speak for themselves: no section title, no subtitle, just
+        // the rows directly under the actions.
+        if (newUi) {
+            Spacer(modifier = Modifier.height(10.dp))
+        } else {
+            Spacer(modifier = Modifier.height(14.dp))
 
-        Text(
-            text = stringResource(R.string.queue_continue_playing),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = onBackgroundColor,
-        )
+            Text(
+                text = stringResource(R.string.queue_continue_playing),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = onBackgroundColor,
+            )
 
-        Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-        Text(
-            text = stringResource(R.string.queue_autoplaying_similar),
-            style = MaterialTheme.typography.bodySmall,
-            color = onBackgroundColor.copy(alpha = 0.5f),
-        )
+            Text(
+                text = stringResource(R.string.queue_autoplaying_similar),
+                style = MaterialTheme.typography.bodySmall,
+                color = onBackgroundColor.copy(alpha = 0.5f),
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        // In the redesign the rows themselves live in a rounded panel, so a full-width rule here
-        // would double up with the panel's own edge.
-        if (!newUi) {
             HorizontalDivider(
                 color = onBackgroundColor.copy(alpha = 0.08f),
                 thickness = 1.dp,
@@ -474,9 +478,11 @@ fun CurrentSongHeader(
  * The redesign's queue actions: four labelled tiles in two rows — autoplay, repeat, shuffle, and
  * clear, which is the only destructive one and is the only one that is not a toggle.
  *
- * Grouped the way the notification stack groups its rows: tiles of equal size on a soft container,
- * with the "on" state carrying the colour instead of a border everywhere. Nothing is drawn around
- * an inactive tile, so a queue whose toggles are all off does not read as a row of empty boxes.
+ * Styled after the control tiles in the notification panel: a toggle that is on becomes a solid
+ * rounded rectangle in the accent colour, a toggle that is off stays a glass box with the icon and
+ * label in their own colour and nothing filled behind them. Clear is never a state, so it always
+ * wears the quiet box - in the error colour, which is enough to read as destructive without a slab
+ * of red sitting in the middle of the sheet.
  */
 @Composable
 private fun QueueActionGrid(
@@ -491,39 +497,31 @@ private fun QueueActionGrid(
     onClearQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val activeContainer = MaterialTheme.colorScheme.primaryContainer
-    val activeContent = MaterialTheme.colorScheme.onPrimaryContainer
-    val idleContainer = onBackgroundColor.copy(alpha = 0.10f)
-    val idleContent = onBackgroundColor.copy(alpha = 0.88f)
-    val destructiveContainer = MaterialTheme.colorScheme.errorContainer
-    val destructiveContent = MaterialTheme.colorScheme.onErrorContainer
-
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(QueueActionGap),
         modifier = modifier.fillMaxWidth(),
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(QueueActionGap),
             modifier = Modifier.fillMaxWidth(),
         ) {
             QueueActionTile(
                 label = stringResource(R.string.queue_action_autoplay),
-                containerColor = if (infiniteQueueEnabled) activeContainer else idleContainer,
-                contentColor = if (infiniteQueueEnabled) activeContent else idleContent,
+                active = infiniteQueueEnabled,
+                onBackgroundColor = onBackgroundColor,
                 onClick = { if (!infiniteQueueLoading) onInfiniteQueueClick() },
                 modifier = Modifier.weight(1f),
             ) {
                 if (infiniteQueueLoading) {
                     CircularWavyProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = if (infiniteQueueEnabled) activeContent else idleContent,
+                        modifier = Modifier.size(QueueActionIconSize),
+                        color = LocalContentColor.current,
                     )
                 } else {
                     Icon(
                         painter = painterResource(R.drawable.all_inclusive),
                         contentDescription = null,
-                        tint = if (infiniteQueueEnabled) activeContent else idleContent,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(QueueActionIconSize),
                     )
                 }
             }
@@ -531,8 +529,8 @@ private fun QueueActionGrid(
             val repeatOn = repeatMode != Player.REPEAT_MODE_OFF
             QueueActionTile(
                 label = stringResource(R.string.queue_action_repeat),
-                containerColor = if (repeatOn) activeContainer else idleContainer,
-                contentColor = if (repeatOn) activeContent else idleContent,
+                active = repeatOn,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onRepeatClick,
                 modifier = Modifier.weight(1f),
             ) {
@@ -546,78 +544,116 @@ private fun QueueActionGrid(
                             },
                         ),
                     contentDescription = null,
-                    tint = if (repeatOn) activeContent else idleContent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(QueueActionIconSize),
                 )
             }
         }
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(QueueActionGap),
             modifier = Modifier.fillMaxWidth(),
         ) {
             QueueActionTile(
                 label = stringResource(R.string.queue_action_shuffle),
-                containerColor = if (shuffleModeEnabled) activeContainer else idleContainer,
-                contentColor = if (shuffleModeEnabled) activeContent else idleContent,
+                active = shuffleModeEnabled,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onShuffleClick,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.shuffle),
                     contentDescription = null,
-                    tint = if (shuffleModeEnabled) activeContent else idleContent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(QueueActionIconSize),
                 )
             }
 
             QueueActionTile(
                 label = stringResource(R.string.queue_action_clear),
-                containerColor = destructiveContainer,
-                contentColor = destructiveContent,
+                active = false,
+                accentColor = MaterialTheme.colorScheme.error,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onClearQueueClick,
                 modifier = Modifier.weight(1f),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.delete),
                     contentDescription = null,
-                    tint = destructiveContent,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(QueueActionIconSize),
                 )
             }
         }
     }
 }
 
+private val QueueActionHeight = 64.dp
+private val QueueActionGap = 10.dp
+private val QueueActionIconSize = 24.dp
+
+/** A toggle reads as a solid slab; everything else is a glass box. */
+private val QueueActionActiveCorner = 20.dp
+private val QueueActionIdleCorner = 26.dp
+
 @Composable
 private fun QueueActionTile(
     label: String,
-    containerColor: Color,
-    contentColor: Color,
+    active: Boolean,
+    onBackgroundColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Colour of the box outline, its icon and its label while the toggle is off.
+    accentColor: Color = onBackgroundColor.copy(alpha = 0.9f),
     icon: @Composable () -> Unit,
 ) {
+    val shape = RoundedCornerShape(if (active) QueueActionActiveCorner else QueueActionIdleCorner)
+    val contentColor =
+        if (active) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            accentColor
+        }
+    // A frosted wash rather than a flat fill: the sheet underneath is blurred artwork, and the
+    // gradient keeps that texture faintly visible through the tile.
+    val idleBrush =
+        Brush.verticalGradient(
+            listOf(
+                onBackgroundColor.copy(alpha = 0.10f),
+                onBackgroundColor.copy(alpha = 0.04f),
+            ),
+        )
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier =
             modifier
-                .height(56.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(containerColor)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp),
+                .height(QueueActionHeight)
+                .clip(shape)
+                .then(
+                    if (active) {
+                        Modifier.background(accentColor)
+                    } else {
+                        Modifier
+                            .background(brush = idleBrush, shape = shape)
+                            .border(
+                                width = 1.dp,
+                                color = accentColor.copy(alpha = 0.28f),
+                                shape = shape,
+                            )
+                    },
+                ).clickable(onClick = onClick)
+                .padding(horizontal = 16.dp),
     ) {
-        icon()
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            icon()
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
