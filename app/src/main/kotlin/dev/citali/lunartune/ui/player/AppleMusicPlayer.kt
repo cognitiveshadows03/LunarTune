@@ -27,10 +27,11 @@ import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -102,11 +103,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -178,6 +183,19 @@ import kotlinx.coroutines.delay
 import me.saket.squiggles.SquigglySlider
 
 private val AppleMusicGutter = 26.dp
+
+/** Height of the fade the lyrics pane keeps above whatever sits below it. */
+private val LyricsBottomFade = 48.dp
+
+/**
+ * Hand-over of the bottom strip between the lyrics and the controls, matching the lyrics page:
+ * the edge lags the controls on the way out and leads them on the way back, so giving the space
+ * up and taking it back both read as one motion.
+ */
+private val LyricsHandoverEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+private const val LYRICS_HANDOVER_COVER_MS = 320
+private const val LYRICS_HANDOVER_REVEAL_MS = 460
+private const val LYRICS_HANDOVER_REVEAL_DELAY_MS = 60
 
 /** Apple Music style player: blurred backdrop, full-bleed artwork fading into it, Apple controls. */
 @Composable
@@ -359,6 +377,27 @@ internal fun AppleMusicPortraitContent(
             }
         }
     }
+    // The lyrics hand the bottom strip to the controls and take it back. The pane changes size in
+    // a single step, either at the start of a hide or at the end of a show, because re-measuring a
+    // karaoke list on every frame of a 300 ms resize is what makes the text stutter on slower
+    // phones. The seam is covered by sweeping the pane's own bottom fade across the strip instead.
+    var controlsHoldSpace by remember { mutableStateOf(showLyricsControls) }
+    val lyricsCover = remember { Animatable(if (showLyricsControls) 1f else 0f) }
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            lyricsCover.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(LYRICS_HANDOVER_COVER_MS, easing = LyricsHandoverEasing),
+            )
+            controlsHoldSpace = true
+        } else {
+            controlsHoldSpace = false
+            lyricsCover.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(LYRICS_HANDOVER_REVEAL_MS, delayMillis = LYRICS_HANDOVER_REVEAL_DELAY_MS, easing = LyricsHandoverEasing),
+            )
+        }
+    }
     val controlsAlpha by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (controlsVisible) 1f else 0f,
         animationSpec = androidx.compose.animation.core.tween(if (controlsVisible) 180 else 140),
@@ -383,7 +422,13 @@ internal fun AppleMusicPortraitContent(
         // Like the immersive style: the artwork grows down into whatever the controls leave free
         // (e.g. with the volume bar hidden), staying at least square and cropping to fill.
         var controlsHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+        var controlsMetadataHeightPx by remember { androidx.compose.runtime.mutableIntStateOf(0) }
         val controlsHeight = with(androidx.compose.ui.platform.LocalDensity.current) { controlsHeightPx.toDp() }
+        // The title/artist row above the progress bar is already faded out once the artwork has
+        // collapsed, so it is dead space: the lyrics must keep clear of the controls from the
+        // progress bar down, not of the whole column.
+        val controlsReserve =
+            (controlsHeight - with(density) { controlsMetadataHeightPx.toDp() }).coerceAtLeast(0.dp)
         val artHeight =
             if (controlsHeightPx == 0) {
                 fullArt
@@ -495,33 +540,52 @@ internal fun AppleMusicPortraitContent(
             enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
             exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
         ) {
-            val lyricsBottom by androidx.compose.animation.core.animateDpAsState(
-                targetValue = if (controlsVisible) controlsHeight else 0.dp,
-                animationSpec = androidx.compose.animation.core.tween(300),
-                label = "appleMusicLyricsBottom",
-            )
-            // Keep the lyrics scroll viewport/focus stable while controls fade in and out.
-            // The bottom fade still protects the visible controls, without changing the line's
-            // scroll target and causing the lyrics to jump as controls appear or disappear.
-            val paneHeight = maxHeight - miniHeaderHeight
-            val fadeStartDp = (paneHeight - lyricsBottom - 48.dp).coerceAtLeast(0.dp)
-            val fadeEndDp = (paneHeight - lyricsBottom).coerceAtLeast(1.dp)
+            // While the controls are up they own the bottom strip, so the pane is handed the
+            // shorter area and its focused line sits higher; once they auto-hide the pane takes
+            // the strip back and the lyrics use the whole column, like the lyrics page does.
+            val lyricsReserve = if (controlsHoldSpace) controlsReserve else 0.dp
+            val fadeLayerPaint = remember { Paint() }
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .padding(top = miniHeaderHeight)
-                        .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
                         .drawWithContent {
-                            drawContent()
+                            // Read in the draw phase: the sweep redraws the pane without
+                            // recomposing the lyrics below it.
                             val h = size.height.coerceAtLeast(1f)
-                            val a = (fadeStartDp.toPx() / h).coerceIn(0f, 1f)
-                            val b = (fadeEndDp.toPx() / h).coerceIn(a, 1f)
-                            drawRect(
-                                brush = Brush.verticalGradient(0f to Color.Black, a to Color.Black, b to Color.Transparent, 1f to Color.Transparent),
-                                blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
-                            )
+                            val coverPx = (controlsReserve * lyricsCover.value).toPx()
+                            val edgeY = (h - coverPx).coerceIn(0f, h)
+                            val stripTop = (edgeY - LyricsBottomFade.toPx()).coerceAtLeast(0f)
+                            // Everything above the fade goes straight to the frame. Only the
+                            // fade band is composed offscreen, so the karaoke highlight no
+                            // longer re-composites a full-pane layer on every frame it moves.
+                            clipRect(bottom = stripTop) {
+                                this@drawWithContent.drawContent()
+                            }
+                            if (edgeY > stripTop) {
+                                clipRect(top = stripTop) {
+                                    drawIntoCanvas { canvas ->
+                                        canvas.saveLayer(Rect(0f, stripTop, size.width, h), fadeLayerPaint)
+                                        clipRect(bottom = edgeY) {
+                                            this@drawWithContent.drawContent()
+                                        }
+                                        drawRect(
+                                            brush =
+                                                Brush.verticalGradient(
+                                                    0f to Color.Black,
+                                                    1f to Color.Transparent,
+                                                    startY = stripTop,
+                                                    endY = edgeY,
+                                                ),
+                                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                                        )
+                                        canvas.restore()
+                                    }
+                                }
+                            }
                         }
+                        .padding(bottom = lyricsReserve)
                         .padding(horizontal = AppleMusicGutter - 16.dp),
             ) {
                 if (lyricsContentReady) {
@@ -591,11 +655,13 @@ internal fun AppleMusicPortraitContent(
             ) {
                 Box(
                     modifier =
-                        Modifier.graphicsLayer {
-                            val t = p()
-                            alpha = (1f - t / 0.6f).coerceIn(0f, 1f)
-                            translationY = -t * 24.dp.toPx()
-                        },
+                        Modifier
+                            .onSizeChanged { controlsMetadataHeightPx = it.height }
+                            .graphicsLayer {
+                                val t = p()
+                                alpha = (1f - t / 0.6f).coerceIn(0f, 1f)
+                                translationY = -t * 24.dp.toPx()
+                            },
                 ) {
                     AppleMusicMetadataRow(
                         title = mediaMetadata.title,
