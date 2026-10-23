@@ -72,6 +72,7 @@ import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.extensions.toMediaItem
+import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.MenuState
