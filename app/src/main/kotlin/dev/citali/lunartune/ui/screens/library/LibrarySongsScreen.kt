@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredWidth
@@ -41,7 +40,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -74,7 +72,6 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.HideExplicitKey
-import dev.citali.lunartune.constants.PureBlackKey
 import dev.citali.lunartune.constants.SongFilter
 import dev.citali.lunartune.constants.SongFilterKey
 import dev.citali.lunartune.constants.SongSortDescendingKey
@@ -109,9 +106,6 @@ fun LibrarySongsScreen(
     val isPlaying by playerConnection.isPlaying.collectAsState()
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val coroutineScope = rememberCoroutineScope()
-    val isDarkTheme = isSystemInDarkTheme()
-    val pureBlack by rememberPreference(PureBlackKey, defaultValue = false)
-
     val (sortType, onSortTypeChange) =
         rememberEnumPreference(
             SongSortTypeKey,
@@ -126,12 +120,13 @@ fun LibrarySongsScreen(
     var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIKED)
     val lazyListState = rememberLazyListState()
 
-    // Issue 2: player-aware bottom padding so content is never hidden behind nav bar + miniplayer
-    val playerAwareBottomPadding =
+    // Keep the scroll viewport above the mini-player and navigation bar so song rows aren't
+    // drawn underneath them. Leave a small inset after the final row.
+    val playerAwareBottomInset =
         LocalPlayerAwareWindowInsets.current
             .only(WindowInsetsSides.Bottom)
             .asPaddingValues()
-            .calculateBottomPadding() + 12.dp
+            .calculateBottomPadding()
 
     val wrappedSongs = remember(songs) { songs.map { item -> ItemWrapper(item) }.toMutableList() }
 
@@ -175,10 +170,18 @@ fun LibrarySongsScreen(
 
             LazyColumn(
                 state = lazyListState,
-                // Issue 2: use player-aware window insets for bottom padding
-                contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
+                contentPadding =
+                    PaddingValues(
+                        start = 24.dp,
+                        top = topContentPadding,
+                        end = 24.dp,
+                        bottom = 12.dp,
+                    ),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
-                modifier = Modifier.fillMaxSize(),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(bottom = playerAwareBottomInset),
             ) {
             item(key = "song_subfilters", contentType = "subfilters") {
             Row(
@@ -426,25 +429,17 @@ fun LibrarySongsScreen(
                         )
                     val inactiveCardColor = MaterialTheme.colorScheme.surfaceContainerLow
 
-                    // Issue 6: divider between cards visible in pure black dark theme
-                    val showDivider = isDarkTheme && pureBlack && index > 0
-                    if (showDivider) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                            thickness = 0.5.dp,
-                        )
-                    }
+                    // Keep rounded cards visibly separated on every theme, including pure black.
+                    val topPadding = if (index == 0) 0.dp else 12.dp
 
                     // Issue 7: Active corners 36.dp, inactive 24.dp
                     val cornerRadius = if (isActive) 36.dp else 24.dp
-                    val topPadding = if (index == 0 || showDivider) 0.dp else 8.dp
 
                     Row(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(top = topPadding, bottom = 0.dp)
+                                .padding(top = topPadding)
                                 .clip(RoundedCornerShape(cornerRadius))
                                 .background(
                                     if (isActive) activeCardColor else inactiveCardColor,
