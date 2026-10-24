@@ -1192,7 +1192,7 @@ internal fun Queue(
                                                                     drawLine(
                                                                         color = glassPalette.rowDividerColor,
                                                                         start = Offset(inset, y),
-                                                                        end = (size.width - 12.dp.toPx()).coerceAtLeast(inset),
+                                                                        end = Offset((size.width - 12.dp.toPx()).coerceAtLeast(inset), y),
                                                                         strokeWidth = 0.75.dp.toPx(),
                                                                     )
                                                                 }
