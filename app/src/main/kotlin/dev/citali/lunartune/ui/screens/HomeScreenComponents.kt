@@ -549,6 +549,7 @@ fun SpeedDialSection(
     haptic: HapticFeedback,
     scope: CoroutineScope,
     modifier: Modifier = Modifier,
+    newUi: Boolean = false,
 ) {
     val context = LocalContext.current
 
@@ -828,6 +829,7 @@ fun SpeedDialSection(
                                                     isPinned = true,
                                                     isActive = isActive,
                                                     isPlaying = isPlaying,
+                                                    blurTextBackdrop = newUi,
                                                 )
                                             }
                                         }

@@ -63,6 +63,7 @@ import dev.citali.lunartune.extensions.toMediaItem
 import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
+import dev.citali.lunartune.ui.component.FeatheredBottomArtworkBlur
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.NumberedMediaRow
 import dev.citali.lunartune.ui.menu.SongMenu
@@ -310,17 +311,32 @@ private fun QuickPickCard(
                         ),
                     ),
         )
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0.52f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.76f),
+        if (!artworkUrl.isNullOrBlank()) {
+            FeatheredBottomArtworkBlur(
+                artworkModel = artworkUrl,
+                cacheKeyUrl = artworkUrl,
+                blurRadius = 24.dp,
+                fadeStartFraction = 0.54f,
+                scrimMaxAlpha = 0.24f,
+            )
+        } else {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.52f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.48f),
+                            ),
                         ),
-                    ),
-        )
+            )
+        }
+
+        val bottomTextShadow =
+            remember(shadowBlurPx) {
+                Shadow(color = Color.Black.copy(alpha = 0.28f), blurRadius = shadowBlurPx)
+            }
 
         Text(
             text = number.toString(),
@@ -367,7 +383,7 @@ private fun QuickPickCard(
         ) {
             Text(
                 text = card.title,
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleLarge.copy(shadow = bottomTextShadow),
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
                 maxLines = 2,
@@ -376,8 +392,8 @@ private fun QuickPickCard(
             if (card.subtitle.isNotBlank()) {
                 Text(
                     text = card.subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White.copy(alpha = 0.78f),
+                    style = MaterialTheme.typography.bodyMedium.copy(shadow = bottomTextShadow),
+                    color = Color.White.copy(alpha = 0.84f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

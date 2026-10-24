@@ -538,6 +538,7 @@ private fun HomeContent(
                                     menuState = menuState,
                                     haptic = haptic,
                                     scope = scope,
+                                    newUi = newUi,
                                 )
                             }
                         }
