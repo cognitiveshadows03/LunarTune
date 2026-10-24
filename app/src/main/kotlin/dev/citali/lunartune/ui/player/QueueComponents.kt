@@ -10,8 +10,6 @@
 package dev.citali.lunartune.ui.player
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
@@ -100,7 +98,7 @@ import kotlin.math.roundToInt
  * Displays album art, song info, and control buttons
  */
 @Composable
-internal fun CurrentSongHeader(
+fun CurrentSongHeader(
     sheetState: BottomSheetState,
     mediaMetadata: MediaMetadata?,
     liked: Boolean,
@@ -124,255 +122,21 @@ internal fun CurrentSongHeader(
     modifier: Modifier = Modifier,
     /** Draws the redesign's grouped action tiles instead of the connected toggle group. */
     newUi: Boolean = false,
-    glassPalette: QueueGlassPalette? = null,
 ) {
     val view = LocalView.current
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
-
-    if (newUi && glassPalette != null) {
-        val headerPanelShape = RoundedCornerShape(QueueHeaderPanelCorner)
-        val artworkShape = RoundedCornerShape(14.dp)
-        val infoPillShape = RoundedCornerShape(22.dp)
-
-        Column(
-            modifier =
-                modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-                    .bottomSheetDraggable(sheetState)
-                    .padding(horizontal = 12.dp)
-                    .padding(top = 6.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 10.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .width(44.dp)
-                            .height(4.5.dp)
-                            .clip(CircleShape)
-                            .background(glassPalette.dragHandleColor),
-                )
-            }
-
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(headerPanelShape)
-                        .background(brush = glassPalette.headerPanelBrush, shape = headerPanelShape)
-                        .border(
-                            width = 1.dp,
-                            brush = glassPalette.headerPanelBorderBrush,
-                            shape = headerPanelShape,
-                        ).padding(horizontal = 14.dp, vertical = 14.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    AsyncImage(
-                        model = mediaMetadata?.thumbnailUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .size(62.dp)
-                                .clip(artworkShape)
-                                .background(onBackgroundColor.copy(alpha = 0.06f))
-                                .border(
-                                    width = 1.dp,
-                                    color = glassPalette.artworkBorder,
-                                    shape = artworkShape,
-                                ),
-                    )
-
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Text(
-                            text = mediaMetadata?.title ?: "",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = glassPalette.rowTitleColor,
-                        )
-                        Text(
-                            text = mediaMetadata?.artists?.joinToString(", ") { it.name } ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = glassPalette.rowSubtitleColor,
-                        )
-                    }
-
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier =
-                            Modifier
-                                .size(42.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (liked) {
-                                        glassPalette.heartPillActiveFill
-                                    } else {
-                                        glassPalette.heartPillFill
-                                    },
-                                ).border(
-                                    width = 1.dp,
-                                    color =
-                                        if (liked) {
-                                            glassPalette.rowActiveBorder
-                                        } else {
-                                            glassPalette.heartPillBorder
-                                        },
-                                    shape = CircleShape,
-                                ).clickable(onClick = onToggleLike),
-                    ) {
-                        Icon(
-                            painter =
-                                painterResource(
-                                    if (liked) {
-                                        R.drawable.favorite
-                                    } else {
-                                        R.drawable.favorite_border
-                                    },
-                                ),
-                            contentDescription = stringResource(R.string.action_like),
-                            modifier = Modifier.size(22.dp),
-                            tint = if (liked) glassPalette.accent else glassPalette.rowTitleColor,
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(infoPillShape)
-                            .background(glassPalette.infoPillFill)
-                            .border(
-                                width = 1.dp,
-                                color = glassPalette.infoPillBorder,
-                                shape = infoPillShape,
-                            ).padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(0.dp),
-                    ) {
-                        IconButton(
-                            onClick = onLockClick,
-                            modifier = Modifier.size(38.dp),
-                            colors =
-                                IconButtonDefaults.iconButtonColors(
-                                    contentColor = glassPalette.rowTrailingIconColor,
-                                ),
-                        ) {
-                            Icon(
-                                painter = painterResource(if (locked) R.drawable.lock else R.drawable.lock_open),
-                                contentDescription = null,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        }
-                        IconButton(
-                            onClick = onMenuClick,
-                            modifier = Modifier.size(38.dp),
-                            colors =
-                                IconButtonDefaults.iconButtonColors(
-                                    contentColor = glassPalette.rowTrailingIconColor,
-                                ),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
-                                modifier = Modifier.size(19.dp),
-                            )
-                        }
-                    }
-
-                    Text(
-                        text =
-                            pluralStringResource(R.plurals.n_song, songCount, songCount) +
-                                "  •  " + makeTimeString(queueDuration * 1000L),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = glassPalette.rowSubtitleColor,
-                        modifier = Modifier.padding(end = 14.dp),
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                QueueActionGrid(
-                    infiniteQueueEnabled = infiniteQueueEnabled,
-                    infiniteQueueLoading = infiniteQueueLoading,
-                    repeatMode = repeatMode,
-                    shuffleModeEnabled = shuffleModeEnabled,
-                    glassPalette = glassPalette,
-                    onInfiniteQueueClick = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onInfiniteQueueClick()
-                    },
-                    onRepeatClick = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onRepeatClick()
-                    },
-                    onShuffleClick = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onShuffleClick()
-                    },
-                    onClearQueueClick = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onClearQueueClick()
-                    },
-                )
-            }
-        }
-        return
-    }
 
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(backgroundColor)
+                .then(if (newUi) Modifier else Modifier.background(backgroundColor))
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 .bottomSheetDraggable(sheetState)
                 .padding(horizontal = 16.dp)
-                .padding(top = 20.dp, bottom = 8.dp),
+                // No card of its own: the artwork, title, count pill and actions sit straight on
+                // the sheet's glass, which is the pane the whole sheet is made of.
+                .padding(top = if (newUi) 6.dp else 20.dp, bottom = if (newUi) 2.dp else 8.dp),
     ) {
         Box(
             modifier =
@@ -500,19 +264,23 @@ internal fun CurrentSongHeader(
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                IconButton(
-                    onClick = onClearQueueClick,
-                    modifier = Modifier.size(40.dp),
-                    colors =
-                        IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error,
-                        ),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.delete),
-                        contentDescription = stringResource(R.string.clear),
-                        modifier = Modifier.size(20.dp),
-                    )
+                // The redesign moves "clear queue" into the action tiles, where it can be labelled
+                // instead of being an unlabelled bin beside the overflow menu.
+                if (!newUi) {
+                    IconButton(
+                        onClick = onClearQueueClick,
+                        modifier = Modifier.size(40.dp),
+                        colors =
+                            IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error,
+                            ),
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.delete),
+                            contentDescription = stringResource(R.string.clear),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
 
@@ -528,54 +296,23 @@ internal fun CurrentSongHeader(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val uncheckedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                    contentColor = onBackgroundColor,
-                )
-            val checkedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
-                    checkedContentColor = onBackgroundColor,
-                )
-            val infiniteCheckedColors =
-                ToggleButtonDefaults.toggleButtonColors(
-                    checkedContainerColor = MaterialTheme.colorScheme.primary,
-                    checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                    contentColor = onBackgroundColor.copy(alpha = 0.5f),
-                )
-
-            ToggleButton(
-                checked = shuffleModeEnabled,
-                onCheckedChange = {
+        if (newUi) {
+            QueueActionGrid(
+                infiniteQueueEnabled = infiniteQueueEnabled,
+                infiniteQueueLoading = infiniteQueueLoading,
+                repeatMode = repeatMode,
+                shuffleModeEnabled = shuffleModeEnabled,
+                onBackgroundColor = onBackgroundColor,
+                onInfiniteQueueClick = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
                             android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
                         )
                     }
-                    onShuffleClick()
+                    onInfiniteQueueClick()
                 },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.shuffle),
-                    contentDescription = stringResource(R.string.action_shuffle_on),
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-
-            ToggleButton(
-                checked = repeatMode != Player.REPEAT_MODE_OFF,
-                onCheckedChange = {
+                onRepeatClick = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
@@ -584,90 +321,170 @@ internal fun CurrentSongHeader(
                     }
                     onRepeatClick()
                 },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
-                colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
+                onShuffleClick = {
+                    if (enableHapticFeedback) {
+                        view.performHapticFeedback(
+                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                        )
+                    }
+                    onShuffleClick()
+                },
+                onClearQueueClick = {
+                    if (enableHapticFeedback) {
+                        view.performHapticFeedback(
+                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                        )
+                    }
+                    onClearQueueClick()
+                },
+            )
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    painter =
-                        painterResource(
-                            when (repeatMode) {
-                                Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
-                                Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
-                                else -> R.drawable.repeat
-                            },
-                        ),
-                    contentDescription = null,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
+                val uncheckedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                        contentColor = onBackgroundColor,
+                    )
+                val checkedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
+                        checkedContentColor = onBackgroundColor,
+                    )
+                val infiniteCheckedColors =
+                    ToggleButtonDefaults.toggleButtonColors(
+                        checkedContainerColor = MaterialTheme.colorScheme.primary,
+                        checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                        contentColor = onBackgroundColor.copy(alpha = 0.5f),
+                    )
 
-            ToggleButton(
-                checked = infiniteQueueEnabled,
-                onCheckedChange = { onInfiniteQueueClick() },
-                modifier = Modifier.weight(1f).size(48.dp),
-                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                colors = infiniteCheckedColors,
-                enabled = !infiniteQueueLoading,
-            ) {
-                AnimatedContent(
-                    targetState = infiniteQueueLoading,
-                    label = "InfiniteQueueLoading",
-                ) { loading ->
-                    if (loading) {
-                        CircularWavyProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = LocalContentColor.current,
-                        )
-                    } else {
-                        Icon(
-                            painter = painterResource(R.drawable.all_inclusive),
-                            contentDescription = stringResource(R.string.similar_content),
-                            modifier = Modifier.size(22.dp),
-                        )
+                ToggleButton(
+                    checked = shuffleModeEnabled,
+                    onCheckedChange = {
+                        if (enableHapticFeedback) {
+                            view.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                            )
+                        }
+                        onShuffleClick()
+                    },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                    colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.shuffle),
+                        contentDescription = stringResource(R.string.action_shuffle_on),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                ToggleButton(
+                    checked = repeatMode != Player.REPEAT_MODE_OFF,
+                    onCheckedChange = {
+                        if (enableHapticFeedback) {
+                            view.performHapticFeedback(
+                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
+                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
+                            )
+                        }
+                        onRepeatClick()
+                    },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
+                    colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
+                ) {
+                    Icon(
+                        painter =
+                            painterResource(
+                                when (repeatMode) {
+                                    Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
+                                    Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
+                                    else -> R.drawable.repeat
+                                },
+                            ),
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+
+                ToggleButton(
+                    checked = infiniteQueueEnabled,
+                    onCheckedChange = { onInfiniteQueueClick() },
+                    modifier = Modifier.weight(1f).size(48.dp),
+                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    colors = infiniteCheckedColors,
+                    enabled = !infiniteQueueLoading,
+                ) {
+                    AnimatedContent(
+                        targetState = infiniteQueueLoading,
+                        label = "InfiniteQueueLoading",
+                    ) { loading ->
+                        if (loading) {
+                            CircularWavyProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = LocalContentColor.current,
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(R.drawable.all_inclusive),
+                                contentDescription = stringResource(R.string.similar_content),
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        // The redesign lets the cards speak for themselves: no section title, no subtitle, just
+        // the rows directly under the actions.
+        if (newUi) {
+            Spacer(modifier = Modifier.height(10.dp))
+        } else {
+            Spacer(modifier = Modifier.height(14.dp))
 
-        Text(
-            text = stringResource(R.string.queue_continue_playing),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = onBackgroundColor,
-        )
+            Text(
+                text = stringResource(R.string.queue_continue_playing),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = onBackgroundColor,
+            )
 
-        Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-        Text(
-            text = stringResource(R.string.queue_autoplaying_similar),
-            style = MaterialTheme.typography.bodySmall,
-            color = onBackgroundColor.copy(alpha = 0.5f),
-        )
+            Text(
+                text = stringResource(R.string.queue_autoplaying_similar),
+                style = MaterialTheme.typography.bodySmall,
+                color = onBackgroundColor.copy(alpha = 0.5f),
+            )
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-        HorizontalDivider(
-            color = onBackgroundColor.copy(alpha = 0.08f),
-            thickness = 1.dp,
-        )
+            HorizontalDivider(
+                color = onBackgroundColor.copy(alpha = 0.08f),
+                thickness = 1.dp,
+            )
+        }
     }
 }
 
-private val QueueHeaderPanelCorner = 28.dp
-private val QueueActionHeight = 60.dp
-private val QueueActionGap = 10.dp
-private val QueueActionIconSize = 20.dp
-private val QueueActionBadgeSize = 36.dp
-private val QueueActionActiveCorner = 20.dp
-private val QueueActionIdleCorner = 30.dp
-
 /**
- * Android 16 Notification Panel style Quick Settings action tiles:
- * grouped 2x2 grid (Autoplay, Repeat, Shuffle, Clear) with translucent frosted glass pills,
- * circular icon badges, subtle borders, and muted lavender/album-derived active state.
+ * The redesign's queue actions: four labelled tiles in two rows — autoplay, repeat, shuffle, and
+ * clear, which is the only destructive one and is the only one that is not a toggle.
+ *
+ * Styled after the control tiles in the notification panel: a toggle that is on becomes a solid
+ * rounded rectangle in the accent colour, a toggle that is off stays a glass box with the icon and
+ * label in their own colour and nothing filled behind them. Clear is never a state, so it always
+ * wears the quiet box - in the error colour, which is enough to read as destructive without a slab
+ * of red sitting in the middle of the sheet.
  */
 @Composable
 private fun QueueActionGrid(
@@ -675,7 +492,7 @@ private fun QueueActionGrid(
     infiniteQueueLoading: Boolean,
     repeatMode: Int,
     shuffleModeEnabled: Boolean,
-    glassPalette: QueueGlassPalette,
+    onBackgroundColor: Color,
     onInfiniteQueueClick: () -> Unit,
     onRepeatClick: () -> Unit,
     onShuffleClick: () -> Unit,
@@ -693,8 +510,7 @@ private fun QueueActionGrid(
             QueueActionTile(
                 label = stringResource(R.string.queue_action_autoplay),
                 active = infiniteQueueEnabled,
-                destructive = false,
-                glassPalette = glassPalette,
+                onBackgroundColor = onBackgroundColor,
                 onClick = { if (!infiniteQueueLoading) onInfiniteQueueClick() },
                 modifier = Modifier.weight(1f),
             ) {
@@ -716,8 +532,7 @@ private fun QueueActionGrid(
             QueueActionTile(
                 label = stringResource(R.string.queue_action_repeat),
                 active = repeatOn,
-                destructive = false,
-                glassPalette = glassPalette,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onRepeatClick,
                 modifier = Modifier.weight(1f),
             ) {
@@ -743,8 +558,7 @@ private fun QueueActionGrid(
             QueueActionTile(
                 label = stringResource(R.string.queue_action_shuffle),
                 active = shuffleModeEnabled,
-                destructive = false,
-                glassPalette = glassPalette,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onShuffleClick,
                 modifier = Modifier.weight(1f),
             ) {
@@ -758,8 +572,8 @@ private fun QueueActionGrid(
             QueueActionTile(
                 label = stringResource(R.string.queue_action_clear),
                 active = false,
-                destructive = true,
-                glassPalette = glassPalette,
+                accentColor = MaterialTheme.colorScheme.error,
+                onBackgroundColor = onBackgroundColor,
                 onClick = onClearQueueClick,
                 modifier = Modifier.weight(1f),
             ) {
@@ -773,79 +587,69 @@ private fun QueueActionGrid(
     }
 }
 
+private val QueueActionHeight = 64.dp
+private val QueueActionGap = 10.dp
+private val QueueActionIconSize = 24.dp
+
+/** A toggle reads as a solid slab; everything else is a glass box. */
+private val QueueActionActiveCorner = 20.dp
+private val QueueActionIdleCorner = 26.dp
+
 @Composable
 private fun QueueActionTile(
     label: String,
     active: Boolean,
-    destructive: Boolean,
-    glassPalette: QueueGlassPalette,
+    onBackgroundColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // Colour of the box outline, its icon and its label while the toggle is off.
+    accentColor: Color = onBackgroundColor.copy(alpha = 0.9f),
     icon: @Composable () -> Unit,
 ) {
-    val cornerRadius by animateDpAsState(
-        targetValue = if (active) QueueActionActiveCorner else QueueActionIdleCorner,
-        animationSpec = tween(durationMillis = 220),
-        label = "queueTileCorner",
-    )
-    val shape = RoundedCornerShape(cornerRadius)
-
-    val fillBrush: Brush
-    val borderBrush: Brush
-    val badgeFill: Color
-    val contentColor: Color
-    when {
-        active -> {
-            fillBrush = glassPalette.tileActiveBrush
-            borderBrush = glassPalette.tileActiveBorderBrush
-            badgeFill = glassPalette.tileActiveBadgeFill
-            contentColor = glassPalette.tileActiveContentColor
+    val shape = RoundedCornerShape(if (active) QueueActionActiveCorner else QueueActionIdleCorner)
+    val contentColor =
+        if (active) {
+            MaterialTheme.colorScheme.onPrimary
+        } else {
+            accentColor
         }
-
-        destructive -> {
-            fillBrush = glassPalette.tileClearBrush
-            borderBrush = glassPalette.tileClearBorderBrush
-            badgeFill = glassPalette.tileClearBadgeFill
-            contentColor = glassPalette.tileClearContentColor
-        }
-
-        else -> {
-            fillBrush = glassPalette.tileIdleBrush
-            borderBrush = glassPalette.tileIdleBorderBrush
-            badgeFill = glassPalette.tileIdleBadgeFill
-            contentColor = glassPalette.tileIdleContentColor
-        }
-    }
+    // A frosted wash rather than a flat fill: the sheet underneath is blurred artwork, and the
+    // gradient keeps that texture faintly visible through the tile.
+    val idleBrush =
+        Brush.verticalGradient(
+            listOf(
+                onBackgroundColor.copy(alpha = 0.10f),
+                onBackgroundColor.copy(alpha = 0.04f),
+            ),
+        )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier =
             modifier
                 .height(QueueActionHeight)
                 .clip(shape)
-                .background(brush = fillBrush, shape = shape)
-                .border(
-                    width = 1.dp,
-                    brush = borderBrush,
-                    shape = shape,
+                .then(
+                    if (active) {
+                        Modifier.background(accentColor)
+                    } else {
+                        Modifier
+                            .background(brush = idleBrush, shape = shape)
+                            .border(
+                                width = 1.dp,
+                                color = accentColor.copy(alpha = 0.28f),
+                                shape = shape,
+                            )
+                    },
                 ).clickable(onClick = onClick)
-                .padding(start = 10.dp, end = 14.dp),
+                .padding(horizontal = 16.dp),
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .size(QueueActionBadgeSize)
-                        .clip(CircleShape)
-                        .background(badgeFill),
-            ) {
-                icon()
-            }
+            icon()
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = contentColor,
                 maxLines = 1,

@@ -8,7 +8,6 @@
 package dev.citali.lunartune.ui.component
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,11 +42,11 @@ internal val NumberedRowHeight = 76.dp
 
 /** Artwork on the redesigned row. */
 private val NumberedRowThumbnail = 56.dp
-private val NumberedRowThumbnailCorner = 14.dp
+private val NumberedRowThumbnailCorner = 13.dp
 
 /** Reserved for the active marker, so a row never shifts when it becomes the playing one. */
 private val NumberedRowMarkerWidth = 3.dp
-private val NumberedRowMarkerHeight = 22.dp
+private val NumberedRowMarkerHeight = 20.dp
 
 /** Position column. Wide enough for three digits before the artwork starts to move. */
 private val NumberedRowPositionWidth = 26.dp
@@ -55,6 +54,12 @@ private val NumberedRowPositionWidth = 26.dp
 /**
  * The row the redesign uses wherever a list is read as a plot rather than a menu: the queue, and
  * the dense variant of the quick picks.
+ *
+ * The item's place on the left, then artwork, title and subtitle, then whatever the caller puts at
+ * the end. Deliberately quiet: the only colour it spends is the primary colour on the playing
+ * item — a short marker beside the position, the position itself, and nothing else. The artwork
+ * carries the playing state on its own, so the row stays legible without a container, a gradient or
+ * per-row elevation; these are long lists read while music plays.
  */
 @Composable
 internal fun NumberedMediaRow(
@@ -69,14 +74,9 @@ internal fun NumberedMediaRow(
     shouldLoadImage: Boolean = true,
     /** When set, a soft wash fades out behind the title and artist from this colour. */
     textFrost: Color? = null,
-    accentColor: Color = MaterialTheme.colorScheme.primary,
-    titleColor: Color = MaterialTheme.colorScheme.onSurface,
-    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
-    positionColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-    thumbnailBorderColor: Color = Color.Transparent,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
-    val thumbShape = RoundedCornerShape(NumberedRowThumbnailCorner)
+    val accent = MaterialTheme.colorScheme.primary
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -92,7 +92,7 @@ internal fun NumberedMediaRow(
                     .width(NumberedRowMarkerWidth)
                     .height(NumberedRowMarkerHeight)
                     .clip(CircleShape)
-                    .background(if (isActive) accentColor else Color.Transparent),
+                    .background(if (isActive) accent else Color.Transparent),
         )
         Spacer(Modifier.width(9.dp))
         Text(
@@ -101,9 +101,9 @@ internal fun NumberedMediaRow(
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
             color =
                 if (isActive) {
-                    accentColor
+                    accent
                 } else {
-                    positionColor
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 },
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -117,21 +117,8 @@ internal fun NumberedMediaRow(
             isActive = isActive,
             isPlaying = isPlaying,
             shouldLoadImage = shouldLoadImage,
-            shape = thumbShape,
-            modifier =
-                Modifier
-                    .size(NumberedRowThumbnail)
-                    .then(
-                        if (thumbnailBorderColor != Color.Transparent) {
-                            Modifier.border(
-                                width = 0.75.dp,
-                                color = thumbnailBorderColor,
-                                shape = thumbShape,
-                            )
-                        } else {
-                            Modifier
-                        },
-                    ),
+            shape = RoundedCornerShape(NumberedRowThumbnailCorner),
+            modifier = Modifier.size(NumberedRowThumbnail),
         )
         Column(
             verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -140,6 +127,8 @@ internal fun NumberedMediaRow(
                     .weight(1f)
                     .then(
                         if (textFrost != null) {
+                            // Apple-Music style: the text sits on its own soft pane of glass
+                            // rather than straight on the artwork.
                             Modifier.drawBehind {
                                 drawRoundRect(
                                     brush = Brush.horizontalGradient(listOf(textFrost, Color.Transparent)),
@@ -155,7 +144,7 @@ internal fun NumberedMediaRow(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                color = titleColor,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -163,7 +152,7 @@ internal fun NumberedMediaRow(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = subtitleColor,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

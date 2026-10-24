@@ -7,24 +7,15 @@
 
 package dev.citali.lunartune.ui.player
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.MediaMetadataListItem
 import dev.citali.lunartune.ui.component.NumberedMediaRow
 import dev.citali.lunartune.utils.makeTimeString
-
-private val QueueRowHighlightCorner = 18.dp
 
 /**
  * Picks the queue row to draw. The redesigned row is behind the developer "New UI" switch, so the
@@ -40,10 +31,11 @@ internal fun QueueRow(
     isPlaying: Boolean,
     shouldLoadImage: Boolean,
     modifier: Modifier = Modifier,
-    glassPalette: QueueGlassPalette? = null,
+    /** Soft wash drawn behind the title and artist, so they stay legible over the artwork. */
+    textFrost: Color? = null,
     trailingContent: @Composable RowScope.() -> Unit = {},
 ) {
-    if (newUi && glassPalette != null) {
+    if (newUi) {
         val subtitle =
             remember(mediaMetadata.artists, mediaMetadata.duration) {
                 val artists = mediaMetadata.artists.joinToString { it.name }
@@ -55,30 +47,6 @@ internal fun QueueRow(
                     else -> artists
                 }
             }
-
-        val highlightShape = RoundedCornerShape(QueueRowHighlightCorner)
-        val rowHighlightModifier =
-            when {
-                isSelected ->
-                    Modifier
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(highlightShape)
-                        .background(brush = glassPalette.rowSelectedBrush, shape = highlightShape)
-                        .border(width = 1.dp, color = glassPalette.rowSelectedBorder, shape = highlightShape)
-
-                isActive ->
-                    Modifier
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                        .clip(highlightShape)
-                        .background(brush = glassPalette.rowActiveBrush, shape = highlightShape)
-                        .border(width = 1.dp, color = glassPalette.rowActiveBorder, shape = highlightShape)
-
-                else ->
-                    Modifier
-                        .padding(horizontal = 4.dp)
-                        .clip(highlightShape)
-            }
-
         NumberedMediaRow(
             position = position,
             title = mediaMetadata.title,
@@ -88,21 +56,9 @@ internal fun QueueRow(
             isActive = isActive,
             isPlaying = isPlaying,
             shouldLoadImage = shouldLoadImage,
-            modifier = rowHighlightModifier.then(modifier),
-            textFrost = null,
-            accentColor = glassPalette.accent,
-            titleColor = glassPalette.rowTitleColor,
-            subtitleColor = glassPalette.rowSubtitleColor,
-            positionColor = glassPalette.rowPositionColor,
-            thumbnailBorderColor =
-                if (isActive) glassPalette.rowActiveBorder else glassPalette.artworkBorder,
-            trailingContent = {
-                CompositionLocalProvider(
-                    LocalContentColor provides glassPalette.rowTrailingIconColor,
-                ) {
-                    trailingContent()
-                }
-            },
+            modifier = modifier,
+            textFrost = textFrost,
+            trailingContent = trailingContent,
         )
     } else {
         MediaMetadataListItem(

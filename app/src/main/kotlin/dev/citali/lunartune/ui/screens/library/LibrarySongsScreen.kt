@@ -120,13 +120,11 @@ fun LibrarySongsScreen(
     var filter by rememberEnumPreference(SongFilterKey, SongFilter.LIKED)
     val lazyListState = rememberLazyListState()
 
-    // Keep the scroll viewport above the mini-player and navigation bar so song rows aren't
-    // drawn underneath them. Leave a small inset after the final row.
-    val playerAwareBottomInset =
+    val playerAwareBottomPadding =
         LocalPlayerAwareWindowInsets.current
             .only(WindowInsetsSides.Bottom)
             .asPaddingValues()
-            .calculateBottomPadding()
+            .calculateBottomPadding() + 12.dp
 
     val wrappedSongs = remember(songs) { songs.map { item -> ItemWrapper(item) }.toMutableList() }
 
@@ -175,13 +173,10 @@ fun LibrarySongsScreen(
                         start = 24.dp,
                         top = topContentPadding,
                         end = 24.dp,
-                        bottom = 12.dp,
+                        bottom = playerAwareBottomPadding,
                     ),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(bottom = playerAwareBottomInset),
+                modifier = Modifier.fillMaxSize(),
             ) {
             item(key = "song_subfilters", contentType = "subfilters") {
             Row(

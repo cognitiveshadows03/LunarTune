@@ -97,7 +97,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -158,7 +157,6 @@ import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -176,7 +174,6 @@ import dev.citali.lunartune.constants.BlurRadiusKey
 import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
-import dev.citali.lunartune.constants.EnableNewUiKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.MaxCanvasCacheSizeKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
@@ -1378,34 +1375,6 @@ fun BottomSheetPlayer(
             )
         }
 
-        val (newUiForQueueBlur) = rememberPreference(EnableNewUiKey, defaultValue = false)
-        val playerScreenHazeState = rememberHazeState()
-        val queueLiveBlurState = rememberQueueLivePlayerBlurState()
-        val playerSheetBaseColor =
-            when {
-                playerDesignStyle == PlayerDesignStyle.V9 -> dynamicBgColor
-                playerDesignStyle == PlayerDesignStyle.V7 ||
-                    playerDesignStyle == PlayerDesignStyle.V7_LEGACY ||
-                    playerDesignStyle == PlayerDesignStyle.V8 ||
-                    playerDesignStyle == PlayerDesignStyle.V10 -> Color.Black
-                playerBackground == PlayerBackgroundStyle.BLUR ||
-                    playerBackground == PlayerBackgroundStyle.GRADIENT -> MaterialTheme.colorScheme.surface
-                useBlackBackground -> Color.Black
-                else -> MaterialTheme.colorScheme.surface
-            }
-
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .drawBehind {
-                        drawRect(playerSheetBaseColor)
-                    }.queueLivePlayerSource(
-                        hazeState = playerScreenHazeState,
-                        liveBlurState = queueLiveBlurState,
-                        enabled = newUiForQueueBlur && !state.isCollapsed && !aodModeEnabled,
-                    ),
-        ) {
         if (!state.isCollapsed &&
             !aodModeEnabled &&
             playerDesignStyle != PlayerDesignStyle.V5 &&
@@ -2044,7 +2013,6 @@ fun BottomSheetPlayer(
                 }
             }
         }
-        }
 
         val queueOnBackgroundColor = if (useBlackBackground) Color.White else MaterialTheme.colorScheme.onSurface
         val queueSurfaceColor = if (useBlackBackground) Color.Black else MaterialTheme.colorScheme.surface
@@ -2089,8 +2057,6 @@ fun BottomSheetPlayer(
                     if (playerDesignStyle == PlayerDesignStyle.V10) !isLyricsScreenVisible else true
             },
             pureBlack = pureBlack,
-            playerHazeState = playerScreenHazeState,
-            liveBlurState = queueLiveBlurState,
         )
 
         mediaMetadata?.let { metadata ->
