@@ -21,11 +21,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,6 +43,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -79,6 +82,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -132,6 +136,7 @@ import dev.citali.lunartune.ui.utils.ShowMediaInfo
 import dev.citali.lunartune.utils.oem.SystemMediaControlResolver
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
+import dev.chrisbanes.haze.HazeState
 import dev.citali.lunartune.utils.resolvePlayerDesignStyle
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -140,7 +145,7 @@ import java.time.LocalDateTime
 @SuppressLint("UnrememberedMutableState")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Queue(
+internal fun Queue(
     state: BottomSheetState,
     playerBottomSheetState: BottomSheetState,
     navController: NavController,
@@ -155,6 +160,8 @@ fun Queue(
     appleMusicQueueOpenProvider: () -> Boolean = { false },
     onAppleMusicQueueClick: () -> Unit = {},
     pureBlack: Boolean,
+    playerHazeState: HazeState? = null,
+    liveBlurState: QueueLivePlayerBlurState? = null,
 ) {
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
     val context = LocalContext.current
@@ -195,16 +202,16 @@ fun Queue(
     // Rows are taller in the redesign; everything that reserves space at the bottom of the list
     // (the floating toolbar, the snackbar, the reorder scroll threshold) follows the same number.
     val queueRowHeight = if (newUi) NumberedRowHeight else ListItemHeight
-    // New UI draws the queue as one rounded group with its own surface; the rows scroll inside it
-    // and it never moves, the way the notification stack groups its items.
-    val groupDivider = onBackgroundColor.copy(alpha = 0.09f)
-    val groupBrush =
-        Brush.verticalGradient(
-            listOf(
-                onBackgroundColor.copy(alpha = 0.10f),
-                onBackgroundColor.copy(alpha = 0.06f),
-            ),
-        )
+    val glassPalette =
+        if (newUi) {
+            rememberQueueGlassPalette(
+                backgroundColor = backgroundColor,
+                onBackgroundColor = onBackgroundColor,
+                pureBlack = pureBlack,
+            )
+        } else {
+            null
+        }
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
@@ -880,18 +887,30 @@ fun Queue(
             }
         }
 
+        DisposableEffect(liveBlurState, newUi) {
+            liveBlurState?.samplingActive = newUi
+            onDispose {
+                liveBlurState?.samplingActive = false
+            }
+        }
+
+        val outerSheetShape =
+            RoundedCornerShape(
+                topStart = if (!state.isExpanded) QueueSheetTopCorner else 0.dp,
+                topEnd = if (!state.isExpanded) QueueSheetTopCorner else 0.dp,
+            )
+
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .then(
-                        if (newUi) {
-                            // One pane of glass for the whole sheet - header, actions and list -
-                            // with the player's blurred artwork behind it. Not a card per block:
-                            // the sheet itself is the glass, the way the notification shade is.
-                            Modifier.queueSheetGlass(
-                                model = mediaMetadata?.thumbnailUrl,
-                                tint = backgroundColor,
+                        if (newUi && glassPalette != null) {
+                            Modifier.queueLiveSheetGlass(
+                                shape = outerSheetShape,
+                                palette = glassPalette,
+                                hazeState = playerHazeState,
+                                liveBlurState = liveBlurState,
                             )
                         } else {
                             Modifier.background(backgroundColor)
@@ -972,6 +991,7 @@ fun Queue(
                         }
                     },
                     newUi = newUi,
+                    glassPalette = glassPalette,
                     onInfiniteQueueClick = {
                         val nextInfiniteQueueEnabled = !infiniteQueueEnabled
                         infiniteQueueEnabled = nextInfiniteQueueEnabled
@@ -983,278 +1003,286 @@ fun Queue(
                     },
                 )
 
-                LazyColumn(
-                    state = lazyListState,
-                    contentPadding =
+                val listContentPadding =
+                    if (newUi) {
+                        PaddingValues(
+                            start = 2.dp,
+                            end = 2.dp,
+                            top = 6.dp,
+                            bottom = if (selection) 96.dp else 8.dp,
+                        )
+                    } else {
                         WindowInsets.systemBars
                             .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                             .add(
                                 WindowInsets(
-                                    left = if (newUi) 6.dp else 0.dp,
-                                    right = if (newUi) 6.dp else 0.dp,
                                     bottom = queueRowHeight + if (selection) 88.dp else 8.dp,
                                 ),
-                            ).asPaddingValues(),
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .then(
-                                if (newUi) {
-                                    // The group is the viewport, not the rows: one card that
-                                    // stays where it is while the songs scroll through it, so its
-                                    // corners can never scroll away. It sits on the sheet's own
-                                    // glass and only lightly tints it, the way a grouped card in
-                                    // the notification shade sits on the shade.
-                                    Modifier
-                                        .padding(top = 10.dp)
-                                        .padding(horizontal = 16.dp)
-                                        .clip(RoundedCornerShape(QueueGroupCorner))
-                                        .background(groupBrush)
-                                } else {
-                                    Modifier
-                                },
-                            ).nestedScroll(state.preUpPostDownNestedScrollConnection),
-                ) {
-                    item(
-                        key = "queue_selection_spacer",
-                        contentType = "queue_selection_spacer",
-                    ) {
-                        Spacer(
-                            modifier =
-                                Modifier
-                                    .animateContentSize()
-                                    .height(if (selection) 48.dp else 0.dp),
-                        )
+                            ).asPaddingValues()
                     }
 
-                    itemsIndexed(
-                        items = mutableQueueWindows,
-                        key = { _, item -> item.queueItemKey },
-                        contentType = { _, _ -> "queue_item" },
-                    ) { index, window ->
-                        ReorderableItem(
-                            state = reorderableState,
-                            key = window.queueItemKey,
+                QueueListViewport(
+                    newUi = newUi,
+                    glassPalette = glassPalette,
+                    canScrollBackwardProvider = { lazyListState.canScrollBackward },
+                    canScrollForwardProvider = { lazyListState.canScrollForward },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    LazyColumn(
+                        state = lazyListState,
+                        contentPadding = listContentPadding,
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .nestedScroll(state.preUpPostDownNestedScrollConnection),
+                    ) {
+                        item(
+                            key = "queue_selection_spacer",
+                            contentType = "queue_selection_spacer",
                         ) {
-                            val currentItem by rememberUpdatedState(window)
-                            val isActive = window.uid == currentPlayingUid
-                            val dismissBoxState =
-                                rememberSwipeToDismissBoxState(
-                                    positionalThreshold = { totalDistance -> totalDistance },
-                                )
+                            Spacer(
+                                modifier =
+                                    Modifier
+                                        .animateContentSize()
+                                        .height(if (selection) 48.dp else 0.dp),
+                            )
+                        }
 
-                            var processedDismiss by remember { mutableStateOf(false) }
-                            LaunchedEffect(dismissBoxState.currentValue) {
-                                val dv = dismissBoxState.currentValue
-                                if (!processedDismiss && (
-                                        dv == SwipeToDismissBoxValue.StartToEnd ||
-                                            dv == SwipeToDismissBoxValue.EndToStart
+                        itemsIndexed(
+                            items = mutableQueueWindows,
+                            key = { _, item -> item.queueItemKey },
+                            contentType = { _, _ -> "queue_item" },
+                        ) { index, window ->
+                            ReorderableItem(
+                                state = reorderableState,
+                                key = window.queueItemKey,
+                            ) {
+                                val currentItem by rememberUpdatedState(window)
+                                val isActive = window.uid == currentPlayingUid
+                                val dismissBoxState =
+                                    rememberSwipeToDismissBoxState(
+                                        positionalThreshold = { totalDistance -> totalDistance },
                                     )
-                                ) {
-                                    processedDismiss = true
-                                    onRemoveWithUndo(currentItem)
-                                }
-                                if (dv == SwipeToDismissBoxValue.Settled) {
-                                    processedDismiss = false
-                                }
-                            }
 
-                            val content: @Composable () -> Unit = {
-                                Row(
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    val shouldLoadImages by remember {
-                                        derivedStateOf {
-                                            state.value > state.collapsedBound + 80.dp
-                                        }
+                                var processedDismiss by remember { mutableStateOf(false) }
+                                LaunchedEffect(dismissBoxState.currentValue) {
+                                    val dv = dismissBoxState.currentValue
+                                    if (!processedDismiss && (
+                                            dv == SwipeToDismissBoxValue.StartToEnd ||
+                                                dv == SwipeToDismissBoxValue.EndToStart
+                                        )
+                                    ) {
+                                        processedDismiss = true
+                                        onRemoveWithUndo(currentItem)
                                     }
+                                    if (dv == SwipeToDismissBoxValue.Settled) {
+                                        processedDismiss = false
+                                    }
+                                }
 
-                                    val trackMetadata = window.mediaItem.metadata ?: return@Row
-                                    val onPlayNextFromQueue =
-                                        remember(
-                                            window.uid,
-                                            window.firstPeriodIndex,
-                                            currentPlayingUid,
-                                            nextPlayingUid,
-                                        ) {
-                                            if (window.uid != currentPlayingUid && window.uid != nextPlayingUid) {
-                                                {
-                                                    playerConnection.moveQueueItemToNext(window.firstPeriodIndex)
-                                                }
-                                            } else {
-                                                null
+                                val content: @Composable () -> Unit = {
+                                    Row(
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        val shouldLoadImages by remember {
+                                            derivedStateOf {
+                                                state.value > state.collapsedBound + 80.dp
                                             }
                                         }
-                                    QueueRow(
-                                        newUi = newUi,
-                                        textFrost =
-                                            if (newUi) onBackgroundColor.copy(alpha = 0.10f) else null,
-                                        mediaMetadata = trackMetadata,
-                                        position = index + 1,
-                                        isSelected = selection && trackMetadata in selectedSongs,
-                                        isActive = isActive,
-                                        isPlaying = isPlaying && isActive,
-                                        shouldLoadImage = shouldLoadImages,
-                                        trailingContent = {
-                                            // The redesign gives the two trailing actions a tighter,
-                                            // equal pair of targets; the old row keeps its defaults.
-                                            val trailingSize = if (newUi) 42.dp else 48.dp
-                                            val trailingIconSize = if (newUi) 22.dp else 24.dp
-                                            IconButton(
-                                                modifier = Modifier.size(trailingSize),
-                                                onClick = {
-                                                    menuState.show {
-                                                        PlayerMenu(
-                                                            mediaMetadata = trackMetadata,
-                                                            navController = navController,
-                                                            playerBottomSheetState = playerBottomSheetState,
-                                                            isQueueTrigger = true,
-                                                            onPlayNextFromQueue = onPlayNextFromQueue,
-                                                            onRemoveFromQueue = {
-                                                                onRemoveWithUndo(window)
-                                                            },
-                                                            onShowDetailsDialog = {
-                                                                window.mediaItem.mediaId.let {
-                                                                    bottomSheetPageState.show {
-                                                                        ShowMediaInfo(it)
-                                                                    }
-                                                                }
-                                                            },
-                                                            onDismiss = menuState::dismiss,
-                                                        )
-                                                    }
-                                                },
+
+                                        val trackMetadata = window.mediaItem.metadata ?: return@Row
+                                        val isItemSelected = selection && trackMetadata in selectedSongs
+                                        val nextWindow = mutableQueueWindows.getOrNull(index + 1)
+                                        val isNextHighlighted =
+                                            nextWindow != null && (
+                                                nextWindow.uid == currentPlayingUid ||
+                                                    (selection && nextWindow.mediaItem.metadata in selectedSongs)
+                                            )
+                                        val showRowDivider =
+                                            index != mutableQueueWindows.lastIndex &&
+                                                !isActive &&
+                                                !isItemSelected &&
+                                                !isNextHighlighted
+
+                                        val onPlayNextFromQueue =
+                                            remember(
+                                                window.uid,
+                                                window.firstPeriodIndex,
+                                                currentPlayingUid,
+                                                nextPlayingUid,
                                             ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.more_vert),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(trailingIconSize),
-                                                )
+                                                if (window.uid != currentPlayingUid && window.uid != nextPlayingUid) {
+                                                    {
+                                                        playerConnection.moveQueueItemToNext(window.firstPeriodIndex)
+                                                    }
+                                                } else {
+                                                    null
+                                                }
                                             }
-                                            if (!effectiveLocked) {
+                                        QueueRow(
+                                            newUi = newUi,
+                                            glassPalette = glassPalette,
+                                            mediaMetadata = trackMetadata,
+                                            position = index + 1,
+                                            isSelected = isItemSelected,
+                                            isActive = isActive,
+                                            isPlaying = isPlaying && isActive,
+                                            shouldLoadImage = shouldLoadImages,
+                                            trailingContent = {
+                                                val trailingSize = if (newUi) 40.dp else 48.dp
+                                                val trailingIconSize = if (newUi) 20.dp else 24.dp
                                                 IconButton(
-                                                    onClick = { },
-                                                    modifier =
-                                                        Modifier
-                                                            .size(trailingSize)
-                                                            .draggableHandle(),
+                                                    modifier = Modifier.size(trailingSize),
+                                                    onClick = {
+                                                        menuState.show {
+                                                            PlayerMenu(
+                                                                mediaMetadata = trackMetadata,
+                                                                navController = navController,
+                                                                playerBottomSheetState = playerBottomSheetState,
+                                                                isQueueTrigger = true,
+                                                                onPlayNextFromQueue = onPlayNextFromQueue,
+                                                                onRemoveFromQueue = {
+                                                                    onRemoveWithUndo(window)
+                                                                },
+                                                                onShowDetailsDialog = {
+                                                                    window.mediaItem.mediaId.let {
+                                                                        bottomSheetPageState.show {
+                                                                            ShowMediaInfo(it)
+                                                                        }
+                                                                    }
+                                                                },
+                                                                onDismiss = menuState::dismiss,
+                                                            )
+                                                        }
+                                                    },
                                                 ) {
                                                     Icon(
-                                                        painter = painterResource(R.drawable.drag_handle),
+                                                        painter = painterResource(R.drawable.more_vert),
                                                         contentDescription = null,
                                                         modifier = Modifier.size(trailingIconSize),
                                                     )
                                                 }
-                                            }
-                                        },
-                                        modifier =
-                                            Modifier
-                                                .fillMaxWidth()
-                                                .then(
-                                                    if (newUi) {
-                                                        Modifier.drawWithContent {
-                                                            drawContent()
-                                                            // Hairline between rows, inset to the
-                                                            // edge of the artwork so the group
-                                                            // reads as a list and not as a table.
-                                                            if (index != mutableQueueWindows.lastIndex) {
-                                                                val inset = QueueGroupDividerInset.toPx()
-                                                                val y = size.height - 0.5.dp.toPx()
-                                                                drawLine(
-                                                                    color = groupDivider,
-                                                                    start = Offset(inset, y),
-                                                                    end = Offset(size.width, y),
-                                                                    strokeWidth = 1.dp.toPx(),
-                                                                )
-                                                            }
-                                                        }
-                                                    } else {
-                                                        Modifier.background(backgroundColor)
-                                                    },
-                                                )
-                                                .combinedClickable(
-                                                    onClick = {
-                                                        if (selection) {
-                                                            if (trackMetadata in selectedSongs) {
-                                                                selectedSongs.remove(trackMetadata)
-                                                                selectedItems.remove(currentItem)
-                                                                if (selectedSongs.isEmpty()) {
-                                                                    selection = false
+                                                if (!effectiveLocked) {
+                                                    IconButton(
+                                                        onClick = { },
+                                                        modifier =
+                                                            Modifier
+                                                                .size(trailingSize)
+                                                                .draggableHandle(),
+                                                    ) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.drag_handle),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(trailingIconSize),
+                                                        )
+                                                    }
+                                                }
+                                            },
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth()
+                                                    .then(
+                                                        if (newUi && glassPalette != null) {
+                                                            Modifier.drawWithContent {
+                                                                drawContent()
+                                                                if (showRowDivider) {
+                                                                    val inset = QueueGroupDividerInset.toPx()
+                                                                    val y = size.height - 0.5.dp.toPx()
+                                                                    drawLine(
+                                                                        color = glassPalette.rowDividerColor,
+                                                                        start = Offset(inset, y),
+                                                                        end = (size.width - 12.dp.toPx()).coerceAtLeast(inset),
+                                                                        strokeWidth = 0.75.dp.toPx(),
+                                                                    )
                                                                 }
-                                                            } else {
-                                                                selectedSongs.add(trackMetadata)
-                                                                selectedItems.add(currentItem)
                                                             }
                                                         } else {
-                                                            if (index == currentWindowIndex) {
-                                                                playerConnection.player.togglePlayPause()
+                                                            Modifier.background(backgroundColor)
+                                                        },
+                                                    ).combinedClickable(
+                                                        onClick = {
+                                                            if (selection) {
+                                                                if (trackMetadata in selectedSongs) {
+                                                                    selectedSongs.remove(trackMetadata)
+                                                                    selectedItems.remove(currentItem)
+                                                                    if (selectedSongs.isEmpty()) {
+                                                                        selection = false
+                                                                    }
+                                                                } else {
+                                                                    selectedSongs.add(trackMetadata)
+                                                                    selectedItems.add(currentItem)
+                                                                }
                                                             } else {
-                                                                val joined =
-                                                                    togetherSessionState as? dev.citali.lunartune.together.TogetherSessionState.Joined
-                                                                val isGuest = joined?.role is dev.citali.lunartune.together.TogetherRole.Guest
-                                                                if (isGuest) {
-                                                                    if (joined?.roomState?.settings?.allowGuestsToControlPlayback != true) {
+                                                                if (index == currentWindowIndex) {
+                                                                    playerConnection.player.togglePlayPause()
+                                                                } else {
+                                                                    val joined =
+                                                                        togetherSessionState as? dev.citali.lunartune.together.TogetherSessionState.Joined
+                                                                    val isGuest = joined?.role is dev.citali.lunartune.together.TogetherRole.Guest
+                                                                    if (isGuest) {
+                                                                        if (joined?.roomState?.settings?.allowGuestsToControlPlayback != true) {
+                                                                            Toast
+                                                                                .makeText(
+                                                                                    context,
+                                                                                    R.string.not_allowed,
+                                                                                    Toast.LENGTH_SHORT,
+                                                                                ).show()
+                                                                            return@combinedClickable
+                                                                        }
+                                                                        val trackId =
+                                                                            window.mediaItem.metadata?.id?.trim().orEmpty().ifBlank {
+                                                                                window.mediaItem.mediaId.trim()
+                                                                            }
+                                                                        if (trackId.isBlank()) return@combinedClickable
                                                                         Toast
                                                                             .makeText(
                                                                                 context,
-                                                                                R.string.not_allowed,
+                                                                                R.string.together_requesting_song_change,
                                                                                 Toast.LENGTH_SHORT,
                                                                             ).show()
-                                                                        return@combinedClickable
-                                                                    }
-                                                                    val trackId =
-                                                                        window.mediaItem.metadata?.id?.trim().orEmpty().ifBlank {
-                                                                            window.mediaItem.mediaId.trim()
-                                                                        }
-                                                                    if (trackId.isBlank()) return@combinedClickable
-                                                                    Toast
-                                                                        .makeText(
-                                                                            context,
-                                                                            R.string.together_requesting_song_change,
-                                                                            Toast.LENGTH_SHORT,
-                                                                        ).show()
-                                                                    playerConnection.service.requestTogetherControl(
-                                                                        dev.citali.lunartune.together.ControlAction.SeekToTrack(
-                                                                            trackId = trackId,
-                                                                            positionMs = 0L,
-                                                                        ),
-                                                                    )
-                                                                } else {
-                                                                    val tappedIndex = window.firstPeriodIndex
-                                                                    if (!playerConnection.service.manualSeekToIndexWithCrossfade(tappedIndex)) {
-                                                                        playerConnection.player.seekToDefaultPosition(
-                                                                            tappedIndex,
+                                                                        playerConnection.service.requestTogetherControl(
+                                                                            dev.citali.lunartune.together.ControlAction.SeekToTrack(
+                                                                                trackId = trackId,
+                                                                                positionMs = 0L,
+                                                                            ),
                                                                         )
-                                                                        playerConnection.player.playWhenReady = true
+                                                                    } else {
+                                                                        val tappedIndex = window.firstPeriodIndex
+                                                                        if (!playerConnection.service.manualSeekToIndexWithCrossfade(tappedIndex)) {
+                                                                            playerConnection.player.seekToDefaultPosition(
+                                                                                tappedIndex,
+                                                                            )
+                                                                            playerConnection.player.playWhenReady = true
+                                                                        }
                                                                     }
                                                                 }
                                                             }
-                                                        }
-                                                    },
-                                                    onLongClick = {
-                                                        if (enableHapticFeedback) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        if (!selection) {
-                                                            selection = true
-                                                        }
-                                                        selectedSongs.clear()
-                                                        selectedItems.clear()
-                                                        selectedSongs.add(trackMetadata)
-                                                        selectedItems.add(currentItem)
-                                                    },
-                                                ),
-                                    )
+                                                        },
+                                                        onLongClick = {
+                                                            if (enableHapticFeedback) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            if (!selection) {
+                                                                selection = true
+                                                            }
+                                                            selectedSongs.clear()
+                                                            selectedItems.clear()
+                                                            selectedSongs.add(trackMetadata)
+                                                            selectedItems.add(currentItem)
+                                                        },
+                                                    ),
+                                        )
+                                    }
                                 }
-                            }
 
-                            if (effectiveLocked) {
-                                content()
-                            } else {
-                                SwipeToDismissBox(
-                                    state = dismissBoxState,
-                                    backgroundContent = {},
-                                ) {
+                                if (effectiveLocked) {
                                     content()
+                                } else {
+                                    SwipeToDismissBox(
+                                        state = dismissBoxState,
+                                        backgroundContent = {},
+                                    ) {
+                                        content()
+                                    }
                                 }
                             }
                         }
@@ -1262,6 +1290,7 @@ fun Queue(
                 }
             }
 
+            val overlayBaseBottom = if (newUi) 18.dp else queueRowHeight
             Box(modifier = Modifier.fillMaxSize()) {
                 SnackbarHost(
                     hostState = snackbarHostState,
@@ -1269,7 +1298,7 @@ fun Queue(
                         Modifier
                             .padding(
                                 bottom =
-                                    (if (selection) queueRowHeight * 2 + 16.dp else queueRowHeight) +
+                                    (if (selection) overlayBaseBottom + queueRowHeight + 16.dp else overlayBaseBottom) +
                                         WindowInsets.systemBars
                                             .asPaddingValues()
                                             .calculateBottomPadding(),
@@ -1285,7 +1314,7 @@ fun Queue(
                             .align(Alignment.BottomCenter)
                             .padding(
                                 bottom =
-                                    queueRowHeight +
+                                    overlayBaseBottom +
                                         WindowInsets.systemBars
                                             .asPaddingValues()
                                             .calculateBottomPadding(),
@@ -1325,8 +1354,98 @@ fun Queue(
     }
 }
 
-/** Corner radius of the queue's group card in the redesign. */
-private val QueueGroupCorner = 26.dp
+/**
+ * Android 16 Notification Shade nested list container: an outer rounded frosted tray with subtle
+ * translucent border surrounding the inner rounded scrollable queue card, preserving all rounded
+ * corners even while tracks scroll inside.
+ */
+@Composable
+private fun QueueListViewport(
+    newUi: Boolean,
+    glassPalette: QueueGlassPalette?,
+    canScrollBackwardProvider: () -> Boolean,
+    canScrollForwardProvider: () -> Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (!newUi || glassPalette == null) {
+        Box(modifier = modifier.fillMaxWidth()) {
+            content()
+        }
+        return
+    }
+
+    val outerTrayShape = RoundedCornerShape(QueueOuterTrayCorner)
+    val innerCardShape = RoundedCornerShape(QueueGroupCorner)
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(
+                    WindowInsets.systemBars.only(
+                        WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal,
+                    ),
+                ).padding(top = 10.dp, bottom = 10.dp)
+                .padding(horizontal = 12.dp)
+                .clip(outerTrayShape)
+                .background(brush = glassPalette.listOuterTrayBrush, shape = outerTrayShape)
+                .border(
+                    width = 1.dp,
+                    brush = glassPalette.listOuterTrayBorderBrush,
+                    shape = outerTrayShape,
+                ).padding(6.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .clip(innerCardShape)
+                    .background(brush = glassPalette.listInnerCardBrush, shape = innerCardShape)
+                    .border(
+                        width = 1.dp,
+                        brush = glassPalette.listInnerCardBorderBrush,
+                        shape = innerCardShape,
+                    ).drawWithContent {
+                        drawContent()
+                        val fadeHeight = 14.dp.toPx()
+                        if (canScrollBackwardProvider()) {
+                            drawRect(
+                                brush =
+                                    Brush.verticalGradient(
+                                        colors = listOf(glassPalette.listScrollEdgeColor, Color.Transparent),
+                                        startY = 0f,
+                                        endY = fadeHeight,
+                                    ),
+                                topLeft = Offset.Zero,
+                                size = Size(size.width, fadeHeight),
+                            )
+                        }
+                        if (canScrollForwardProvider()) {
+                            val topY = (size.height - fadeHeight).coerceAtLeast(0f)
+                            drawRect(
+                                brush =
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color.Transparent, glassPalette.listScrollEdgeColor),
+                                        startY = topY,
+                                        endY = size.height,
+                                    ),
+                                topLeft = Offset(0f, topY),
+                                size = Size(size.width, size.height - topY),
+                            )
+                        }
+                    },
+        ) {
+            content()
+        }
+    }
+}
+
+private val QueueSheetTopCorner = 28.dp
+private val QueueOuterTrayCorner = 30.dp
+
+/** Corner radius of the queue's inner group card in the redesign. */
+private val QueueGroupCorner = 24.dp
 
 /** How far the hairline between rows is inset, lining up with the edge of the artwork. */
 private val QueueGroupDividerInset = 112.dp
