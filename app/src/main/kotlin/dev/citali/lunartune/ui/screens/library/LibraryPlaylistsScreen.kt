@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.ui.screens.library
 
+import android.util.LruCache
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -88,6 +89,8 @@ import coil3.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.LocalDatabase
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
@@ -860,52 +863,80 @@ private fun triggerPlaylistMenu(
     }
 }
 
+private val ArtworkGradientCache = LruCache<String, List<Color>>(128)
+private val ArtworkPaletteSemaphore = Semaphore(3)
+
 @Composable
 fun rememberArtworkGradient(
     thumbnailUrl: String?,
     fallbackColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ): List<Color> {
     val context = LocalContext.current
-    var colors by remember(thumbnailUrl) { mutableStateOf(listOf(fallbackColor, fallbackColor.copy(alpha = 0.5f))) }
+    val cachedInitial =
+        remember(thumbnailUrl) {
+            thumbnailUrl?.let { url ->
+                synchronized(ArtworkGradientCache) { ArtworkGradientCache.get(url) }
+            }
+        }
+    var colors by
+        remember(thumbnailUrl) {
+            mutableStateOf(cachedInitial ?: listOf(fallbackColor, fallbackColor.copy(alpha = 0.5f)))
+        }
 
     LaunchedEffect(thumbnailUrl) {
-        if (thumbnailUrl == null) return@LaunchedEffect
-        val request =
-            ImageRequest
-                .Builder(context)
-                .data(thumbnailUrl)
-                .size(PlayerColorExtractor.Config.IMAGE_SIZE, PlayerColorExtractor.Config.IMAGE_SIZE)
-                .allowHardware(false)
-                .build()
+        if (thumbnailUrl.isNullOrBlank()) return@LaunchedEffect
+        val existing = synchronized(ArtworkGradientCache) { ArtworkGradientCache.get(thumbnailUrl) }
+        if (existing != null) {
+            colors = existing
+            return@LaunchedEffect
+        }
 
-        val result =
-            runCatching {
-                context.imageLoader.execute(request)
-            }.getOrNull()
+        val appContext = context.applicationContext
+        val bitmap =
+            withContext(Dispatchers.IO) {
+                val request =
+                    ImageRequest
+                        .Builder(appContext)
+                        .data(thumbnailUrl)
+                        .size(PlayerColorExtractor.Config.IMAGE_SIZE, PlayerColorExtractor.Config.IMAGE_SIZE)
+                        .allowHardware(false)
+                        .build()
+                runCatching { appContext.imageLoader.execute(request).image?.toBitmap() }.getOrNull()
+            } ?: return@LaunchedEffect
 
-        if (result != null) {
-            val bitmap = result.image?.toBitmap()
-            if (bitmap != null) {
-                val palette =
-                    withContext(Dispatchers.Default) {
+        val resolvedColors =
+            ArtworkPaletteSemaphore.withPermit {
+                synchronized(ArtworkGradientCache) { ArtworkGradientCache.get(thumbnailUrl) }?.let {
+                    return@withPermit it
+                }
+                withContext(Dispatchers.Default) {
+                    val palette =
                         Palette
                             .from(bitmap)
                             .maximumColorCount(PlayerColorExtractor.Config.MAX_COLOR_COUNT)
                             .resizeBitmapArea(PlayerColorExtractor.Config.BITMAP_AREA)
                             .generate()
-                    }
 
-                val extractedColors =
-                    PlayerColorExtractor.extractGradientColors(
-                        palette = palette,
-                        fallbackColor = fallbackColor.toArgb(),
-                    )
-                if (extractedColors.size >= 2) {
-                    colors = extractedColors
-                } else if (extractedColors.isNotEmpty()) {
-                    colors = listOf(extractedColors[0], extractedColors[0].copy(alpha = 0.5f))
+                    val extractedColors =
+                        PlayerColorExtractor.extractGradientColors(
+                            palette = palette,
+                            fallbackColor = fallbackColor.toArgb(),
+                        )
+                    when {
+                        extractedColors.size >= 2 -> extractedColors
+                        extractedColors.isNotEmpty() ->
+                            listOf(extractedColors[0], extractedColors[0].copy(alpha = 0.5f))
+                        else -> null
+                    }?.also { resolved ->
+                        synchronized(ArtworkGradientCache) {
+                            ArtworkGradientCache.put(thumbnailUrl, resolved)
+                        }
+                    }
                 }
             }
+
+        if (resolvedColors != null) {
+            colors = resolvedColors
         }
     }
     return colors

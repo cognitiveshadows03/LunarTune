@@ -145,13 +145,18 @@ fun SearchScreen(
                 ),
     ) {
         if (effectiveHeaderImageUri.isNotBlank()) {
-            val headerOffset = if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
                 blendColor = MaterialTheme.colorScheme.surface,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .graphicsLayer {
+                        val headerOffset =
+                            if (lazyListState.firstVisibleItemIndex == 0) {
+                                lazyListState.firstVisibleItemScrollOffset
+                            } else {
+                                1000
+                            }
                         translationY = -headerOffset.toFloat()
                         alpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
                     },

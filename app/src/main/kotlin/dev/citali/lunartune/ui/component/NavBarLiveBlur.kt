@@ -119,11 +119,10 @@ class NavBarBlurState {
  */
 @Composable
 fun Modifier.navBarLiveBlurSource(state: NavBarBlurState?): Modifier {
+    if (state == null) return this
     val layer = rememberGraphicsLayer()
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
-
-    if (state == null) return this
     val blurState = state
 
     LaunchedEffect(blurState, layer) {

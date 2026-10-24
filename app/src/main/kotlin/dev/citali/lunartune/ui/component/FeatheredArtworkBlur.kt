@@ -7,77 +7,195 @@
 
 package dev.citali.lunartune.ui.component
 
-import android.os.Build
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.RectF
+import android.graphics.Shader
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.RenderEffect
-import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
-import coil3.compose.AsyncImage
-import dev.citali.lunartune.utils.LyricsArtBlurCache
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.size.Size
+import coil3.toBitmap
+import dev.citali.lunartune.utils.ImageBlurUtils
+import kotlin.math.max
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
-private const val CpuBlurPixelsPerDp = 0.44f
+private const val BlurSampleWidthPx = 192
+private const val BlurSampleRadiusPx = 15f
+private const val MaxCachedCardBlurs = 24
+
+private object FeatheredCardBlurCache {
+    private val cache = LruCache<String, ImageBitmap>(MaxCachedCardBlurs)
+    private val semaphore = Semaphore(2)
+
+    fun get(key: String): ImageBitmap? = synchronized(cache) { cache.get(key) }
+
+    fun put(
+        key: String,
+        bitmap: ImageBitmap,
+    ) {
+        synchronized(cache) {
+            cache.put(key, bitmap)
+        }
+    }
+
+    suspend fun loadOrCreate(
+        context: android.content.Context,
+        key: String,
+        url: String,
+        aspectRatio: Float,
+        fadeStartFraction: Float,
+    ): ImageBitmap? {
+        get(key)?.let { return it }
+
+        val appContext = context.applicationContext
+        val fullWidth = BlurSampleWidthPx
+        val fullHeight = (BlurSampleWidthPx * aspectRatio).roundToInt().coerceIn(64, 384)
+
+        val decoded =
+            withContext(Dispatchers.IO) {
+                val request =
+                    ImageRequest
+                        .Builder(appContext)
+                        .data(url)
+                        .size(Size(fullWidth, fullHeight))
+                        .allowHardware(false)
+                        .build()
+                runCatching { appContext.imageLoader.execute(request).image?.toBitmap() }.getOrNull()
+            } ?: return null
+
+        return semaphore.withPermit {
+            get(key)?.let { return@withPermit it }
+            withContext(Dispatchers.Default) {
+                val sw = decoded.width.coerceAtLeast(1)
+                val sh = decoded.height.coerceAtLeast(1)
+                val scale = max(fullWidth.toFloat() / sw, fullHeight.toFloat() / sh)
+                val drawW = sw * scale
+                val drawH = sh * scale
+                val dx = (fullWidth - drawW) * 0.5f
+                val dy = (fullHeight - drawH) * 0.5f
+
+                val cropped = Bitmap.createBitmap(fullWidth, fullHeight, Bitmap.Config.ARGB_8888)
+                Canvas(cropped).drawBitmap(
+                    decoded,
+                    null,
+                    RectF(dx, dy, dx + drawW, dy + drawH),
+                    Paint(Paint.FILTER_BITMAP_FLAG),
+                )
+
+                val blurred = ImageBlurUtils.blur(cropped, BlurSampleRadiusPx)
+                if (blurred !== cropped) {
+                    cropped.recycle()
+                }
+
+                val s0 = fadeStartFraction.coerceIn(0f, 0.88f)
+                val stripHeight = (fullHeight * (1f - s0)).roundToInt().coerceIn(1, fullHeight)
+                val stripTop = fullHeight - stripHeight
+
+                val strip = Bitmap.createBitmap(fullWidth, stripHeight, Bitmap.Config.ARGB_8888)
+                val stripCanvas = Canvas(strip)
+                stripCanvas.drawBitmap(blurred, 0f, -stripTop.toFloat(), null)
+                blurred.recycle()
+
+                val maskPaint =
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+                        shader =
+                            LinearGradient(
+                                0f,
+                                0f,
+                                0f,
+                                stripHeight.toFloat(),
+                                intArrayOf(
+                                    0x00000000,
+                                    0x40000000,
+                                    0xC2000000.toInt(),
+                                    0xF5000000.toInt(),
+                                    0xFF000000.toInt(),
+                                ),
+                                floatArrayOf(0f, 0.20f, 0.38f, 0.58f, 1f),
+                                Shader.TileMode.CLAMP,
+                            )
+                    }
+                stripCanvas.drawRect(0f, 0f, fullWidth.toFloat(), stripHeight.toFloat(), maskPaint)
+
+                strip.asImageBitmap().also { put(key, it) }
+            }
+        }
+    }
+}
 
 /**
- * Progressive bottom artwork blur inspired by Telegram's profile header: the upper portion of the
- * card stays tack-sharp while the lower text region smoothly melts into a clamped Gaussian blur of
- * the underlying cover art, paired with a light legibility veil instead of a heavy dark gradient.
+ * Progressive bottom artwork blur inspired by Telegram's profile header, pre-composited once per
+ * artwork URL off the main thread into a compact cached strip so scrolling pays zero GPU offscreen
+ * layer or `RenderEffect` cost per frame.
  */
 @Composable
-internal fun FeatheredBottomArtworkBlur(
-    artworkModel: Any?,
-    cacheKeyUrl: String?,
-    blurRadius: Dp,
+internal fun BoxScope.FeatheredBottomArtworkBlur(
+    artworkUrl: String?,
+    aspectRatio: Float,
     fadeStartFraction: Float = 0.54f,
     scrimMaxAlpha: Float = 0.24f,
-    modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
-    val radiusPx = with(density) { blurRadius.toPx() }.coerceAtLeast(1f)
-    val hardwareBlurEffect =
-        remember(radiusPx) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                BlurEffect(
-                    radiusX = radiusPx,
-                    radiusY = radiusPx,
-                    edgeTreatment = TileMode.Clamp,
-                ).takeIf(RenderEffect::isSupported)
-            } else {
-                null
+    val context = LocalContext.current
+    val s0 = fadeStartFraction.coerceIn(0f, 0.88f)
+    val span = 1f - s0
+    val cacheKey =
+        remember(artworkUrl, aspectRatio, s0) {
+            artworkUrl?.takeIf { it.isNotBlank() }?.let { url ->
+                "$url|${(aspectRatio * 100f).roundToInt()}|${(s0 * 100f).roundToInt()}"
             }
         }
 
-    val s0 = fadeStartFraction.coerceIn(0f, 0.88f)
-    val span = 1f - s0
-    val maskBrush =
-        remember(s0) {
-            Brush.verticalGradient(
-                s0 to Color.Transparent,
-                (s0 + span * 0.20f) to Color.Black.copy(alpha = 0.25f),
-                (s0 + span * 0.38f) to Color.Black.copy(alpha = 0.76f),
-                (s0 + span * 0.58f) to Color.Black.copy(alpha = 0.96f),
-                1f to Color.Black,
-            )
+    var featheredStrip by
+        remember(cacheKey) {
+            mutableStateOf(cacheKey?.let(FeatheredCardBlurCache::get))
         }
+
+    LaunchedEffect(cacheKey, artworkUrl) {
+        if (featheredStrip == null && cacheKey != null && !artworkUrl.isNullOrBlank()) {
+            featheredStrip =
+                FeatheredCardBlurCache.loadOrCreate(
+                    context = context,
+                    key = cacheKey,
+                    url = artworkUrl,
+                    aspectRatio = aspectRatio,
+                    fadeStartFraction = s0,
+                )
+        }
+    }
+
     val scrimBrush =
         remember(s0, scrimMaxAlpha) {
             val clampedAlpha = scrimMaxAlpha.coerceIn(0f, 1f)
@@ -95,75 +213,25 @@ internal fun FeatheredBottomArtworkBlur(
             )
         }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        val hasBlurLayer =
-            if (hardwareBlurEffect != null) {
-                AsyncImage(
-                    model = artworkModel,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                            .drawWithContent {
-                                drawContent()
-                                drawRect(
-                                    brush = maskBrush,
-                                    blendMode = BlendMode.DstIn,
-                                )
-                            }
-                            .graphicsLayer {
-                                clip = true
-                                renderEffect = hardwareBlurEffect
-                            },
-                )
-                true
-            } else {
-                val context = LocalContext.current
-                val cpuRadius = (blurRadius.value * CpuBlurPixelsPerDp).coerceAtLeast(1f)
-                val cacheRevision by LyricsArtBlurCache.updates.collectAsState()
-                val blurredBitmap =
-                    remember(cacheKeyUrl, cpuRadius, cacheRevision) {
-                        cacheKeyUrl?.let { url ->
-                            LyricsArtBlurCache.peek(url, cpuRadius)?.asImageBitmap()
-                        }
-                    }
-
-                LaunchedEffect(cacheKeyUrl, cpuRadius) {
-                    if (!cacheKeyUrl.isNullOrBlank()) {
-                        LyricsArtBlurCache.prefetch(context, cacheKeyUrl, cpuRadius)
-                    }
-                }
-
-                if (blurredBitmap != null) {
-                    Image(
-                        bitmap = blurredBitmap,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                .drawWithContent {
-                                    drawContent()
-                                    drawRect(
-                                        brush = maskBrush,
-                                        blendMode = BlendMode.DstIn,
-                                    )
-                                },
-                    )
-                    true
-                } else {
-                    false
-                }
-            }
-
-        Box(
+    val strip = featheredStrip
+    if (strip != null) {
+        Image(
+            bitmap = strip,
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            filterQuality = FilterQuality.Low,
             modifier =
                 Modifier
-                    .fillMaxSize()
-                    .background(if (hasBlurLayer) scrimBrush else fallbackScrimBrush),
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .fillMaxHeight(span),
         )
     }
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(if (strip != null) scrimBrush else fallbackScrimBrush),
+    )
 }

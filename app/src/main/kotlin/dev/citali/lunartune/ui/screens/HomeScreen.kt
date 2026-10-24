@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -331,12 +332,29 @@ private fun HomeContent(
             )
         }
 
-        val headerOffset =
-            if (lazyListState.firstVisibleItemIndex == 0) lazyListState.firstVisibleItemScrollOffset else 1000
+        val hasHeaderImage = effectiveHeaderImageUri.isNotBlank()
         // The header's local text dim rides the same fade as the artwork: once
         // the image has scrolled away there is nothing left to dim against.
-        val headerDimAlpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
-        if (effectiveHeaderImageUri.isNotBlank()) {
+        // Only read scroll state in composition when a header image exists, and quantize it via
+        // derivedStateOf so scrolling item 0 never recomposes HomeContent on every pixel.
+        val headerDimAlpha by
+            remember(hasHeaderImage, lazyListState) {
+                derivedStateOf {
+                    if (!hasHeaderImage) {
+                        0f
+                    } else {
+                        val offset =
+                            if (lazyListState.firstVisibleItemIndex == 0) {
+                                lazyListState.firstVisibleItemScrollOffset
+                            } else {
+                                1000
+                            }
+                        val raw = (1f - offset / 300f).coerceIn(0f, 1f)
+                        (raw * 20f).toInt() / 20f
+                    }
+                }
+            }
+        if (hasHeaderImage) {
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
                 blendColor = MaterialTheme.colorScheme.surface,
@@ -344,8 +362,14 @@ private fun HomeContent(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .graphicsLayer {
-                        translationY = -headerOffset.toFloat()
-                        alpha = (1f - headerOffset / 300f).coerceIn(0f, 1f)
+                        val offset =
+                            if (lazyListState.firstVisibleItemIndex == 0) {
+                                lazyListState.firstVisibleItemScrollOffset
+                            } else {
+                                1000
+                            }
+                        translationY = -offset.toFloat()
+                        alpha = (1f - offset / 300f).coerceIn(0f, 1f)
                     },
             )
         }
@@ -538,7 +562,6 @@ private fun HomeContent(
                                     menuState = menuState,
                                     haptic = haptic,
                                     scope = scope,
-                                    newUi = newUi,
                                 )
                             }
                         }

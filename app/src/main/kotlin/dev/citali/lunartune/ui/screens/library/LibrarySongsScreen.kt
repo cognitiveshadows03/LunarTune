@@ -411,24 +411,36 @@ fun LibrarySongsScreen(
                 itemsIndexed(
                     items = filteredSongs,
                     key = { _, item -> item.item.song.id },
+                    contentType = { _, _ -> "library_song" },
                 ) { index, songWrapper ->
                     val song = songWrapper.item
                     val isActive = song.id == mediaMetadata?.id
 
-                    // Issue 7: active song gets fully rounded shape + artwork-based color
-                    // inactive songs use theme color and are more rounded than before
-                    val activeCardColor =
-                        rememberArtworkCardColor(
-                            thumbnailUrl = song.song.thumbnailUrl,
-                            fallbackColor = MaterialTheme.colorScheme.primaryContainer,
-                        )
-                    val inactiveCardColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    // Issue 7: active song gets fully rounded shape + artwork-based color;
+                    // inactive rows skip artwork bitmap decoding and palette extraction entirely.
+                    val cardColor =
+                        if (isActive) {
+                            rememberArtworkCardColor(
+                                thumbnailUrl = song.song.thumbnailUrl,
+                                fallbackColor = MaterialTheme.colorScheme.primaryContainer,
+                            )
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        }
 
                     // Keep rounded cards visibly separated on every theme, including pure black.
                     val topPadding = if (index == 0) 0.dp else 12.dp
 
                     // Issue 7: Active corners 36.dp, inactive 24.dp
                     val cornerRadius = if (isActive) 36.dp else 24.dp
+                    val artistsText =
+                        remember(song.id, song.artists) {
+                            song.artists.joinToString(", ") { it.name }
+                        }
+                    val durationText =
+                        remember(song.song.duration) {
+                            makeTimeString(song.song.duration * 1000L)
+                        }
 
                     Row(
                         modifier =
@@ -436,9 +448,8 @@ fun LibrarySongsScreen(
                                 .fillMaxWidth()
                                 .padding(top = topPadding)
                                 .clip(RoundedCornerShape(cornerRadius))
-                                .background(
-                                    if (isActive) activeCardColor else inactiveCardColor,
-                                ).combinedClickable(
+                                .background(cardColor)
+                                .combinedClickable(
                                     onClick = {
                                         if (song.id == mediaMetadata?.id) {
                                             playerConnection.player.togglePlayPause()
@@ -496,7 +507,7 @@ fun LibrarySongsScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = song.artists.joinToString(", ") { it.name },
+                                text = artistsText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color =
                                     if (isActive) {
@@ -524,7 +535,6 @@ fun LibrarySongsScreen(
                             }
 
                             // Issue 1: Real duration pill using makeTimeString
-                            val durationText = makeTimeString(song.song.duration * 1000L)
                             Box(
                                 modifier =
                                     Modifier

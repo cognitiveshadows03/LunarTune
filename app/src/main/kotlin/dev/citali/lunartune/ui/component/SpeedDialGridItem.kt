@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,7 +56,6 @@ fun SpeedDialGridItem(
     modifier: Modifier = Modifier,
     isActive: Boolean = false,
     isPlaying: Boolean = false,
-    blurTextBackdrop: Boolean = false,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -110,30 +108,18 @@ fun SpeedDialGridItem(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val widthPx = with(density) { maxWidth.roundToPx().coerceAtLeast(1) }
             val heightPx = with(density) { maxHeight.roundToPx().coerceAtLeast(1) }
-            val resizedThumbnailUrl =
-                remember(item.thumbnail, widthPx, heightPx) {
-                    item.thumbnail?.resize(
-                        width = widthPx,
-                        height = heightPx,
-                        ytimgResizePolicy = YtimgResizePolicy.PreserveOriginal,
-                    )
-                }
             val request =
-                remember(resizedThumbnailUrl, widthPx, heightPx) {
+                remember(item.thumbnail, widthPx, heightPx) {
                     ImageRequest
                         .Builder(context)
-                        .data(resizedThumbnailUrl)
-                        .size(widthPx, heightPx)
+                        .data(
+                            item.thumbnail?.resize(
+                                width = widthPx,
+                                height = heightPx,
+                                ytimgResizePolicy = YtimgResizePolicy.PreserveOriginal,
+                            ),
+                        ).size(widthPx, heightPx)
                         .build()
-                }
-            val titleShadowBlurPx = with(density) { 8.dp.toPx() }
-            val labelTextStyle =
-                if (blurTextBackdrop) {
-                    MaterialTheme.typography.labelLargeEmphasized.copy(
-                        shadow = Shadow(color = Color.Black.copy(alpha = 0.30f), blurRadius = titleShadowBlurPx),
-                    )
-                } else {
-                    MaterialTheme.typography.labelLargeEmphasized
                 }
 
             AsyncImage(
@@ -143,24 +129,14 @@ fun SpeedDialGridItem(
                 modifier = Modifier.fillMaxSize(),
             )
 
-            if (blurTextBackdrop && !resizedThumbnailUrl.isNullOrBlank()) {
-                FeatheredBottomArtworkBlur(
-                    artworkModel = request,
-                    cacheKeyUrl = resizedThumbnailUrl,
-                    blurRadius = 16.dp,
-                    fadeStartFraction = 0.50f,
-                    scrimMaxAlpha = 0.26f,
-                )
-            } else {
-                Box(
-                    modifier =
-                        Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .height(86.dp)
-                            .background(labelGradient),
-                )
-            }
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(86.dp)
+                        .background(labelGradient),
+            )
 
             Row(
                 modifier =
@@ -172,7 +148,7 @@ fun SpeedDialGridItem(
             ) {
                 Text(
                     text = item.title,
-                    style = labelTextStyle,
+                    style = MaterialTheme.typography.labelLargeEmphasized,
                     color = foregroundColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

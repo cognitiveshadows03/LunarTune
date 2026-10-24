@@ -313,9 +313,8 @@ private fun QuickPickCard(
         )
         if (!artworkUrl.isNullOrBlank()) {
             FeatheredBottomArtworkBlur(
-                artworkModel = artworkUrl,
-                cacheKeyUrl = artworkUrl,
-                blurRadius = 24.dp,
+                artworkUrl = artworkUrl,
+                aspectRatio = QuickPickAspectRatio,
                 fadeStartFraction = 0.54f,
                 scrimMaxAlpha = 0.24f,
             )
