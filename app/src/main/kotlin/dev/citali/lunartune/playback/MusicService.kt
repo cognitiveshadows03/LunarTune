@@ -403,7 +403,7 @@ class MusicService :
     private val prefetchingMediaIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     // Buffering-stall watchdog state.
     @Volatile private var bufferingSinceMs = 0L
-    @Volatile private var stallRecoveryMediaId: String? = null
+    private val bufferingStallRecoveryTracker = BufferingStallRecoveryTracker()
     private val remotePlaybackTrackingUrlCache = ConcurrentHashMap<String, String>()
     private val contentLengthCache = ConcurrentHashMap<String, Long>()
     private val mediaOkHttpClient: OkHttpClient by lazy {
@@ -2686,8 +2686,8 @@ class MusicService :
      * The retry is deliberately different from the HTTP-failure retry. That one re-walks
      * the same InnerTube clients; this one asks for the NewPipe resolver, which returns
      * descrambled, unthrottled URLs and is already trusted on the download path. One
-     * attempt per item: if the unthrottled URL also stalls, the track is not playable from
-     * this network and the configured skip/stop behaviour takes over.
+     * attempt is allowed per continuous stall: if the alternate URL also stalls, playback
+     * is stopped or skipped instead of leaving the item buffering indefinitely.
      */
     private fun detectBufferingStall() {
         if (!::player.isInitialized) return
@@ -2701,36 +2701,85 @@ class MusicService :
             return
         }
 
+        val mediaId = player.currentMediaItem?.mediaId?.trim().orEmpty()
+        if (mediaId.isEmpty() || mediaId.isLocalMediaId()) {
+            bufferingSinceMs = 0L
+            return
+        }
+
+        val hasRetried = bufferingStallRecoveryTracker.hasAttemptedRecovery(mediaId)
+        val timeoutMs = if (hasRetried) STALL_RECOVERY_RETRY_TIMEOUT_MS else STALL_RECOVERY_TIMEOUT_MS
         val now = SystemClock.elapsedRealtime()
         if (bufferingSinceMs == 0L) {
             bufferingSinceMs = now
             return
         }
-        if (now - bufferingSinceMs < STALL_RECOVERY_TIMEOUT_MS) return
+        if (now - bufferingSinceMs < timeoutMs) return
 
-        val mediaId = player.currentMediaItem?.mediaId?.trim().orEmpty()
         bufferingSinceMs = 0L
-        if (mediaId.isEmpty() || mediaId.isLocalMediaId()) return
-        // One recovery per item. The tracker is reset when the item changes.
-        if (stallRecoveryMediaId == mediaId) return
-        stallRecoveryMediaId = mediaId
+        val recoverySnapshot = capturePlaybackRecoverySnapshot()
+
+        if (hasRetried) {
+            Timber.tag(TAG).e(
+                "Stream for %s is still buffering after the unthrottled retry (%dms); stopping recovery",
+                mediaId,
+                timeoutMs,
+            )
+
+            if (!isNetworkCurrentlyConnected()) {
+                waitOnNetworkError()
+                stopPlaybackAtSnapshot(
+                    recoverySnapshot,
+                    resumeWhenReady = recoverySnapshot?.playWhenReady == true,
+                )
+            } else if (dataStore.get(AutoSkipNextOnErrorKey, false)) {
+                player.playWhenReady = false
+                player.stop()
+                skipOnError()
+            } else {
+                stopPlaybackAtSnapshot(recoverySnapshot, resumeWhenReady = false)
+            }
+            return
+        }
+
+        if (!bufferingStallRecoveryTracker.registerRecoveryAttempt(mediaId)) return
 
         Timber.tag(TAG).w(
             "Stream for %s has been buffering for over %dms with no error; retrying with unthrottled URLs",
             mediaId,
-            STALL_RECOVERY_TIMEOUT_MS,
+            timeoutMs,
         )
 
-        val recoverySnapshot = capturePlaybackRecoverySnapshot()
         playbackUrlCache.remove(mediaId)
         YTPlayerUtils.invalidateCachedStreamUrls(mediaId)
         YTPlayerUtils.requestUnthrottledResolution(mediaId)
 
-        if (preparePlaybackFromSnapshot(recoverySnapshot)) return
+        if (preparePlaybackFromSnapshot(recoverySnapshot, forceReload = true)) return
 
         if (player.currentMediaItem?.mediaId == mediaId) {
             if (dataStore.get(AutoSkipNextOnErrorKey, false)) skipOnError() else stopOnError()
         }
+    }
+
+    private fun stopPlaybackAtSnapshot(
+        snapshot: PlaybackRecoverySnapshot?,
+        resumeWhenReady: Boolean,
+    ) {
+        if (snapshot != null && player.currentMediaItem?.mediaId != snapshot.mediaId) return
+
+        player.playWhenReady = false
+        player.stop()
+
+        if (snapshot != null) {
+            val targetIndex =
+                (0 until player.mediaItemCount)
+                    .firstOrNull { index -> player.getMediaItemAt(index).mediaId == snapshot.mediaId }
+            if (targetIndex != null) {
+                player.seekTo(targetIndex, snapshot.positionMs)
+            }
+        }
+
+        player.playWhenReady = resumeWhenReady && snapshot?.playWhenReady == true
     }
 
     /**
@@ -4025,12 +4074,27 @@ class MusicService :
         )
     }
 
-    private fun preparePlaybackFromSnapshot(snapshot: PlaybackRecoverySnapshot?): Boolean {
+    private fun preparePlaybackFromSnapshot(
+        snapshot: PlaybackRecoverySnapshot?,
+        forceReload: Boolean = false,
+    ): Boolean {
         if (snapshot == null) {
+            if (forceReload) {
+                player.playWhenReady = false
+                player.stop()
+            }
             player.prepare()
             return true
         }
         if (player.currentMediaItem?.mediaId != snapshot.mediaId) return false
+
+        if (forceReload) {
+            // prepare() is a no-op while ExoPlayer is already in STATE_BUFFERING. Stop
+            // first so the stalled DataSource is released and the resolver is invoked
+            // again for a fresh URL.
+            player.playWhenReady = false
+            player.stop()
+        }
 
         val currentIndex = player.currentMediaItemIndex
         val targetIndex =
@@ -7009,7 +7073,7 @@ class MusicService :
         }
 
         bufferingSinceMs = 0L
-        stallRecoveryMediaId = null
+        bufferingStallRecoveryTracker.onMediaItemChanged(mediaItem?.mediaId)
 
         scope.launch {
             val shouldSave = withContext(Dispatchers.IO) { dataStore.get(PersistentQueueKey, true) }
@@ -7380,6 +7444,10 @@ class MusicService :
             if (player.isPlaying || (player.playbackState == Player.STATE_READY && !player.playWhenReady)) {
                 playbackStreamRecoveryTracker.onPlaybackRecovered(currentMediaId)
             }
+            if (player.isPlaying) {
+                bufferingSinceMs = 0L
+                bufferingStallRecoveryTracker.onPlaybackRecovered(currentMediaId)
+            }
             currentMediaId
                 ?.let(playbackUrlCache::get)
                 ?.url
@@ -7717,6 +7785,7 @@ class MusicService :
         if (!isLocalMedia &&
             !isFullyDownloadedMedia &&
             error.isTransientNetworkFailure() &&
+            !bufferingStallRecoveryTracker.hasAttemptedRecovery(currentMediaId) &&
             retryPlaybackAfterNetworkFailure(currentMediaId, isFullyDownloadedMedia)
         ) {
             return
@@ -8083,27 +8152,43 @@ class MusicService :
                 } ?: resolvedDataSpec
             }
 
-        val playbackData =
+        val playbackResult: Result<YTPlayerUtils.PlaybackData> =
             runBlocking(Dispatchers.IO) {
-                retryWithoutPlaybackLoginContext {
-                    YTPlayerUtils.playerResponseForPlayback(
-                        mediaId,
-                        audioQuality = if (lowDataModeActive) AudioQuality.LOW else audioQuality,
-                        connectivityManager = connectivityManager,
-                        preferredStreamClient = preferredStreamClient,
-                        networkMetered = lowDataModeActive,
-                    )
-                }.recoverCatching { youtubeFailure ->
-                    if (youtubeFailure !is YTPlayerUtils.BotDetectionPlaybackException) throw youtubeFailure
+                withTimeoutOrNull(PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS) {
+                    retryWithoutPlaybackLoginContext {
+                        YTPlayerUtils.playerResponseForPlayback(
+                            mediaId,
+                            audioQuality = if (lowDataModeActive) AudioQuality.LOW else audioQuality,
+                            connectivityManager = connectivityManager,
+                            preferredStreamClient = preferredStreamClient,
+                            networkMetered = lowDataModeActive,
+                        )
+                    }.recoverCatching { youtubeFailure ->
+                        if (youtubeFailure !is YTPlayerUtils.BotDetectionPlaybackException) throw youtubeFailure
 
-                    Timber.tag("MusicService").w(
-                        youtubeFailure,
-                        "YouTube stream clients hit bot detection for %s; trying external audio fallback",
+                        Timber.tag(TAG).w(
+                            youtubeFailure,
+                            "YouTube stream clients hit bot detection for %s; trying external audio fallback",
+                            mediaId,
+                        )
+                        throw youtubeFailure
+                    }
+                } ?: run {
+                    Timber.tag(TAG).w(
+                        "Stream URL resolution for %s exceeded %dms",
                         mediaId,
+                        PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS,
                     )
-                    throw youtubeFailure
+                    Result.failure(
+                        SocketTimeoutException(
+                            "Stream URL resolution exceeded ${PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS}ms",
+                        ),
+                    )
                 }
-            }.getOrElse { throwable ->
+            }
+
+        val playbackData =
+            playbackResult.getOrElse { throwable ->
                 when {
                     throwable is YTPlayerUtils.InvalidPlaybackLoginContextException -> {
                         promptLoginRecovery(mediaId, throwable.targetUrl)
@@ -9287,10 +9372,14 @@ class MusicService :
         // How far ahead of the last usable moment a mid-track URL refresh is started.
         const val REFRESH_URL_LEAD_MS = 20_000L
 
-        // How long a stream may sit in STATE_BUFFERING before it is treated as stalled.
-        // Generous on purpose: a slow but working edge connection should be allowed to
-        // finish, and the recovery costs a full re-resolve.
+        // How long the original stream may sit in STATE_BUFFERING before one fresh,
+        // unthrottled stream resolution is attempted.
         const val STALL_RECOVERY_TIMEOUT_MS = 15_000L
+        // Give the alternate resolution one bounded window. If the player still has no
+        // audio after this, stop/skip instead of leaving the track buffering forever.
+        const val STALL_RECOVERY_RETRY_TIMEOUT_MS = 45_000L
+        // Bound the full YouTube stream URL resolution, including client fallbacks.
+        const val PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS = 45_000L
         const val CROSSFADE_MIN_BUFFER_MS = 15_000
         const val CROSSFADE_MAX_BUFFER_MS = 45_000
         const val CROSSFADE_FRAME_MS = 32L

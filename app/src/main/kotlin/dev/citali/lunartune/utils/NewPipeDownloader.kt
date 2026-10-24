@@ -20,14 +20,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * OkHttp-backed [Downloader] for NewPipe Extractor. Only used by the download resolution path,
- * so it stays out of the way of normal playback.
+ * OkHttp-backed [Downloader] for NewPipe Extractor. Used for stream resolution and download
+ * fallback; response deadlines keep a stalled resolver from blocking playback indefinitely.
  */
 internal class NewPipeDownloader : Downloader() {
     private val client: OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -68,6 +69,7 @@ internal class NewPipeDownloader : Downloader() {
     private companion object {
         const val CONNECT_TIMEOUT_SECONDS = 15L
         const val READ_TIMEOUT_SECONDS = 60L
+        const val CALL_TIMEOUT_SECONDS = 30L
         const val FALLBACK_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
         val EMPTY_BODY = ByteArray(0).toRequestBody(null)
