@@ -122,7 +122,7 @@ internal fun FeatheredBottomArtworkBlur(
             } else {
                 val context = LocalContext.current
                 val cpuRadius = (blurRadius.value * CpuBlurPixelsPerDp).coerceAtLeast(1f)
-                val cacheRevision by LyricsArtBlurCache.revisionFlow.collectAsState()
+                val cacheRevision by LyricsArtBlurCache.updates.collectAsState()
                 val blurredBitmap =
                     remember(cacheKeyUrl, cpuRadius, cacheRevision) {
                         cacheKeyUrl?.let { url ->
