@@ -8,18 +8,24 @@
 package dev.citali.lunartune.ui.screens
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarScrollBehavior
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -28,17 +34,17 @@ import androidx.navigation.navArgument
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.constants.UpdateChannel
 import dev.citali.lunartune.defaultUpdateChannel
-import dev.citali.lunartune.musicrecognition.MusicRecognitionRoute
 import dev.citali.lunartune.musicrecognition.MusicRecognitionDetailsRoute
-import dev.citali.lunartune.ui.screens.BrowseScreen
+import dev.citali.lunartune.musicrecognition.MusicRecognitionRoute
+import dev.citali.lunartune.ui.component.PrimaryRootDepthState
+import dev.citali.lunartune.ui.component.PrimaryRootNavProxy
 import dev.citali.lunartune.ui.screens.artist.ArtistAlbumsScreen
 import dev.citali.lunartune.ui.screens.artist.ArtistItemsScreen
 import dev.citali.lunartune.ui.screens.artist.ArtistScreen
 import dev.citali.lunartune.ui.screens.artist.ArtistSongsScreen
-import dev.citali.lunartune.ui.screens.library.LibraryScreen
 import dev.citali.lunartune.ui.screens.library.LocalSongScreen
-import dev.citali.lunartune.ui.screens.musicrecognition.MusicRecognitionScreen
 import dev.citali.lunartune.ui.screens.musicrecognition.MusicRecognitionDetailsScreen
+import dev.citali.lunartune.ui.screens.musicrecognition.MusicRecognitionScreen
 import dev.citali.lunartune.ui.screens.playlist.AutoPlaylistScreen
 import dev.citali.lunartune.ui.screens.playlist.CachePlaylistScreen
 import dev.citali.lunartune.ui.screens.playlist.LocalPlaylistScreen
@@ -49,16 +55,13 @@ import dev.citali.lunartune.ui.screens.search.OnlineSearchResult
 import dev.citali.lunartune.ui.screens.search.OnlineSearchResultArgument
 import dev.citali.lunartune.ui.screens.search.OnlineSearchResultRoute
 import dev.citali.lunartune.ui.screens.search.OnlineSearchResultRoutePrefix
-import dev.citali.lunartune.ui.screens.search.SearchScreen
 import dev.citali.lunartune.ui.screens.settings.AboutScreen
 import dev.citali.lunartune.ui.screens.settings.AccountSettings
 import dev.citali.lunartune.ui.screens.settings.AiIntegrationSettings
 import dev.citali.lunartune.ui.screens.settings.AodCustomizedScreen
-import dev.citali.lunartune.ui.screens.settings.AppearanceSettings
-import dev.citali.lunartune.ui.screens.settings.IconScreen
-import dev.citali.lunartune.ui.screens.settings.BackupAndRestore
 import dev.citali.lunartune.ui.screens.settings.AppLockScreen
-import dev.citali.lunartune.ui.screens.settings.PinSetupScreen
+import dev.citali.lunartune.ui.screens.settings.AppearanceSettings
+import dev.citali.lunartune.ui.screens.settings.BackupAndRestore
 import dev.citali.lunartune.ui.screens.settings.ChangelogScreen
 import dev.citali.lunartune.ui.screens.settings.ChiperSettings
 import dev.citali.lunartune.ui.screens.settings.ContentSettings
@@ -66,72 +69,125 @@ import dev.citali.lunartune.ui.screens.settings.CustomizeBackground
 import dev.citali.lunartune.ui.screens.settings.DebugSettings
 import dev.citali.lunartune.ui.screens.settings.DiscordSettings
 import dev.citali.lunartune.ui.screens.settings.HiddenPlaylistsScreen
+import dev.citali.lunartune.ui.screens.settings.IconScreen
 import dev.citali.lunartune.ui.screens.settings.IntegrationScreen
 import dev.citali.lunartune.ui.screens.settings.InternetSettings
 import dev.citali.lunartune.ui.screens.settings.LastFMSettings
 import dev.citali.lunartune.ui.screens.settings.LogcatScreen
 import dev.citali.lunartune.ui.screens.settings.LyricsAnimationSettings
 import dev.citali.lunartune.ui.screens.settings.LyricsSettings
-import dev.citali.lunartune.ui.screens.settings.NavigationBarSettings
 import dev.citali.lunartune.ui.screens.settings.MusicTogetherScreen
 import dev.citali.lunartune.ui.screens.settings.MusicTransferScreen
+import dev.citali.lunartune.ui.screens.settings.NavigationBarSettings
 import dev.citali.lunartune.ui.screens.settings.PalettePickerScreen
+import dev.citali.lunartune.ui.screens.settings.PinSetupScreen
 import dev.citali.lunartune.ui.screens.settings.PlayerSettings
 import dev.citali.lunartune.ui.screens.settings.PrivacySettings
 import dev.citali.lunartune.ui.screens.settings.SettingsScreen
 import dev.citali.lunartune.ui.screens.settings.StorageSettings
 import dev.citali.lunartune.ui.screens.settings.StreamSourcesSettings
-import dev.citali.lunartune.constants.TabTransitionStyle
 import dev.citali.lunartune.ui.screens.settings.ThemeCreatorScreen
 import dev.citali.lunartune.ui.screens.settings.UpdateScreen
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.viewmodels.OnlineSearchSort
+
+private val DrillTransitionCornerShape = RoundedCornerShape(24.dp)
+
+@Composable
+private fun AnimatedContentScope.DrillPageContainer(
+    pureBlack: Boolean,
+    content: @Composable () -> Unit,
+) {
+    val containerColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    if (transition.isRunning) {
+                        shape = DrillTransitionCornerShape
+                        clip = true
+                    } else {
+                        shape = RectangleShape
+                        clip = false
+                    }
+                }.background(containerColor),
+    ) {
+        content()
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 fun NavGraphBuilder.navigationBuilder(
     navController: NavHostController,
     scrollBehavior: TopAppBarScrollBehavior,
     latestVersionName: () -> String,
+    primaryRootDepthState: PrimaryRootDepthState,
+    onSelectPrimaryTab: (Screens) -> Unit,
+    pureBlack: Boolean = false,
     disableAnimations: Boolean = false,
-    tabTransition: TabTransitionStyle = TabTransitionStyle.BLOOM,
     onClearUpdateBadge: () -> Unit = {},
-    homeScrollConnection: NestedScrollConnection? = null,
-    searchScrollConnection: NestedScrollConnection? = null,
     onlineSearchSort: OnlineSearchSort = OnlineSearchSort.DEFAULT,
 ) {
     composable(Screens.Home.route) {
-        HomeScreen(navController, headerScrollConnection = homeScrollConnection)
+        PrimaryRootNavProxy(
+            depthState = primaryRootDepthState,
+            disableAnimations = disableAnimations,
+        )
     }
     composable(
-        Screens.Library.route,
+        route = Screens.Library.route,
+        enterTransition = { fadeIn(tween(0)) },
+        exitTransition = { fadeOut(tween(0)) },
+        popEnterTransition = { fadeIn(tween(0)) },
+        popExitTransition = { fadeOut(tween(0)) },
     ) {
-        LibraryScreen(
-            navController = navController,
-            scrollBehavior = scrollBehavior,
-        )
+        LaunchedEffect(Unit) {
+            onSelectPrimaryTab(Screens.Library)
+            if (!navController.popBackStack(Screens.Home.route, inclusive = false)) {
+                navController.navigate(Screens.Home.route) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
     }
-    composable(Screens.Search.route) {
-        SearchScreen(
-            navController = navController,
-            onSearchClick = {
-                navController.currentBackStackEntry
-                    ?.savedStateHandle
-                    ?.set("openSearch", true)
-            },
-            headerScrollConnection = searchScrollConnection,
-        )
+    composable(
+        route = Screens.Search.route,
+        enterTransition = { fadeIn(tween(0)) },
+        exitTransition = { fadeOut(tween(0)) },
+        popEnterTransition = { fadeIn(tween(0)) },
+        popExitTransition = { fadeOut(tween(0)) },
+    ) {
+        LaunchedEffect(Unit) {
+            onSelectPrimaryTab(Screens.Search)
+            if (!navController.popBackStack(Screens.Home.route, inclusive = false)) {
+                navController.navigate(Screens.Home.route) {
+                    popUpTo(0) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
     }
     composable("local_songs") {
-        LocalSongScreen(navController)
+        DrillPageContainer(pureBlack) {
+            LocalSongScreen(navController)
+        }
     }
     composable("history") {
-        HistoryScreen(navController)
+        DrillPageContainer(pureBlack) {
+            HistoryScreen(navController)
+        }
     }
     composable("stats") {
-        StatsScreen(navController)
+        DrillPageContainer(pureBlack) {
+            StatsScreen(navController)
+        }
     }
     composable("news") {
-        NewsScreen(navController)
+        DrillPageContainer(pureBlack) {
+            NewsScreen(navController)
+        }
     }
     composable(
         route = "view_news/{newsId}",
@@ -140,7 +196,9 @@ fun NavGraphBuilder.navigationBuilder(
                 navArgument("newsId") { type = NavType.StringType },
             ),
     ) {
-        ViewNewsScreen(navController)
+        DrillPageContainer(pureBlack) {
+            ViewNewsScreen(navController)
+        }
     }
     composable(
         route = "year_in_music?year={year}",
@@ -153,29 +211,43 @@ fun NavGraphBuilder.navigationBuilder(
             ),
     ) { backStackEntry ->
         val selectedYear = backStackEntry.arguments?.getInt("year")?.takeIf { it > 0 }
-        YearInMusicScreen(
-            navController = navController,
-            initialYear = selectedYear,
-        )
+        DrillPageContainer(pureBlack) {
+            YearInMusicScreen(
+                navController = navController,
+                initialYear = selectedYear,
+            )
+        }
     }
     composable(MusicRecognitionRoute) {
-        MusicRecognitionScreen(navController)
+        DrillPageContainer(pureBlack) {
+            MusicRecognitionScreen(navController)
+        }
     }
     composable(MusicRecognitionDetailsRoute) { backStackEntry ->
         val encodedTrack = backStackEntry.arguments?.getString("encodedTrack").orEmpty()
-        MusicRecognitionDetailsScreen(navController, encodedTrack)
+        DrillPageContainer(pureBlack) {
+            MusicRecognitionDetailsScreen(navController, encodedTrack)
+        }
     }
     composable(Screens.MoodAndGenres.route) {
-        MoodAndGenresScreen(navController)
+        DrillPageContainer(pureBlack) {
+            MoodAndGenresScreen(navController)
+        }
     }
     composable("account") {
-        AccountScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            AccountScreen(navController, scrollBehavior)
+        }
     }
     composable("new_release") {
-        NewReleaseScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            NewReleaseScreen(navController, scrollBehavior)
+        }
     }
     composable("charts_screen") {
-        ChartsScreen(navController)
+        DrillPageContainer(pureBlack) {
+            ChartsScreen(navController)
+        }
     }
     composable(
         route = "browse/{browseId}",
@@ -186,11 +258,13 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        BrowseScreen(
-            navController,
-            scrollBehavior,
-            it.arguments?.getString("browseId"),
-        )
+        DrillPageContainer(pureBlack) {
+            BrowseScreen(
+                navController,
+                scrollBehavior,
+                it.arguments?.getString("browseId"),
+            )
+        }
     }
     composable(
         route = OnlineSearchResultRoute,
@@ -201,34 +275,44 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
         enterTransition = {
-            if (disableAnimations) fadeIn(tween(0)) else fadeIn(tween(250))
+            when {
+                disableAnimations -> fadeIn(tween(0))
+                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true ->
+                    fadeIn(tween(180))
+                else -> LunarMotion.depthPageEnter()
+            }
         },
         exitTransition = {
-            if (disableAnimations) {
-                fadeOut(tween(0))
-            } else if (targetState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) {
-                fadeOut(tween(200))
-            } else {
-                fadeOut(tween(200)) + slideOutHorizontally { -it / 2 }
+            when {
+                disableAnimations -> fadeOut(tween(0))
+                targetState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true ->
+                    fadeOut(tween(140))
+                else -> LunarMotion.depthPageExit()
             }
         },
         popEnterTransition = {
-            if (disableAnimations) {
-                fadeIn(tween(0))
-            } else if (initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true) {
-                fadeIn(tween(250))
-            } else {
-                fadeIn(tween(250)) + slideInHorizontally { -it / 2 }
+            when {
+                disableAnimations -> fadeIn(tween(0))
+                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true ->
+                    fadeIn(tween(180))
+                else -> LunarMotion.depthPagePopEnter()
             }
         },
         popExitTransition = {
-            if (disableAnimations) fadeOut(tween(0)) else fadeOut(tween(200))
+            when {
+                disableAnimations -> fadeOut(tween(0))
+                targetState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true ->
+                    fadeOut(tween(140))
+                else -> LunarMotion.depthPagePopExit()
+            }
         },
     ) {
-        OnlineSearchResult(
-            navController = navController,
-            searchSort = onlineSearchSort,
-        )
+        DrillPageContainer(pureBlack) {
+            OnlineSearchResult(
+                navController = navController,
+                searchSort = onlineSearchSort,
+            )
+        }
     }
     composable(
         route = "album/{albumId}",
@@ -239,7 +323,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        AlbumScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            AlbumScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "artist/{artistId}",
@@ -250,7 +336,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        ArtistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            ArtistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "artist/{artistId}/songs",
@@ -261,7 +349,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        ArtistSongsScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            ArtistSongsScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "artist/{artistId}/albums",
@@ -272,7 +362,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        ArtistAlbumsScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            ArtistAlbumsScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "artist/{artistId}/items?browseId={browseId}&params={params}",
@@ -291,7 +383,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        ArtistItemsScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            ArtistItemsScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "online_playlist/{playlistId}",
@@ -302,7 +396,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        OnlinePlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            OnlinePlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "local_playlist/{playlistId}",
@@ -313,7 +409,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        LocalPlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            LocalPlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "spotify_playlist/{playlistId}",
@@ -324,7 +422,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        SpotifyPlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            SpotifyPlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "auto_playlist/{playlist}?tab={tab}",
@@ -339,7 +439,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        AutoPlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            AutoPlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "cache_playlist/{playlist}",
@@ -350,7 +452,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        CachePlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            CachePlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "top_playlist/{top}",
@@ -361,7 +465,9 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        TopPlaylistScreen(navController, scrollBehavior)
+        DrillPageContainer(pureBlack) {
+            TopPlaylistScreen(navController, scrollBehavior)
+        }
     }
     composable(
         route = "youtube_browse/{browseId}?params={params}",
@@ -377,102 +483,166 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) {
-        YouTubeBrowseScreen(navController)
+        DrillPageContainer(pureBlack) {
+            YouTubeBrowseScreen(navController)
+        }
     }
     composable("settings") {
-        SettingsScreen(navController, latestVersionName())
+        DrillPageContainer(pureBlack) {
+            SettingsScreen(navController, latestVersionName())
+        }
     }
     composable("settings/account") {
-        AccountSettings(navController, latestVersionName())
+        DrillPageContainer(pureBlack) {
+            AccountSettings(navController, latestVersionName())
+        }
     }
     composable("settings/hidden_playlists") {
-        HiddenPlaylistsScreen(navController)
+        DrillPageContainer(pureBlack) {
+            HiddenPlaylistsScreen(navController)
+        }
     }
     composable("settings/appearance") {
-        AppearanceSettings(navController)
+        DrillPageContainer(pureBlack) {
+            AppearanceSettings(navController)
+        }
     }
     composable("settings/appearance/icon") {
-        IconScreen(navController)
+        DrillPageContainer(pureBlack) {
+            IconScreen(navController)
+        }
     }
     composable("settings/appearance/navigation_bar") {
-        NavigationBarSettings(navController)
+        DrillPageContainer(pureBlack) {
+            NavigationBarSettings(navController)
+        }
     }
     composable("settings/appearance/aod_customized") {
-        AodCustomizedScreen(navController)
+        DrillPageContainer(pureBlack) {
+            AodCustomizedScreen(navController)
+        }
     }
     composable("settings/appearance/palette_picker") {
-        PalettePickerScreen(navController)
+        DrillPageContainer(pureBlack) {
+            PalettePickerScreen(navController)
+        }
     }
     composable("settings/appearance/lyrics_animations") {
-        LyricsAnimationSettings(navController)
+        DrillPageContainer(pureBlack) {
+            LyricsAnimationSettings(navController)
+        }
     }
     composable("settings/appearance/theme_creator") {
-        ThemeCreatorScreen(navController)
+        DrillPageContainer(pureBlack) {
+            ThemeCreatorScreen(navController)
+        }
     }
     composable("settings/content") {
-        ContentSettings(navController)
+        DrillPageContainer(pureBlack) {
+            ContentSettings(navController)
+        }
     }
     composable("settings/lyrics") {
-        LyricsSettings(navController)
+        DrillPageContainer(pureBlack) {
+            LyricsSettings(navController)
+        }
     }
     composable("settings/internet") {
-        InternetSettings(navController)
+        DrillPageContainer(pureBlack) {
+            InternetSettings(navController)
+        }
     }
     composable("settings/player") {
-        PlayerSettings(navController)
+        DrillPageContainer(pureBlack) {
+            PlayerSettings(navController)
+        }
     }
     composable("settings/player/stream_sources") {
-        StreamSourcesSettings(navController)
+        DrillPageContainer(pureBlack) {
+            StreamSourcesSettings(navController)
+        }
     }
     composable("settings/player/chiper") {
-        ChiperSettings(navController)
+        DrillPageContainer(pureBlack) {
+            ChiperSettings(navController)
+        }
     }
     composable("settings/storage") {
-        StorageSettings(navController)
+        DrillPageContainer(pureBlack) {
+            StorageSettings(navController)
+        }
     }
     composable("settings/privacy") {
-        PrivacySettings(navController)
+        DrillPageContainer(pureBlack) {
+            PrivacySettings(navController)
+        }
     }
     composable("settings/app_lock") {
-        AppLockScreen(navController)
+        DrillPageContainer(pureBlack) {
+            AppLockScreen(navController)
+        }
     }
     composable("settings/pin_setup") {
-        PinSetupScreen(navController)
+        DrillPageContainer(pureBlack) {
+            PinSetupScreen(navController)
+        }
     }
     composable("settings/backup_restore") {
-        BackupAndRestore(navController)
+        DrillPageContainer(pureBlack) {
+            BackupAndRestore(navController)
+        }
     }
     composable("settings/music_transfer") {
-        MusicTransferScreen(navController)
+        DrillPageContainer(pureBlack) {
+            MusicTransferScreen(navController)
+        }
     }
     composable("settings/discord") {
-        DiscordSettings(navController)
+        DrillPageContainer(pureBlack) {
+            DiscordSettings(navController)
+        }
     }
     composable("settings/integration") {
-        IntegrationScreen(navController)
+        DrillPageContainer(pureBlack) {
+            IntegrationScreen(navController)
+        }
     }
     composable("settings/ai_integration") {
-        AiIntegrationSettings(navController)
+        DrillPageContainer(pureBlack) {
+            AiIntegrationSettings(navController)
+        }
     }
     composable("settings/music_together") {
-        MusicTogetherScreen(navController)
+        DrillPageContainer(pureBlack) {
+            MusicTogetherScreen(navController)
+        }
     }
     composable("settings/lastfm") {
-        LastFMSettings(navController)
+        DrillPageContainer(pureBlack) {
+            LastFMSettings(navController)
+        }
     }
     composable("settings/discord/experimental") {
-        dev.citali.lunartune.ui.screens.settings
-            .DiscordExperimental(navController)
+        DrillPageContainer(pureBlack) {
+            dev.citali.lunartune.ui.screens.settings
+                .DiscordExperimental(navController)
+        }
     }
     composable("settings/misc") {
-        DebugSettings(navController)
+        DrillPageContainer(pureBlack) {
+            DebugSettings(navController)
+        }
     }
     composable("settings/logcat") {
-        LogcatScreen(navController)
+        DrillPageContainer(pureBlack) {
+            LogcatScreen(navController)
+        }
     }
     if (BuildConfig.UPDATER_AVAILABLE) {
         composable("settings/update") {
-            UpdateScreen(navController, onUpToDate = onClearUpdateBadge)
+            DrillPageContainer(pureBlack) {
+                UpdateScreen(navController, onUpToDate = onClearUpdateBadge)
+            }
         }
     }
     composable(
@@ -488,13 +658,19 @@ fun NavGraphBuilder.navigationBuilder(
     ) { backStackEntry ->
         val channelName = backStackEntry.arguments?.getString("channel")
         val channel = UpdateChannel.fromStoredName(channelName, defaultUpdateChannel)
-        ChangelogScreen(navController, channel = channel)
+        DrillPageContainer(pureBlack) {
+            ChangelogScreen(navController, channel = channel)
+        }
     }
     composable("settings/about") {
-        AboutScreen(navController)
+        DrillPageContainer(pureBlack) {
+            AboutScreen(navController)
+        }
     }
     composable("customize_background") {
-        CustomizeBackground(navController)
+        DrillPageContainer(pureBlack) {
+            CustomizeBackground(navController)
+        }
     }
     composable(
         route = "$LOGIN_ROUTE?$LOGIN_URL_ARGUMENT={$LOGIN_URL_ARGUMENT}",
@@ -507,9 +683,11 @@ fun NavGraphBuilder.navigationBuilder(
                 },
             ),
     ) { backStackEntry ->
-        LoginScreen(
-            navController,
-            startUrl = backStackEntry.arguments?.getString(LOGIN_URL_ARGUMENT)?.let(Uri::decode),
-        )
+        DrillPageContainer(pureBlack) {
+            LoginScreen(
+                navController,
+                startUrl = backStackEntry.arguments?.getString(LOGIN_URL_ARGUMENT)?.let(Uri::decode),
+            )
+        }
     }
 }

@@ -31,12 +31,10 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.annotation.DrawableRes
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Transition
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -44,8 +42,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -168,7 +164,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.Dialog
@@ -193,7 +188,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.Timeline
 import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.exoplayer.offline.Download
-import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -250,7 +244,6 @@ import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NavBarHideOnScrollKey
 import dev.citali.lunartune.constants.NavBarLongPressAction
 import dev.citali.lunartune.constants.NavBarLongPressActionsKey
-import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
@@ -271,8 +264,6 @@ import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.SearchSource
 import dev.citali.lunartune.constants.SearchSourceKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
-import dev.citali.lunartune.constants.TabTransitionKey
-import dev.citali.lunartune.constants.TabTransitionStyle
 import dev.citali.lunartune.constants.UpdateChannel
 import dev.citali.lunartune.constants.UpdateChannelKey
 import dev.citali.lunartune.constants.UseSystemFontKey
@@ -303,6 +294,8 @@ import dev.citali.lunartune.ui.component.AppLockGate
 import dev.citali.lunartune.ui.component.BottomSheetMenu
 import dev.citali.lunartune.ui.component.BottomSheetPage
 import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
+import dev.citali.lunartune.ui.component.PrimaryTabsHost
+import dev.citali.lunartune.ui.component.rememberPrimaryRootDepthState
 import dev.citali.lunartune.ui.component.DISMISSED_ANCHOR
 import dev.citali.lunartune.ui.component.EXPANDED_ANCHOR
 import dev.citali.lunartune.ui.component.FloatingNavigationToolbar
@@ -884,10 +877,6 @@ class MainActivity : FragmentActivity() {
                 DisableAnimationsKey,
                 defaultValue = defaultDisableAnimations,
             )
-            val tabTransition by rememberEnumPreference(
-                TabTransitionKey,
-                defaultValue = TabTransitionStyle.BLOOM,
-            )
             val forceHighRefreshRate by rememberPreference(
                 ForceHighRefreshRateKey,
                 defaultValue = true,
@@ -1063,8 +1052,6 @@ class MainActivity : FragmentActivity() {
                     val allYtItems by homeViewModel.allYtItems.collectAsState()
                     val networkBannerState by networkBannerViewModel.bannerState.collectAsStateWithLifecycle()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val (previousTab) = rememberSaveable { mutableStateOf("home") }
-                    val currentRoute = navBackStackEntry?.destination?.route
                     val onlineSearchEncodedQuery =
                         navBackStackEntry
                             ?.takeIf {
@@ -1072,7 +1059,6 @@ class MainActivity : FragmentActivity() {
                             }?.arguments
                             ?.getString(OnlineSearchResultArgument)
                     var onlineSearchSort by rememberSaveable { mutableStateOf(OnlineSearchSort.DEFAULT) }
-                    val isYearInMusicScreen = currentRoute?.startsWith("year_in_music") == true
 
                     val navigationItems =
                         remember(isTvDevice) {
@@ -1093,14 +1079,31 @@ class MainActivity : FragmentActivity() {
                                 else -> null
                             }
                         }
-                    val launchMusicRecognitionFromShortcut =
-                        remember {
-                            intent?.action == ACTION_MUSIC_RECOGNITION
+
+                    val initialPrimaryTab =
+                        remember(defaultOpenTab, tabOpenedFromShortcut) {
+                            when (tabOpenedFromShortcut ?: defaultOpenTab) {
+                                NavigationTab.HOME -> Screens.Home
+                                NavigationTab.SEARCH -> Screens.Search
+                                NavigationTab.LIBRARY -> Screens.Library
+                                else -> Screens.Home
+                            }
                         }
+                    var selectedPrimaryTabRoute by rememberSaveable { mutableStateOf(initialPrimaryTab.route) }
+                    val selectedPrimaryTab =
+                        remember(selectedPrimaryTabRoute, navigationItems) {
+                            navigationItems.fastFirstOrNull { it.route == selectedPrimaryTabRoute } ?: Screens.Home
+                        }
+                    val primaryRootDepthState = rememberPrimaryRootDepthState()
+
+                    val rawNavRoute = navBackStackEntry?.destination?.route
+                    val isAtPrimaryRoot = rawNavRoute == null || rawNavRoute == Screens.Home.route
+                    val currentRoute = if (isAtPrimaryRoot) selectedPrimaryTab.route else rawNavRoute
+                    val isYearInMusicScreen = currentRoute?.startsWith("year_in_music") == true
 
                     val topLevelScreens =
                         remember(navigationItems) {
-                            navigationItems.map(Screens::route) + "settings"
+                            navigationItems.map(Screens::route)
                         }
 
                     val (query, onQueryChange) =
@@ -1116,7 +1119,7 @@ class MainActivity : FragmentActivity() {
                         active = newActive
                         if (!newActive) {
                             focusManager.clearFocus()
-                            if (navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route }) {
+                            if (isAtPrimaryRoot) {
                                 onQueryChange(TextFieldValue())
                             }
                         }
@@ -1154,17 +1157,15 @@ class MainActivity : FragmentActivity() {
                     }
 
                     val shouldShowSearchBar =
-                        remember(active, navBackStackEntry) {
+                        remember(active, isAtPrimaryRoot, rawNavRoute) {
                             active ||
-                                navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route } ||
-                                navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == true
+                                isAtPrimaryRoot ||
+                                rawNavRoute?.startsWith(OnlineSearchResultRoutePrefix) == true
                         }
 
                     val shouldShowNavigationBar =
-                        remember(navBackStackEntry, active) {
-                            navBackStackEntry?.destination?.route == null ||
-                                navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route } &&
-                                !active
+                        remember(isAtPrimaryRoot, active) {
+                            isAtPrimaryRoot && !active
                         }
 
                     val shouldShowHomeShuffleButton =
@@ -1234,7 +1235,7 @@ class MainActivity : FragmentActivity() {
 
                     // A freshly opened/re-entered tab always starts with the bar
                     // home; the spring back becomes part of the route transition.
-                    LaunchedEffect(navBackStackEntry?.destination?.route) {
+                    LaunchedEffect(currentRoute) {
                         navHideAnim.animateTo(0f)
                     }
 
@@ -1334,18 +1335,23 @@ class MainActivity : FragmentActivity() {
                             0.dp
                         }
 
-                    // The slot collapses only when a route hides the bar; scroll
-                    // hiding never touches layout (see navHideAnim above).
-                    val bottomNavigationBarHeight by animateDpAsState(
-                        targetValue =
-                            if (shouldShowNavigationBar && !useRail) {
-                                navVisibleHeight
-                            } else {
-                                0.dp
-                            },
-                        animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
-                        label = "",
-                    )
+                    // Deferred 0..1 hide state for active search bar / rail; read only inside
+                    // draw / offset lambdas alongside primaryRootDepthState.presence so bottomBar
+                    // never recomposes on the main thread during page or predictive-back motion.
+                    val activeSearchBarHideState =
+                        animateFloatAsState(
+                            targetValue = if (active || useRail) 1f else 0f,
+                            animationSpec =
+                                if (disableAnimations) {
+                                    snap()
+                                } else {
+                                    tween(
+                                        durationMillis = LunarMotion.DepthZoomPopExitMs,
+                                        easing = LunarMotion.SpatialEnterEasing,
+                                    )
+                                },
+                            label = "activeSearchBarHide",
+                        )
 
                     val playerBottomSheetState =
                         rememberBottomSheetState(
@@ -1558,50 +1564,55 @@ class MainActivity : FragmentActivity() {
                     val homeScrollBehavior =
                         appBarScrollBehavior(
                             canScroll = {
-                                navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == false &&
-                                    navBackStackEntry?.destination?.route != Screens.Library.route &&
+                                currentRoute == Screens.Home.route &&
                                     !playerBottomSheetState.isExpandedOrExpanding
                             },
                         )
                     val searchScrollBehavior =
                         appBarScrollBehavior(
                             canScroll = {
-                                navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == false &&
-                                    navBackStackEntry?.destination?.route != Screens.Library.route &&
+                                currentRoute == Screens.Search.route &&
                                     !playerBottomSheetState.isExpandedOrExpanding
                             },
                         )
                     val topAppBarScrollBehavior =
                         appBarScrollBehavior(
                             canScroll = {
-                                navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == false &&
+                                !isAtPrimaryRoot &&
+                                    rawNavRoute?.startsWith(OnlineSearchResultRoutePrefix) == false &&
                                     !playerBottomSheetState.isExpandedOrExpanding
                             },
                         )
 
-                    val handlePrimaryNavigationClick: (Screens, Boolean) -> Unit = { screen, isSelected ->
-                        if (isSelected) {
-                            if (screen == Screens.Search) {
-                                openSearch()
-                                coroutineScope.launch { searchScrollBehavior.state.resetHeightOffset() }
-                            } else {
-                                navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
-                                when (screen) {
-                                    Screens.Home -> {
-                                        coroutineScope.launch { homeScrollBehavior.state.resetHeightOffset() }
-                                    }
+                    var homeScrollToTopTrigger by remember { mutableIntStateOf(0) }
+                    var searchScrollToTopTrigger by remember { mutableIntStateOf(0) }
 
-                                    else -> {}
+                    val handlePrimaryNavigationClick: (Screens, Boolean) -> Unit = { screen, isSelected ->
+                        if (isSelected && isAtPrimaryRoot) {
+                            when (screen) {
+                                Screens.Search -> {
+                                    openSearch()
+                                    searchScrollToTopTrigger++
+                                    coroutineScope.launch { searchScrollBehavior.state.resetHeightOffset() }
+                                }
+
+                                Screens.Home -> {
+                                    homeScrollToTopTrigger++
+                                    coroutineScope.launch { homeScrollBehavior.state.resetHeightOffset() }
+                                }
+
+                                else -> {
+                                    navController.currentBackStackEntry?.savedStateHandle?.set("scrollToTop", true)
                                 }
                             }
                         } else {
-                            if (navController.currentDestination?.route != screen.route) {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+                            selectedPrimaryTabRoute = screen.route
+                            if (!isAtPrimaryRoot) {
+                                if (!navController.popBackStack(Screens.Home.route, inclusive = false)) {
+                                    navController.navigate(Screens.Home.route) {
+                                        popUpTo(0) { inclusive = true }
+                                        launchSingleTop = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
                         }
@@ -1623,32 +1634,32 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    var previousRoute by rememberSaveable { mutableStateOf<String?>(null) }
-
-                    LaunchedEffect(navBackStackEntry) {
-                        val currentRoute = navBackStackEntry?.destination?.route
+                    LaunchedEffect(navBackStackEntry, isAtPrimaryRoot) {
+                        val destRoute = navBackStackEntry?.destination?.route
 
                         val isEnteringSubScreen =
-                            currentRoute != null &&
-                                currentRoute !in topLevelScreens &&
-                                currentRoute.startsWith(OnlineSearchResultRoutePrefix) != true
+                            !isAtPrimaryRoot &&
+                                destRoute != null &&
+                                destRoute.startsWith(OnlineSearchResultRoutePrefix) != true
                         if (isEnteringSubScreen) {
                             topAppBarScrollBehavior.state.heightOffset = 0f
                             topAppBarScrollBehavior.state.contentOffset = 0f
                         }
 
-                        previousRoute = currentRoute
+                        if (!isAtPrimaryRoot) {
+                            topBarMenuExpanded = false
+                        }
 
                         if ((
-                                currentRoute?.startsWith("artist/") == true ||
-                                    currentRoute?.startsWith("album/") == true
+                                destRoute?.startsWith("artist/") == true ||
+                                    destRoute?.startsWith("album/") == true
                             ) &&
                             playerBottomSheetState.isExpanded
                         ) {
                             playerBottomSheetState.collapseSoft()
                         }
 
-                        if (navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == true) {
+                        if (destRoute?.startsWith(OnlineSearchResultRoutePrefix) == true) {
                             val searchQuery =
                                 decodeOnlineSearchQuery(
                                     navBackStackEntry
@@ -1662,9 +1673,7 @@ class MainActivity : FragmentActivity() {
                                     TextRange(searchQuery.length),
                                 ),
                             )
-                        } else if (navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route } ||
-                            navBackStackEntry?.destination?.route in topLevelScreens
-                        ) {
+                        } else if (isAtPrimaryRoot) {
                             onQueryChange(TextFieldValue())
                         }
                     }
@@ -1775,13 +1784,9 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    var shouldShowTopBar by rememberSaveable { mutableStateOf(false) }
-
-                    LaunchedEffect(navBackStackEntry) {
-                        shouldShowTopBar =
-                            !active && navBackStackEntry?.destination?.route in topLevelScreens &&
-                            navBackStackEntry?.destination?.route != "settings"
-                    }
+                    val shouldShowTopBar = !active && isAtPrimaryRoot
+                    val shouldRenderPrimaryTopBar =
+                        !active && (isAtPrimaryRoot || primaryRootDepthState.isActiveInHierarchy)
 
                     var sharedSong: SongItem? by remember {
                         mutableStateOf(null)
@@ -1795,16 +1800,6 @@ class MainActivity : FragmentActivity() {
                             handleIntent(intent, navController)
                         }
                     }
-
-                    val currentTitleRes =
-                        remember(navBackStackEntry) {
-                            when (navBackStackEntry?.destination?.route) {
-                                Screens.Home.route -> R.string.home
-                                Screens.Search.route -> R.string.search
-                                Screens.Library.route -> R.string.filter_library
-                                else -> null
-                            }
-                        }
                     val (navBarLongPressActions) = rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
                     val homeLongPressAction by
                         rememberEnumPreference(
@@ -1880,8 +1875,7 @@ class MainActivity : FragmentActivity() {
                                             if (wasPlayerActive) {
                                                 playerBottomSheetState.collapse(if (disableAnimations) snap() else spring())
                                             }
-                                            val isSelected =
-                                                navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true
+                                            val isSelected = isAtPrimaryRoot && selectedPrimaryTab.route == screen.route
                                             if (wasPlayerActive && isSelected) {
                                                 return@TvNavigationRail
                                             }
@@ -1895,8 +1889,7 @@ class MainActivity : FragmentActivity() {
                                         header = { Spacer(Modifier.height(24.dp)) },
                                     ) {
                                         navigationItems.fastForEach { screen ->
-                                            val isSelected =
-                                                navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } == true
+                                            val isSelected = isAtPrimaryRoot && selectedPrimaryTab.route == screen.route
 
                                             NavigationRailItem(
                                                 selected = isSelected,
@@ -1934,42 +1927,17 @@ class MainActivity : FragmentActivity() {
 
                             Scaffold(
                                 topBar = {
-                                    if (shouldShowTopBar) {
-                                        val shouldUseFloatingTopBar =
-                                            remember(navBackStackEntry) {
-                                                navBackStackEntry?.destination?.route == Screens.Home.route ||
-                                                    navBackStackEntry?.destination?.route == Screens.Search.route ||
-                                                    navBackStackEntry?.destination?.route == Screens.Library.route
-                                            }
-                                        val shouldShowBlurBackground =
-                                            remember(navBackStackEntry) {
-                                                shouldUseFloatingTopBar
-                                            }
+                                    if (shouldRenderPrimaryTopBar) {
+                                        val shouldUseFloatingTopBar = true
+                                        val shouldShowBlurBackground = true
 
                                         val surfaceColor = MaterialTheme.colorScheme.surface
                                         val currentScrollBehavior =
-                                            when (navBackStackEntry?.destination?.route) {
-                                                Screens.Home.route -> homeScrollBehavior
-
-                                                Screens.Search.route -> searchScrollBehavior
-
-                                                // Library hits else but is offset 0 (self-contained);
-                                                // sub-screens use the shared shell behavior.
+                                            when (selectedPrimaryTab) {
+                                                Screens.Home -> homeScrollBehavior
+                                                Screens.Search -> searchScrollBehavior
                                                 else -> topAppBarScrollBehavior
                                             }
-                                        // Rigid slide (Step 3): the header translates as a block via
-                                        // Modifier.offset while the M3 TopAppBar itself gets
-                                        // scrollBehavior = null (below), so it never collapses or
-                                        // double-renders. The floating behavior only listens to
-                                        // scroll (non-consuming) and updates heightOffset.
-                                        //
-                                        // heightOffsetLimit must be set from the measured header
-                                        // height. The header Box is a single shared shell composable
-                                        // whose size is identical for Home/Search, so onSizeChanged
-                                        // fires only once (size doesn't change on tab switch).
-                                        // Therefore: measure once here, then apply the limit to the
-                                        // CURRENT route's state via LaunchedEffect so every route gets
-                                        // its limit on entry (not just the first-measured one).
                                         var headerHeightPx by remember { mutableStateOf(0) }
                                         LaunchedEffect(currentScrollBehavior, headerHeightPx) {
                                             if (headerHeightPx > 0) {
@@ -1988,10 +1956,22 @@ class MainActivity : FragmentActivity() {
                                                     .onSizeChanged { size ->
                                                         if (size.height > 0) headerHeightPx = size.height
                                                     }.offset {
-                                                        IntOffset(
-                                                            x = 0,
-                                                            y = currentScrollBehavior.state.heightOffset.roundToInt(),
-                                                        )
+                                                        val scrollOffset =
+                                                            if (selectedPrimaryTab == Screens.Library) {
+                                                                0
+                                                            } else {
+                                                                currentScrollBehavior.state.heightOffset.roundToInt()
+                                                            }
+                                                        IntOffset(x = 0, y = scrollOffset)
+                                                    }.graphicsLayer {
+                                                        val p = primaryRootDepthState.presence.coerceIn(0f, 1f)
+                                                        val scale =
+                                                            LunarMotion.DepthRecedeTargetScale +
+                                                                (1f - LunarMotion.DepthRecedeTargetScale) * p
+                                                        transformOrigin = TransformOrigin(0.5f, 0f)
+                                                        scaleX = scale
+                                                        scaleY = scale
+                                                        alpha = p * p
                                                     },
                                         ) {
                                             // Gradient shadow background. It lives inside the
@@ -2068,7 +2048,7 @@ class MainActivity : FragmentActivity() {
                                                                 MaterialTheme.typography.titleLarge.copy(
                                                                     fontWeight = FontWeight.Bold,
                                                                     shadow =
-                                                                        if (navBackStackEntry?.destination?.route == Screens.Home.route) {
+                                                                        if (selectedPrimaryTab == Screens.Home) {
                                                                             Shadow(
                                                                                 color = titleShadowColor.copy(alpha = 0.72f),
                                                                                 blurRadius = titleShadowBlurPx,
@@ -2098,20 +2078,7 @@ class MainActivity : FragmentActivity() {
                                                         onNavigate = { route -> navController.navigate(route) },
                                                     )
                                                 },
-                                                scrollBehavior =
-                                                    if (navBackStackEntry?.destination?.route == Screens.Library.route ||
-                                                        shouldUseFloatingTopBar
-                                                    ) {
-                                                        // Library is fixed, and floating routes
-                                                        // (Home/Search) now slide rigidly via the
-                                                        // outer Box.offset â€” passing a behavior here
-                                                        // would make M3 collapse/co-render and
-                                                        // double-move the header. Only non-floating
-                                                        // sub-screens use M3's collapse behavior.
-                                                        null
-                                                    } else {
-                                                        topAppBarScrollBehavior
-                                                    },
+                                                scrollBehavior = null,
                                                 colors =
                                                     TopAppBarDefaults.topAppBarColors(
                                                         containerColor =
@@ -2140,9 +2107,9 @@ class MainActivity : FragmentActivity() {
                                     AnimatedVisibility(
                                         visible =
                                             active ||
-                                                navBackStackEntry?.destination?.route?.startsWith(OnlineSearchResultRoutePrefix) == true,
-                                        enter = fadeIn(animationSpec = tween(durationMillis = if (disableAnimations) 0 else 300)),
-                                        exit = fadeOut(animationSpec = tween(durationMillis = if (disableAnimations) 0 else 200)),
+                                                rawNavRoute?.startsWith(OnlineSearchResultRoutePrefix) == true,
+                                        enter = fadeIn(animationSpec = tween(durationMillis = if (disableAnimations) 0 else 220)),
+                                        exit = fadeOut(animationSpec = tween(durationMillis = if (disableAnimations) 0 else 160)),
                                     ) {
                                         TopSearch(
                                             query = query,
@@ -2169,9 +2136,7 @@ class MainActivity : FragmentActivity() {
                                                                 onActiveChange(false)
                                                             }
 
-                                                            !navigationItems.fastAny {
-                                                                it.route == navBackStackEntry?.destination?.route
-                                                            } -> {
+                                                            !isAtPrimaryRoot -> {
                                                                 navController.navigateUp()
                                                             }
 
@@ -2184,9 +2149,7 @@ class MainActivity : FragmentActivity() {
                                                         when {
                                                             active -> {}
 
-                                                            !navigationItems.fastAny {
-                                                                it.route == navBackStackEntry?.destination?.route
-                                                            } -> {
+                                                            !isAtPrimaryRoot -> {
                                                                 navController.backToMain()
                                                             }
 
@@ -2196,11 +2159,7 @@ class MainActivity : FragmentActivity() {
                                                 ) {
                                                     Icon(
                                                         painterResource(
-                                                            if (active ||
-                                                                !navigationItems.fastAny {
-                                                                    it.route == navBackStackEntry?.destination?.route
-                                                                }
-                                                            ) {
+                                                            if (active || !isAtPrimaryRoot) {
                                                                 R.drawable.arrow_back
                                                             } else {
                                                                 R.drawable.search
@@ -2339,13 +2298,6 @@ class MainActivity : FragmentActivity() {
                                                 !isFloatingNavBar &&
                                                 playerBottomSheetState.isCollapsed
 
-                                        // Routes that hide the bar entirely still slide it
-                                        // out on their own spring; the scroll beta adds its
-                                        // progress on top, and the larger of the two wins.
-                                        val routeHideFraction =
-                                            1f -
-                                                bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
-                                                    navVisibleHeight
                                         // captured here: the drift lambda below runs
                                         // outside composition, where LocalDensity is
                                         // not readable
@@ -2365,9 +2317,14 @@ class MainActivity : FragmentActivity() {
                                                     shouldShowNavigationBar && !useRail &&
                                                     !playerBottomSheetState.isDismissed
                                                 ) {
+                                                    val routeHide =
+                                                        maxOf(
+                                                            1f - primaryRootDepthState.presence,
+                                                            activeSearchBarHideState.value,
+                                                        )
                                                     with(navDriftDensity) {
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() *
-                                                            maxOf(routeHideFraction, navHideAnim.value)
+                                                            maxOf(routeHide, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
                                                     }
                                                 } else {
@@ -2402,13 +2359,16 @@ class MainActivity : FragmentActivity() {
                                                         // The whole hide motion: translate out and
                                                         // fade a little ahead of arrival so no
                                                         // edge of plate, shadow or frost lingers.
-                                                        // Clamped: the settle overshoots on
-                                                        // purpose, and progress below 0 would
-                                                        // lift the bar above its resting
-                                                        // place (a gap at the bottom) while
-                                                        // above 1 is already off-screen.
+                                                        // Read exclusively on RenderThread so page
+                                                        // transitions and predictive-back swipes
+                                                        // trigger zero main-thread recompositions.
+                                                        val routeHide =
+                                                            maxOf(
+                                                                1f - primaryRootDepthState.presence,
+                                                                activeSearchBarHideState.value,
+                                                            )
                                                         val hide =
-                                                            maxOf(routeHideFraction, navHideAnim.value)
+                                                            maxOf(routeHide, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
                                                         translationY = navSlideDistance.toPx() * 1.15f * hide
                                                         alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
@@ -2429,8 +2389,7 @@ class MainActivity : FragmentActivity() {
                                                             bottom = bottomInset + floatingBarsBottomPadding,
                                                         ).height(navVisibleHeight),
                                                 isSelected = { screen ->
-                                                    navBackStackEntry?.destination?.hierarchy?.any { it.route == screen.route } ==
-                                                        true
+                                                    isAtPrimaryRoot && selectedPrimaryTab.route == screen.route
                                                 },
                                                 onItemClick = { screen, isSelected ->
                                                     handlePrimaryNavigationClick(screen, isSelected)
@@ -2608,179 +2567,20 @@ class MainActivity : FragmentActivity() {
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             ) {
-                                var transitionDirection =
-                                    AnimatedContentTransitionScope.SlideDirection.Left
-
-                                if (navigationItems.fastAny { it.route == navBackStackEntry?.destination?.route }) {
-                                    if (navigationItems.fastAny { it.route == previousTab }) {
-                                        val curIndex =
-                                            navigationItems.indexOf(
-                                                navigationItems.fastFirstOrNull {
-                                                    it.route == navBackStackEntry?.destination?.route
-                                                },
-                                            )
-
-                                        val prevIndex =
-                                            navigationItems.indexOf(
-                                                navigationItems.fastFirstOrNull {
-                                                    it.route == previousTab
-                                                },
-                                            )
-
-                                        if (prevIndex > curIndex) {
-                                            AnimatedContentTransitionScope.SlideDirection.Right.also {
-                                                transitionDirection = it
-                                            }
-                                        }
-                                    }
+                                BackHandler(
+                                    enabled =
+                                        isAtPrimaryRoot &&
+                                            !active &&
+                                            !playerBottomSheetState.isExpanded &&
+                                            selectedPrimaryTab.route != initialPrimaryTab.route,
+                                ) {
+                                    selectedPrimaryTabRoute = initialPrimaryTab.route
                                 }
 
-                                NavHost(
-                                    navController = navController,
-                                    startDestination =
-                                        if (launchMusicRecognitionFromShortcut) {
-                                            MusicRecognitionRoute
-                                        } else {
-                                            when (tabOpenedFromShortcut ?: defaultOpenTab) {
-                                                NavigationTab.HOME -> Screens.Home.route
-                                                NavigationTab.LIBRARY -> Screens.Library.route
-                                                else -> Screens.Home.route
-                                            }
-                                        },
-                                    // Route transitions.
-                                    //
-                                    // The three TabTransitionStyle values are honoured here now.
-                                    // FADE and SPRING_SLIDE were previously dead: only BLOOM was
-                                    // ever checked, and only for the settings route, so every tab
-                                    // switch played the same delayed fade-and-scale whatever the
-                                    // setting said.
-                                    //
-                                    // Springs instead of tweens, at high stiffness. A spring and a
-                                    // tween cost the same per frame, but a spring's duration is
-                                    // emergent - the earlier spring pass was reverted because a lazy
-                                    // one kept two full screens composited for well over half a
-                                    // second. These settle in roughly a third.
-                                    enterTransition = {
-                                        val fromTopLevel = initialState.destination.route in topLevelScreens
-                                        val toTopLevel = targetState.destination.route in topLevelScreens
-                                        // Direction comes from the tab order, so a slide moves the
-                                        // way the content actually is on the bar.
-                                        val fromIndex = topLevelScreens.indexOf(initialState.destination.route)
-                                        val toIndex = topLevelScreens.indexOf(targetState.destination.route)
-                                        val forward = toIndex >= fromIndex
-
-                                        when {
-                                            disableAnimations -> fadeIn(tween(0))
-
-                                            tabTransition == TabTransitionStyle.BLOOM &&
-                                                targetState.destination.route == "settings" ->
-                                                fadeIn(tween(220)) +
-                                                    scaleIn(
-                                                        animationSpec = spring(dampingRatio = 0.78f, stiffness = 260f),
-                                                        initialScale = 0.6f,
-                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
-                                                    )
-
-                                            fromTopLevel && toTopLevel ->
-                                                when (tabTransition) {
-                                                    TabTransitionStyle.FADE ->
-                                                        fadeIn(LunarMotion.tabEnter())
-                                                    TabTransitionStyle.BLOOM ->
-                                                        fadeIn(LunarMotion.tabEnter()) +
-                                                            scaleIn(
-                                                                animationSpec = LunarMotion.tabEnterScale(),
-                                                                initialScale = 0.92f,
-                                                                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
-                                                            )
-                                                    TabTransitionStyle.SPRING_SLIDE ->
-                                                        fadeIn(LunarMotion.tabEnter()) +
-                                                            slideInHorizontally(
-                                                                animationSpec = LunarMotion.tabEnterSlide(),
-                                                                initialOffsetX = { width -> if (forward) width / 5 else -width / 5 },
-                                                            )
-                                                }
-
-                                            else ->
-                                                fadeIn(LunarMotion.drillEnter()) +
-                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnterSlide()) { it / 2 }
-                                        }
-                                    },
-                                    exitTransition = {
-                                        val fromTopLevel = initialState.destination.route in topLevelScreens
-                                        val toTopLevel = targetState.destination.route in topLevelScreens
-                                        val fromIndex = topLevelScreens.indexOf(initialState.destination.route)
-                                        val toIndex = topLevelScreens.indexOf(targetState.destination.route)
-                                        val forward = toIndex >= fromIndex
-
-                                        when {
-                                            disableAnimations -> fadeOut(tween(0))
-                                            fromTopLevel && toTopLevel ->
-                                                when (tabTransition) {
-                                                    // The leaving screen gets out of the way and does
-                                                    // not overshoot; only the arriving one carries the
-                                                    // momentum.
-                                                    TabTransitionStyle.FADE -> fadeOut(LunarMotion.tabExit())
-                                                    TabTransitionStyle.BLOOM -> fadeOut(LunarMotion.tabExit())
-                                                    TabTransitionStyle.SPRING_SLIDE ->
-                                                        fadeOut(LunarMotion.tabExit()) +
-                                                            slideOutHorizontally(
-                                                                animationSpec = LunarMotion.tabExitSlide(),
-                                                                targetOffsetX = { width -> if (forward) -width / 5 else width / 5 },
-                                                            )
-                                                }
-                                            else ->
-                                                fadeOut(LunarMotion.drillExit()) +
-                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExitSlide()) { -it / 2 }
-                                        }
-                                    },
-                                    // Coming back out - playlist or downloads back to Library. This
-                                    // is the mirror of the drill-in, so the screen returns from the
-                                    // side it left towards instead of sliding in from an arbitrary
-                                    // direction, and it lands on a spring rather than a 250ms tween.
-                                    popEnterTransition = {
-                                        val fromTopLevel =
-                                            initialState.destination.route in topLevelScreens ||
-                                                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true
-                                        val toTopLevel = targetState.destination.route in topLevelScreens
-
-                                        when {
-                                            disableAnimations -> fadeIn(tween(0))
-                                            fromTopLevel && toTopLevel ->
-                                                fadeIn(LunarMotion.tabEnter()) +
-                                                    scaleIn(
-                                                        animationSpec = LunarMotion.tabEnterScale(),
-                                                        initialScale = 0.92f,
-                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f),
-                                                    )
-                                            else ->
-                                                fadeIn(LunarMotion.drillEnter()) +
-                                                    slideInHorizontally(animationSpec = LunarMotion.drillEnterSlide()) { -it / 2 }
-                                        }
-                                    },
-                                    popExitTransition = {
-                                        val fromTopLevel =
-                                            initialState.destination.route in topLevelScreens ||
-                                                initialState.destination.route?.startsWith(OnlineSearchResultRoutePrefix) == true
-                                        val toTopLevel = targetState.destination.route in topLevelScreens
-
-                                        when {
-                                            disableAnimations -> fadeOut(tween(0))
-                                            tabTransition == TabTransitionStyle.BLOOM &&
-                                                initialState.destination.route == "settings" ->
-                                                fadeOut(tween(220, delayMillis = 60)) +
-                                                    scaleOut(
-                                                        animationSpec = tween(250),
-                                                        targetScale = 0.6f,
-                                                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.92f, 0.04f),
-                                                    )
-                                            fromTopLevel && toTopLevel -> fadeOut(LunarMotion.tabExit())
-                                            else ->
-                                                fadeOut(LunarMotion.drillExit()) +
-                                                    slideOutHorizontally(animationSpec = LunarMotion.drillExitSlide()) { it / 2 }
-                                        }
-                                    },
+                                Box(
                                     modifier =
                                         Modifier
+                                            .fillMaxSize()
                                             .then(
                                                 if (isTvDevice) {
                                                     Modifier
@@ -2790,37 +2590,18 @@ class MainActivity : FragmentActivity() {
                                                 } else {
                                                     Modifier
                                                 },
-                                            ).nestedScroll(
-                                                // Step 2b: the NavHost-level connection now serves
-                                                // ONLY shell-driven sub-screens (Album/Artist/
-                                                // Playlist/...). Home and Search attach their own
-                                                // per-route connection inside their screen, so a
-                                                // departing screen's fling can no longer reach the
-                                                // incoming route's header state (fling carry-over is
-                                                // severed structurally). Library is self-contained
-                                                // and OnlineSearchResult is gated by canScroll=false,
-                                                // so routing them through this shared arm is harmless.
-                                                topAppBarScrollBehavior.nestedScrollConnection,
                                             ).then(
-                                                // Beta scroll-driven bar hide: registered only
-                                                // when enabled so disabled users pay nothing.
+                                                // Beta scroll-driven bar hide: registered on the
+                                                // shared content host so both warm primary tabs and
+                                                // sub-screens drive it seamlessly.
                                                 if (navBarHideOnScroll) {
                                                     Modifier.nestedScroll(navBarScrollHideConnection)
                                                 } else {
                                                     Modifier
                                                 },
                                             ).then(
-                                                // Frosted glass source: Haze's default Behind
-                                                // selection excludes ancestor sources, so the
-                                                // source must sit on the content — sourcing the
-                                                // Scaffold would leave the bottom-bar effect
-                                                // with empty input (invisible bar, every API).
-                                                // The mini player shares this source for its frosted-glow
-                                                // background. Pre-Android 12 both are static frost with
-                                                // no blur consumer, so no source is attached — except
-                                                // while the top-bar menu is open: it is static and
-                                                // short-lived, so the source (and Haze's fallback
-                                                // blur paths) are enabled there on every API level.
+                                                // Frosted glass source: captures both warm primary
+                                                // tabs and NavHost drill-in pages in one pass.
                                                 if (
                                                     topBarMenuExpanded ||
                                                     (
@@ -2833,10 +2614,6 @@ class MainActivity : FragmentActivity() {
                                                     Modifier
                                                 },
                                             ).then(
-                                                // Live blur source for the capsule bar on Android 11
-                                                // and below. It records the strip of content behind
-                                                // the bar a few times a second; the bar crops its own
-                                                // window out of that strip and draws it under a tint.
                                                 if (capsuleLiveBlurSource != null) {
                                                     Modifier.navBarLiveBlurSource(capsuleLiveBlurSource)
                                                 } else {
@@ -2844,17 +2621,75 @@ class MainActivity : FragmentActivity() {
                                                 },
                                             ),
                                 ) {
-                                    navigationBuilder(
-                                        navController,
-                                        topAppBarScrollBehavior,
-                                        { latestVersionName },
-                                        disableAnimations,
-                                        tabTransition = tabTransition,
-                                        onClearUpdateBadge = { latestVersionName = BuildConfig.VERSION_NAME },
+                                    PrimaryTabsHost(
+                                        tabs = navigationItems,
+                                        selectedTab = selectedPrimaryTab,
+                                        isAtPrimaryRoot = isAtPrimaryRoot,
+                                        depthState = primaryRootDepthState,
+                                        pureBlack = pureBlack,
+                                        disableAnimations = disableAnimations,
+                                        navController = navController,
+                                        homeViewModel = homeViewModel,
+                                        scrollBehavior = topAppBarScrollBehavior,
                                         homeScrollConnection = homeScrollBehavior.nestedScrollConnection,
                                         searchScrollConnection = searchScrollBehavior.nestedScrollConnection,
-                                        onlineSearchSort = onlineSearchSort,
+                                        onOpenSearch = openSearch,
+                                        homeScrollToTopTrigger = homeScrollToTopTrigger,
+                                        searchScrollToTopTrigger = searchScrollToTopTrigger,
                                     )
+
+                                    NavHost(
+                                        navController = navController,
+                                        startDestination = Screens.Home.route,
+                                        enterTransition = {
+                                            when {
+                                                disableAnimations -> fadeIn(tween(0))
+                                                targetState.destination.route == Screens.Home.route ->
+                                                    LunarMotion.depthRootHoldPopEnter()
+                                                else -> LunarMotion.depthPageEnter()
+                                            }
+                                        },
+                                        exitTransition = {
+                                            when {
+                                                disableAnimations -> fadeOut(tween(0))
+                                                initialState.destination.route == Screens.Home.route ->
+                                                    LunarMotion.depthRootHoldExit()
+                                                else -> LunarMotion.depthPageExit()
+                                            }
+                                        },
+                                        popEnterTransition = {
+                                            when {
+                                                disableAnimations -> fadeIn(tween(0))
+                                                targetState.destination.route == Screens.Home.route ->
+                                                    LunarMotion.depthRootHoldPopEnter()
+                                                else -> LunarMotion.depthPagePopEnter()
+                                            }
+                                        },
+                                        popExitTransition = {
+                                            when {
+                                                disableAnimations -> fadeOut(tween(0))
+                                                else -> LunarMotion.depthPagePopExit()
+                                            }
+                                        },
+                                        modifier =
+                                            Modifier
+                                                .fillMaxSize()
+                                                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+                                    ) {
+                                        navigationBuilder(
+                                            navController = navController,
+                                            scrollBehavior = topAppBarScrollBehavior,
+                                            latestVersionName = { latestVersionName },
+                                            primaryRootDepthState = primaryRootDepthState,
+                                            onSelectPrimaryTab = { screen ->
+                                                selectedPrimaryTabRoute = screen.route
+                                            },
+                                            pureBlack = pureBlack,
+                                            disableAnimations = disableAnimations,
+                                            onClearUpdateBadge = { latestVersionName = BuildConfig.VERSION_NAME },
+                                            onlineSearchSort = onlineSearchSort,
+                                        )
+                                    }
                                 }
                             }
                         }

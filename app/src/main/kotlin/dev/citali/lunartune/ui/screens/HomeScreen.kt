@@ -103,6 +103,8 @@ private val HomeSectionSpacing = 18.dp
 fun HomeScreen(
     navController: NavController,
     headerScrollConnection: NestedScrollConnection? = null,
+    isActiveTab: Boolean = true,
+    scrollToTopTrigger: Int = 0,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
@@ -124,9 +126,15 @@ fun HomeScreen(
             ?.collectAsStateWithLifecycle()
 
     LaunchedEffect(scrollToTop?.value) {
-        if (scrollToTop?.value == true) {
+        if (scrollToTop?.value == true && isActiveTab) {
             lazyListState.animateScrollToItem(0)
             backStackEntry?.savedStateHandle?.set("scrollToTop", false)
+        }
+    }
+
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            lazyListState.animateScrollToItem(0)
         }
     }
 
@@ -161,7 +169,7 @@ fun HomeScreen(
         }
     }
 
-    if (selectedChip != null) {
+    if (selectedChip != null && isActiveTab) {
         BackHandler {
             viewModel.onAction(HomeAction.SelectChip(selectedChip))
         }

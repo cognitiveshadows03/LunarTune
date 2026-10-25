@@ -105,6 +105,8 @@ fun SearchScreen(
     navController: NavController,
     onSearchClick: () -> Unit,
     headerScrollConnection: NestedScrollConnection? = null,
+    isActiveTab: Boolean = true,
+    scrollToTopTrigger: Int = 0,
     viewModel: SearchDiscoveryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -124,9 +126,15 @@ fun SearchScreen(
             ?.collectAsStateWithLifecycle()
 
     LaunchedEffect(scrollToTop?.value) {
-        if (scrollToTop?.value == true) {
+        if (scrollToTop?.value == true && isActiveTab) {
             lazyListState.animateScrollToItem(0)
             backStackEntry?.savedStateHandle?.set("scrollToTop", false)
+        }
+    }
+
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            lazyListState.animateScrollToItem(0)
         }
     }
 

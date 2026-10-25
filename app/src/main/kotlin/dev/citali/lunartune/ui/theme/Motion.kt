@@ -1,10 +1,17 @@
 package dev.citali.lunartune.ui.theme
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.ui.unit.IntOffset
 
 /**
@@ -117,6 +124,86 @@ object LunarMotion {
     const val TabExitMs = 220
     const val DrillEnterMs = 380
     const val DrillExitMs = 240
+
+    // Keep-alive primary tab directional glide (Home <-> Search <-> Library).
+    const val TabGlideEnterMs = 210
+    const val TabGlideEnterFadeMs = 165
+    const val TabGlideFadeDelayMs = 25
+    const val TabGlideExitMs = 115
+    const val TabGlideOffsetDp = 28
+
+    /** Balanced ease-out that avoids front-loading 70% of travel into Frame 1. */
+    val TabGlideEasing: Easing = CubicBezierEasing(0.18f, 0.9f, 0.2f, 1f)
+
+    /** Quick exit acceleration so the departing tab clears out before incoming opacity peaks. */
+    val TabGlideExitEasing: Easing = CubicBezierEasing(0.3f, 0f, 0.85f, 0.25f)
+
+    // Spatial Depth Zoom page drill-in / Predictive Back specs.
+    // Finite tween durations keep Navigation Compose's SeekableTransitionState 1:1 linear
+    // during Android 14+ Predictive Back edge swipes.
+    const val DepthZoomEnterMs = 270
+    const val DepthZoomEnterFadeMs = 185
+    const val DepthZoomExitMs = 270
+    const val DepthZoomPopEnterMs = 250
+    const val DepthZoomPopExitMs = 220
+
+    const val DepthEnterInitialScale = 0.94f
+    const val DepthRecedeTargetScale = 0.95f
+    const val DepthPopExitTargetScale = 0.92f
+    const val DepthBackgroundDimAlpha = 0.58f
+    const val DepthScrimMaxAlpha = 0.28f
+
+    val SpatialEnterEasing: Easing = CubicBezierEasing(0.18f, 0.88f, 0.22f, 1f)
+    val SpatialExitEasing: Easing = CubicBezierEasing(0.3f, 0f, 0.85f, 0.22f)
+
+    fun depthPageEnter(): EnterTransition =
+        fadeIn(
+            animationSpec = tween(durationMillis = DepthZoomEnterFadeMs, easing = LinearOutSlowInEasing),
+        ) +
+            scaleIn(
+                animationSpec = tween(durationMillis = DepthZoomEnterMs, easing = SpatialEnterEasing),
+                initialScale = DepthEnterInitialScale,
+            )
+
+    fun depthPageExit(): ExitTransition =
+        fadeOut(
+            animationSpec = tween(durationMillis = DepthZoomExitMs, easing = SpatialEnterEasing),
+            targetAlpha = DepthBackgroundDimAlpha,
+        ) +
+            scaleOut(
+                animationSpec = tween(durationMillis = DepthZoomExitMs, easing = SpatialEnterEasing),
+                targetScale = DepthRecedeTargetScale,
+            )
+
+    fun depthPagePopEnter(): EnterTransition =
+        fadeIn(
+            animationSpec = tween(durationMillis = DepthZoomPopEnterMs, easing = SpatialEnterEasing),
+            initialAlpha = DepthBackgroundDimAlpha,
+        ) +
+            scaleIn(
+                animationSpec = tween(durationMillis = DepthZoomPopEnterMs, easing = SpatialEnterEasing),
+                initialScale = DepthRecedeTargetScale,
+            )
+
+    fun depthPagePopExit(): ExitTransition =
+        fadeOut(
+            animationSpec = tween(durationMillis = DepthZoomPopExitMs, easing = SpatialExitEasing),
+        ) +
+            scaleOut(
+                animationSpec = tween(durationMillis = DepthZoomPopExitMs, easing = SpatialExitEasing),
+                targetScale = DepthPopExitTargetScale,
+            )
+
+    /** Keeps the lightweight primary-root proxy alive in NavHost during push/pop transitions. */
+    fun depthRootHoldExit(): ExitTransition =
+        fadeOut(
+            animationSpec = tween(durationMillis = DepthZoomExitMs, easing = SpatialEnterEasing),
+        )
+
+    fun depthRootHoldPopEnter(): EnterTransition =
+        fadeIn(
+            animationSpec = tween(durationMillis = DepthZoomPopEnterMs, easing = SpatialEnterEasing),
+        )
 
     /** Same timing as [tabEnter] and friends, for callers that animate an IntOffset. */
     fun tabEnterSlide(): FiniteAnimationSpec<IntOffset> = tween(TabEnterMs, easing = EmphasizedDecelerate)
