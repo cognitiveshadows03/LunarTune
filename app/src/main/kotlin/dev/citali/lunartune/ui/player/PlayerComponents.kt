@@ -36,10 +36,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.layout
-import dev.citali.lunartune.ui.component.LyricsEnhanced
-import dev.citali.lunartune.ui.component.LyricsV2
-import dev.citali.lunartune.constants.LyricsMode
-import dev.citali.lunartune.constants.LyricsModeKey
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource

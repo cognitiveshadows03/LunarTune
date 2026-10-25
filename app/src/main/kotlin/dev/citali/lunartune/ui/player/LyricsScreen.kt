@@ -101,6 +101,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.animation.core.tween
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.common.C
 import androidx.media3.common.Player.STATE_BUFFERING
 import androidx.media3.common.Player.STATE_READY
@@ -113,6 +114,7 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.size.Size
 import coil3.toBitmap
+import com.mocharealm.accompanist.lyrics.ui.composable.list.LyricsLazyListState
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -158,6 +160,8 @@ import dev.citali.lunartune.utils.LyricsArtBlurCache
 import dev.citali.lunartune.utils.makeTimeString
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
+import dev.citali.lunartune.viewmodels.LyricsRenderScreenState
+import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
 import kotlin.coroutines.cancellation.CancellationException
 
 private val AppleMusicFallbackGradient =
@@ -246,9 +250,9 @@ fun LyricsScreen(
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     backHandlerEnabled: Boolean = true,
-    rememberedEnhancedListState: LazyListState? = null,
+    rememberedEnhancedListState: LyricsLazyListState? = null,
     rememberedV2ListState: LazyListState? = null,
-    pageOpenGeneration: Int = 0,
+    lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -267,6 +271,7 @@ fun LyricsScreen(
             }
         }
     val currentLyrics by playerConnection.currentLyrics.collectAsStateWithLifecycle(initialValue = null)
+    val lyricsRenderState by lyricsRenderViewModel.state.collectAsStateWithLifecycle()
 
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
@@ -385,6 +390,11 @@ fun LyricsScreen(
     val durationState = remember(mediaMetadata.id) { mutableLongStateOf(C.TIME_UNSET) }
     var sliderPosition by remember(mediaMetadata.id) { mutableStateOf<Long?>(null) }
     var gradientColors by remember(mediaMetadata.thumbnailUrl) { mutableStateOf(AppleMusicFallbackGradient) }
+
+    val lyricsDurationMs = durationState.longValue.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
+    LaunchedEffect(mediaMetadata.id, lyricsDurationMs) {
+        lyricsRenderViewModel.bind(mediaMetadata.id, lyricsDurationMs)
+    }
 
     val isScrubbing = sliderPosition != null
     LaunchedEffect(autoHidePlayerControls, controlsRevealed, controlsInteraction, isScrubbing) {
@@ -552,12 +562,13 @@ fun LyricsScreen(
                 ) {
                     AppleMusicLyricsPane(
                         lyricsMode = lyricsMode,
+                        lyricsState = lyricsRenderState,
+                        lyricsRenderViewModel = lyricsRenderViewModel,
                         foregroundColor = foregroundColor,
                         sliderPositionProvider = { sliderPosition },
                         lyricsSyncOffset = lyricsSyncOffset,
                         rememberedEnhancedListState = rememberedEnhancedListState,
                         rememberedV2ListState = rememberedV2ListState,
-                        pageOpenGeneration = pageOpenGeneration,
                         modifier =
                             Modifier
                                 .weight(1.15f)
@@ -633,12 +644,13 @@ fun LyricsScreen(
                     lyrics = {
                         AppleMusicLyricsPane(
                             lyricsMode = lyricsMode,
+                            lyricsState = lyricsRenderState,
+                            lyricsRenderViewModel = lyricsRenderViewModel,
                             foregroundColor = foregroundColor,
                             sliderPositionProvider = { sliderPosition },
                             lyricsSyncOffset = lyricsSyncOffset,
                             rememberedEnhancedListState = rememberedEnhancedListState,
                             rememberedV2ListState = rememberedV2ListState,
-                            pageOpenGeneration = pageOpenGeneration,
                         )
                     },
                     controls = {
@@ -1373,21 +1385,23 @@ private fun AppleMusicHeaderIconButton(
 @Composable
 private fun AppleMusicLyricsPane(
     lyricsMode: LyricsMode,
+    lyricsState: LyricsRenderScreenState,
+    lyricsRenderViewModel: LyricsRenderViewModel,
     foregroundColor: Color,
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
-    rememberedEnhancedListState: LazyListState? = null,
+    rememberedEnhancedListState: LyricsLazyListState? = null,
     rememberedV2ListState: LazyListState? = null,
-    pageOpenGeneration: Int = 0,
 ) {
     LyricsContent(
         lyricsMode = lyricsMode,
+        lyricsState = lyricsState,
+        lyricsRenderViewModel = lyricsRenderViewModel,
         sliderPositionProvider = sliderPositionProvider,
         lyricsSyncOffset = lyricsSyncOffset,
         rememberedEnhancedListState = rememberedEnhancedListState,
         rememberedV2ListState = rememberedV2ListState,
-        pageOpenGeneration = pageOpenGeneration,
         modifier =
             modifier
                 .fillMaxSize()
@@ -1758,33 +1772,37 @@ private fun AppleMusicSlider(
 @Composable
 private fun LyricsContent(
     lyricsMode: LyricsMode,
+    lyricsState: LyricsRenderScreenState,
+    lyricsRenderViewModel: LyricsRenderViewModel,
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
-    rememberedEnhancedListState: LazyListState? = null,
+    rememberedEnhancedListState: LyricsLazyListState? = null,
     rememberedV2ListState: LazyListState? = null,
-    pageOpenGeneration: Int = 0,
 ) {
     when (lyricsMode) {
         LyricsMode.V2 -> {
             LyricsV2(
+                lyricsState = lyricsState,
                 sliderPositionProvider = sliderPositionProvider,
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
                 rememberedListState = rememberedV2ListState,
+                lyricsRenderViewModel = lyricsRenderViewModel,
             )
         }
 
         LyricsMode.ENHANCED -> {
             LyricsEnhanced(
+                lyricsState = lyricsState,
                 sliderPositionProvider = sliderPositionProvider,
                 lyricsSyncOffset = lyricsSyncOffset,
                 modifier = modifier,
                 textColorOverride = textColor,
-                rememberedListState = rememberedEnhancedListState,
-                pageOpenGeneration = pageOpenGeneration,
+                rememberedKaraokeListState = rememberedEnhancedListState,
+                lyricsRenderViewModel = lyricsRenderViewModel,
             )
         }
     }

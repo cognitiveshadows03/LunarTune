@@ -134,6 +134,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -141,6 +142,7 @@ import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import com.mocharealm.accompanist.lyrics.ui.composable.list.rememberLyricsLazyListState
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
@@ -179,6 +181,7 @@ import dev.citali.lunartune.utils.makeTimeString
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberLowDataModeActive
 import dev.citali.lunartune.utils.rememberPreference
+import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
 import kotlinx.coroutines.delay
 import me.saket.squiggles.SquigglySlider
 
@@ -239,11 +242,12 @@ internal fun AppleMusicPortraitContent(
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
+    lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
 ) {
-    // Lyrics (ported from ArchiveTune's AppleMusicPlayer): the artwork collapses into a 56dp mini
-    // header thumbnail beside the credits, the word-synced lyrics (LyricsEnhanced / LyricsV2, per the
-    // lyrics mode setting) fade in below after a short deferral, and the controls auto-hide after 5s
-    // while reading — a tap anywhere brings them back.
+    // Inline lyrics layout: the artwork collapses into a 56dp mini header thumbnail beside the
+    // credits, the word-synced lyrics (LyricsEnhanced / LyricsV2, per the lyrics mode setting)
+    // fade in below after a short deferral, and the controls auto-hide after 5s while reading —
+    // a tap anywhere brings them back.
     val collapse by androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (lyricsOpen || queueOpen) 1f else 0f,
         animationSpec =
@@ -335,17 +339,20 @@ internal fun AppleMusicPortraitContent(
     val thumbTop = 16.dp
     val miniHeaderHeight = statusTop + thumbTop + thumb + 8.dp
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
+    val lyricsRenderState by lyricsRenderViewModel.state.collectAsStateWithLifecycle()
+    val lyricsDurationMs = duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
+    LaunchedEffect(mediaMetadata.id, lyricsDurationMs) {
+        lyricsRenderViewModel.bind(mediaMetadata.id, lyricsDurationMs)
+    }
     // AnimatedVisibility removes the lyrics composable when the page closes. Keep its list states
     // in this always-composed parent so reopening the same song resumes where the reader left off.
-    val enhancedLyricsListState = key(mediaMetadata.id, "enhanced-lyrics") { rememberLazyListState() }
+    val enhancedLyricsListState = key(mediaMetadata.id, "enhanced-lyrics") { rememberLyricsLazyListState() }
     val v2LyricsListState = key(mediaMetadata.id, "v2-lyrics") { rememberLazyListState() }
 
     var lyricsContentReady by remember { mutableStateOf(false) }
-    var lyricsOpenGeneration by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     LaunchedEffect(lyricsOpen) {
         lyricsContentReady = false
         if (lyricsOpen) {
-            lyricsOpenGeneration++
             kotlinx.coroutines.delay(160L)
             lyricsContentReady = true
         }
@@ -593,24 +600,25 @@ internal fun AppleMusicPortraitContent(
                     when (lyricsMode) {
                         LyricsMode.V2 ->
                             LyricsV2(
+                                lyricsState = lyricsRenderState,
                                 sliderPositionProvider = { provider.value },
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 modifier = Modifier.fillMaxSize(),
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
-                                appleMusicPlayerMode = true,
                                 rememberedListState = v2LyricsListState,
+                                lyricsRenderViewModel = lyricsRenderViewModel,
                             )
                         LyricsMode.ENHANCED ->
                             LyricsEnhanced(
+                                lyricsState = lyricsRenderState,
                                 sliderPositionProvider = { provider.value },
                                 lyricsSyncOffset = lyricsSyncOffset,
                                 modifier = Modifier.fillMaxSize(),
                                 // Always on the dark blurred backdrop, so ignore light theme colours.
                                 textColorOverride = Color.White,
-                                appleMusicPlayerMode = true,
-                                rememberedListState = enhancedLyricsListState,
-                                pageOpenGeneration = lyricsOpenGeneration,
+                                rememberedKaraokeListState = enhancedLyricsListState,
+                                lyricsRenderViewModel = lyricsRenderViewModel,
                             )
                     }
                 }
