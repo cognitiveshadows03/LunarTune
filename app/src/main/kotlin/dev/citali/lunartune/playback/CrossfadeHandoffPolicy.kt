@@ -96,3 +96,22 @@ internal fun hasPlaybackPositionAdvanced(
     positionAfterSeekMs: Long,
     currentPositionMs: Long,
 ): Boolean = currentPositionMs > positionAfterSeekMs
+
+/**
+ * Minimum buffered duration ahead of `localPlayer.currentPosition` required before scheduling
+ * a muted PCM skip of [lagMs] milliseconds so dropping [lagMs] of frames cannot drain the
+ * primary sample queue into a post-handoff rebuffer pause.
+ */
+internal fun requiredBufferBeforeCrossfadeSkipMs(
+    lagMs: Long,
+    postSkipCushionMs: Long,
+    remainingTrackDurationMs: Long?,
+    endGuardMs: Long,
+): Long {
+    val safeLag = lagMs.coerceAtLeast(0L)
+    val safeCushion = postSkipCushionMs.coerceAtLeast(0L)
+    val desired = safeLag + safeCushion
+    if (remainingTrackDurationMs == null) return desired
+    val availableBeforeEnd = (remainingTrackDurationMs - endGuardMs.coerceAtLeast(0L)).coerceAtLeast(0L)
+    return desired.coerceAtMost(availableBeforeEnd)
+}

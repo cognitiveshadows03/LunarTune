@@ -346,12 +346,17 @@ private fun buildRowLayers(
     layoutDirection: LayoutDirection,
     atlas: LunarTextAtlas,
 ): PreparedRowLayers {
+    val allowCharacterBlur = supportsLyricsBlur()
     val glowShadow =
-        Shadow(
-            color = color.copy(alpha = color.alpha * GLOW_ALPHA_FACTOR),
-            offset = Offset.Zero,
-            blurRadius = GLOW_BLUR_RADIUS_PX,
-        )
+        if (allowCharacterBlur) {
+            Shadow(
+                color = color.copy(alpha = color.alpha * GLOW_ALPHA_FACTOR),
+                offset = Offset.Zero,
+                blurRadius = GLOW_BLUR_RADIUS_PX,
+            )
+        } else {
+            null
+        }
     return PreparedRowLayers(
         row.runs.map { run ->
             run.groups.map { group ->
@@ -369,7 +374,7 @@ private fun buildRowLayers(
                         }
                     }
                 val glow =
-                    if (group.effects.glow && staticUnit != null) {
+                    if (allowCharacterBlur && group.effects.glow && staticUnit != null && glowShadow != null) {
                         atlas.getOrPut(
                             key = buildUnitKey(run.profile, staticUnit, color, glow = true),
                             width = staticUnit.width,
@@ -619,9 +624,9 @@ private fun DrawScope.drawAnimatedGroup(
         }
     val swellPeak = 0.1f * group.intensity
 
-    // Single pre-baked atlas glow draw for held words/phrases (zero BlurEffect or FBO allocation).
+    // Single pre-baked atlas glow draw for held words/phrases on Android 12+ (zero BlurEffect or FBO allocation).
     val glowLayer = cachedGroup?.glow
-    if (group.effects.glow && glowLayer != null) {
+    if (supportsLyricsBlur() && group.effects.glow && glowLayer != null) {
         val glowStrength = glowBounceStrength(groupProgress)
         if (glowStrength > 0.01f) {
             val groupScale =

@@ -9,6 +9,7 @@
 
 package dev.citali.lunartune.ui.component
 
+import android.os.Build
 import android.os.SystemClock
 import android.view.WindowManager
 import android.widget.Toast
@@ -222,7 +223,8 @@ fun LyricsV2(
         } else {
             Color.White
         }
-    val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
+    val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val lyricsLineBlur = isAndroid12OrLater && (lyricsLineBlurOverride ?: lyricsLineBlurPreference)
 
     val inactiveAlpha = 0.35f
 
@@ -1335,7 +1337,8 @@ private fun AnimatedWordV2(
                 fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
             )
         }
-    val showStaticWordGlow = isWordActive && glowFactor > 0.01f
+    val showStaticWordGlow =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWordActive && glowFactor > 0.01f
     val activeWordTextStyle =
         remember(baseWordTextStyle, showStaticWordGlow, textColor, glowFactor) {
             if (showStaticWordGlow) {

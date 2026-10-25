@@ -14,6 +14,7 @@
 package dev.citali.lunartune.ui.component
 
 import android.app.Activity
+import android.os.Build
 import android.os.SystemClock
 import android.view.WindowManager
 import android.widget.Toast
@@ -174,7 +175,9 @@ fun LyricsEnhanced(
         } else {
             Color.White
         }
-    val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
+    val lyricsLineBlur =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            (lyricsLineBlurOverride ?: lyricsLineBlurPreference)
 
     var isSelectionModeActive by rememberSaveable { mutableStateOf(false) }
     val selectedLineKeys = remember { mutableStateListOf<String>() }

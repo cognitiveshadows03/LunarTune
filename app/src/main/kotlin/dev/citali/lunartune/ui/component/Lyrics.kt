@@ -428,7 +428,9 @@ fun Lyrics(
     val lyricsAnimationStyle by rememberEnumPreference(LyricsAnimationStyleKey, LyricsAnimationStyle.APPLE)
     val lyricsTextSize by rememberPreference(LyricsTextSizeKey, 26f)
     val lyricsLineSpacing by rememberPreference(LyricsLineSpacingKey, 1.3f)
-    val lyricsLineBlur by rememberPreference(LyricsLineBlurKey, true)
+    val supportsLyricsBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val lyricsLineBlurPref by rememberPreference(LyricsLineBlurKey, true)
+    val lyricsLineBlur = supportsLyricsBlur && lyricsLineBlurPref
     val animationsDisabled = LocalAnimationsDisabled.current
     val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()
 
@@ -1576,7 +1578,9 @@ fun Lyrics(
                                                             }
 
                                                         val wordShadow =
-                                                            if (isWordActive && glowIntensity > 0.05f) {
+                                                            if (!supportsLyricsBlur) {
+                                                                null
+                                                            } else if (isWordActive && glowIntensity > 0.05f) {
                                                                 Shadow(
                                                                     color =
                                                                         lyricsGlowColor.copy(
@@ -1886,7 +1890,9 @@ fun Lyrics(
                                             textAlign = alignment,
                                             lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
                                         )
-                                    } else if (isActiveLine && effectiveAnimationStyle == LyricsAnimationStyle.GLOW &&
+                                    } else if (supportsLyricsBlur &&
+                                        isActiveLine &&
+                                        effectiveAnimationStyle == LyricsAnimationStyle.GLOW &&
                                         !reduceMotionDuringScroll
                                     ) {
                                         val styledText =
@@ -2300,7 +2306,7 @@ fun Lyrics(
 
                                                                         val romAlpha = 0.4f + (0.4f * fillProgress)
                                                                         val romShadow =
-                                                                            if (isWordActive && fillProgress > 0.05f) {
+                                                                            if (supportsLyricsBlur && isWordActive && fillProgress > 0.05f) {
                                                                                 Shadow(
                                                                                     color =
                                                                                         lyricsGlowColor.copy(

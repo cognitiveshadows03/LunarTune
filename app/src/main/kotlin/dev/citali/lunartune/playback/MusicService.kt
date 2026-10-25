@@ -74,6 +74,7 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR
 import androidx.media3.datasource.cache.ContentMetadata
@@ -3452,14 +3453,24 @@ class MusicService :
             player.playWhenReady = shouldContinuePlayback
             if (shouldContinuePlayback) {
                 if (!awaitPrimaryCrossfadeHandoffReady(incomingPlayer)) {
-                    abortCrossfadeAndResumePrimary("primary_handoff_not_ready")
+                    completeFallbackHandoffFromSecondary(
+                        targetIndex = targetIndex,
+                        targetMediaId = target.mediaId,
+                        incomingPlayer = incomingPlayer,
+                        reason = "primary_handoff_not_ready",
+                    )
                     handoffCompleted = true
                     return
                 }
 
                 if (!synchronizePrimaryForCrossfadeHandoff(targetIndex, incomingPosition, incomingPlayer)) {
                     if (crossfadePlaybackRequested && player.currentMediaItemIndex == targetIndex) {
-                        abortCrossfadeAndResumePrimary("primary_handoff_sync_failed")
+                        completeFallbackHandoffFromSecondary(
+                            targetIndex = targetIndex,
+                            targetMediaId = target.mediaId,
+                            incomingPlayer = incomingPlayer,
+                            reason = "primary_handoff_sync_failed",
+                        )
                     } else {
                         cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
                     }
@@ -3469,7 +3480,12 @@ class MusicService :
 
                 if (!performCrossfadeHandoff(targetIndex, incomingPlayer)) {
                     if (crossfadePlaybackRequested && player.currentMediaItemIndex == targetIndex) {
-                        abortCrossfadeAndResumePrimary("primary_handoff_failed")
+                        completeFallbackHandoffFromSecondary(
+                            targetIndex = targetIndex,
+                            targetMediaId = target.mediaId,
+                            incomingPlayer = incomingPlayer,
+                            reason = "primary_handoff_failed",
+                        )
                     } else {
                         cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
                     }
@@ -3560,6 +3576,9 @@ class MusicService :
             primaryGainAndSyncProcessor.clearPendingSkip()
             player.seekTo(targetIndex, correctiveTargetMs)
             seekOriginMs = correctiveTargetMs
+            if (!awaitPrimaryCrossfadeHandoffReady(incomingPlayer)) {
+                return false
+            }
             if (!awaitPrimaryPositionAdvance(targetIndex, seekOriginMs)) {
                 return false
             }
@@ -3569,10 +3588,20 @@ class MusicService :
         }
 
         if (lagMs in (CROSSFADE_HANDOFF_PHASE_TOLERANCE_MS + 1L)..CROSSFADE_HANDOFF_MAX_SKIP_SYNC_MS) {
-            if (primaryGainAndSyncProcessor.scheduleSkipMs(lagMs)) {
+            if (!awaitPrimaryBufferForSkip(targetIndex, lagMs)) {
+                return false
+            }
+            primaryPositionMs = player.currentPosition.coerceAtLeast(0L)
+            secondaryPositionMs = incomingPlayer.currentPosition.coerceAtLeast(0L)
+            lagMs = (secondaryPositionMs - primaryPositionMs).coerceAtMost(CROSSFADE_HANDOFF_MAX_SKIP_SYNC_MS)
+            if (lagMs > CROSSFADE_HANDOFF_PHASE_TOLERANCE_MS &&
+                primaryGainAndSyncProcessor.scheduleSkipMs(lagMs)
+            ) {
                 try {
                     val drainDeadlineMs =
-                        android.os.SystemClock.elapsedRealtime() + CROSSFADE_HANDOFF_SPLICE_DRAIN_TIMEOUT_MS
+                        android.os.SystemClock.elapsedRealtime() +
+                            lagMs +
+                            CROSSFADE_HANDOFF_SPLICE_DRAIN_TIMEOUT_MS
                     while (kotlinx.coroutines.currentCoroutineContext().isActive &&
                         android.os.SystemClock.elapsedRealtime() < drainDeadlineMs
                     ) {
@@ -3601,6 +3630,48 @@ class MusicService :
             }
         }
         return true
+    }
+
+    private suspend fun awaitPrimaryBufferForSkip(
+        targetIndex: Int,
+        lagMs: Long,
+    ): Boolean {
+        if (lagMs <= 0L) return true
+        if (player.currentMediaItem
+                ?.localConfiguration
+                ?.uri
+                ?.shouldBypassPlayerCache() == true
+        ) {
+            return true
+        }
+        val deadlineMs = android.os.SystemClock.elapsedRealtime() + CROSSFADE_HANDOFF_READY_TIMEOUT_MS
+        while (kotlinx.coroutines.currentCoroutineContext().isActive &&
+            android.os.SystemClock.elapsedRealtime() < deadlineMs
+        ) {
+            if (!crossfadePlaybackRequested || !player.playWhenReady) return false
+            if (player.currentMediaItemIndex != targetIndex) return false
+            if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) return false
+            val currentPosition = localPlayer.currentPosition.coerceAtLeast(0L)
+            val duration = localPlayer.duration
+            val remainingDuration =
+                if (duration != C.TIME_UNSET && duration > currentPosition) {
+                    duration - currentPosition
+                } else {
+                    null
+                }
+            val requiredBufferedMs =
+                requiredBufferBeforeCrossfadeSkipMs(
+                    lagMs = lagMs,
+                    postSkipCushionMs = PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS.toLong(),
+                    remainingTrackDurationMs = remainingDuration,
+                    endGuardMs = CROSSFADE_END_GUARD_MS,
+                )
+            if (localPlayer.totalBufferedDuration.coerceAtLeast(0L) >= requiredBufferedMs) {
+                return true
+            }
+            delay(CROSSFADE_HANDOFF_POLL_MS)
+        }
+        return false
     }
 
     private fun clampCrossfadeHandoffSeekPosition(
@@ -3764,6 +3835,82 @@ class MusicService :
         if (resetVolume && ::player.isInitialized) {
             applyEffectiveVolumeImmediately()
         }
+    }
+
+    private suspend fun completeFallbackHandoffFromSecondary(
+        targetIndex: Int,
+        targetMediaId: String,
+        incomingPlayer: ExoPlayer,
+        reason: String,
+    ) {
+        if (!::player.isInitialized ||
+            !crossfadePlaybackRequested ||
+            player.currentMediaItemIndex != targetIndex
+        ) {
+            abortCrossfadeAndResumePrimary(reason)
+            return
+        }
+
+        Timber.tag(TAG).w(
+            "Deferring secondary crossfade release until primary is ready: reason=%s",
+            reason,
+        )
+        player.playWhenReady = true
+
+        val waitDeadlineMs =
+            android.os.SystemClock.elapsedRealtime() + CROSSFADE_FALLBACK_READY_TIMEOUT_MS
+        while (kotlinx.coroutines.currentCoroutineContext().isActive &&
+            android.os.SystemClock.elapsedRealtime() < waitDeadlineMs
+        ) {
+            if (!crossfadePlaybackRequested || !player.playWhenReady) {
+                incomingPlayer.pause()
+                cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
+                return
+            }
+            if (player.currentMediaItemIndex != targetIndex) {
+                cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
+                return
+            }
+            if (player.playbackState == Player.STATE_READY && player.isPlaying) {
+                break
+            }
+            if (!incomingPlayer.isPlaying &&
+                (incomingPlayer.playbackState == Player.STATE_ENDED || incomingPlayer.playbackState == Player.STATE_IDLE)
+            ) {
+                break
+            }
+            delay(CROSSFADE_HANDOFF_POLL_MS)
+        }
+
+        if (player.playbackState == Player.STATE_READY &&
+            player.isPlaying &&
+            incomingPlayer.isPlaying &&
+            crossfadePlaybackRequested &&
+            player.currentMediaItemIndex == targetIndex
+        ) {
+            performCrossfadeHandoff(targetIndex, incomingPlayer)
+        }
+
+        if (player.currentMediaItemIndex == targetIndex) {
+            currentMediaMetadata.value = player.getMediaItemAt(targetIndex).metadata
+            normalizeFactor.value =
+                resolveAudioNormalizationFactor(
+                    mediaId = targetMediaId,
+                    format = null,
+                    normalizeAudio = audioNormalizationEnabled,
+                )
+        }
+
+        isCrossfading = false
+        crossfadeHandoffInProgress = false
+        crossfadeHandoffProgress = 0f
+        crossfadeProgress = 0f
+        crossfadeIncomingBaseVolume = 1f
+        crossfadePlaybackRequested = false
+        releaseSecondaryCrossfadePlayer()
+        applyEffectiveVolumeImmediately()
+        updateAudiblePlaybackRecovery()
+        scheduleCrossfade()
     }
 
     private fun abortCrossfadeAndResumePrimary(reason: String) {
@@ -8335,11 +8482,16 @@ class MusicService :
             .Factory()
             .setCache(playerCache)
             .setUpstreamDataSourceFactory(createResolvedUpstreamDataSourceFactory())
-            .apply {
-                if (!cacheWriteEnabled) {
-                    setCacheWriteDataSinkFactory(null)
-                }
-            }.setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
+            .setCacheWriteDataSinkFactory(
+                if (cacheWriteEnabled) {
+                    CacheDataSink
+                        .Factory()
+                        .setCache(playerCache)
+                        .setFragmentSize(PLAYER_CACHE_FRAGMENT_SIZE)
+                } else {
+                    null
+                },
+            ).setFlags(FLAG_IGNORE_CACHE_ON_ERROR)
 
     private fun createCacheDataSource(): CacheDataSource.Factory =
         CacheDataSource
@@ -9034,7 +9186,7 @@ class MusicService :
 
     private fun updateWakeLock() {
         val wl = wakeLock ?: return
-        val shouldHold = wakelockEnabled && player.isPlaying
+        val shouldHold = wakelockEnabled && (player.isPlaying || isCrossfadeContinuouslyPlaying())
         if (shouldHold && !wl.isHeld) {
             wl.acquire()
         } else if (!shouldHold && wl.isHeld) {
@@ -9776,6 +9928,7 @@ class MusicService :
         private const val TOGETHER_HOST_INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000L
         const val ERROR_CODE_NO_STREAM = 1000001
         const val CHUNK_LENGTH = 1024 * 1024L
+        const val PLAYER_CACHE_FRAGMENT_SIZE = 128 * 1024L
         private const val PLAYBACK_FORMAT_ID_METADATA_KEY = "lunartune_itag"
         val RETRYABLE_STREAM_RESPONSE_CODES = setOf(403, 404, 410, 416)
         const val PERSISTENT_QUEUE_FILE = "persistent_queue.data"
@@ -9799,19 +9952,20 @@ class MusicService :
         const val CROSSFADE_PREPARE_AHEAD_MS = 30_000L
         const val CROSSFADE_READY_TIMEOUT_MS = 5_000L
         const val CROSSFADE_HANDOFF_READY_TIMEOUT_MS = 5_000L
+        const val CROSSFADE_FALLBACK_READY_TIMEOUT_MS = 4_000L
         const val CROSSFADE_HANDOFF_BUFFER_MS = 5_000L
-        const val CROSSFADE_HANDOFF_SEEK_GUARD_MS = 750L
+        const val CROSSFADE_HANDOFF_SEEK_GUARD_MS = 2_500L
         const val CROSSFADE_HANDOFF_PHASE_TOLERANCE_MS = 3L
-        const val CROSSFADE_HANDOFF_MAX_SKIP_SYNC_MS = 650L
+        const val CROSSFADE_HANDOFF_MAX_SKIP_SYNC_MS = 2_500L
         const val CROSSFADE_HANDOFF_RESEEK_LEAD_MS = 65L
         const val CROSSFADE_HANDOFF_SPLICE_SAFETY_MS = 8L
-        const val CROSSFADE_HANDOFF_SPLICE_DRAIN_TIMEOUT_MS = 650L
+        const val CROSSFADE_HANDOFF_SPLICE_DRAIN_TIMEOUT_MS = 1_200L
         const val CROSSFADE_HANDOFF_MAX_DRIFT_MS = 12L
         const val CROSSFADE_HANDOFF_DURATION_MS = 36L
         const val CROSSFADE_HANDOFF_FRAME_MS = 4L
         const val CROSSFADE_HANDOFF_POLL_MS = 4L
         const val CROSSFADE_MIN_BUFFER_BEFORE_START_MS = 5_000L
-        const val CROSSFADE_MAX_BUFFER_BEFORE_START_MS = 12_500L
+        const val CROSSFADE_MAX_BUFFER_BEFORE_START_MS = 20_000L
         const val PRIMARY_MIN_BUFFER_MS = 20_000
         const val PRIMARY_MAX_BUFFER_MS = 60_000
         const val PRIMARY_BUFFER_FOR_PLAYBACK_MS = 500
@@ -9835,8 +9989,8 @@ class MusicService :
         const val STALL_RECOVERY_RETRY_TIMEOUT_MS = 45_000L
         // Bound the full YouTube stream URL resolution, including client fallbacks.
         const val PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS = 45_000L
-        const val CROSSFADE_MIN_BUFFER_MS = 15_000
-        const val CROSSFADE_MAX_BUFFER_MS = 45_000
+        const val CROSSFADE_MIN_BUFFER_MS = 25_000
+        const val CROSSFADE_MAX_BUFFER_MS = 60_000
         const val CROSSFADE_FRAME_MS = 32L
         const val MIN_AUDIBLE_EFFECTIVE_VOLUME = 0.01f
         const val STUCK_MUTED_VOLUME_EPSILON = 0.001f

@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.ui.component.karaoke
 
+import android.os.Build
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextRange
@@ -59,7 +60,11 @@ object FastLatinProfile : DefaultLyricsProfile() {
                 timingCount > 1 &&
                 duration >= HELD_WORD_MIN_DURATION_MS &&
                 duration / timingCount > HELD_CHAR_MIN_AVG_MS
-        return ProfileGroupEffects(scale = enabled, glow = enabled, glowAsGroup = true)
+        return ProfileGroupEffects(
+            scale = enabled,
+            glow = enabled && supportsLyricsBlur(),
+            glowAsGroup = true,
+        )
     }
 
     override fun matches(syllable: KaraokeSyllable): Boolean {
@@ -275,6 +280,8 @@ object FastLatinProfile : DefaultLyricsProfile() {
     private const val HELD_CHAR_MIN_AVG_MS = 200L
     private const val OVERLAP_EPSILON_PX = 0.5f
 }
+
+internal fun supportsLyricsBlur(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
 val LunarLyricsProfiles: List<LyricsProfile> =
     listOf(

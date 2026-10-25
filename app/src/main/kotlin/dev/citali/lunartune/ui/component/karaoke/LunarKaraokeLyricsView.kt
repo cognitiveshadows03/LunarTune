@@ -632,8 +632,9 @@ fun LunarKaraokeLyricsView(
                 playbackPosition = timeProvider,
             )
 
+        val effectiveUseBlurEffect = useBlurEffect && supportsLyricsBlur()
         val focusBlurScale by animateFloatAsState(
-            targetValue = if (listState.isManualScrolling || !useBlurEffect) 0f else 1f,
+            targetValue = if (listState.isManualScrolling || !effectiveUseBlurEffect) 0f else 1f,
             animationSpec = tween(durationMillis = if (listState.isManualScrolling) 100 else 300),
             label = "manualScrollFocusBlur",
         )
@@ -670,11 +671,16 @@ fun LunarKaraokeLyricsView(
                     firstAnchor - itemIndex,
                     itemIndex - lastAnchor,
                 )
-            val animatedBlur by animateFloatAsState(
-                targetValue = if (useBlurEffect) distance * blurDelta else 0f,
-                animationSpec = tween(durationMillis = 300),
-                label = "lineFocusBlur",
-            )
+            val animatedBlur =
+                if (effectiveUseBlurEffect) {
+                    animateFloatAsState(
+                        targetValue = distance * blurDelta,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "lineFocusBlur",
+                    ).value
+                } else {
+                    0f
+                }
 
             Column {
                 if (itemIndex == 0 && f.activeIntro) {

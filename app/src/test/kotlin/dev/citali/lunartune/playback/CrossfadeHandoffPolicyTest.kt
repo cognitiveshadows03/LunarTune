@@ -109,4 +109,35 @@ class CrossfadeHandoffPolicyTest {
         assertEquals(1f, clamped.playerVolume, 1e-5f)
         assertEquals(1.414f, clamped.postVolumeGain, 1e-5f)
     }
+
+    @Test
+    fun requiredBufferBeforeCrossfadeSkip_includesPostSkipCushion_andClampsNearTrackEnd() {
+        assertEquals(
+            2_300L,
+            requiredBufferBeforeCrossfadeSkipMs(
+                lagMs = 800L,
+                postSkipCushionMs = 1_500L,
+                remainingTrackDurationMs = 30_000L,
+                endGuardMs = 150L,
+            ),
+        )
+        assertEquals(
+            2_300L,
+            requiredBufferBeforeCrossfadeSkipMs(
+                lagMs = 800L,
+                postSkipCushionMs = 1_500L,
+                remainingTrackDurationMs = null,
+                endGuardMs = 150L,
+            ),
+        )
+        assertEquals(
+            850L,
+            requiredBufferBeforeCrossfadeSkipMs(
+                lagMs = 800L,
+                postSkipCushionMs = 1_500L,
+                remainingTrackDurationMs = 1_000L,
+                endGuardMs = 150L,
+            ),
+        )
+    }
 }
