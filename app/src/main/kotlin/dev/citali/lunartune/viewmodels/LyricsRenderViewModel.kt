@@ -95,13 +95,30 @@ class LyricsRenderViewModel
             mediaId: String,
             durationMs: Long,
         ) {
-            val nextBinding = Binding(mediaId, durationMs.coerceAtLeast(0L))
-            if (binding == nextBinding) return
+            val previousBinding = binding
+            val normalizedDurationMs =
+                if (durationMs <= 0L && previousBinding?.mediaId == mediaId && previousBinding.durationMs > 0L) {
+                    previousBinding.durationMs
+                } else {
+                    durationMs.coerceAtLeast(0L)
+                }
+            val nextBinding = Binding(mediaId, normalizedDurationMs)
+            if (previousBinding == nextBinding) return
 
-            val mediaChanged = binding?.mediaId != mediaId
+            val mediaChanged = previousBinding?.mediaId != mediaId
             binding = nextBinding
             observationJob?.cancel()
-            if (mediaChanged) _state.value = LyricsRenderScreenState.Loading
+            val cached = prepareLyrics.peekCached(nextBinding.mediaId, nextBinding.durationMs)
+            if (cached != null) {
+                _state.value =
+                    if (cached.lines.isEmpty()) {
+                        LyricsRenderScreenState.Empty
+                    } else {
+                        LyricsRenderScreenState.Success(cached)
+                    }
+            } else if (mediaChanged) {
+                _state.value = LyricsRenderScreenState.Loading
+            }
             observationJob =
                 viewModelScope.launch {
                     prepareLyrics.observe(nextBinding.mediaId, nextBinding.durationMs).collect { result ->

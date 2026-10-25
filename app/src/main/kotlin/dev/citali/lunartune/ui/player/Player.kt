@@ -64,8 +64,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.mocharealm.accompanist.lyrics.ui.composable.list.LyricsLazyListState
-import com.mocharealm.accompanist.lyrics.ui.composable.list.rememberLyricsLazyListState
+import dev.citali.lunartune.ui.component.karaoke.LunarLyricsListState
+import dev.citali.lunartune.ui.component.karaoke.rememberLunarLyricsListState
 import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -518,9 +518,11 @@ fun BottomSheetPlayer(
     }
     // The full lyrics overlay is removed after its close transition. Hoist each mode's state so
     // opening the same song again does not make the library animate from item zero every time.
-    val enhancedLyricsListState = key(mediaMetadata?.id, "enhanced-lyrics") { rememberLyricsLazyListState() }
+    val enhancedLyricsListState = key(mediaMetadata?.id, "enhanced-lyrics") { rememberLunarLyricsListState() }
     val v2LyricsListState = key(mediaMetadata?.id, "v2-lyrics") { rememberLazyListState() }
-    val preparedDurationMs = duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
+    val preparedDurationMs =
+        duration.takeIf { it != C.TIME_UNSET && it > 0L }
+            ?: ((mediaMetadata?.duration?.coerceAtLeast(0) ?: 0) * 1000L)
     LaunchedEffect(mediaMetadata?.id, preparedDurationMs) {
         val currentMediaId = mediaMetadata?.id ?: return@LaunchedEffect
         lyricsRenderViewModel.bind(currentMediaId, preparedDurationMs)
@@ -1874,6 +1876,7 @@ fun BottomSheetPlayer(
                                 onCloseLyrics = { isLyricsScreenVisible = false },
                                 appleMusicQueueOpen = playerDesignStyle == PlayerDesignStyle.V10 && isAppleQueueOpen,
                                 onCloseAppleMusicQueue = { isAppleQueueOpen = false },
+                                lyricsRenderViewModel = lyricsRenderViewModel,
                                 modifier =
                                     Modifier
                                         .fillMaxSize()
@@ -2015,6 +2018,7 @@ fun BottomSheetPlayer(
                     onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
                     enhancedLyricsListState = enhancedLyricsListState,
                     v2LyricsListState = v2LyricsListState,
+                    lyricsRenderViewModel = lyricsRenderViewModel,
                     onDismiss = { isLyricsScreenVisible = false },
                     onQueueClick = openQueue,
                 )
@@ -2034,6 +2038,7 @@ fun BottomSheetPlayer(
                     onLyricsSyncOffsetChange = { lyricsSyncOffset = it },
                     enhancedLyricsListState = enhancedLyricsListState,
                     v2LyricsListState = v2LyricsListState,
+                    lyricsRenderViewModel = lyricsRenderViewModel,
                     onDismiss = { isLyricsScreenVisible = false },
                     onQueueClick = openQueue,
                 )
@@ -2107,8 +2112,9 @@ private fun MikoLyricsTransition(
     navController: NavController,
     lyricsSyncOffset: Int,
     onLyricsSyncOffsetChange: (Int) -> Unit,
-    enhancedLyricsListState: LyricsLazyListState,
+    enhancedLyricsListState: LunarLyricsListState,
     v2LyricsListState: LazyListState,
+    lyricsRenderViewModel: LyricsRenderViewModel,
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2147,6 +2153,7 @@ private fun MikoLyricsTransition(
                 backHandlerEnabled = backHandlerEnabled,
                 rememberedEnhancedListState = enhancedLyricsListState,
                 rememberedV2ListState = v2LyricsListState,
+                lyricsRenderViewModel = lyricsRenderViewModel,
             )
         }
     }
@@ -2161,8 +2168,9 @@ private fun AppleMusicLyricsPageTransition(
     navController: NavController,
     lyricsSyncOffset: Int,
     onLyricsSyncOffsetChange: (Int) -> Unit,
-    enhancedLyricsListState: LyricsLazyListState,
+    enhancedLyricsListState: LunarLyricsListState,
     v2LyricsListState: LazyListState,
+    lyricsRenderViewModel: LyricsRenderViewModel,
     onDismiss: () -> Unit,
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -2219,6 +2227,7 @@ private fun AppleMusicLyricsPageTransition(
                     backHandlerEnabled = backHandlerEnabled,
                     rememberedEnhancedListState = enhancedLyricsListState,
                     rememberedV2ListState = v2LyricsListState,
+                    lyricsRenderViewModel = lyricsRenderViewModel,
                 )
             }
         }

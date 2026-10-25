@@ -142,9 +142,9 @@ import androidx.media3.common.Player.STATE_ENDED
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import com.mocharealm.accompanist.lyrics.ui.composable.list.rememberLyricsLazyListState
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
+import dev.citali.lunartune.ui.component.karaoke.rememberLunarLyricsListState
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.LyricsAutoHidePlayerControlsKey
 import dev.citali.lunartune.constants.LyricsMode
@@ -346,17 +346,9 @@ internal fun AppleMusicPortraitContent(
     }
     // AnimatedVisibility removes the lyrics composable when the page closes. Keep its list states
     // in this always-composed parent so reopening the same song resumes where the reader left off.
-    val enhancedLyricsListState = key(mediaMetadata.id, "enhanced-lyrics") { rememberLyricsLazyListState() }
+    val enhancedLyricsListState = key(mediaMetadata.id, "enhanced-lyrics") { rememberLunarLyricsListState() }
     val v2LyricsListState = key(mediaMetadata.id, "v2-lyrics") { rememberLazyListState() }
 
-    var lyricsContentReady by remember { mutableStateOf(false) }
-    LaunchedEffect(lyricsOpen) {
-        lyricsContentReady = false
-        if (lyricsOpen) {
-            kotlinx.coroutines.delay(160L)
-            lyricsContentReady = true
-        }
-    }
     var controlsVisible by remember { mutableStateOf(true) }
     var controlsPoke by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val autoHideLyricsControls = autoHideLyricsControlsState.value
@@ -595,32 +587,30 @@ internal fun AppleMusicPortraitContent(
                         .padding(bottom = lyricsReserve)
                         .padding(horizontal = AppleMusicGutter - 16.dp),
             ) {
-                if (lyricsContentReady) {
-                    val provider = androidx.compose.runtime.rememberUpdatedState(sliderPosition)
-                    when (lyricsMode) {
-                        LyricsMode.V2 ->
-                            LyricsV2(
-                                lyricsState = lyricsRenderState,
-                                sliderPositionProvider = { provider.value },
-                                lyricsSyncOffset = lyricsSyncOffset,
-                                modifier = Modifier.fillMaxSize(),
-                                // Always on the dark blurred backdrop, so ignore light theme colours.
-                                textColorOverride = Color.White,
-                                rememberedListState = v2LyricsListState,
-                                lyricsRenderViewModel = lyricsRenderViewModel,
-                            )
-                        LyricsMode.ENHANCED ->
-                            LyricsEnhanced(
-                                lyricsState = lyricsRenderState,
-                                sliderPositionProvider = { provider.value },
-                                lyricsSyncOffset = lyricsSyncOffset,
-                                modifier = Modifier.fillMaxSize(),
-                                // Always on the dark blurred backdrop, so ignore light theme colours.
-                                textColorOverride = Color.White,
-                                rememberedKaraokeListState = enhancedLyricsListState,
-                                lyricsRenderViewModel = lyricsRenderViewModel,
-                            )
-                    }
+                val provider = androidx.compose.runtime.rememberUpdatedState(sliderPosition)
+                when (lyricsMode) {
+                    LyricsMode.V2 ->
+                        LyricsV2(
+                            lyricsState = lyricsRenderState,
+                            sliderPositionProvider = { provider.value },
+                            lyricsSyncOffset = lyricsSyncOffset,
+                            modifier = Modifier.fillMaxSize(),
+                            // Always on the dark blurred backdrop, so ignore light theme colours.
+                            textColorOverride = Color.White,
+                            rememberedListState = v2LyricsListState,
+                            lyricsRenderViewModel = lyricsRenderViewModel,
+                        )
+                    LyricsMode.ENHANCED ->
+                        LyricsEnhanced(
+                            lyricsState = lyricsRenderState,
+                            sliderPositionProvider = { provider.value },
+                            lyricsSyncOffset = lyricsSyncOffset,
+                            modifier = Modifier.fillMaxSize(),
+                            // Always on the dark blurred backdrop, so ignore light theme colours.
+                            textColorOverride = Color.White,
+                            rememberedKaraokeListState = enhancedLyricsListState,
+                            lyricsRenderViewModel = lyricsRenderViewModel,
+                        )
                 }
             }
         }

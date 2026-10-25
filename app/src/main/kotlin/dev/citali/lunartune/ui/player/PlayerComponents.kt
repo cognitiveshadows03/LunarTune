@@ -113,6 +113,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.Player.STATE_ENDED
@@ -137,6 +138,7 @@ import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.PlayerSliderTrack
 import dev.citali.lunartune.ui.component.ResizableIconButton
+import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
 import dev.citali.lunartune.ui.menu.PlayerMenu
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.ui.theme.PlayerBackgroundColorUtils
@@ -2160,6 +2162,7 @@ fun V8PlayerContent(
     lyricsSyncOffset: Int = 0,
     onLyricsSyncOffsetChange: (Int) -> Unit = {},
     onCloseLyrics: () -> Unit = {},
+    lyricsRenderViewModel: LyricsRenderViewModel? = null,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2281,6 +2284,7 @@ fun V8PlayerContent(
             onSliderValueChangeFinished = onSliderValueChangeFinished,
             onVolumeChange = onVolumeChange,
             modifier = modifier,
+            lyricsRenderViewModel = lyricsRenderViewModel ?: hiltViewModel(),
         )
     } else {
         V8PortraitContent(

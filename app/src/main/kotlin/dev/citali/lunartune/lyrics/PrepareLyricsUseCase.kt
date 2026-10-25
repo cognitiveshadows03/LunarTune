@@ -19,17 +19,62 @@ import kotlinx.coroutines.withContext
 import moe.rukamori.archivetune.betterlyrics.QRCParser
 import moe.rukamori.archivetune.betterlyrics.TTMLParser
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlin.math.roundToLong
 
+@Singleton
 @OptIn(ExperimentalCoroutinesApi::class)
 class PrepareLyricsUseCase
     @Inject
     constructor(
         private val repository: LyricsRenderingRepository,
     ) {
+        private data class BaseCacheKey(
+            val source: String,
+            val durationBucket: Long,
+            val romanization: LyricsRomanizationPreferences,
+            val japaneseLanguagePackInstalled: Boolean,
+        )
+
+        private data class PreparedBase(
+            val sourceFormat: LyricsSourceFormat,
+            val syncType: LyricsSyncType,
+            val lines: ImmutableList<PreparedLyricsLine>,
+        )
+
+        private data class CachedMediaPrepared(
+            val durationMs: Long,
+            val prepared: PreparedLyrics,
+        )
+
+        private val baseCache =
+            object : LinkedHashMap<BaseCacheKey, PreparedBase>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<BaseCacheKey, PreparedBase>?): Boolean =
+                    size > MAX_BASE_CACHE_ENTRIES
+            }
+
+        private val latestByMediaId =
+            object : LinkedHashMap<String, CachedMediaPrepared>(16, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedMediaPrepared>?): Boolean =
+                    size > MAX_MEDIA_CACHE_ENTRIES
+            }
+
         suspend fun setShowTranslations(show: Boolean) {
             repository.setShowTranslations(show)
         }
+
+        fun peekCached(
+            mediaId: String,
+            durationMs: Long,
+        ): PreparedLyrics? =
+            synchronized(latestByMediaId) {
+                val cached = latestByMediaId[mediaId] ?: return@synchronized null
+                val matchesDuration =
+                    cached.prepared.sourceFormat != LyricsSourceFormat.LRC ||
+                        durationMs <= 0L ||
+                        (cached.durationMs / 1000L) == (durationMs / 1000L)
+                cached.prepared.takeIf { matchesDuration }
+            }
 
         fun observe(
             mediaId: String,
@@ -40,50 +85,144 @@ class PrepareLyricsUseCase
                 repository.observePreferences(),
             ) { entity, preferences -> entity to preferences }
                 .mapLatest { (entity, preferences) ->
+                    tryResolveCached(mediaId, entity, durationMs, preferences)?.let { cached ->
+                        return@mapLatest Result.success(cached)
+                    }
                     withContext(Dispatchers.Default) {
-                        prepare(entity, durationMs, preferences)
+                        prepare(mediaId, entity, durationMs, preferences)
                     }
                 }
 
-        private suspend fun prepare(
+        private fun resolveEffectivePreferences(
+            entity: LyricsEntity,
+            preferences: LyricsRenderingPreferences,
+        ): LyricsRenderingPreferences =
+            if (entity.source == LyricsEntity.Source.AI_TRANSLATION.value && !preferences.showTranslations) {
+                preferences.copy(showTranslations = true)
+            } else {
+                preferences
+            }
+
+        private fun resolveSourceText(storedLyrics: String): String =
+            if (RAW_TTML_ROOT_REGEX.containsMatchIn(storedLyrics.take(TTML_ROOT_SCAN_LENGTH))) {
+                storedLyrics.removePrefix("\uFEFF").trimStart()
+            } else {
+                LyricsUtils.normalizeLyricsText(storedLyrics)
+            }
+
+        private fun tryResolveCached(
+            mediaId: String,
             entity: LyricsEntity?,
             durationMs: Long,
             preferences: LyricsRenderingPreferences,
-        ): Result<PreparedLyrics?> {
-            if (entity == null) return Result.success(null)
-            val storedLyrics = entity.lyrics
-            val effectivePreferences =
-                if (entity.source == LyricsEntity.Source.AI_TRANSLATION.value && !preferences.showTranslations) {
-                    preferences.copy(showTranslations = true)
-                } else {
-                    preferences
-                }
-
-            val normalizedSource = LyricsUtils.normalizeLyricsText(storedLyrics)
-            val source =
-                if (RAW_TTML_ROOT_REGEX.containsMatchIn(storedLyrics.take(TTML_ROOT_SCAN_LENGTH))) {
-                    storedLyrics.removePrefix("\uFEFF").trimStart()
-                } else {
-                    normalizedSource
-                }
+        ): PreparedLyrics? {
+            if (entity == null) return null
+            val effectivePreferences = resolveEffectivePreferences(entity, preferences)
+            val source = resolveSourceText(entity.lyrics)
             if (source.isBlank() || source == LyricsEntity.LYRICS_NOT_FOUND) {
-                return Result.success(
+                val empty =
                     PreparedLyrics(
                         sourceFormat = LyricsSourceFormat.PLAIN,
                         syncType = LyricsSyncType.PLAIN,
                         lines = ImmutableList.of(),
                         preferences = effectivePreferences,
-                    ),
+                    )
+                cacheForMedia(mediaId, durationMs, empty)
+                return empty
+            }
+            val key = buildBaseCacheKey(source, durationMs, effectivePreferences)
+            val cachedBase = synchronized(baseCache) { baseCache[key] } ?: return null
+            val prepared =
+                PreparedLyrics(
+                    sourceFormat = cachedBase.sourceFormat,
+                    syncType = cachedBase.syncType,
+                    lines = cachedBase.lines,
+                    preferences = effectivePreferences,
                 )
+            cacheForMedia(mediaId, durationMs, prepared)
+            return prepared
+        }
+
+        private fun buildBaseCacheKey(
+            source: String,
+            durationMs: Long,
+            preferences: LyricsRenderingPreferences,
+        ): BaseCacheKey {
+            val isLrc = !LyricsUtils.isTtml(source) && LyricsUtils.isLineSyncedLrc(source)
+            val durationBucket = if (isLrc) durationMs.coerceAtLeast(0L) / 1000L else 0L
+            return BaseCacheKey(
+                source = source,
+                durationBucket = durationBucket,
+                romanization = preferences.romanization,
+                japaneseLanguagePackInstalled = preferences.japaneseLanguagePackInstalled,
+            )
+        }
+
+        private fun cacheForMedia(
+            mediaId: String,
+            durationMs: Long,
+            prepared: PreparedLyrics,
+        ) {
+            synchronized(latestByMediaId) {
+                latestByMediaId[mediaId] = CachedMediaPrepared(durationMs.coerceAtLeast(0L), prepared)
+            }
+        }
+
+        private suspend fun prepare(
+            mediaId: String,
+            entity: LyricsEntity?,
+            durationMs: Long,
+            preferences: LyricsRenderingPreferences,
+        ): Result<PreparedLyrics?> {
+            if (entity == null) {
+                synchronized(latestByMediaId) {
+                    latestByMediaId.remove(mediaId)
+                }
+                return Result.success(null)
+            }
+            val effectivePreferences = resolveEffectivePreferences(entity, preferences)
+            val source = resolveSourceText(entity.lyrics)
+            if (source.isBlank() || source == LyricsEntity.LYRICS_NOT_FOUND) {
+                val empty =
+                    PreparedLyrics(
+                        sourceFormat = LyricsSourceFormat.PLAIN,
+                        syncType = LyricsSyncType.PLAIN,
+                        lines = ImmutableList.of(),
+                        preferences = effectivePreferences,
+                    )
+                cacheForMedia(mediaId, durationMs, empty)
+                return Result.success(empty)
             }
 
             return try {
+                val key = buildBaseCacheKey(source, durationMs, effectivePreferences)
+                val cachedBase = synchronized(baseCache) { baseCache[key] }
                 val prepared =
-                    when {
-                        LyricsUtils.isTtml(source) -> prepareTtml(source, effectivePreferences)
-                        LyricsUtils.isLineSyncedLrc(source) -> prepareSyncedText(source, durationMs, effectivePreferences)
-                        else -> preparePlainText(source, effectivePreferences)
+                    if (cachedBase != null) {
+                        PreparedLyrics(
+                            sourceFormat = cachedBase.sourceFormat,
+                            syncType = cachedBase.syncType,
+                            lines = cachedBase.lines,
+                            preferences = effectivePreferences,
+                        )
+                    } else {
+                        val freshlyPrepared =
+                            when {
+                                LyricsUtils.isTtml(source) -> prepareTtml(source, effectivePreferences)
+                                LyricsUtils.isLineSyncedLrc(source) -> prepareSyncedText(source, durationMs, effectivePreferences)
+                                else -> preparePlainText(source, effectivePreferences)
+                            }
+                        synchronized(baseCache) {
+                            baseCache[key] =
+                                PreparedBase(
+                                    sourceFormat = freshlyPrepared.sourceFormat,
+                                    syncType = freshlyPrepared.syncType,
+                                    lines = freshlyPrepared.lines,
+                                )
+                        }
+                        freshlyPrepared
                     }
+                cacheForMedia(mediaId, durationMs, prepared)
                 Result.success(prepared)
             } catch (throwable: Throwable) {
                 if (throwable is CancellationException) throw throwable
@@ -389,6 +528,8 @@ class PrepareLyricsUseCase
         private companion object {
             const val DEFAULT_LINE_DURATION_MS = 4000L
             const val TTML_ROOT_SCAN_LENGTH = 4096
+            const val MAX_BASE_CACHE_ENTRIES = 32
+            const val MAX_MEDIA_CACHE_ENTRIES = 24
             val WHITESPACE_REGEX = Regex("\\s+")
             val RAW_TTML_ROOT_REGEX = Regex("""<(?:[A-Za-z_][\w.-]*:)?tt(?:\s|>)""", RegexOption.IGNORE_CASE)
             val RTL_LANGUAGES = setOf("ar", "dv", "fa", "he", "ku", "ps", "sd", "ug", "ur", "yi")

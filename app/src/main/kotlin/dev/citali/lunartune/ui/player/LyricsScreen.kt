@@ -114,8 +114,8 @@ import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.size.Size
 import coil3.toBitmap
-import com.mocharealm.accompanist.lyrics.ui.composable.list.LyricsLazyListState
 import dagger.hilt.android.EntryPointAccessors
+import dev.citali.lunartune.ui.component.karaoke.LunarLyricsListState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -250,7 +250,7 @@ fun LyricsScreen(
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     backHandlerEnabled: Boolean = true,
-    rememberedEnhancedListState: LyricsLazyListState? = null,
+    rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
     lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
 ) {
@@ -386,12 +386,27 @@ fun LyricsScreen(
         }
     }
 
-    val positionState = remember(mediaMetadata.id) { mutableLongStateOf(0L) }
-    val durationState = remember(mediaMetadata.id) { mutableLongStateOf(C.TIME_UNSET) }
+    val positionState =
+        remember(mediaMetadata.id) {
+            mutableLongStateOf(player.currentPosition.coerceAtLeast(0L))
+        }
+    val durationState =
+        remember(mediaMetadata.id) {
+            val currentDuration = player.duration
+            val initialDuration =
+                if (currentDuration != C.TIME_UNSET && currentDuration > 0L) {
+                    currentDuration
+                } else {
+                    mediaMetadata.duration.coerceAtLeast(0) * 1000L
+                }
+            mutableLongStateOf(initialDuration.takeIf { it > 0L } ?: C.TIME_UNSET)
+        }
     var sliderPosition by remember(mediaMetadata.id) { mutableStateOf<Long?>(null) }
     var gradientColors by remember(mediaMetadata.thumbnailUrl) { mutableStateOf(AppleMusicFallbackGradient) }
 
-    val lyricsDurationMs = durationState.longValue.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
+    val lyricsDurationMs =
+        durationState.longValue.takeIf { it != C.TIME_UNSET && it > 0L }
+            ?: (mediaMetadata.duration.coerceAtLeast(0) * 1000L)
     LaunchedEffect(mediaMetadata.id, lyricsDurationMs) {
         lyricsRenderViewModel.bind(mediaMetadata.id, lyricsDurationMs)
     }
@@ -1391,7 +1406,7 @@ private fun AppleMusicLyricsPane(
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
-    rememberedEnhancedListState: LyricsLazyListState? = null,
+    rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
 ) {
     LyricsContent(
@@ -1778,7 +1793,7 @@ private fun LyricsContent(
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
-    rememberedEnhancedListState: LyricsLazyListState? = null,
+    rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
 ) {
     when (lyricsMode) {

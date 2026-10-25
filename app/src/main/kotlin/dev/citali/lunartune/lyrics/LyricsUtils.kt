@@ -878,13 +878,29 @@ object LyricsUtils {
         return romajiBuilder.toString().lowercase()
     }
 
+    private fun createBoundedStringCache(maxEntries: Int): MutableMap<String, String> =
+        object : LinkedHashMap<String, String>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+                size > maxEntries
+        }
+
+    private val japaneseRomanizeCache = createBoundedStringCache(1024)
+    private val koreanRomanizeCache = createBoundedStringCache(1024)
+    private val icuRomanizeCache = createBoundedStringCache(1024)
+
     /**
      * Romanizes Japanese text with the optional downloaded Kuromoji dictionary and the optimized
      * katakanaToRomaji function. Returns the original text when the language pack is unavailable.
      */
-    suspend fun romanizeJapanese(text: String): String =
-        withContext(Dispatchers.Default) {
-            val tokenizer = JapaneseLanguagePackManager.tokenizerOrNull() ?: return@withContext text
+    suspend fun romanizeJapanese(text: String): String {
+        val tokenizer = JapaneseLanguagePackManager.tokenizerOrNull() ?: return text
+        synchronized(japaneseRomanizeCache) {
+            japaneseRomanizeCache[text]?.let { return it }
+        }
+        return withContext(Dispatchers.Default) {
+            synchronized(japaneseRomanizeCache) {
+                japaneseRomanizeCache[text]?.let { return@withContext it }
+            }
             val tokens = tokenizer.tokenize(text)
 
             val romanizedTokens =
@@ -905,8 +921,13 @@ object LyricsUtils {
                         }
                     katakanaToRomaji(currentReading, nextTokenReading)
                 }
-            romanizedTokens.joinToString(" ")
+            val result = romanizedTokens.joinToString(" ")
+            synchronized(japaneseRomanizeCache) {
+                japaneseRomanizeCache[text] = result
+            }
+            result
         }
+    }
 
     /**
      * Converts a Katakana string to Romaji.
@@ -969,8 +990,14 @@ object LyricsUtils {
         return romajiBuilder.toString().lowercase()
     }
 
-    suspend fun romanizeKorean(text: String): String =
-        withContext(Dispatchers.Default) {
+    suspend fun romanizeKorean(text: String): String {
+        synchronized(koreanRomanizeCache) {
+            koreanRomanizeCache[text]?.let { return it }
+        }
+        return withContext(Dispatchers.Default) {
+            synchronized(koreanRomanizeCache) {
+                koreanRomanizeCache[text]?.let { return@withContext it }
+            }
             val romajaBuilder = StringBuilder()
             var prevFinal: String? = null
 
@@ -1017,8 +1044,13 @@ object LyricsUtils {
                 romajaBuilder.append(jong)
             }
 
-            romajaBuilder.toString()
+            val result = romajaBuilder.toString()
+            synchronized(koreanRomanizeCache) {
+                koreanRomanizeCache[text] = result
+            }
+            result
         }
+    }
 
     /**
      * Checks if the given text contains any Japanese characters (Hiragana, Katakana, or common Kanji).
@@ -1198,10 +1230,21 @@ object LyricsUtils {
         return normalizeRomanizedText(word, romanized)
     }
 
-    private suspend fun romanizeWithIcu(text: String): String =
-        withContext(Dispatchers.Default) {
-            genericRomanizationTransliterator.get().transliterate(text)
+    private suspend fun romanizeWithIcu(text: String): String {
+        synchronized(icuRomanizeCache) {
+            icuRomanizeCache[text]?.let { return it }
         }
+        return withContext(Dispatchers.Default) {
+            synchronized(icuRomanizeCache) {
+                icuRomanizeCache[text]?.let { return@withContext it }
+            }
+            val result = genericRomanizationTransliterator.get().transliterate(text)
+            synchronized(icuRomanizeCache) {
+                icuRomanizeCache[text] = result
+            }
+            result
+        }
+    }
 
     private fun normalizeRomanizedText(
         original: String,

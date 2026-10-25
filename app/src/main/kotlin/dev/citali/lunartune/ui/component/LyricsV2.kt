@@ -55,8 +55,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -240,7 +240,7 @@ fun LyricsV2(
     val isWordSyncedFormat = preparedLyrics?.syncType == LyricsSyncType.WORD
 
     val lyricsEntries: List<LyricsEntry> =
-        remember(preparedLyrics) {
+        remember(preparedLyrics?.lines, preparedLyrics?.sourceFormat, preparedLyrics?.syncType) {
             val parsed = preparedLyrics?.toLyricsEntries().orEmpty()
             if (parsed.isNotEmpty() && parsed.first().time >= 0) {
                 listOf(HEAD_LYRICS_ENTRY) + parsed
@@ -260,7 +260,8 @@ fun LyricsV2(
         }
     val latestSliderPositionProvider = rememberUpdatedState(sliderPositionProvider)
     val latestAnimationsDisabled = rememberUpdatedState(animationsDisabled)
-    val clockPositionMs by lyricsRenderViewModel.playbackPositionMs.collectAsStateWithLifecycle()
+    val latestSyncOffset = rememberUpdatedState(lyricsSyncOffset)
+    val clockPositionState = lyricsRenderViewModel.playbackPositionMs.collectAsStateWithLifecycle()
 
     DisposableEffect(player, lyricsRenderViewModel) {
         val listener =
@@ -306,12 +307,32 @@ fun LyricsV2(
         }
     }
 
-    val playbackPositionMs = (clockPositionMs + lyricsSyncOffset.toLong()).coerceAtLeast(0L)
-    val currentPositionMs = (playbackPositionMs + leadMs).coerceAtLeast(0L)
-    var currentLineIndex by remember { mutableIntStateOf(0) }
-    LaunchedEffect(entriesWithWords, isSynced, currentPositionMs) {
-        if (!isSynced || entriesWithWords.isEmpty()) return@LaunchedEffect
-        currentLineIndex = findCurrentLineIndex(entriesWithWords, currentPositionMs, 0L)
+    val playbackPositionProvider: () -> Long =
+        remember(clockPositionState, player) {
+            {
+                val clockedMs = clockPositionState.value
+                val baseMs =
+                    latestSliderPositionProvider.value()
+                        ?: if (clockedMs == 0L && player.currentPosition > 0L) {
+                            player.currentPosition
+                        } else {
+                            clockedMs
+                        }
+                (baseMs + latestSyncOffset.value.toLong()).coerceAtLeast(0L)
+            }
+        }
+    val currentLineIndex by remember(entriesWithWords, isSynced, leadMs) {
+        derivedStateOf {
+            if (!isSynced || entriesWithWords.isEmpty()) {
+                0
+            } else {
+                findCurrentLineIndex(
+                    entriesWithWords,
+                    (playbackPositionProvider() + leadMs).coerceAtLeast(0L),
+                    0L,
+                )
+            }
+        }
     }
 
     // ── Scroll State ──
@@ -471,7 +492,9 @@ fun LyricsV2(
                 if (item.isInstrumental && isSynced) {
                     val startTimeMs = item.time
                     val endTimeMs = item.time + item.durationMs
-                    val isActive = playbackPositionMs in startTimeMs until endTimeMs
+                    val isActive by remember(startTimeMs, endTimeMs) {
+                        derivedStateOf { playbackPositionProvider() in startTimeMs until endTimeMs }
+                    }
                     val distanceFromActive = abs(index - currentLineIndex)
                     val instrAlpha =
                         when {
@@ -576,7 +599,7 @@ fun LyricsV2(
                     ) {
                         InstrumentalBreakItem(
                             durationMs = item.durationMs,
-                            currentPositionMs = playbackPositionMs,
+                            currentPositionMs = if (isActive) playbackPositionProvider() else if (index < currentLineIndex) endTimeMs else 0L,
                             startTimeMs = startTimeMs,
                             textColor = textColor,
                             inactiveAlpha = inactiveAlpha,
@@ -795,9 +818,19 @@ fun LyricsV2(
                         val supplementaryTextStyle =
                             remember(supplementaryBaseTextStyle, lyricsTextSize, lyricsFontFamily, isAllBackground) {
                                 supplementaryBaseTextStyle.copy(
-                                    fontSize = (lyricsTextSize * 0.55f).sp,
-                                    lineHeight = (lyricsTextSize * 0.75f).sp,
-                                    fontWeight = FontWeight.Normal,
+                                    fontSize = (lyricsTextSize * 0.56f).sp,
+                                    lineHeight = (lyricsTextSize * 0.76f).sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal,
+                                    fontFamily = lyricsFontFamily ?: supplementaryBaseTextStyle.fontFamily,
+                                )
+                            }
+                        val translationTextStyle =
+                            remember(supplementaryBaseTextStyle, lyricsTextSize, lyricsFontFamily, isAllBackground) {
+                                supplementaryBaseTextStyle.copy(
+                                    fontSize = (lyricsTextSize * 0.62f).sp,
+                                    lineHeight = (lyricsTextSize * 0.84f).sp,
+                                    fontWeight = FontWeight.SemiBold,
                                     fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal,
                                     fontFamily = lyricsFontFamily ?: supplementaryBaseTextStyle.fontFamily,
                                 )
@@ -807,7 +840,7 @@ fun LyricsV2(
                             Text(
                                 text = romanizedText,
                                 style = supplementaryTextStyle,
-                                color = textColor.copy(alpha = if (isActive) 0.76f else 0.42f),
+                                color = textColor.copy(alpha = if (isActive) 0.78f else 0.68f),
                                 textAlign = textAlign,
                                 modifier =
                                     Modifier
@@ -818,17 +851,11 @@ fun LyricsV2(
 
                         if (item.words != null && isSynced) {
                             val lineWords = item.words!!
-                            val lineWordSpan =
-                                remember(lineWords) {
-                                    val minStart = lineWords.minOfOrNull { (it.startTime * 1000).roundToLong() } ?: 0L
-                                    val maxEnd = lineWords.maxOfOrNull { (it.endTime * 1000).roundToLong() } ?: 0L
-                                    minStart to maxEnd
-                                }
                             val scopedPositionMs =
                                 when {
-                                    currentPositionMs < lineWordSpan.first -> 0L
-                                    currentPositionMs >= lineWordSpan.second -> Long.MAX_VALUE
-                                    else -> currentPositionMs
+                                    isActive -> (playbackPositionProvider() + leadMs).coerceAtLeast(0L)
+                                    isPast -> Long.MAX_VALUE
+                                    else -> 0L
                                 }
                             LyricsLineV2(
                                 words = lineWords,
@@ -878,13 +905,13 @@ fun LyricsV2(
                         if (translationText != null) {
                             Text(
                                 text = translationText,
-                                style = supplementaryTextStyle,
-                                color = textColor.copy(alpha = if (isActive) 0.76f else 0.42f),
+                                style = translationTextStyle,
+                                color = textColor.copy(alpha = if (isActive) 0.80f else 0.72f),
                                 textAlign = textAlign,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .padding(top = (lyricsTextSize * 0.3f).dp),
+                                        .padding(top = (lyricsTextSize * 0.28f).dp),
                             )
                         }
                     }
@@ -1294,16 +1321,36 @@ private fun AnimatedWordV2(
         label = "v2FloatOffset",
     )
 
-    // ── Glow intensity ──
-    // "lines and words that are done animating shouldnt continue to glow"
-    // Make glow build up faster: reach max intensity at 50% progress
-    val glowProgress = (progress * 2f).coerceAtMost(1f)
-    val glowAlpha = if (isWordActive) glowProgress * 0.45f * glowFactor else 0f
-    val glowRadius = if (isWordActive) glowProgress * 12f * glowFactor else 0f
-
     val actualFontSize = if (isBackground) fontSize * 0.85f else fontSize
     val fontWeight = if (isLineActive || isLinePast) FontWeight.ExtraBold else FontWeight.SemiBold
     val glowPadding = 10.dp
+    val headlineBase = MaterialTheme.typography.headlineMedium
+    val baseWordTextStyle =
+        remember(headlineBase, actualFontSize, fontWeight, lyricsFontFamily) {
+            headlineBase.copy(
+                fontSize = actualFontSize.sp,
+                fontWeight = fontWeight,
+                fontStyle = FontStyle.Normal,
+                lineHeight = (actualFontSize * 1.35f).sp,
+                fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
+            )
+        }
+    val showStaticWordGlow = isWordActive && glowFactor > 0.01f
+    val activeWordTextStyle =
+        remember(baseWordTextStyle, showStaticWordGlow, textColor, glowFactor) {
+            if (showStaticWordGlow) {
+                baseWordTextStyle.copy(
+                    shadow =
+                        Shadow(
+                            color = textColor.copy(alpha = (0.40f * glowFactor).coerceIn(0f, 1f)),
+                            offset = Offset.Zero,
+                            blurRadius = (11f * glowFactor).coerceAtLeast(1f),
+                        ),
+                )
+            } else {
+                baseWordTextStyle
+            }
+        }
 
     // ── Two-layer rendering: dim base + liquid fill overlay ──
     Box(
@@ -1342,40 +1389,16 @@ private fun AnimatedWordV2(
         // Layer 1: Base text (always dimmed)
         Text(
             text = word.text,
-            style =
-                MaterialTheme.typography.headlineMedium.copy(
-                    fontSize = actualFontSize.sp,
-                    fontWeight = fontWeight,
-                    fontStyle = FontStyle.Normal,
-                    lineHeight = (actualFontSize * 1.35f).sp,
-                    fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
-                ),
+            style = baseWordTextStyle,
             color = textColor.copy(alpha = if (isBackground) inactiveAlpha * 0.7f else inactiveAlpha),
             modifier = Modifier.padding(glowPadding),
         )
 
-        // Layer 2: Filled overlay with liquid sweep mask + glow
+        // Layer 2: Filled overlay with liquid sweep mask + static cached glow
         if (isWordComplete || isWordActive || isLinePast) {
             Text(
                 text = word.text,
-                style =
-                    MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = actualFontSize.sp,
-                        fontWeight = fontWeight,
-                        fontStyle = FontStyle.Normal,
-                        lineHeight = (actualFontSize * 1.35f).sp,
-                        fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
-                        shadow =
-                            if (glowAlpha > 0f) {
-                                Shadow(
-                                    color = textColor.copy(alpha = glowAlpha),
-                                    offset = Offset.Zero,
-                                    blurRadius = glowRadius.coerceAtLeast(1f),
-                                )
-                            } else {
-                                null
-                            },
-                    ),
+                style = activeWordTextStyle,
                 color =
                     textColor.copy(
                         alpha = if (isBackground) 0.75f else 1f,
