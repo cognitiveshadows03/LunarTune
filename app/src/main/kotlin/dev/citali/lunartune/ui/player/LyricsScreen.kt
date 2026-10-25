@@ -143,7 +143,6 @@ import dev.citali.lunartune.constants.PlayerCustomBrightnessKey
 import dev.citali.lunartune.constants.PlayerCustomContrastKey
 import dev.citali.lunartune.constants.PlayerCustomImageUriKey
 import dev.citali.lunartune.constants.ShowLyricsPlayerControlsKey
-import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.LyricsEnhanced
@@ -263,6 +262,7 @@ fun LyricsScreen(
 
     val playbackState by playerConnection.playbackState.collectAsStateWithLifecycle()
     val isPlaying by playerConnection.isPlaying.collectAsStateWithLifecycle()
+    val crossfadeInProgress by playerConnection.crossfadeInProgress.collectAsStateWithLifecycle()
     val deviceMusicVolumeController = rememberDeviceMusicVolumeController()
     val onVolumeChange =
         remember(deviceMusicVolumeController) {
@@ -517,7 +517,7 @@ fun LyricsScreen(
         }
     }
 
-    val isLoading = playbackState == STATE_BUFFERING || sliderPosition != null
+    val isLoading = (playbackState == STATE_BUFFERING && !crossfadeInProgress) || sliderPosition != null
     val orientation = LocalConfiguration.current.orientation
 
     BackHandler(enabled = backHandlerEnabled, onBack = onBackClick)
@@ -636,7 +636,7 @@ fun LyricsScreen(
                             onPlayPauseClick = {
                                 hapticClick()
                                 revealControls()
-                                player.togglePlayPause()
+                                playerConnection.togglePlayPause()
                             },
                             onNextClick = {
                                 hapticClick()
@@ -697,7 +697,7 @@ fun LyricsScreen(
                             onPlayPauseClick = {
                                 hapticClick()
                                 revealControls()
-                                player.togglePlayPause()
+                                playerConnection.togglePlayPause()
                             },
                             onNextClick = {
                                 hapticClick()

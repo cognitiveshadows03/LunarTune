@@ -75,24 +75,72 @@ class PlayerConnection(
     val player = service.player
     val localPlayer = service.localPlayer
 
-    val playbackState = MutableStateFlow(player.playbackState)
-    private val _isPlaying = MutableStateFlow(player.isPlaying)
-    val isPlaying = _isPlaying.asStateFlow()
+    private val _rawPlaybackState = MutableStateFlow(player.playbackState)
+    private val _rawIsPlaying = MutableStateFlow(player.isPlaying)
+    private val _playbackSuppressionReason = MutableStateFlow(player.playbackSuppressionReason)
     val playbackParameters = MutableStateFlow(player.playbackParameters)
 
     /**
      * True while an audio crossfade is fading or handing over to the primary
      * player.
      *
-     * The main player must not show a buffering spinner for this window: the
-     * incoming track keeps playing continuously on the secondary crossfade
-     * player, so the primary reporting STATE_BUFFERING is an implementation
-     * detail of the hand-off, not a stall the user is experiencing.
+     * The main player must not show a buffering spinner or flip Play/Pause for
+     * this window: the incoming track keeps playing continuously on the
+     * secondary crossfade player, so the primary reporting STATE_BUFFERING or
+     * !isPlaying is an implementation detail of the hand-off, not a pause or
+     * stall the user is experiencing.
      */
     val crossfadeInProgress: StateFlow<Boolean> =
         combine(service.isCrossfadingFlow, service.crossfadeHandoffFlow) { fading, handoff ->
             fading || handoff
-        }.stateIn(scope, SharingStarted.Eagerly, false)
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            service.isCrossfadingFlow.value || service.crossfadeHandoffFlow.value,
+        )
+
+    private val crossfadeContinuouslyPlaying =
+        combine(
+            crossfadeInProgress,
+            service.crossfadePlaybackRequestedFlow,
+            _playbackSuppressionReason,
+        ) { inProgress, requested, suppressionReason ->
+            inProgress &&
+                requested &&
+                suppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+        }
+
+    val playbackState: StateFlow<Int> =
+        combine(_rawPlaybackState, crossfadeContinuouslyPlaying) { rawState, crossfadePlaying ->
+            if (
+                crossfadePlaying &&
+                (rawState == Player.STATE_BUFFERING || rawState == Player.STATE_ENDED)
+            ) {
+                Player.STATE_READY
+            } else {
+                rawState
+            }
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            if (
+                service.isCrossfadeContinuouslyPlaying() &&
+                (player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED)
+            ) {
+                Player.STATE_READY
+            } else {
+                player.playbackState
+            },
+        )
+
+    val isPlaying: StateFlow<Boolean> =
+        combine(_rawIsPlaying, crossfadeContinuouslyPlaying) { rawIsPlaying, crossfadePlaying ->
+            rawIsPlaying || crossfadePlaying
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            player.isPlaying || service.isCrossfadeContinuouslyPlaying(),
+        )
     val mediaMetadata = service.currentMediaMetadata
     val currentSong =
         mediaMetadata.flatMapLatest {
@@ -171,8 +219,9 @@ class PlayerConnection(
     init {
         player.addListener(this)
 
-        playbackState.value = player.playbackState
-        _isPlaying.value = player.isPlaying
+        _rawPlaybackState.value = player.playbackState
+        _rawIsPlaying.value = player.isPlaying
+        _playbackSuppressionReason.value = player.playbackSuppressionReason
         playbackParameters.value = player.playbackParameters
         queueTitle.value = service.queueTitle
         queueWindows.value = player.getQueueWindows()
@@ -372,6 +421,10 @@ class PlayerConnection(
         error.value = null
     }
 
+    fun togglePlayPause() {
+        service.togglePlayPause()
+    }
+
     fun seekToNext() {
         val state = service.togetherSessionState.value as? dev.citali.lunartune.together.TogetherSessionState.Joined
         if (state?.role is dev.citali.lunartune.together.TogetherRole.Guest) {
@@ -397,12 +450,16 @@ class PlayerConnection(
     }
 
     override fun onPlaybackStateChanged(state: Int) {
-        playbackState.value = state
+        _rawPlaybackState.value = state
         updatePlaybackError(player.playerError)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
-        _isPlaying.value = isPlaying
+        _rawIsPlaying.value = isPlaying
+    }
+
+    override fun onPlaybackSuppressionReasonChanged(playbackSuppressionReason: Int) {
+        _playbackSuppressionReason.value = playbackSuppressionReason
     }
 
     override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {

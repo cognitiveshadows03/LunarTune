@@ -18,11 +18,15 @@ import android.os.SystemClock
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -125,6 +129,7 @@ import kotlin.math.roundToInt
 private const val LRC_LEAD_MS = 0L
 private const val MIN_KARAOKE_SYLLABLE_DURATION_MS = 1
 private const val LYRICS_VIEWPORT_OFFSET_RATIO = 0.38f
+private const val LYRICS_ANCHOR_GLIDE_MS = 520
 private val LyricsEnhancedTopFade = 20.dp
 
 /** Space both lyrics panes keep below their list; the lyrics page relies on it matching. */
@@ -525,48 +530,71 @@ fun LyricsEnhanced(
             }
 
             else -> {
-                val lyricsViewportAnchor =
-                    remember { LyricsAnchor.Fraction(LYRICS_VIEWPORT_OFFSET_RATIO) }
-
-                CompositionLocalProvider(LocalLayoutDirection provides lyricsLayoutDirection) {
-                    key(lyricsSessionKey, syncedLyrics) {
-                        LunarKaraokeLyricsView(
-                            listState = karaokeLyricsListState,
-                            lyrics = syncedLyrics,
-                            currentPosition = playbackSyncPosition,
-                            autoScrollEnabled = lyricsScrollEnabled,
-                            onLineClicked = { line ->
-                                if (isSelectionModeActive) {
-                                    toggleSelectedLine(line.selectionKey())
-                                } else if (lyricsClick && isSynced && line.start >= 0) {
-                                    player.seekTo(line.start.toLong())
-                                }
-                            },
-                            onLinePressed = { line ->
-                                val lineKey = line.selectionKey()
-                                if (!isSelectionModeActive) {
-                                    isSelectionModeActive = true
-                                    if (!selectedLineKeys.contains(lineKey)) {
-                                        selectedLineKeys.add(lineKey)
-                                    }
-                                } else if (!selectedLineKeys.contains(lineKey)) {
-                                    toggleSelectedLine(lineKey)
-                                }
-                            },
-                            textColor = textColor,
-                            normalLineTextStyle = normalTextStyle,
-                            translationTextStyle = translationTextStyle,
-                            accompanimentLineTextStyle = accompanimentTextStyle,
-                            phoneticTextStyle = phoneticTextStyle,
-                            blendMode = BlendMode.SrcOver,
-                            useBlurEffect = lyricsLineBlur,
-                            showTranslation = showTranslations,
-                            showPhonetic = showPhonetics,
-                            anchor = lyricsViewportAnchor,
-                            topFade = LyricsFade.Fixed(LyricsEnhancedTopFade),
-                            bottomFade = LyricsFade.Fixed(LyricsEnhancedBottomFade),
-                            modifier = Modifier.fillMaxSize(),
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    val targetAnchorOffset =
+                        if (maxHeight.value.isFinite()) {
+                            (maxHeight * LYRICS_VIEWPORT_OFFSET_RATIO).coerceAtLeast(0.dp)
+                        } else {
+                            0.dp
+                        }
+                    val lyricsViewportOffset by
+                        animateDpAsState(
+                            targetValue = targetAnchorOffset,
+                            animationSpec =
+                                tween(
+                                    durationMillis = LYRICS_ANCHOR_GLIDE_MS,
+                                    easing = FastOutSlowInEasing,
+                                ),
+                            label = "lyricsViewportOffset",
                         )
+                    val lyricsViewportAnchor =
+                        remember(lyricsViewportOffset) {
+                            LyricsAnchor.Fixed(lyricsViewportOffset.coerceAtLeast(0.dp))
+                        }
+
+                    CompositionLocalProvider(LocalLayoutDirection provides lyricsLayoutDirection) {
+                        key(lyricsSessionKey, syncedLyrics) {
+                            LunarKaraokeLyricsView(
+                                listState = karaokeLyricsListState,
+                                lyrics = syncedLyrics,
+                                currentPosition = playbackSyncPosition,
+                                autoScrollEnabled = lyricsScrollEnabled,
+                                onLineClicked = { line ->
+                                    if (isSelectionModeActive) {
+                                        toggleSelectedLine(line.selectionKey())
+                                    } else if (lyricsClick && isSynced && line.start >= 0) {
+                                        player.seekTo(line.start.toLong())
+                                    }
+                                },
+                                onLinePressed = { line ->
+                                    val lineKey = line.selectionKey()
+                                    if (!isSelectionModeActive) {
+                                        isSelectionModeActive = true
+                                        if (!selectedLineKeys.contains(lineKey)) {
+                                            selectedLineKeys.add(lineKey)
+                                        }
+                                    } else if (!selectedLineKeys.contains(lineKey)) {
+                                        toggleSelectedLine(lineKey)
+                                    }
+                                },
+                                textColor = textColor,
+                                normalLineTextStyle = normalTextStyle,
+                                translationTextStyle = translationTextStyle,
+                                accompanimentLineTextStyle = accompanimentTextStyle,
+                                phoneticTextStyle = phoneticTextStyle,
+                                blendMode = BlendMode.SrcOver,
+                                useBlurEffect = lyricsLineBlur,
+                                showTranslation = showTranslations,
+                                showPhonetic = showPhonetics,
+                                anchor = lyricsViewportAnchor,
+                                topFade = LyricsFade.Fixed(LyricsEnhancedTopFade),
+                                bottomFade = LyricsFade.Fixed(LyricsEnhancedBottomFade),
+                                keepAliveZone = 72.dp,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
             }

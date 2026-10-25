@@ -197,7 +197,6 @@ import dev.citali.lunartune.constants.SliderStyle
 import dev.citali.lunartune.constants.SliderStyleKey
 import dev.citali.lunartune.constants.ThumbnailCornerRadiusKey
 import dev.citali.lunartune.extensions.metadata
-import dev.citali.lunartune.extensions.togglePlayPause
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.BottomSheet
@@ -1061,7 +1060,7 @@ fun BottomSheetPlayer(
                         }
 
                         Key.Spacebar -> {
-                            playerConnection.player.togglePlayPause()
+                            playerConnection.togglePlayPause()
                             true
                         }
 
@@ -2069,7 +2068,7 @@ fun BottomSheetPlayer(
                 canSkipPrevious = canSkipPrevious,
                 canSkipNext = canSkipNext,
                 thumbnailCornerRadius = thumbnailCornerRadius,
-                onPlayPause = { playerConnection.player.togglePlayPause() },
+                onPlayPause = playerConnection::togglePlayPause,
                 onSkipPrevious = playerConnection::seekToPrevious,
                 onSkipNext = playerConnection::seekToNext,
                 onSeek = { sliderPosition = it },

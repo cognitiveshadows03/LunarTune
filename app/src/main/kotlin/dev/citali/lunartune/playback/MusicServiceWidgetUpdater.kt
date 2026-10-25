@@ -82,15 +82,16 @@ internal class MusicServiceWidgetUpdater(
 
     fun updateProgressTracking() {
         progressJob?.cancel()
-        if (player.isPlaying && player.duration > 0) {
+        val effectivelyPlaying = player.isPlaying || service.isCrossfadeContinuouslyPlaying()
+        if (effectivelyPlaying && player.duration > 0) {
             progressJob =
                 scope.launch(SilentHandler) {
                     val installedTargets = findInstalledTargets(progressWidgets)
                     if (installedTargets.isEmpty()) return@launch
 
-                    while (isActive && player.isPlaying) {
+                    while (isActive && (player.isPlaying || service.isCrossfadeContinuouslyPlaying())) {
                         delay(WIDGET_PROGRESS_UPDATE_INTERVAL_MILLIS)
-                        if (player.isPlaying) {
+                        if (player.isPlaying || service.isCrossfadeContinuouslyPlaying()) {
                             updateProgress(installedTargets, player.playbackProgress())
                         }
                     }
@@ -115,7 +116,7 @@ internal class MusicServiceWidgetUpdater(
             WidgetSnapshot(
                 title = meta?.title?.toString() ?: service.getString(R.string.no_track_playing),
                 artist = meta?.artist?.toString().orEmpty(),
-                isPlaying = player.isPlaying,
+                isPlaying = player.isPlaying || service.isCrossfadeContinuouslyPlaying(),
                 isAvailable = mediaItem != null,
                 playbackPosition = player.playbackProgress(),
                 artPath = cachedArt?.absolutePath,
@@ -140,7 +141,7 @@ internal class MusicServiceWidgetUpdater(
                     WidgetSnapshot(
                         title = freshMeta?.title?.toString() ?: service.getString(R.string.no_track_playing),
                         artist = freshMeta?.artist?.toString().orEmpty(),
-                        isPlaying = player.isPlaying,
+                        isPlaying = player.isPlaying || service.isCrossfadeContinuouslyPlaying(),
                         isAvailable = true,
                         playbackPosition = player.playbackProgress(),
                         artPath = artFile.absolutePath,

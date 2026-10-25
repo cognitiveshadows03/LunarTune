@@ -79,7 +79,6 @@ import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.PerSongAlbumArtOverridesKey
 import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
-import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.together.isConnectedToSession
@@ -488,7 +487,7 @@ private fun MiniPlayerTransportControls(
                     playerConnection.player.seekTo(0, 0)
                     playerConnection.player.playWhenReady = true
                 } else {
-                    playerConnection.player.togglePlayPause()
+                    playerConnection.togglePlayPause()
                 }
             }
         }
@@ -544,8 +543,9 @@ fun NewMiniPlayerContent(
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsStateWithLifecycle()
     val canSkipPrevious by playerConnection.canSkipPrevious.collectAsStateWithLifecycle()
     val canSkipNext by playerConnection.canSkipNext.collectAsStateWithLifecycle()
+    val crossfadeInProgress by playerConnection.crossfadeInProgress.collectAsStateWithLifecycle()
 
-    val isLoading = playbackState == Player.STATE_BUFFERING
+    val isLoading = playbackState == Player.STATE_BUFFERING && !crossfadeInProgress
     val progressProvider =
         remember(position, duration) {
             { if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f }

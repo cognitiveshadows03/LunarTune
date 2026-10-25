@@ -604,6 +604,7 @@ class MusicService :
     private var secondaryCrossfadeTarget: CrossfadeTarget? = null
     private val _isCrossfading = MutableStateFlow(false)
     private val _crossfadeHandoffInProgress = MutableStateFlow(false)
+    private val _crossfadePlaybackRequested = MutableStateFlow(false)
 
     /**
      * Backed by a StateFlow but read and written as a plain Boolean everywhere
@@ -622,28 +623,60 @@ class MusicService :
             _crossfadeHandoffInProgress.value = value
         }
 
+    private var crossfadePlaybackRequested: Boolean
+        get() = _crossfadePlaybackRequested.value
+        set(value) {
+            _crossfadePlaybackRequested.value = value
+        }
+
     /**
      * Observable crossfade state, for the player UI.
      *
-     * The UI uses these to avoid showing a buffering spinner during the
-     * handoff. That spinner is a false signal here: the incoming track is
-     * playing continuously on the secondary crossfade player, and the primary
-     * only reports STATE_BUFFERING because it is re-preparing the same cached
-     * track to take over. Surfacing that as "stopping" made an intentional,
-     * continuous transition look like a stall.
+     * The UI uses these to avoid showing a buffering spinner or flipping the
+     * Play/Pause icon during the handoff. Both are false signals here: the
+     * incoming track is playing continuously on the secondary crossfade player,
+     * and the primary only reports STATE_BUFFERING / !isPlaying because it is
+     * re-preparing the same cached track to take over. Surfacing that as
+     * "stopping" made an intentional, continuous transition look like a stall.
      *
-     * Exposed as two flows rather than one combined flow so that no
+     * Exposed as plain flows rather than one combined flow so that no
      * CoroutineScope is captured during property initialisation, which would
      * make it depend on superclass field ordering.
      */
     val isCrossfadingFlow: StateFlow<Boolean> = _isCrossfading
     val crossfadeHandoffFlow: StateFlow<Boolean> = _crossfadeHandoffInProgress
+    val crossfadePlaybackRequestedFlow: StateFlow<Boolean> = _crossfadePlaybackRequested
     private var crossfadeBaseVolume = 1f
     private var crossfadeIncomingBaseVolume = 1f
     private var crossfadeProgress = 0f
     private var crossfadeHandoffProgress = 0f
-    private var crossfadePlaybackRequested = false
     private var crossfadeSuppressedMediaId: String? = null
+
+    fun isCrossfadeContinuouslyPlaying(): Boolean =
+        (isCrossfading || crossfadeHandoffInProgress) &&
+            crossfadePlaybackRequested &&
+            (::player.isInitialized && player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE)
+
+    fun togglePlayPause() {
+        if (!::player.isInitialized) return
+        if ((isCrossfading || crossfadeHandoffInProgress) && crossfadePlaybackRequested) {
+            crossfadePlaybackRequested = false
+            secondaryCrossfadePlayer?.let { secondaryPlayer ->
+                secondaryPlayer.playWhenReady = false
+                secondaryPlayer.pause()
+            }
+            player.playWhenReady = false
+            return
+        }
+        if (!player.playWhenReady && player.playbackState == Player.STATE_IDLE) {
+            player.prepare()
+        } else if (player.playbackState == Player.STATE_ENDED) {
+            player.seekToDefaultPosition()
+            player.playWhenReady = true
+            return
+        }
+        player.playWhenReady = !player.playWhenReady
+    }
     private var lyricsPreloadManager: LyricsPreloadManager? = null
 
     private val secondaryCrossfadeListener =
@@ -7544,7 +7577,13 @@ class MusicService :
         super.onIsPlayingChanged(isPlaying)
         secondaryCrossfadePlayer?.let { secondaryPlayer ->
             if (isCrossfading && !crossfadeHandoffInProgress) {
-                if (isPlaying) {
+                val shouldKeepSecondaryPlaying =
+                    isPlaying ||
+                        (
+                            crossfadePlaybackRequested &&
+                                player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+                        )
+                if (shouldKeepSecondaryPlaying) {
                     secondaryPlayer.play()
                 } else {
                     secondaryPlayer.pause()

@@ -129,7 +129,6 @@ import dev.citali.lunartune.constants.PlayerHorizontalPadding
 import dev.citali.lunartune.constants.SliderStyle
 import dev.citali.lunartune.db.entities.FormatEntity
 import dev.citali.lunartune.db.entities.codecLabel
-import dev.citali.lunartune.extensions.togglePlayPause
 import dev.citali.lunartune.extensions.toggleRepeatMode
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.playback.PlayerConnection
@@ -1000,7 +999,7 @@ fun PlayerPlaybackControls(
                                 playerConnection.player.seekTo(0, 0)
                                 playerConnection.player.playWhenReady = true
                             } else {
-                                playerConnection.player.togglePlayPause()
+                                playerConnection.togglePlayPause()
                             }
                         },
                         colors =
@@ -1129,7 +1128,7 @@ fun PlayerPlaybackControls(
                                         playerConnection.player.seekTo(0, 0)
                                         playerConnection.player.playWhenReady = true
                                     } else {
-                                        playerConnection.player.togglePlayPause()
+                                        playerConnection.togglePlayPause()
                                     }
                                 },
                         contentAlignment = Alignment.Center,
@@ -1318,7 +1317,7 @@ fun PlayerPlaybackControls(
                                 playerConnection.player.seekTo(0, 0)
                                 playerConnection.player.playWhenReady = true
                             } else {
-                                playerConnection.player.togglePlayPause()
+                                playerConnection.togglePlayPause()
                             }
                         },
                         shape = RoundedCornerShape(cinematicPlayPauseCorner),
@@ -1495,7 +1494,7 @@ fun PlayerPlaybackControls(
                                     playerConnection.player.seekTo(0, 0)
                                     playerConnection.player.playWhenReady = true
                                 } else {
-                                    playerConnection.player.togglePlayPause()
+                                    playerConnection.togglePlayPause()
                                 }
                             },
                 ) {
@@ -1632,7 +1631,7 @@ fun PlayerPlaybackControls(
                                     playerConnection.player.seekTo(0, 0)
                                     playerConnection.player.playWhenReady = true
                                 } else {
-                                    playerConnection.player.togglePlayPause()
+                                    playerConnection.togglePlayPause()
                                 }
                             },
                             shape = RoundedCornerShape(28.dp),
@@ -2020,7 +2019,7 @@ fun V8PlayerControlsContent(
                     playerConnection.player.seekTo(0, 0)
                     playerConnection.player.playWhenReady = true
                 } else {
-                    playerConnection.player.togglePlayPause()
+                    playerConnection.togglePlayPause()
                 }
             }
         }
@@ -2229,7 +2228,7 @@ fun V8PlayerContent(
                     playerConnection.player.seekTo(0, 0)
                     playerConnection.player.playWhenReady = true
                 } else {
-                    playerConnection.player.togglePlayPause()
+                    playerConnection.togglePlayPause()
                 }
             },
             onSliderValueChange = onSliderValueChange,
@@ -2277,7 +2276,7 @@ fun V8PlayerContent(
                     playerConnection.player.seekTo(0, 0)
                     playerConnection.player.playWhenReady = true
                 } else {
-                    playerConnection.player.togglePlayPause()
+                    playerConnection.togglePlayPause()
                 }
             },
             onSliderValueChange = onSliderValueChange,
@@ -2319,7 +2318,7 @@ fun V8PlayerContent(
                     playerConnection.player.seekTo(0, 0)
                     playerConnection.player.playWhenReady = true
                 } else {
-                    playerConnection.player.togglePlayPause()
+                    playerConnection.togglePlayPause()
                 }
             },
             onSliderValueChange = onSliderValueChange,
@@ -3208,7 +3207,7 @@ fun V9PlayerContent(
             playerConnection.player.seekTo(0, 0)
             playerConnection.player.playWhenReady = true
         } else {
-            playerConnection.player.togglePlayPause()
+            playerConnection.togglePlayPause()
         }
     }
 

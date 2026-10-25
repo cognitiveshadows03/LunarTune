@@ -7,30 +7,31 @@
 
 package dev.citali.lunartune.ui.component.karaoke
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.TextStyle
@@ -55,6 +56,7 @@ import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLine
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLyrics
 import com.mocharealm.accompanist.lyrics.ui.preparation.prepareLyrics
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -62,7 +64,7 @@ private const val INTRO_DOTS_MIN_DURATION_MS = 5000
 private const val INTERLUDE_DOTS_MIN_GAP_MS = 5000
 private const val SYNC_PREPARE_MAX_LINES = 200
 private const val MAX_SCENE_CACHE_ENTRIES = 10
-private const val MAX_FOCUS_BLUR_DISTANCE = 3
+private const val CAPTION_REFLOW_DURATION_MS = 340L
 
 private data class LunarSceneCacheKey(
     val lyrics: SyncedLyrics,
@@ -88,11 +90,13 @@ internal class LunarDisplayItem(
     val itemKey: String,
     val line: ISyncedLine,
     val prepared: PreparedLine?,
+    val startMs: Int,
+    val endMs: Int,
     val interludeStartMs: Int,
     val interludeEndMs: Int,
 ) {
     val hasInterlude: Boolean
-        get() = interludeEndMs - interludeStartMs >= INTERLUDE_DOTS_MIN_GAP_MS
+        get() = interludeEndMs - interludeStartMs > INTERLUDE_DOTS_MIN_GAP_MS
 }
 
 @Immutable
@@ -100,6 +104,9 @@ internal data class LunarFocusState(
     val firstFocusedItemIndex: Int,
     val lastFocusedItemIndex: Int,
     val scrollTargetItemIndex: Int,
+    val focusEndItemIndex: Int,
+    val activeInterludeItemIndex: Int,
+    val activeIntro: Boolean,
 )
 
 private object LunarKaraokeSceneCache {
@@ -144,7 +151,7 @@ private fun buildCachedLunarScene(
         val preparedLine = prepared.lines.getOrNull(index)
         if (preparedLine != null && preparedLine in embeddedSet) continue
         val sourceLine = lyrics.lines[index]
-        val lineStartMs = sourceLine.start
+        val lineStartMs = minLineStartMs(sourceLine, preparedLine)
         val lineEndMs = maxLineEndMs(sourceLine, preparedLine)
         val interludeStart = if (items.isEmpty()) 0 else prevMaxEndMs
         val interludeEnd = lineStartMs
@@ -154,6 +161,8 @@ private fun buildCachedLunarScene(
                 itemKey = "${sourceLine.start}-${sourceLine.end}-$index",
                 line = sourceLine,
                 prepared = preparedLine,
+                startMs = lineStartMs,
+                endMs = lineEndMs,
                 interludeStartMs = interludeStart,
                 interludeEndMs = interludeEnd,
             ),
@@ -177,11 +186,33 @@ private fun buildCachedLunarScene(
     )
 }
 
+private fun minLineStartMs(
+    source: ISyncedLine,
+    prepared: PreparedLine?,
+): Int {
+    var start =
+        minOf(
+            source.start,
+            (source as? KaraokeLine.MainKaraokeLine)?.accompanimentLines?.minOfOrNull { it.start }
+                ?: source.start,
+        )
+    if (prepared != null) {
+        for (child in prepared.before) start = minOf(start, child.source.start)
+        for (child in prepared.after) start = minOf(start, child.source.start)
+    }
+    return start
+}
+
 private fun maxLineEndMs(
     source: ISyncedLine,
     prepared: PreparedLine?,
 ): Int {
-    var end = source.end
+    var end =
+        maxOf(
+            source.end,
+            (source as? KaraokeLine.MainKaraokeLine)?.accompanimentLines?.maxOfOrNull { it.end }
+                ?: source.end,
+        )
     if (prepared != null) {
         for (child in prepared.before) end = maxOf(end, child.source.end)
         for (child in prepared.after) end = maxOf(end, child.source.end)
@@ -189,6 +220,13 @@ private fun maxLineEndMs(
     return end
 }
 
+/**
+ * Matches [KaraokeLyricsView]'s `LyricsPlaybackTimeline` focus interval rule:
+ * - While one or more lines cover `nowMs` (`startMs <= nowMs < endMs`), those lines are focused
+ *   and the scroll anchor tracks `firstFocused` with spring-chain focus ending at `lastFocused`.
+ * - As soon as a line ends (`nowMs >= endMs`), the scroll target immediately transitions to the
+ *   next upcoming line so the 650ms glide + 240Hz spring cascade settles smoothly onto the anchor.
+ */
 internal fun computeLunarFocusState(
     items: List<LunarDisplayItem>,
     nowMs: Int,
@@ -198,77 +236,138 @@ internal fun computeLunarFocusState(
             firstFocusedItemIndex = -1,
             lastFocusedItemIndex = -1,
             scrollTargetItemIndex = 0,
+            focusEndItemIndex = 0,
+            activeInterludeItemIndex = -1,
+            activeIntro = false,
         )
     }
 
-    // Binary search last item with line.start <= nowMs.
+    val introEnd = items[0].startMs
+    val activeIntro = introEnd > INTRO_DOTS_MIN_DURATION_MS && nowMs in 0 until introEnd
+
+    // Binary search first item with startMs > nowMs (`nextUpcoming`).
     var low = 0
     var high = items.size
     while (low < high) {
         val mid = (low + high) ushr 1
-        if (items[mid].line.start <= nowMs) {
+        if (items[mid].startMs <= nowMs) {
             low = mid + 1
         } else {
             high = mid
         }
     }
-    val candidateLastStarted = low - 1
-    if (candidateLastStarted < 0) {
-        // Before first lyric line (intro).
-        return LunarFocusState(
-            firstFocusedItemIndex = -1,
-            lastFocusedItemIndex = -1,
-            scrollTargetItemIndex = 0,
-        )
-    }
+    val nextUpcoming = low
+    val candidateLastStarted = nextUpcoming - 1
 
     var firstFocused = -1
     var lastFocused = -1
-    val scanStart = (candidateLastStarted - 6).coerceAtLeast(0)
-    for (idx in scanStart..candidateLastStarted) {
-        val item = items[idx]
-        val endMs = maxLineEndMs(item.line, item.prepared)
-        if (nowMs in item.line.start..endMs) {
-            if (firstFocused < 0) firstFocused = idx
-            lastFocused = idx
+    if (candidateLastStarted >= 0) {
+        val scanStart = (candidateLastStarted - 6).coerceAtLeast(0)
+        for (idx in scanStart..candidateLastStarted) {
+            val item = items[idx]
+            val active =
+                if (item.endMs > item.startMs) {
+                    nowMs >= item.startMs && nowMs < item.endMs
+                } else {
+                    idx == candidateLastStarted && (nextUpcoming >= items.size || nowMs < items[nextUpcoming].startMs)
+                }
+            if (active) {
+                if (firstFocused < 0) firstFocused = idx
+                lastFocused = idx
+            }
         }
     }
 
-    if (firstFocused >= 0) {
-        return LunarFocusState(
-            firstFocusedItemIndex = firstFocused,
-            lastFocusedItemIndex = lastFocused,
-            scrollTargetItemIndex = firstFocused,
-        )
-    }
+    val activeInterlude =
+        if (nextUpcoming in 1 until items.size) {
+            val upcoming = items[nextUpcoming]
+            if (upcoming.hasInterlude && nowMs >= upcoming.interludeStartMs && nowMs < upcoming.interludeEndMs) {
+                nextUpcoming
+            } else {
+                -1
+            }
+        } else {
+            -1
+        }
 
-    // Between two lines: if the upcoming line has an active interlude, scroll to it so the
-    // breathing dots sit right on the anchor; otherwise hold on the just-finished line until
-    // ~250ms before the next line starts.
-    val nextIdx = candidateLastStarted + 1
-    if (nextIdx < items.size) {
-        val nextItem = items[nextIdx]
-        if (nextItem.hasInterlude && nowMs in nextItem.interludeStartMs..nextItem.interludeEndMs) {
-            return LunarFocusState(
-                firstFocusedItemIndex = -1,
-                lastFocusedItemIndex = -1,
-                scrollTargetItemIndex = nextIdx,
-            )
+    val scrollTarget =
+        when {
+            firstFocused >= 0 -> firstFocused
+            nextUpcoming in items.indices -> nextUpcoming
+            else -> items.lastIndex
         }
-        if (nextItem.line.start - nowMs <= 220) {
-            return LunarFocusState(
-                firstFocusedItemIndex = nextIdx,
-                lastFocusedItemIndex = nextIdx,
-                scrollTargetItemIndex = nextIdx,
-            )
+    val focusEnd =
+        when {
+            lastFocused >= 0 -> lastFocused
+            else -> scrollTarget
         }
-    }
 
     return LunarFocusState(
-        firstFocusedItemIndex = candidateLastStarted,
-        lastFocusedItemIndex = candidateLastStarted,
-        scrollTargetItemIndex = candidateLastStarted,
+        firstFocusedItemIndex = firstFocused,
+        lastFocusedItemIndex = lastFocused,
+        scrollTargetItemIndex = scrollTarget,
+        focusEndItemIndex = focusEnd,
+        activeInterludeItemIndex = activeInterlude,
+        activeIntro = activeIntro,
     )
+}
+
+private fun PreparedLine.computeLunarSettledHeightPx(
+    nowMs: Int,
+    translationShown: Boolean,
+    phoneticShown: Boolean,
+    density: Float,
+    anticipateAccompaniment: Boolean = false,
+    nested: Boolean = false,
+    parentStartMs: Int = source.start,
+    parentEndMs: Int = source.end,
+): Float {
+    if (nested) {
+        val visStart = minOf(source.start, parentStartMs)
+        val visEnd = maxOf(source.end, parentEndMs)
+        if (nowMs !in visStart..visEnd && !anticipateAccompaniment) return 0f
+    }
+    var extent = height + if (nested) 4f * density else 0f
+    if (!phoneticShown) {
+        for (row in rows) {
+            extent -= row.phoneticHeight + row.phoneticSpacingBefore
+        }
+    }
+    val hasLinePhonetic = phoneticShown && phonetic != null
+    val hasLineTranslation = translationShown && translation != null
+    if (hasLinePhonetic) {
+        extent += 4f * density + (phonetic?.size?.height ?: 0)
+    }
+    if (hasLineTranslation) {
+        extent += (if (hasLinePhonetic) 2f else 4f) * density + (translation?.size?.height ?: 0)
+    }
+    for (child in before) {
+        extent +=
+            child.computeLunarSettledHeightPx(
+                nowMs = nowMs,
+                translationShown = translationShown,
+                phoneticShown = phoneticShown,
+                density = density,
+                anticipateAccompaniment = anticipateAccompaniment,
+                nested = true,
+                parentStartMs = source.start,
+                parentEndMs = source.end,
+            )
+    }
+    for (child in after) {
+        extent +=
+            child.computeLunarSettledHeightPx(
+                nowMs = nowMs,
+                translationShown = translationShown,
+                phoneticShown = phoneticShown,
+                density = density,
+                anticipateAccompaniment = anticipateAccompaniment,
+                nested = true,
+                parentStartMs = source.start,
+                parentEndMs = source.end,
+            )
+    }
+    return extent.coerceAtLeast(0f)
 }
 
 @Composable
@@ -282,7 +381,7 @@ fun LunarKaraokeLyricsView(
     autoScrollEnabled: Boolean = true,
     normalLineTextStyle: TextStyle =
         LocalTextStyle.current.copy(
-            fontSize = 30.sp,
+            fontSize = 34.sp,
             lineHeight = TextUnit.Unspecified,
             fontWeight = FontWeight.Bold,
             textMotion = TextMotion.Animated,
@@ -296,14 +395,14 @@ fun LunarKaraokeLyricsView(
         ),
     accompanimentLineTextStyle: TextStyle =
         LocalTextStyle.current.copy(
-            fontSize = 21.sp,
+            fontSize = 22.sp,
             lineHeight = TextUnit.Unspecified,
             fontWeight = FontWeight.Bold,
             textMotion = TextMotion.Animated,
         ),
     phoneticTextStyle: TextStyle =
         normalLineTextStyle.copy(
-            fontSize = 16.sp,
+            fontSize = 18.sp,
             lineHeight = TextUnit.Unspecified,
             fontWeight = FontWeight.SemiBold,
             textMotion = TextMotion.Static,
@@ -315,11 +414,14 @@ fun LunarKaraokeLyricsView(
     showTranslation: Boolean = true,
     showPhonetic: Boolean = true,
     anchor: LyricsAnchor = LyricsAnchor.Fixed(64.dp),
-    topFade: LyricsFade = LyricsFade.Fixed(28.dp),
-    bottomFade: LyricsFade = LyricsFade.Fixed(56.dp),
-    itemSpacing: Dp = 14.dp,
-    blurDelta: Float = 2.5f,
-    autoScrollResumeDelayMillis: Long = 2000L,
+    topFade: LyricsFade = LyricsFade.ToAnchor(16.dp),
+    bottomFade: LyricsFade = LyricsFade.Fraction(0.5f),
+    keepAliveZone: Dp = 100.dp,
+    itemSpacing: Dp = 16.dp,
+    blurDelta: Float = 3f,
+    scrollAnimationSpec: AnimationSpec<Float> = tween(650, easing = FastOutSlowInEasing),
+    autoScrollResumeDelayMillis: Long = 2500L,
+    scrollChain: LunarScrollChain? = LunarScrollChain(),
 ) {
     val currentProvider by rememberUpdatedState(currentPosition)
     val timeProvider = remember { { currentProvider() } }
@@ -445,6 +547,8 @@ fun LunarKaraokeLyricsView(
             }
         }
 
+        // Seed Frame-0 scroll position synchronously before the first LazyLayout measure pass so
+        // cached lyrics open directly on the active line without rushing from item 0.
         if (autoScrollEnabled && !listState.hasPositionedInitially && displayItems.isNotEmpty()) {
             listState.ensureInitialPosition(
                 targetIndex = computeLunarFocusState(displayItems, timeProvider()).scrollTargetItemIndex,
@@ -452,135 +556,192 @@ fun LunarKaraokeLyricsView(
             )
         }
 
-        val autoScrollModifier =
+        val translationShown = rememberUpdatedState(showTranslation)
+        val phoneticShown = rememberUpdatedState(showPhonetic)
+        val previousCaptions =
+            remember(scene, listState) { booleanArrayOf(showTranslation, showPhonetic) }
+        SideEffect {
+            if (previousCaptions[0] != showTranslation || previousCaptions[1] != showPhonetic) {
+                listState.preserveFollowAnchorForContentChange()
+                previousCaptions[0] = showTranslation
+                previousCaptions[1] = showPhonetic
+            }
+        }
+        LaunchedEffect(scene, listState, showTranslation, showPhonetic) {
+            withFrameNanos { }
+            delay(CAPTION_REFLOW_DURATION_MS)
+            listState.finishCaptionContentChange()
+        }
+
+        SideEffect {
+            listState.setInterludeItem(focusState.activeInterludeItemIndex)
+        }
+
+        val listItems =
+            remember(scene, density.density) {
+                displayItems.mapIndexed { itemIndex, item ->
+                    val prepared = item.prepared
+                    val estimated =
+                        ((prepared?.height ?: 0f) +
+                            (if (prepared?.phonetic != null) {
+                                4f * density.density + prepared.phonetic!!.size.height
+                            } else {
+                                0f
+                            }) +
+                            (if (prepared?.translation != null) {
+                                (if (prepared.phonetic != null) 2f else 4f) * density.density +
+                                    prepared.translation!!.size.height
+                            } else {
+                                0f
+                            }))
+                            .roundToInt()
+                            .coerceAtLeast(0)
+                    LunarListItem(
+                        key = item.itemKey,
+                        preserveAnchorOnHeightChange = false,
+                        estimatedHeightPx = estimated,
+                        settledHeightPx =
+                            prepared?.let { preparedLine ->
+                                {
+                                    val f = focusState
+                                    val focused =
+                                        f.firstFocusedItemIndex >= 0 &&
+                                            itemIndex in f.firstFocusedItemIndex..f.lastFocusedItemIndex
+                                    preparedLine
+                                        .computeLunarSettledHeightPx(
+                                            nowMs = timeProvider(),
+                                            translationShown = translationShown.value,
+                                            phoneticShown = phoneticShown.value,
+                                            density = density.density,
+                                            anticipateAccompaniment = focused,
+                                        ).roundToInt()
+                                }
+                            },
+                    )
+                }
+            }
+
+        val followModifier =
             lunarLyricsAutoScroll(
                 state = listState,
                 autoScrollEnabled = autoScrollEnabled,
-                targetIndexProvider = { focusState.scrollTargetItemIndex },
-                itemCount = displayItems.size,
+                targetIndex = { focusState.scrollTargetItemIndex },
+                focusEndIndex = { focusState.focusEndItemIndex },
+                animationSpec = scrollAnimationSpec,
                 resumeDelayMillis = autoScrollResumeDelayMillis,
+                playbackPosition = timeProvider,
             )
 
         val focusBlurScale by animateFloatAsState(
             targetValue = if (listState.isManualScrolling || !useBlurEffect) 0f else 1f,
-            animationSpec = tween(durationMillis = if (listState.isManualScrolling) 100 else 260),
-            label = "manualScrollBlurScale",
+            animationSpec = tween(durationMillis = if (listState.isManualScrolling) 100 else 300),
+            label = "manualScrollFocusBlur",
         )
 
-        val bottomPadding = (maxHeight - anchorOffset).coerceAtLeast(80.dp)
-
-        LazyColumn(
-            state = listState.lazyListState,
+        LunarLyricsLazyColumn(
+            items = listItems,
+            state = listState,
+            itemSpacing = itemSpacing,
+            scrollChain = scrollChain,
+            beyondBounds = keepAliveZone,
             contentPadding =
                 PaddingValues(
                     top = anchorOffset,
-                    bottom = bottomPadding,
+                    bottom = maxHeight + keepAliveZone,
                 ),
-            verticalArrangement = Arrangement.spacedBy(itemSpacing),
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .then(autoScrollModifier)
+                    .then(followModifier)
                     .lunarLyricsEdgeFade(topFadeSize, bottomFadeSize),
-        ) {
-            itemsIndexed(
-                items = displayItems,
-                key = { _, item -> item.itemKey },
-                contentType = { _, _ -> "karaoke_line" },
-            ) { itemIndex, item ->
-                val isFocused by remember(itemIndex, displayItems) {
-                    derivedStateOf {
-                        val f = focusState
-                        f.firstFocusedItemIndex >= 0 &&
-                            itemIndex in f.firstFocusedItemIndex..f.lastFocusedItemIndex
-                    }
-                }
-                val distanceBucket by remember(itemIndex, displayItems) {
-                    derivedStateOf {
-                        val f = focusState
-                        if (f.firstFocusedItemIndex < 0) {
-                            itemIndex.coerceAtMost(MAX_FOCUS_BLUR_DISTANCE)
-                        } else {
-                            maxOf(
-                                0,
-                                f.firstFocusedItemIndex - itemIndex,
-                                itemIndex - f.lastFocusedItemIndex,
-                            ).coerceAtMost(MAX_FOCUS_BLUR_DISTANCE)
-                        }
-                    }
-                }
-                val targetBlur = if (useBlurEffect) distanceBucket * blurDelta else 0f
-                val animatedBlur by animateFloatAsState(
-                    targetValue = targetBlur,
-                    animationSpec = tween(durationMillis = 260),
-                    label = "lineFocusBlur",
+        ) { itemIndex ->
+            val item = displayItems[itemIndex]
+            val f = focusState
+            val isFocused =
+                f.firstFocusedItemIndex >= 0 &&
+                    itemIndex in f.firstFocusedItemIndex..f.lastFocusedItemIndex
+            val firstAnchor =
+                if (f.firstFocusedItemIndex >= 0) f.firstFocusedItemIndex else f.scrollTargetItemIndex
+            val lastAnchor =
+                if (f.lastFocusedItemIndex >= 0) f.lastFocusedItemIndex else f.scrollTargetItemIndex
+            val distance =
+                maxOf(
+                    0,
+                    firstAnchor - itemIndex,
+                    itemIndex - lastAnchor,
                 )
+            val animatedBlur by animateFloatAsState(
+                targetValue = if (useBlurEffect) distance * blurDelta else 0f,
+                animationSpec = tween(durationMillis = 300),
+                label = "lineFocusBlur",
+            )
 
-                val showInterludeDots by remember(item) {
-                    derivedStateOf {
-                        if (!item.hasInterlude) {
-                            false
-                        } else if (itemIndex == 0) {
-                            item.interludeEndMs >= INTRO_DOTS_MIN_DURATION_MS &&
-                                timeProvider() in 0..item.interludeEndMs
-                        } else {
-                            timeProvider() in item.interludeStartMs..item.interludeEndMs
-                        }
-                    }
+            Column {
+                if (itemIndex == 0 && f.activeIntro) {
+                    KaraokeBreathingDots(
+                        alignment =
+                            if (item.prepared?.rightAligned == true) {
+                                KaraokeAlignment.End
+                            } else {
+                                KaraokeAlignment.Start
+                            },
+                        startTimeMs = 0,
+                        endTimeMs = item.startMs,
+                        currentTimeProvider = timeProvider,
+                        defaults = breathingDotsDefaults,
+                        trailingSpacing = itemSpacing,
+                        lineHeight = breathingLineHeight,
+                    )
+                }
+                if (f.activeInterludeItemIndex == itemIndex && itemIndex > 0) {
+                    KaraokeBreathingDots(
+                        alignment =
+                            if (item.prepared?.rightAligned == true) {
+                                KaraokeAlignment.End
+                            } else {
+                                KaraokeAlignment.Start
+                            },
+                        startTimeMs = item.interludeStartMs,
+                        endTimeMs = item.interludeEndMs,
+                        currentTimeProvider = timeProvider,
+                        defaults = breathingDotsDefaults,
+                        trailingSpacing = itemSpacing,
+                        lineHeight = breathingLineHeight,
+                    )
                 }
 
-                Column(
-                    modifier =
-                        Modifier.graphicsLayer {
-                            translationY = listState.cascade.offsetFor(itemIndex)
-                        },
+                LyricsLineItem(
+                    isFocused = isFocused,
+                    isRightAligned = item.prepared?.rightAligned == true,
+                    onLineClicked = {
+                        listState.resumeAutoScroll(item.line.start, itemIndex)
+                        onLineClicked(item.line)
+                    },
+                    onLinePressed = { onLinePressed(item.line) },
+                    blurRadius = { animatedBlur * focusBlurScale },
+                    blendMode = blendMode,
                 ) {
-                    if (showInterludeDots) {
-                        KaraokeBreathingDots(
-                            alignment =
-                                if (item.prepared?.rightAligned == true) {
-                                    KaraokeAlignment.End
-                                } else {
-                                    KaraokeAlignment.Start
-                                },
-                            startTimeMs = item.interludeStartMs,
-                            endTimeMs = item.interludeEndMs,
+                    val preparedLine = item.prepared
+                    if (preparedLine != null) {
+                        LunarPreparedLineText(
+                            prepared = preparedLine,
                             currentTimeProvider = timeProvider,
-                            defaults = breathingDotsDefaults,
-                            trailingSpacing = itemSpacing,
-                            lineHeight = breathingLineHeight,
-                        )
-                    }
-
-                    LyricsLineItem(
-                        isFocused = isFocused,
-                        isRightAligned = item.prepared?.rightAligned == true,
-                        onLineClicked = {
-                            listState.resumeAutoScroll(itemIndex)
-                            onLineClicked(item.line)
-                        },
-                        onLinePressed = { onLinePressed(item.line) },
-                        blurRadius = { animatedBlur * focusBlurScale },
-                        activeAlpha = 1f,
-                        inactiveAlpha = 0.42f,
-                        blendMode = blendMode,
-                    ) {
-                        val preparedLine = item.prepared
-                        if (preparedLine != null) {
-                            LunarPreparedLineText(
-                                prepared = preparedLine,
-                                currentTimeProvider = timeProvider,
-                                resources = resources,
-                                showPhonetic = showPhonetic,
-                                showTranslation = showTranslation,
-                                verticalPadding = 2.dp,
-                                onChildClick = { child ->
-                                    listState.resumeAutoScroll(itemIndex)
-                                    onLineClicked(child.source)
+                            resources = resources,
+                            showPhonetic = showPhonetic,
+                            showTranslation = showTranslation,
+                            verticalPadding = 0.dp,
+                            modifier =
+                                if (item.line is KaraokeLine.AccompanimentKaraokeLine) {
+                                    Modifier.padding(horizontal = 16.dp)
+                                } else {
+                                    Modifier
                                 },
-                                onChildLongClick = { child -> onLinePressed(child.source) },
-                            )
-                        }
+                            onChildClick = { child ->
+                                listState.resumeAutoScroll(child.source.start, itemIndex)
+                                onLineClicked(child.source)
+                            },
+                            onChildLongClick = { child -> onLinePressed(child.source) },
+                        )
                     }
                 }
             }
