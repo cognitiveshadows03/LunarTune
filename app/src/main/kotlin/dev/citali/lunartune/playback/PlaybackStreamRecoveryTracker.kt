@@ -7,24 +7,40 @@
 
 package dev.citali.lunartune.playback
 
-internal class PlaybackStreamRecoveryTracker {
-    private var attemptedMediaId: String? = null
+internal class PlaybackStreamRecoveryTracker(
+    private val maxRetriesPerItem: Int = DEFAULT_MAX_RETRIES_PER_ITEM,
+) {
+    private var trackedMediaId: String? = null
+    private var attemptsForTrackedItem: Int = 0
 
     fun registerRetryAttempt(mediaId: String): Boolean {
-        if (attemptedMediaId == mediaId) return false
-        attemptedMediaId = mediaId
+        if (trackedMediaId != mediaId) {
+            trackedMediaId = mediaId
+            attemptsForTrackedItem = 0
+        }
+        if (attemptsForTrackedItem >= maxRetriesPerItem) return false
+        attemptsForTrackedItem += 1
         return true
     }
 
+    fun isFinalRetryAttempt(mediaId: String): Boolean =
+        trackedMediaId == mediaId && attemptsForTrackedItem >= maxRetriesPerItem
+
     fun onPlaybackRecovered(mediaId: String?) {
-        if (mediaId != null && attemptedMediaId == mediaId) {
-            attemptedMediaId = null
+        if (mediaId != null && trackedMediaId == mediaId) {
+            trackedMediaId = null
+            attemptsForTrackedItem = 0
         }
     }
 
     fun onMediaItemChanged(currentMediaId: String?) {
-        if (attemptedMediaId != currentMediaId) {
-            attemptedMediaId = null
+        if (trackedMediaId != currentMediaId) {
+            trackedMediaId = null
+            attemptsForTrackedItem = 0
         }
+    }
+
+    companion object {
+        const val DEFAULT_MAX_RETRIES_PER_ITEM = 3
     }
 }

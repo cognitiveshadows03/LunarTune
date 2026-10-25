@@ -1022,14 +1022,14 @@ object YTPlayerUtils {
                     authState = authState,
                 )
         }
-        if (metadataResult.exceptionOrNull()?.isForbiddenPlayerRequest() == true) {
+        if (metadataResult.exceptionOrNull()?.isRetryableMetadataPlayerFailure() == true) {
             for (fallbackClient in buildStreamClientOrder(preferredStreamClient, authState, videoId)) {
                 if (fallbackClient == metadataClient) continue
                 val useCookieAuthentication = canUseLoggedInPlayback && fallbackClient.supportsCookieAuthentication
                 if (fallbackClient.loginRequired && !useCookieAuthentication) continue
 
                 Timber.tag(logTag).i(
-                    "Metadata request was forbidden for %s; trying %s",
+                    "Metadata request failed for %s; trying %s",
                     describeClient(metadataClient),
                     describeClient(fallbackClient),
                 )
@@ -1436,9 +1436,9 @@ object YTPlayerUtils {
             )
 
         return PlaybackData(
-            metadataPlayerResponse.playerConfig?.audioConfig,
-            metadataPlayerResponse.videoDetails,
-            metadataPlayerResponse.playbackTracking,
+            metadataPlayerResponse.playerConfig?.audioConfig ?: streamPlayerResponse.playerConfig?.audioConfig,
+            metadataPlayerResponse.videoDetails ?: streamPlayerResponse.videoDetails,
+            metadataPlayerResponse.playbackTracking ?: streamPlayerResponse.playbackTracking,
             format,
             streamUrl,
             streamExpiresInSeconds,
@@ -1855,8 +1855,8 @@ object YTPlayerUtils {
             message.contains("invalid argument", ignoreCase = true)
     }
 
-    private fun Throwable.isForbiddenPlayerRequest(): Boolean =
-        (this as? ClientRequestException)?.response?.status == HttpStatusCode.Forbidden
+    private fun Throwable.isRetryableMetadataPlayerFailure(): Boolean =
+        this !is CancellationException && !isInvalidPlaybackLoginContextFailure()
 
     internal fun isBotDetectionError(reason: String): Boolean {
         val lower = reason.lowercase(Locale.US)

@@ -284,9 +284,11 @@ import java.io.ObjectInputStream
 import java.io.ObjectOutputStream
 import java.io.Serializable
 import java.net.ConnectException
+import java.net.ProtocolException
 import java.net.Proxy
 import java.net.ProxySelector
 import java.net.SocketAddress
+import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.UnknownHostException
@@ -296,6 +298,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
+import javax.net.ssl.SSLException
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.pow
@@ -457,19 +460,45 @@ class MusicService :
 
                 val updatedRequest: Request = updatedRequestBuilder.build()
                 val response = chain.proceed(updatedRequest)
-                if (response.code == 403 && host.endsWith("googlevideo.com")) {
-                    Timber.tag(TAG).w(
-                        "YouTube media 403 host=%s client=%s c=%s cver=%s hasPot=%s range=%s",
-                        host,
-                        requestProfile.variantLabel,
-                        request.url.queryParameter("c").orEmpty(),
-                        request.url.queryParameter("cver").orEmpty(),
-                        request.url.queryParameter("pot") != null,
-                        updatedRequest.header("Range").orEmpty(),
+                if (response.code in RETRYABLE_STREAM_RESPONSE_CODES &&
+                    (host.endsWith("googlevideo.com") || host.endsWith("googleusercontent.com"))
+                ) {
+                    if (response.code == 403) {
+                        Timber.tag(TAG).w(
+                            "YouTube media 403 host=%s client=%s c=%s cver=%s hasPot=%s range=%s",
+                            host,
+                            requestProfile.variantLabel,
+                            request.url.queryParameter("c").orEmpty(),
+                            request.url.queryParameter("cver").orEmpty(),
+                            request.url.queryParameter("pot") != null,
+                            updatedRequest.header("Range").orEmpty(),
+                        )
+                    }
+                    invalidateFailedResolvedStreamUrl(
+                        failedUrl = request.url.toString(),
+                        responseCode = response.code,
+                        requestProfile = requestProfile,
                     )
                 }
                 response
             }.build()
+    }
+
+    private fun invalidateFailedResolvedStreamUrl(
+        failedUrl: String,
+        responseCode: Int,
+        requestProfile: StreamClientUtils.StreamRequestProfile,
+    ) {
+        val expired = YTPlayerUtils.isExpiredOrNearExpiredStreamUrl(failedUrl)
+        playbackUrlCache.entries.forEach { (mediaId, cached) ->
+            if (cached.url == failedUrl) {
+                playbackUrlCache.remove(mediaId, cached)
+                YTPlayerUtils.invalidateCachedStreamUrls(mediaId)
+                if (!expired && requestProfile.clientKey.isNotEmpty()) {
+                    YTPlayerUtils.markStreamClientFailed(mediaId, requestProfile.clientKey, responseCode)
+                }
+            }
+        }
     }
     private var currentQueue: Queue = EmptyQueue
     var queueTitle: String? = null
@@ -723,7 +752,15 @@ class MusicService :
     private fun Throwable.isNetworkConnectionFailure(): Boolean {
         var current: Throwable? = this
         while (current != null) {
-            if (current is ConnectException || current is UnknownHostException) return true
+            if (
+                current is ConnectException ||
+                current is UnknownHostException ||
+                current is SocketException ||
+                current is SSLException ||
+                current is ProtocolException
+            ) {
+                return true
+            }
             current = current.cause
         }
         return false
@@ -735,6 +772,24 @@ class MusicService :
 
     private fun Throwable.isTransientNetworkFailure(): Boolean =
         isRequestTimeout() || isNetworkConnectionFailure()
+
+    private fun PlaybackException.isRetryableUnspecifiedStreamIoError(): Boolean {
+        if (errorCode != PlaybackException.ERROR_CODE_IO_UNSPECIFIED) return false
+        if (YTPlayerUtils.isBotDetectionException(this) || YTPlayerUtils.isBadStreamPlayerResponseException(this)) {
+            return false
+        }
+        var current: Throwable? = cause
+        while (current != null) {
+            if (
+                current is YTPlayerUtils.LoginRequiredForPlaybackException ||
+                current is YTPlayerUtils.InvalidPlaybackLoginContextException
+            ) {
+                return false
+            }
+            current = current.cause
+        }
+        return true
+    }
 
     lateinit var sleepTimer: SleepTimer
 
@@ -2831,9 +2886,9 @@ class MusicService :
      * URL is in use until it is replaced, so a failure here is a no-op.
      */
     private fun refreshAgingPlaybackUrlIfNeeded() {
-        if (!fastPlaybackStartEnabled) return
         if (!::player.isInitialized) return
         if (isCrossfading || crossfadeHandoffInProgress) return
+        if (isLowDataModeActive()) return
         val mediaId = player.currentMediaItem?.mediaId?.trim().orEmpty()
         if (mediaId.isEmpty() || mediaId.isLocalMediaId()) return
         if (mediaId in prefetchingMediaIds) return
@@ -4047,6 +4102,7 @@ class MusicService :
                 )
 
         playbackUrlCache.remove(mediaId)
+        contentLengthCache.remove(mediaId)
         YTPlayerUtils.invalidateCachedStreamUrls(mediaId)
         if (!failedExpiredUrl && requestProfile.clientKey.isNotEmpty()) {
             YTPlayerUtils.markStreamClientFailed(mediaId, requestProfile.clientKey, responseException.responseCode)
@@ -4054,6 +4110,9 @@ class MusicService :
 
         if (!playbackStreamRecoveryTracker.registerRetryAttempt(mediaId)) {
             return false
+        }
+        if (playbackStreamRecoveryTracker.isFinalRetryAttempt(mediaId)) {
+            YTPlayerUtils.requestUnthrottledResolution(mediaId)
         }
 
         Timber.tag("MusicService").i(
@@ -4074,10 +4133,14 @@ class MusicService :
         val recoverySnapshot = capturePlaybackRecoverySnapshot()
 
         playbackUrlCache.remove(mediaId)
+        contentLengthCache.remove(mediaId)
         YTPlayerUtils.invalidateCachedStreamUrls(mediaId)
 
         if (!playbackStreamRecoveryTracker.registerRetryAttempt(mediaId)) {
             return false
+        }
+        if (playbackStreamRecoveryTracker.isFinalRetryAttempt(mediaId)) {
+            YTPlayerUtils.requestUnthrottledResolution(mediaId)
         }
 
         Timber.tag("MusicService").i("Retrying playback for %s after a transient network failure", mediaId)
@@ -7968,6 +8031,30 @@ class MusicService :
             }
         }
 
+        if (!isLocalMedia &&
+            !isFullyDownloadedMedia &&
+            error.isRetryableUnspecifiedStreamIoError()
+        ) {
+            val failedUrl = playbackUrlCache[currentMediaId]?.url
+            failedUrl
+                ?.let(StreamClientUtils::resolveRequestProfile)
+                ?.clientKey
+                ?.takeIf(String::isNotEmpty)
+                ?.let { clientKey ->
+                    YTPlayerUtils.markStreamClientFailed(
+                        videoId = currentMediaId,
+                        clientKey = clientKey,
+                        httpStatusCode = null,
+                    )
+                }
+            scope.launch(Dispatchers.IO) {
+                runCatching { playerCache.removeResource(currentMediaId) }
+            }
+            if (retryPlaybackAfterNetworkFailure(currentMediaId, isFullyDownloadedMedia)) {
+                return
+            }
+        }
+
         if (dataStore.get(AutoSkipNextOnErrorKey, false)) {
             skipOnError()
         } else {
@@ -9480,8 +9567,8 @@ class MusicService :
         const val CROSSFADE_MAX_BUFFER_BEFORE_START_MS = 12_500L
         const val PRIMARY_MIN_BUFFER_MS = 20_000
         const val PRIMARY_MAX_BUFFER_MS = 60_000
-        const val PRIMARY_BUFFER_FOR_PLAYBACK_MS = 150
-        const val PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 750
+        const val PRIMARY_BUFFER_FOR_PLAYBACK_MS = 500
+        const val PRIMARY_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
 
         // Opt-in only. 150ms starts audio almost immediately but leaves no cushion at
         // all, so any read that fails surfaces straight away as a 2000
