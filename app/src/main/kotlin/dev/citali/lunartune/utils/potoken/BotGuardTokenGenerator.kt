@@ -8,6 +8,7 @@
 package dev.citali.lunartune.utils.potoken
 
 import android.content.Context
+import android.os.SystemClock
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -29,10 +30,25 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import moe.rukamori.archivetune.innertube.YouTube
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Dns
 import okhttp3.Headers.Companion.toHeaders
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import org.json.JSONArray
+import org.json.JSONObject
 import timber.log.Timber
+import java.io.IOException
+import java.net.Proxy
+import java.net.ProxySelector
+import java.net.SocketAddress
+import java.net.SocketTimeoutException
+import java.net.URI
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.Collections
@@ -53,22 +69,10 @@ import kotlin.coroutines.resumeWithException
  * 3. [mintToken] — suspend function, called per video. Reuses the engine until
  *    it expires (~50 min) or the session changes.
  * 4. [onAppBackgrounded] — releases the WebView to free ~50 MB of memory.
- *
- * ## Optimizations
- *
- * - **Suspend API** — [mintToken] is a suspend function, never blocks the calling thread.
- * - **Pre-warm** — [preWarm] bootstraps the engine at app startup so the first
- *   real mint is instant.
- * - **Player token cache** — Caches per-video tokens (LRU, max 200) to avoid
- *   redundant mints when the same video is played multiple times.
- * - **Session token reuse** — The session token is minted once per engine and
- *   reused for all videos until the engine expires or the session changes.
- * - **Background cleanup** — [onAppBackgrounded] releases the WebView to free memory.
- *   The engine is recreated on the next [mintToken] call.
  */
 object BotGuardTokenGenerator {
     private const val TAG = "BotGuardTokenGen"
-    private const val CREATE_URL = "https://www.youtube.com/api/jnn/v1/Create"
+    private const val CHALLENGE_PAGE_URL = "https://www.youtube.com/?hl=en"
     private const val GENERATE_IT_URL = "https://www.youtube.com/api/jnn/v1/GenerateIT"
     private const val REQUEST_KEY = "O43z0dpjhgX20SCx4KAo"
     private const val API_KEY = "AIzaSyDyT5W0Jh49F30Pqqtyfdf7pDLFKLJoAnw"
@@ -85,20 +89,44 @@ object BotGuardTokenGenerator {
     /** Maximum number of cached player tokens. */
     private const val PLAYER_TOKEN_CACHE_SIZE = 200
 
-    private val httpClient =
+    private val httpClient: OkHttpClient by lazy {
         OkHttpClient
             .Builder()
+            .proxySelector(
+                object : ProxySelector() {
+                    override fun select(uri: URI?): List<Proxy> = listOf(YouTube.streamOkHttpProxy)
+
+                    override fun connectFailed(
+                        uri: URI?,
+                        sa: SocketAddress?,
+                        ioe: IOException?,
+                    ) {
+                        Timber.tag(TAG).v(ioe, "Proxy connection failed for %s", uri)
+                    }
+                },
+            ).dns(Dns { hostname -> YouTube.dns.lookup(hostname) })
             .callTimeout(20, TimeUnit.SECONDS)
             .build()
+    }
 
     // ── state ────────────────────────────────────────────────────────
     private var appContext: Context? = null
+
+    @Volatile
     private var permanentlyBroken = false
 
     private val mutex = Mutex()
+
+    @Volatile
     private var engine: BotGuardEngine? = null
+
+    @Volatile
     private var engineSessionId: String? = null
+
+    @Volatile
     private var cachedSessionToken: String? = null
+
+    @Volatile
     private var engineReady = false
 
     /**
@@ -117,6 +145,14 @@ object BotGuardTokenGenerator {
     fun initialize(context: Context) {
         appContext = context.applicationContext
         Timber.tag(TAG).d("Initialized")
+    }
+
+    /**
+     * Lock-free check whether the BotGuard engine is already bootstrapped for [sessionId].
+     */
+    fun isWarmForSession(sessionId: String): Boolean {
+        if (permanentlyBroken || sessionId.isBlank()) return false
+        return isEngineReadyForSession(sessionId)
     }
 
     /**
@@ -147,15 +183,6 @@ object BotGuardTokenGenerator {
 
     /**
      * Mint a PoToken pair for the given [videoId] and [sessionId].
-     *
-     * Returns `null` when:
-     * - [initialize] was never called
-     * - The system has no usable WebView
-     * - BotGuard bootstrap timed out
-     * - The WebView is permanently broken
-     *
-     * This is a **suspend function** — never blocks the calling thread.
-     * Call from a coroutine context (e.g. `Dispatchers.IO`).
      */
     suspend fun mintToken(
         videoId: String,
@@ -168,70 +195,84 @@ object BotGuardTokenGenerator {
             }
         if (permanentlyBroken) return null
 
-        val cachedResult =
+        return mutex.withLock {
+            mintTokenLocked(
+                ctx = ctx,
+                videoId = videoId,
+                sessionId = sessionId,
+            )
+        }
+    }
+
+    suspend fun mintRequiredToken(
+        videoId: String,
+        sessionId: String,
+    ): PoTokenResult {
+        val ctx = appContext ?: throw PoTokenException("Token generator is not initialized")
+        if (permanentlyBroken) throw BrokenWebViewException("Token generation requires a usable system WebView")
+        require(videoId.isNotBlank() && sessionId.isNotBlank())
+        return withTimeoutOrNull(COLD_START_TIMEOUT_MS * 2L) {
             mutex.withLock {
-                if (!isEngineReadyForSession(sessionId)) return@withLock null
-                val cachedPlayer = playerTokenCache[videoId] ?: return@withLock null
-                val sessionToken = cachedSessionToken ?: return@withLock null
-                PoTokenResult(playerToken = cachedPlayer, sessionToken = sessionToken)
+                mintTokenOrThrowLocked(ctx, videoId, sessionId)
             }
-        if (cachedResult != null) {
-            Timber.tag(TAG).d("Cache hit for $videoId")
-            return cachedResult
+        } ?: throw SocketTimeoutException("Timed out waiting for the playback token engine")
+    }
+
+    suspend fun mintToken(
+        videoId: String,
+        sessionId: String,
+        maximumWaitMillis: Long,
+    ): PoTokenResult? {
+        if (maximumWaitMillis <= 0L) return null
+        val ctx =
+            appContext ?: run {
+                Timber.tag(TAG).w("initialize() not called")
+                return null
+            }
+        if (permanentlyBroken) return null
+
+        val deadline = SystemClock.elapsedRealtime() + maximumWaitMillis
+        val acquired =
+            withTimeoutOrNull(maximumWaitMillis) {
+                mutex.lock()
+                true
+            } ?: false
+        if (!acquired) {
+            Timber.tag(TAG).w(
+                "Token generation exceeded ${maximumWaitMillis}ms while waiting for the engine",
+            )
+            return null
         }
 
-        val requiresColdStart =
-            mutex.withLock {
-                !isEngineReadyForSession(sessionId)
-            }
-        val timeout = if (requiresColdStart) COLD_START_TIMEOUT_MS else WARM_TIMEOUT_MS
-
         return try {
-            withTimeout(timeout) {
-                val result = mintTokenInternal(ctx, videoId, sessionId, forceNewEngine = false)
-                // Cache the player token
-                mutex.withLock {
-                    playerTokenCache[videoId] = result.playerToken
-                }
-                result
+            val remainingMillis = deadline - SystemClock.elapsedRealtime()
+            if (remainingMillis <= 0L) {
+                Timber.tag(TAG).w(
+                    "Token generation exceeded ${maximumWaitMillis}ms stream resolution budget",
+                )
+                null
+            } else {
+                mintTokenLocked(
+                    ctx = ctx,
+                    videoId = videoId,
+                    sessionId = sessionId,
+                    maximumOperationMillis = remainingMillis,
+                )
             }
-        } catch (e: TimeoutCancellationException) {
-            Timber.tag(TAG).w("Timed out after ${timeout}ms — proceeding without PoToken")
-            mutex.withLock { destroyEngine() }
-            null
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (e: BrokenWebViewException) {
-            Timber.tag(TAG).e(e, "Permanently broken WebView")
-            permanentlyBroken = true
-            null
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "mintToken failed: ${e.message}")
-            null
+        } finally {
+            mutex.unlock()
         }
     }
 
     /**
      * Release the WebView to free memory (~50 MB).
-     * Call from `onTrimMemory(TRIM_MEMORY_UI_HIDDEN)` or similar.
-     * The engine is recreated on the next [mintToken] call.
      */
     suspend fun onAppBackgrounded() {
         mutex.withLock {
             if (engine != null) {
                 Timber.tag(TAG).d("Releasing engine (app backgrounded)")
-                destroyEngine()
+                destroyEngineLocked()
             }
-        }
-    }
-
-    /**
-     * Invalidate the player token cache for a specific video.
-     * Useful when the user's auth state changes.
-     */
-    suspend fun invalidatePlayerToken(videoId: String) {
-        mutex.withLock {
-            playerTokenCache.remove(videoId)
         }
     }
 
@@ -242,7 +283,7 @@ object BotGuardTokenGenerator {
     suspend fun invalidateAll() {
         mutex.withLock {
             playerTokenCache.clear()
-            destroyEngine()
+            destroyEngineLocked()
         }
     }
 
@@ -255,74 +296,136 @@ object BotGuardTokenGenerator {
         getOrCreateEngine(
             ctx = ctx,
             sessionId = sessionId,
-            forceNewEngine = false,
         )
     }
 
-    private suspend fun mintTokenInternal(
+    private suspend fun mintTokenInternalLocked(
         ctx: Context,
         videoId: String,
         sessionId: String,
-        forceNewEngine: Boolean,
     ): PoTokenResult {
-        val (eng, sessionTok, wasNew) =
-            getOrCreateEngine(
+        val (eng, sessionTok) =
+            getOrCreateEngineLocked(
                 ctx = ctx,
                 sessionId = sessionId,
-                forceNewEngine = forceNewEngine,
             )
-
-        val playerTok =
-            try {
-                eng.mint(videoId)
-            } catch (e: Throwable) {
-                if (wasNew) throw e
-                Timber.tag(TAG).w(e, "mint failed, retrying with fresh engine")
-                return mintTokenInternal(ctx, videoId, sessionId, forceNewEngine = true)
-            }
-
+        val playerTok = eng.mint(videoId)
         return PoTokenResult(playerToken = playerTok, sessionToken = sessionTok)
+    }
+
+    private suspend fun mintTokenLocked(
+        ctx: Context,
+        videoId: String,
+        sessionId: String,
+        maximumOperationMillis: Long? = null,
+    ): PoTokenResult? =
+        try {
+            mintTokenOrThrowLocked(ctx, videoId, sessionId, maximumOperationMillis)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            Timber.tag(TAG).e(failure, "Token generation failed")
+            null
+        }
+
+    private suspend fun mintTokenOrThrowLocked(
+        ctx: Context,
+        videoId: String,
+        sessionId: String,
+        maximumOperationMillis: Long? = null,
+    ): PoTokenResult {
+        if (permanentlyBroken) throw BrokenWebViewException("Token generation requires a usable system WebView")
+        if (isEngineReadyForSession(sessionId)) {
+            val cachedPlayer = playerTokenCache[videoId]
+            val sessionToken = cachedSessionToken
+            if (cachedPlayer != null && sessionToken != null) {
+                Timber.tag(TAG).d("Cache hit for $videoId")
+                return PoTokenResult(
+                    playerToken = cachedPlayer,
+                    sessionToken = sessionToken,
+                )
+            }
+        }
+
+        val defaultTimeout =
+            if (isEngineReadyForSession(sessionId)) {
+                WARM_TIMEOUT_MS
+            } else {
+                COLD_START_TIMEOUT_MS
+            }
+        val timeout =
+            maximumOperationMillis?.let { minOf(defaultTimeout, it) }
+                ?: defaultTimeout
+        return try {
+            withTimeoutOrNull(timeout) {
+                mintTokenInternalLocked(
+                    ctx = ctx,
+                    videoId = videoId,
+                    sessionId = sessionId,
+                ).also { result ->
+                    playerTokenCache[videoId] = result.playerToken
+                }
+            } ?: throw SocketTimeoutException("Playback token generation timed out after ${timeout}ms")
+        } catch (failure: Exception) {
+            resetEngineAfterInterruptedMint()
+            if (failure is BrokenWebViewException) permanentlyBroken = true
+            throw failure
+        }
+    }
+
+    private suspend fun resetEngineAfterInterruptedMint() {
+        withContext(NonCancellable) {
+            destroyEngineLocked()
+        }
     }
 
     private suspend fun getOrCreateEngine(
         ctx: Context,
         sessionId: String,
-        forceNewEngine: Boolean,
-    ): Triple<BotGuardEngine, String, Boolean> =
+    ): Pair<BotGuardEngine, String> =
         mutex.withLock {
-            val needsNew = forceNewEngine || !isEngineReadyForSession(sessionId)
-            if (needsNew) {
-                withContext(Dispatchers.Main) {
-                    engine?.close()
-                }
-                engine = null
-                engineSessionId = null
-                cachedSessionToken = null
-                engineReady = false
-                playerTokenCache.clear()
-
-                val newEngine = BotGuardEngine.create(ctx)
-                val newSessionToken =
-                    try {
-                        newEngine.mint(sessionId)
-                    } catch (error: Throwable) {
-                        withContext(NonCancellable + Dispatchers.Main) {
-                            newEngine.close()
-                        }
-                        throw error
-                    }
-                engine = newEngine
-                engineSessionId = sessionId
-                cachedSessionToken = newSessionToken
-                engineReady = true
-            }
-
-            Triple(
-                requireNotNull(engine),
-                requireNotNull(cachedSessionToken),
-                needsNew,
+            getOrCreateEngineLocked(
+                ctx = ctx,
+                sessionId = sessionId,
             )
         }
+
+    private suspend fun getOrCreateEngineLocked(
+        ctx: Context,
+        sessionId: String,
+    ): Pair<BotGuardEngine, String> {
+        val needsNew = !isEngineReadyForSession(sessionId)
+        if (needsNew) {
+            withContext(Dispatchers.Main) {
+                engine?.close()
+            }
+            engine = null
+            engineSessionId = null
+            cachedSessionToken = null
+            engineReady = false
+            playerTokenCache.clear()
+
+            val newEngine = BotGuardEngine.create(ctx)
+            val newSessionToken =
+                try {
+                    newEngine.mint(sessionId)
+                } catch (error: Throwable) {
+                    withContext(NonCancellable + Dispatchers.Main) {
+                        newEngine.close()
+                    }
+                    throw error
+                }
+            engine = newEngine
+            engineSessionId = sessionId
+            cachedSessionToken = newSessionToken
+            engineReady = true
+        }
+
+        return Pair(
+            requireNotNull(engine),
+            requireNotNull(cachedSessionToken),
+        )
+    }
 
     private fun isEngineReadyForSession(sessionId: String): Boolean =
         engineReady &&
@@ -330,7 +433,7 @@ object BotGuardTokenGenerator {
             cachedSessionToken != null &&
             engine?.isExpired == false
 
-    private suspend fun destroyEngine() {
+    private suspend fun destroyEngineLocked() {
         withContext(Dispatchers.Main) {
             engine?.close()
         }
@@ -354,9 +457,11 @@ object BotGuardTokenGenerator {
             Collections.synchronizedMap(
                 ArrayMap<String, CancellableContinuation<String>>(),
             )
-        private lateinit var expiry: Instant
 
-        val isExpired: Boolean get() = Instant.now().isAfter(expiry)
+        @Volatile
+        private var expiry: Instant = Instant.MAX
+
+        val isExpired: Boolean get() = closed.get() || !Instant.now().isBefore(expiry)
 
         fun startBootstrap() {
             scope.launch(exceptionHandler) {
@@ -381,23 +486,47 @@ object BotGuardTokenGenerator {
         @JavascriptInterface
         fun onPageLoaded() {
             dispatchBridgeCallback {
-                Timber.tag(TAG).d("Page loaded — requesting challenge from Create")
-                postToBotGuard(CREATE_URL, "[ \"$REQUEST_KEY\" ]") { body ->
-                    val challengeJson = parseCreateChallenge(body)
-                    webView.evaluateJavascript(
-                        """
-                        try {
-                            var data = $challengeJson;
-                            runBotGuard(data).then(function(r) {
-                                this.webPoSignalOutput = r.webPoSignalOutput;
-                                $JS_BRIDGE.onBotGuardReady(r.botguardResponse);
-                            }, function(e) {
-                                $JS_BRIDGE.onFatalError(e + "\n" + e.stack);
-                            });
-                        } catch(e) { $JS_BRIDGE.onFatalError(e + "\n" + e.stack); }
-                        """.trimIndent(),
-                        null,
-                    )
+                Timber.tag(TAG).d("Page loaded — requesting page-bound attestation challenge")
+                requestBotGuard(CHALLENGE_PAGE_URL) { body ->
+                    val page = withContext(Dispatchers.Default) { parsePageChallenge(body) }
+                    val interpreterUrl =
+                        page.challenge
+                            .getJSONObject("interpreterUrl")
+                            .getString("privateDoNotAccessOrElseTrustedResourceUrlWrappedValue")
+                            .let { if (it.startsWith("//")) "https:$it" else it }
+                            .toHttpUrlOrNull()
+                            ?: throw PoTokenException("Invalid BotGuard interpreter URL")
+                    if (!interpreterUrl.isHttps ||
+                        !(
+                            interpreterUrl.host == "www.youtube.com" ||
+                                interpreterUrl.host == "www.google.com" ||
+                                interpreterUrl.host == "www.gstatic.com"
+                        )
+                    ) {
+                        throw PoTokenException("Unsupported BotGuard interpreter origin")
+                    }
+                    requestBotGuard(interpreterUrl.toString()) { interpreter ->
+                        if (interpreter.isBlank()) throw PoTokenException("Empty BotGuard interpreter")
+                        page.challenge.put(
+                            "interpreterJavascript",
+                            JSONObject().put("privateDoNotAccessOrElseSafeScriptWrappedValue", interpreter),
+                        )
+                        webView.evaluateJavascript(
+                            """
+                            try {
+                                globalThis.yt = { config_: ${page.configuration} };
+                                var data = ${page.challenge};
+                                runBotGuard(data).then(function(r) {
+                                    this.webPoSignalOutput = r.webPoSignalOutput;
+                                    $JS_BRIDGE.onBotGuardReady(r.botguardResponse);
+                                }, function(e) {
+                                    $JS_BRIDGE.onFatalError(e + "\n" + e.stack);
+                                });
+                            } catch(e) { $JS_BRIDGE.onFatalError(e + "\n" + e.stack); }
+                            """.trimIndent(),
+                            null,
+                        )
+                    }
                 }
             }
         }
@@ -406,7 +535,7 @@ object BotGuardTokenGenerator {
         fun onBotGuardReady(botguardResponse: String) {
             dispatchBridgeCallback {
                 Timber.tag(TAG).d("BotGuard executed — requesting integrity token from GenerateIT")
-                postToBotGuard(GENERATE_IT_URL, "[ \"$REQUEST_KEY\", \"$botguardResponse\" ]") { body ->
+                requestBotGuard(GENERATE_IT_URL, JSONArray().put(REQUEST_KEY).put(botguardResponse).toString()) { body ->
                     try {
                         val (tokenU8, lifetimeSec) = parseIntegrityToken(body)
                         expiry = Instant.now().plusSeconds(lifetimeSec).minus(10, ChronoUnit.MINUTES)
@@ -482,7 +611,7 @@ object BotGuardTokenGenerator {
         ) {
             dispatchBridgeCallback {
                 val base64 = commaSeparatedBytesToBase64(csvBytes)
-                Timber.tag(TAG).d("Minted token for $identifier (${base64.length} chars)")
+                Timber.tag(TAG).d("Minted playback token (%d chars)", base64.length)
                 pendingMints
                     .remove(identifier)
                     ?.let { continuation ->
@@ -533,38 +662,63 @@ object BotGuardTokenGenerator {
             readySignal.resumeWithException(error)
         }
 
-        private fun postToBotGuard(
+        private fun requestBotGuard(
             url: String,
-            jsonBody: String,
-            onSuccess: (String) -> Unit,
+            jsonBody: String? = null,
+            onSuccess: suspend (String) -> Unit,
         ) {
             scope.launch(exceptionHandler) {
                 val request =
                     okhttp3.Request
                         .Builder()
                         .url(url)
-                        .post(jsonBody.toRequestBody())
-                        .headers(
-                            mapOf(
-                                "User-Agent" to WV_USER_AGENT,
-                                "Accept" to "application/json",
-                                "Content-Type" to "application/json+protobuf",
-                                "x-goog-api-key" to API_KEY,
-                                "x-user-agent" to "grpc-web-javascript/0.1",
-                            ).toHeaders(),
+                        .apply {
+                            if (jsonBody != null) post(jsonBody.toRequestBody())
+                        }.headers(
+                            buildMap {
+                                put("User-Agent", WV_USER_AGENT)
+                                put("Accept", "*/*")
+                                put("Accept-Language", "en-US,en;q=0.7")
+                                if (jsonBody != null) {
+                                    put("Content-Type", "application/json+protobuf")
+                                    put("x-goog-api-key", API_KEY)
+                                    put("x-user-agent", "grpc-web-javascript/0.1")
+                                }
+                            }.toHeaders(),
                         ).build()
 
-                val response =
-                    withContext(Dispatchers.IO) {
-                        httpClient.newCall(request).execute()
-                    }
+                val body =
+                    suspendCancellableCoroutine<String> { continuation ->
+                        val call = httpClient.newCall(request)
+                        continuation.invokeOnCancellation { call.cancel() }
+                        call.enqueue(
+                            object : Callback {
+                                override fun onFailure(
+                                    call: Call,
+                                    e: IOException,
+                                ) {
+                                    if (continuation.isActive) continuation.resumeWithException(e)
+                                }
 
-                if (response.code != 200) {
-                    signalError(PoTokenException("BotGuard HTTP ${response.code} from $url"))
-                } else {
-                    val body = withContext(Dispatchers.IO) { response.body!!.string() }
-                    onSuccess(body)
-                }
+                                override fun onResponse(
+                                    call: Call,
+                                    response: Response,
+                                ) {
+                                    val result =
+                                        runCatching {
+                                            response.use {
+                                                if (it.code != 200) {
+                                                    throw PoTokenException("BotGuard HTTP ${it.code}")
+                                                }
+                                                it.body.string()
+                                            }
+                                        }
+                                    if (continuation.isActive) continuation.resumeWith(result)
+                                }
+                            },
+                        )
+                    }
+                onSuccess(body)
             }
         }
 
@@ -579,7 +733,7 @@ object BotGuardTokenGenerator {
                     }
                 }
             continuations.forEach { continuation ->
-                continuation.cancel(CancellationException("BotGuard engine closed"))
+                continuation.resumeWithException(PoTokenException("BotGuard engine closed"))
             }
             webView.clearHistory()
             webView.clearCache(true)
@@ -590,8 +744,8 @@ object BotGuardTokenGenerator {
         }
 
         companion object {
-            suspend fun create(context: Context): BotGuardEngine {
-                return withContext(Dispatchers.Main) {
+            suspend fun create(context: Context): BotGuardEngine =
+                withContext(Dispatchers.Main) {
                     suspendCancellableCoroutine { cont ->
                         lateinit var engine: BotGuardEngine
                         val wv =
@@ -629,7 +783,6 @@ object BotGuardTokenGenerator {
                         engine.startBootstrap()
                     }
                 }
-            }
         }
     }
 }

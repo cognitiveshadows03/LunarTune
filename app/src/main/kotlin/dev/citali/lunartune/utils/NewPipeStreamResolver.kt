@@ -11,8 +11,8 @@ import android.net.Uri
 import dev.citali.lunartune.constants.AudioQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.response.PlayerResponse
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
@@ -94,7 +94,7 @@ internal object NewPipeStreamResolver {
                     format = stream.toInnerTubeFormat(streamUrl),
                     streamUrl = streamUrl,
                     streamExpiresInSeconds = streamExpirySeconds(streamUrl),
-                    authFingerprint = YouTube.currentPlaybackAuthState().fingerprint,
+                    authFingerprint = YTPlayerUtils.currentStreamCacheFingerprint(),
                 )
             }
         }
@@ -120,6 +120,12 @@ internal object NewPipeStreamResolver {
 
     private fun AudioStream.toInnerTubeFormat(streamUrl: String): PlayerResponse.StreamingData.Format {
         val bitrate = averageBitrate.takeIf { it > 0 } ?: 0
+        val resolvedContentLength =
+            streamUrl
+                .toHttpUrlOrNull()
+                ?.queryParameter("clen")
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
         return PlayerResponse.StreamingData.Format(
             itag = id.toIntOrNull() ?: -1,
             url = streamUrl,
@@ -127,7 +133,7 @@ internal object NewPipeStreamResolver {
             bitrate = bitrate,
             width = null,
             height = null,
-            contentLength = null,
+            contentLength = resolvedContentLength,
             quality = if (bitrate >= 128_000) "medium" else "tiny",
             fps = null,
             qualityLabel = null,

@@ -290,15 +290,13 @@ class App :
                 .map { it.toPlaybackAuthState() }
                 .distinctUntilChanged()
                 .collect { authState ->
-                    val previousFingerprint = YouTube.currentPlaybackAuthState().fingerprint
+                    val previousFingerprint = YTPlayerUtils.currentStreamCacheFingerprint()
+                    val nextFingerprint = YTPlayerUtils.currentStreamCacheFingerprint(authState)
                     YouTube.authState = authState
-                    if (previousFingerprint != authState.fingerprint) {
+                    if (previousFingerprint != nextFingerprint) {
                         YTPlayerUtils.clearPlaybackAuthCaches()
-                        val sessionId = authState.sessionId
-                        if (!sessionId.isNullOrBlank()) {
-                            BotGuardTokenGenerator.preWarm(sessionId)
-                        }
                     }
+                    YTPlayerUtils.preWarmWebPoTokens(authState)
                 }
         }
 

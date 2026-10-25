@@ -9,45 +9,43 @@ package dev.citali.lunartune.utils
 
 import android.net.ConnectivityManager
 import androidx.media3.common.PlaybackException
-import io.ktor.client.plugins.ClientRequestException
-import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import dev.citali.lunartune.constants.AudioQuality
 import dev.citali.lunartune.constants.PlayerStreamClient
-import moe.rukamori.archivetune.innertube.NewPipeUtils
+import dev.citali.lunartune.utils.potoken.BotGuardTokenGenerator
+import dev.citali.lunartune.utils.potoken.PoTokenResult
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.URLBuilder
+import io.ktor.http.parseQueryString
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import moe.rukamori.archivetune.innertube.PlaybackAuthState
 import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.YouTubeClient
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_CREATOR
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_MUSIC
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_TESTSUITE
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_UNPLUGGED
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_VR_1_43_32
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_VR_1_61_48
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_VR_1_65_10
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.ANDROID_VR_NO_AUTH
+import moe.rukamori.archivetune.innertune.models.YouTubeClient.Companion.ANDROID_VR_1_65_10
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.IOS
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.IOS_MUSIC
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.IPADOS
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.MOBILE
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.MWEB
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.TVHTML5
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.TVHTML5_DOWNGRADED
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.TVHTML5_SIMPLY
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.TVHTML5_SIMPLY_EMBEDDED_PLAYER
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.VISIONOS
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.WEB
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.WEB_CREATOR
-import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.WEB_EMBEDDED
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.WEB_PRIMARY
 import moe.rukamori.archivetune.innertube.models.YouTubeClient.Companion.WEB_REMIX
 import moe.rukamori.archivetune.innertube.models.response.PlayerResponse
-import dev.citali.lunartune.utils.potoken.BotGuardTokenGenerator
-import dev.citali.lunartune.utils.potoken.PoTokenResult
+import moe.rukamori.archivetune.morideobfuscator.CipherRuntimeStatus
+import moe.rukamori.archivetune.morideobfuscator.MoriCipherRuntime
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import org.schabi.newpipe.extractor.exceptions.ParsingException
+import org.schabi.newpipe.extractor.services.youtube.YoutubeJavaScriptPlayerManager
 import timber.log.Timber
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -57,9 +55,14 @@ object YTPlayerUtils {
     private const val DEFAULT_STREAM_EXPIRE_SECONDS = 300
     private const val MAX_PLAYBACK_DATA_CACHE_ENTRIES = 128
     private const val PLAYBACK_DATA_RESOLUTION_MUTEX_COUNT = 32
-    private const val MAX_SIGNATURE_TIMESTAMP_CACHE_ENTRIES = 256
+    private const val SIGNATURE_TIMESTAMP_TTL_MS = 30 * 60 * 1000L
+    private const val LOGGED_IN_POTOKEN_WAIT_MS = 12_000L
+    private const val WARM_POTOKEN_WAIT_MS = 5_000L
+    private const val FALLBACK_POTOKEN_WAIT_MS = 10_000L
     const val STREAM_URL_EXPIRY_SAFETY_MS = 60_000L
     private val RETRYABLE_STREAM_RESPONSE_CODES = setOf(403, 404, 410, 416)
+
+    private val backgroundTokenScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private fun extractExpireTimestampMsFromUrl(url: String): Long? {
         val expireTimestamp =
@@ -96,7 +99,8 @@ object YTPlayerUtils {
         val videoId: String,
         val targetUrl: String,
         reason: String?,
-    ) : IllegalStateException(reason)
+        cause: Throwable? = null,
+    ) : IllegalStateException(reason, cause)
 
     class InvalidPlaybackLoginContextException(
         val videoId: String,
@@ -107,7 +111,8 @@ object YTPlayerUtils {
     class BotDetectionPlaybackException(
         val videoId: String,
         val clients: Set<String>,
-    ) : IllegalStateException("YouTube playback bot detection blocked all stream clients")
+        cause: Throwable? = null,
+    ) : IllegalStateException("YouTube playback bot detection blocked all stream clients", cause)
 
     class BadStreamPlayerResponseException(
         val videoId: String,
@@ -125,18 +130,8 @@ object YTPlayerUtils {
      * The main client is used for metadata and initial streams.
      * Do not use other clients for this because it can result in inconsistent metadata.
      * For example other clients can have different normalization targets (loudnessDb).
-     *
-     * [moe.rukamori.archivetune.innertube.models.YouTubeClient.WEB_REMIX] should be preferred here because currently it is the only client which provides:
-     * - the correct metadata (like loudnessDb)
-     * - premium formats
      */
     private val MAIN_CLIENT: YouTubeClient = WEB_REMIX
-
-    private val ANONYMOUS_WEB_EMBEDDED_CLIENT: YouTubeClient =
-        WEB_EMBEDDED.copy(
-            supportsCookieAuthentication = false,
-            friendlyName = "Web Embedded Player (Anonymous)",
-        )
 
     private val ANONYMOUS_MWEB_CLIENT: YouTubeClient =
         MWEB.copy(
@@ -150,34 +145,16 @@ object YTPlayerUtils {
     private val STREAM_FALLBACK_CLIENTS: Array<YouTubeClient> =
         arrayOf(
             VISIONOS,
-            IOS,
-            IOS_MUSIC,
-            TVHTML5,
-            TVHTML5_DOWNGRADED,
-            ANDROID_MUSIC,
-            WEB_REMIX,
-            WEB_CREATOR,
-            WEB_EMBEDDED,
-            MWEB,
-            WEB,
-            WEB_PRIMARY,
-            TVHTML5_SIMPLY,
-            MOBILE,
-            IPADOS,
-            ANDROID_CREATOR,
-            ANDROID_TESTSUITE,
-            ANDROID_UNPLUGGED,
-            TVHTML5_SIMPLY_EMBEDDED_PLAYER,
-            ANDROID_VR_NO_AUTH,
             ANDROID_VR_1_65_10,
-            ANDROID_VR_1_61_48,
-            ANDROID_VR_1_43_32,
+            WEB_REMIX,
+            WEB,
+            MWEB,
+            WEB_CREATOR,
         )
 
     private data class CachedStreamUrl(
         val url: String,
         val expiresAtMs: Long,
-        val authFingerprint: String,
     )
 
     private data class PlaybackDataCacheKey(
@@ -195,31 +172,30 @@ object YTPlayerUtils {
     private val streamUrlCache = ConcurrentHashMap<String, CachedStreamUrl>()
     private val playbackDataCache = ConcurrentHashMap<PlaybackDataCacheKey, CachedPlaybackData>()
     private val playbackDataResolutionMutexes = Array(PLAYBACK_DATA_RESOLUTION_MUTEX_COUNT) { Mutex() }
-    // The signature timestamp depends on the player script, not on the track, so the
-    // same value comes back for every video in a session. It was being re-fetched on
-    // every resolution - including every prefetch and every retry - which is a full
-    // round trip sitting directly in front of the first byte of audio. Keyed by video
-    // id so the behaviour stays literally identical per track, and bounded so it
-    // cannot grow without limit.
-    private val signatureTimestampCache = ConcurrentHashMap<String, Int>()
-
-    // Video ids that a stalled playback asked to resolve through NewPipe instead.
-    // InnerTube's ciphered formats are deciphered locally but still arrive throttled,
-    // which reads as a stream that never finishes buffering rather than as an error.
-    // NewPipe Extractor returns descrambled, unthrottled URLs, so it is the escape
-    // hatch once a song has actually stalled - never on the first attempt.
+    private val youtubeiVisitorMutex = Mutex()
     private val unthrottledResolutionVideoIds = ConcurrentHashMap.newKeySet<String>()
     private val failedStreamClientsUntil = ConcurrentHashMap<String, Long>()
 
+    @Volatile private var cachedSignatureTimestamp: Int? = null
+    @Volatile private var cachedSignatureTimestampExpiresAtMs: Long = 0L
     @Volatile private var lastSuccessfulClientKey: String? = null
+
+    fun currentStreamCacheFingerprint(authState: PlaybackAuthState = YouTube.currentPlaybackAuthState()): String =
+        authState.streamCacheFingerprint()
 
     fun clearPlaybackAuthCaches() {
         streamUrlCache.clear()
         playbackDataCache.clear()
-        signatureTimestampCache.clear()
+        cachedSignatureTimestamp = null
+        cachedSignatureTimestampExpiresAtMs = 0L
         unthrottledResolutionVideoIds.clear()
         failedStreamClientsUntil.clear()
         lastSuccessfulClientKey = null
+    }
+
+    suspend fun preWarmWebPoTokens(authState: PlaybackAuthState = YouTube.currentPlaybackAuthState()) {
+        val contentBinding = authState.youtubeiContentBinding() ?: return
+        BotGuardTokenGenerator.preWarm(contentBinding)
     }
 
     suspend fun recoverFromBadStreamPlayerResponse(videoId: String) {
@@ -263,24 +239,42 @@ object YTPlayerUtils {
                 ?.let { return authState }
         }
 
-        val action = if (forceRefresh) "Refreshing" else "Fetching"
-        Timber.tag(logTag).i("%s visitorData for %s (%s)", action, videoId, reason)
+        return youtubeiVisitorMutex.withLock {
+            if (!forceRefresh) {
+                YouTube
+                    .currentPlaybackAuthState()
+                    .visitorData
+                    ?.takeIf {
+                        it.isNotBlank() &&
+                            authState.cookie == YouTube.currentPlaybackAuthState().cookie &&
+                            authState.dataSyncId == YouTube.currentPlaybackAuthState().dataSyncId
+                    }?.let { existingVisitorData ->
+                        return@withLock authState.copy(visitorData = existingVisitorData).normalized()
+                    }
+            }
 
-        val refreshedVisitorData =
-            YouTube
-                .visitorData()
-                .onFailure {
-                    Timber.tag(logTag).e(it, "Failed to refresh visitorData for $videoId")
-                    reportException(it)
-                }.getOrNull()
-                ?.takeIf { it.isNotBlank() }
+            val action = if (forceRefresh) "Refreshing" else "Fetching"
+            Timber.tag(logTag).i("%s visitorData for %s (%s)", action, videoId, reason)
 
-        if (refreshedVisitorData != null) {
-            YouTube.visitorData = refreshedVisitorData
-            return authState.copy(visitorData = refreshedVisitorData).normalized()
+            val refreshedVisitorData =
+                YouTube
+                    .visitorData()
+                    .onFailure {
+                        Timber.tag(logTag).e(it, "Failed to refresh visitorData for $videoId")
+                        reportException(it)
+                    }.getOrNull()
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+
+            if (refreshedVisitorData != null) {
+                if (authState.hasSamePlaybackSession(YouTube.currentPlaybackAuthState())) {
+                    YouTube.visitorData = refreshedVisitorData
+                }
+                return@withLock authState.copy(visitorData = refreshedVisitorData).normalized()
+            }
+
+            authState
         }
-
-        return authState
     }
 
     private suspend fun repairAuthStateAfterBotDetection(
@@ -290,7 +284,7 @@ object YTPlayerUtils {
     ): PlaybackAuthState {
         var repairedAuthState = authState
 
-        if (authState.webClientPoTokenEnabled && !authState.sessionId.isNullOrBlank()) {
+        if (!authState.youtubeiContentBinding().isNullOrBlank()) {
             BotGuardTokenGenerator.invalidateAll()
             repairedAuthState =
                 repairedAuthState
@@ -353,7 +347,12 @@ object YTPlayerUtils {
         }
 
         if (!hasWebGvsPoToken(repairedAuthState, videoId)) {
-            repairedAuthState = mintWebPlaybackPoTokens(videoId, repairedAuthState)
+            repairedAuthState =
+                mintWebPlaybackPoTokens(
+                    videoId = videoId,
+                    authState = repairedAuthState,
+                    maximumWaitMillis = LOGGED_IN_POTOKEN_WAIT_MS,
+                )
         }
 
         if (repairedAuthState.fingerprint != authState.fingerprint) {
@@ -369,14 +368,25 @@ object YTPlayerUtils {
         videoId: String,
     ): Boolean =
         authState.webClientPoTokenEnabled &&
-            !authState.resolveGvsPoToken(WEB_CREATOR, videoId).isNullOrBlank()
+            !authState.resolveVideoScopedGvsPoToken(WEB_CREATOR, videoId).isNullOrBlank()
 
     private suspend fun mintWebPlaybackPoTokens(
         videoId: String,
         authState: PlaybackAuthState,
+        maximumWaitMillis: Long? = null,
     ): PlaybackAuthState {
-        val sessionId = authState.sessionId ?: return authState
-        val tokenResult = BotGuardTokenGenerator.mintToken(videoId, sessionId) ?: return authState
+        if (hasWebGvsPoToken(authState, videoId) &&
+            !authState.resolveVideoScopedPlayerPoToken(WEB_REMIX, videoId).isNullOrBlank()
+        ) {
+            return authState
+        }
+        val contentBinding = authState.youtubeiContentBinding() ?: return authState
+        val tokenResult =
+            if (maximumWaitMillis != null) {
+                BotGuardTokenGenerator.mintToken(videoId, contentBinding, maximumWaitMillis)
+            } else {
+                BotGuardTokenGenerator.mintToken(videoId, contentBinding)
+            } ?: return authState
         return authState.withGeneratedPoTokens(videoId, tokenResult)
     }
 
@@ -384,10 +394,12 @@ object YTPlayerUtils {
         videoId: String,
         tokenResult: PoTokenResult,
     ): PlaybackAuthState {
+        // Scope minted GVS & Player PoTokens strictly to the current videoId (per upstream core 133f7ba)
+        // so stale or session-only tokens are never attached to another video's player/stream URL.
         val updatedAuthState =
             copy(
                 poTokenGvs = tokenResult.playerToken,
-                poTokenGvsSession = tokenResult.sessionToken,
+                poTokenGvsSession = null,
                 poTokenGvsVideoId = videoId,
                 poTokenPlayer = tokenResult.playerToken,
                 poTokenPlayerVideoId = videoId,
@@ -401,7 +413,7 @@ object YTPlayerUtils {
                 currentAuthState
                     .copy(
                         poTokenGvs = tokenResult.playerToken,
-                        poTokenGvsSession = tokenResult.sessionToken,
+                        poTokenGvsSession = null,
                         poTokenGvsVideoId = videoId,
                         poTokenPlayer = tokenResult.playerToken,
                         poTokenPlayerVideoId = videoId,
@@ -418,6 +430,56 @@ object YTPlayerUtils {
             visitorData == other.visitorData &&
             dataSyncId == other.dataSyncId
 
+    private fun PlaybackAuthState.youtubeiContentBinding(): String? {
+        if (!hasLoginCookie) return visitorData?.trim()?.takeIf(String::isNotBlank)
+        val normalizedDataSyncId = dataSyncId?.trim()?.takeIf(String::isNotBlank)
+        if (normalizedDataSyncId != null) {
+            return if ("||" in normalizedDataSyncId) {
+                normalizedDataSyncId
+            } else {
+                "$normalizedDataSyncId||"
+            }
+        }
+        return sessionId
+    }
+
+    private fun PlaybackAuthState.streamCacheFingerprint(): String {
+        val raw =
+            listOf(
+                cookie.orEmpty(),
+                visitorData.orEmpty(),
+                dataSyncId.orEmpty(),
+            ).joinToString(separator = "\u0000")
+        val digest = MessageDigest.getInstance("SHA-1").digest(raw.toByteArray(Charsets.UTF_8))
+        return buildString(digest.size * 2) {
+            for (byte in digest) {
+                val value = byte.toInt() and 0xFF
+                append(Character.forDigit(value ushr 4, 16))
+                append(Character.forDigit(value and 0x0F, 16))
+            }
+        }
+    }
+
+    private fun PlaybackAuthState.resolveVideoScopedPlayerPoToken(
+        client: YouTubeClient,
+        videoId: String,
+    ): String? {
+        if (!webClientPoTokenEnabled) return null
+        if (!client.useWebPoTokens || !PlaybackAuthState.supportsGvsPoToken(client)) return null
+        return poTokenPlayer?.takeIf { poTokenPlayerVideoId == videoId }
+            ?: poToken
+    }
+
+    private fun PlaybackAuthState.resolveVideoScopedGvsPoToken(
+        client: YouTubeClient?,
+        videoId: String,
+    ): String? {
+        if (client != null && (!client.useWebPoTokens || !PlaybackAuthState.supportsGvsPoToken(client))) return null
+        if (!webClientPoTokenEnabled) return null
+        return poTokenGvs?.takeIf { poTokenGvsVideoId == videoId }
+            ?: poToken
+    }
+
     private fun PlaybackAuthState.withoutAccountBoundPlaybackState(): PlaybackAuthState =
         copy(
             dataSyncId = null,
@@ -432,13 +494,11 @@ object YTPlayerUtils {
         ).normalized()
 
     internal fun shouldSkipCipheredWebPlaybackCandidate(
-        webClientPoTokenEnabled: Boolean,
         isWebClient: Boolean,
         isCiphered: Boolean,
         hasGvsPoToken: Boolean,
     ): Boolean =
-        webClientPoTokenEnabled &&
-            isWebClient &&
+        isWebClient &&
             isCiphered &&
             !hasGvsPoToken
 
@@ -471,32 +531,18 @@ object YTPlayerUtils {
         return expiresAtMs <= nowMs + STREAM_URL_EXPIRY_SAFETY_MS
     }
 
-    private val androidVrClientKeys =
-        listOf(
-            ANDROID_VR_NO_AUTH,
-            ANDROID_VR_1_65_10,
-            ANDROID_VR_1_61_48,
-            ANDROID_VR_1_43_32,
-        ).map { StreamClientUtils.buildClientKey(it) }
-
     fun markStreamClientFailed(
         videoId: String,
         clientKey: String?,
         httpStatusCode: Int?,
-        authFingerprint: String = YouTube.currentPlaybackAuthState().fingerprint,
+        authFingerprint: String = YouTube.currentPlaybackAuthState().streamCacheFingerprint(),
     ) {
         if (httpStatusCode != null && httpStatusCode !in RETRYABLE_STREAM_RESPONSE_CODES) return
         val normalizedClientKey = normalizeStreamClientKey(clientKey)
         if (normalizedClientKey.isEmpty()) return
-        val until = System.currentTimeMillis() + FAILED_CLIENT_BACKOFF_MS
-        val keysToBlock = linkedSetOf(normalizedClientKey)
-        if (httpStatusCode == 403 && normalizedClientKey.substringBefore("@").startsWith("ANDROID_VR")) {
-            keysToBlock += androidVrClientKeys
-        }
-        for (key in keysToBlock) {
-            failedStreamClientsUntil[buildFailedClientKey(videoId, key, authFingerprint)] = until
-        }
-        if (lastSuccessfulClientKey != null && keysToBlock.contains(lastSuccessfulClientKey)) {
+        failedStreamClientsUntil[buildFailedClientKey(videoId, normalizedClientKey, authFingerprint)] =
+            System.currentTimeMillis() + FAILED_CLIENT_BACKOFF_MS
+        if (lastSuccessfulClientKey == normalizedClientKey) {
             lastSuccessfulClientKey = null
         }
     }
@@ -505,7 +551,7 @@ object YTPlayerUtils {
         videoId: String,
         client: PlayerStreamClient,
         httpStatusCode: Int?,
-        authFingerprint: String = YouTube.currentPlaybackAuthState().fingerprint,
+        authFingerprint: String = YouTube.currentPlaybackAuthState().streamCacheFingerprint(),
     ) {
         markStreamClientFailed(videoId, client.name, httpStatusCode, authFingerprint)
     }
@@ -534,53 +580,24 @@ object YTPlayerUtils {
         authFingerprint: String,
     ): String = "$authFingerprint:$videoId:${normalizeStreamClientKey(clientKey)}"
 
-    internal fun resolvePreferredPlaybackClient(
-        preferredStreamClient: PlayerStreamClient,
-        authState: PlaybackAuthState,
-    ): YouTubeClient =
+    internal fun resolvePreferredPlaybackClient(preferredStreamClient: PlayerStreamClient): YouTubeClient =
         when (preferredStreamClient) {
-            PlayerStreamClient.VISION_OS -> {
-                VISIONOS
-            }
-
-            PlayerStreamClient.ANDROID_VR -> {
-                ANDROID_VR_NO_AUTH
-            }
-
-            PlayerStreamClient.WEB_CREATOR -> {
-                WEB_CREATOR
-            }
-
-            PlayerStreamClient.WEB_REMIX -> {
-                WEB_REMIX
-            }
-
-            PlayerStreamClient.HI_RES_LOSSLESS -> {
-                WEB_REMIX
-            }
-
-            PlayerStreamClient.IOS -> {
-                IOS
-            }
-
-            PlayerStreamClient.TVHTML5 -> {
-                TVHTML5
-            }
-
-            PlayerStreamClient.ANDROID_MUSIC -> {
-                ANDROID_MUSIC
-            }
-
-            else -> {
-                WEB_REMIX
-            }
+            PlayerStreamClient.VISION_OS -> VISIONOS
+            PlayerStreamClient.ANDROID_VR -> ANDROID_VR_1_65_10
+            PlayerStreamClient.WEB_CREATOR -> WEB_CREATOR
+            PlayerStreamClient.WEB_REMIX -> WEB_REMIX
+            PlayerStreamClient.HI_RES_LOSSLESS -> WEB_REMIX
+            PlayerStreamClient.IOS -> IOS
+            PlayerStreamClient.TVHTML5 -> TVHTML5
+            PlayerStreamClient.ANDROID_MUSIC -> ANDROID_MUSIC
         }
 
     internal fun buildStreamClientOrder(
         preferredStreamClient: PlayerStreamClient,
         authState: PlaybackAuthState,
+        videoId: String? = null,
     ): List<YouTubeClient> {
-        val preferredYouTubeClient = resolvePreferredPlaybackClient(preferredStreamClient, authState)
+        val preferredYouTubeClient = resolvePreferredPlaybackClient(preferredStreamClient)
         val lastSuccessfulClient =
             lastSuccessfulClientKey?.let { key ->
                 STREAM_FALLBACK_CLIENTS.find { StreamClientUtils.buildClientKey(it) == key }
@@ -590,26 +607,31 @@ object YTPlayerUtils {
             buildList {
                 STREAM_FALLBACK_CLIENTS.forEach { client ->
                     add(client)
-                    if (authState.hasPlaybackLoginContext) {
-                        when (client) {
-                            WEB_EMBEDDED -> add(ANONYMOUS_WEB_EMBEDDED_CLIENT)
-                            MWEB -> add(ANONYMOUS_MWEB_CLIENT)
-                            else -> Unit
-                        }
+                    if (authState.hasPlaybackLoginContext && client == MWEB) {
+                        add(ANONYMOUS_MWEB_CLIENT)
                     }
                 }
             }
 
+        val preferDirectClientsBeforeColdWeb =
+            !authState.hasPlaybackLoginContext &&
+                preferredYouTubeClient == WEB_REMIX &&
+                (videoId == null || !hasWebGvsPoToken(authState, videoId))
+
         return buildList {
+            if (preferDirectClientsBeforeColdWeb) {
+                lastSuccessfulClient
+                    ?.takeIf { !PlaybackAuthState.supportsGvsPoToken(it) }
+                    ?.let { add(it) }
+                add(VISIONOS)
+                add(ANDROID_VR_1_65_10)
+            }
             add(preferredYouTubeClient)
             lastSuccessfulClient
                 ?.takeIf { it != preferredYouTubeClient }
                 ?.let { add(it) }
             addAll(orderedFallbackClients)
             if (preferredYouTubeClient != MAIN_CLIENT) add(MAIN_CLIENT)
-            if (preferredStreamClient == PlayerStreamClient.WEB_REMIX) {
-                addAll(STREAM_FALLBACK_CLIENTS)
-            }
         }.distinct()
     }
 
@@ -634,7 +656,6 @@ object YTPlayerUtils {
         audioQuality: AudioQuality,
         connectivityManager: ConnectivityManager,
         preferredStreamClient: PlayerStreamClient = PlayerStreamClient.WEB_REMIX,
-        // if provided, this preference overrides ConnectivityManager.isActiveNetworkMetered
         networkMetered: Boolean? = null,
     ): Result<PlaybackData> {
         val isMetered = networkMetered ?: connectivityManager.isActiveNetworkMetered
@@ -643,7 +664,7 @@ object YTPlayerUtils {
                 videoId = videoId,
                 audioQuality = audioQuality,
                 networkMetered = isMetered,
-                authFingerprint = YouTube.currentPlaybackAuthState().fingerprint,
+                authFingerprint = YouTube.currentPlaybackAuthState().streamCacheFingerprint(),
             )
         getCachedPlaybackData(initialKey)?.let { return Result.success(it) }
         val resolutionMutex =
@@ -654,7 +675,7 @@ object YTPlayerUtils {
                     videoId = videoId,
                     audioQuality = audioQuality,
                     networkMetered = isMetered,
-                    authFingerprint = YouTube.currentPlaybackAuthState().fingerprint,
+                    authFingerprint = YouTube.currentPlaybackAuthState().streamCacheFingerprint(),
                 )
             getCachedPlaybackData(currentKey)?.let { return@withLock Result.success(it) }
             resolvePlaybackData(
@@ -685,9 +706,6 @@ object YTPlayerUtils {
         networkMetered: Boolean,
     ): Result<PlaybackData> =
         runCatching {
-            // Asked for only after this track stalled in STATE_BUFFERING. One attempt,
-            // and if NewPipe cannot serve it we fall through to the normal client walk
-            // with nothing lost.
             if (videoId in unthrottledResolutionVideoIds) {
                 NewPipeStreamResolver.resolve(videoId, audioQuality).onSuccess { playbackData ->
                     Timber.tag(logTag).w(
@@ -707,7 +725,6 @@ object YTPlayerUtils {
                     AudioQuality.HIGH -> listOf(AudioQuality.HIGH, AudioQuality.LOW)
                     AudioQuality.AUTO -> listOf(AudioQuality.AUTO, AudioQuality.HIGH, AudioQuality.LOW)
                     AudioQuality.LOW -> listOf(AudioQuality.LOW, AudioQuality.HIGH, AudioQuality.AUTO)
-                    else -> listOf(audioQuality)
                 }.distinct()
 
             var lastError: Throwable? = null
@@ -754,9 +771,6 @@ object YTPlayerUtils {
 
     /**
      * Mark a video so the next resolution goes through [NewPipeStreamResolver] first.
-     *
-     * Called by the playback service when a stream has been sitting in STATE_BUFFERING
-     * long enough that it is not going to start on its own.
      */
     fun requestUnthrottledResolution(videoId: String) {
         if (unthrottledResolutionVideoIds.add(videoId)) {
@@ -818,8 +832,6 @@ object YTPlayerUtils {
         runCatching {
             Timber.tag(logTag).i("Fetching download response for videoId: $videoId, playlistId: $playlistId")
 
-            // NewPipe-first: upstream-maintained decipher with unthrottled URLs.
-            // Falls through to InnerTube (which carries login context) on failure.
             val newPipeResult = NewPipeStreamResolver.resolve(videoId, audioQuality)
             if (newPipeResult.isSuccess) return@runCatching newPipeResult.getOrThrow()
             Timber.tag(logTag).w(
@@ -834,40 +846,32 @@ object YTPlayerUtils {
                 listOf(preferredStreamClient) +
                     downloadPreferredStreamClientAttempts.filterNot { it == preferredStreamClient }
 
-            for (preferredStreamClient in downloadClients) {
+            for (downloadClient in downloadClients) {
                 val attemptResult =
                     playerResponseForPlayback(
                         videoId = videoId,
                         playlistId = playlistId,
                         audioQuality = audioQuality,
                         connectivityManager = connectivityManager,
-                        preferredStreamClient = preferredStreamClient,
+                        preferredStreamClient = downloadClient,
                         networkMetered = networkMetered,
                     )
-
                 if (attemptResult.isSuccess) return@runCatching attemptResult.getOrThrow()
-
                 lastError = attemptResult.exceptionOrNull()
-                Timber.tag(logTag).w(
-                    lastError,
-                    "Download stream resolution failed with preferred client %s for %s",
-                    preferredStreamClient.name,
-                    videoId,
-                )
+                if (lastError is CancellationException) throw lastError
             }
 
-            throw lastError ?: IllegalStateException("Failed to resolve download stream for $videoId")
+            throw lastError ?: IllegalStateException("Failed to fetch download response for $videoId")
         }
 
     private val downloadPreferredStreamClientAttempts: List<PlayerStreamClient> =
         listOf(
             PlayerStreamClient.VISION_OS,
-            PlayerStreamClient.IOS,
-            PlayerStreamClient.TVHTML5,
-            PlayerStreamClient.WEB_REMIX,
-            PlayerStreamClient.ANDROID_MUSIC,
-            PlayerStreamClient.HI_RES_LOSSLESS,
             PlayerStreamClient.ANDROID_VR,
+            PlayerStreamClient.WEB_REMIX,
+            PlayerStreamClient.HI_RES_LOSSLESS,
+            PlayerStreamClient.TVHTML5,
+            PlayerStreamClient.ANDROID_MUSIC,
         )
 
     private suspend fun refreshIpRotationForBotDetection(
@@ -920,15 +924,23 @@ object YTPlayerUtils {
                     reason = if (hasLoginCookie) "cookie-only playback fallback" else "anonymous playback bootstrap",
                 )
         }
-        var sessionId = authState.sessionId
-        if (!sessionId.isNullOrBlank()) {
-            try {
-                authState = mintWebPlaybackPoTokens(videoId, authState)
-                sessionId = authState.sessionId
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (e: Exception) {
-                Timber.tag(logTag).w(e, "PoToken generation failed for playback request")
+        val contentBinding = authState.youtubeiContentBinding()
+        if (!contentBinding.isNullOrBlank()) {
+            if (canUseLoggedInPlayback || BotGuardTokenGenerator.isWarmForSession(contentBinding)) {
+                try {
+                    val waitMs = if (canUseLoggedInPlayback) LOGGED_IN_POTOKEN_WAIT_MS else WARM_POTOKEN_WAIT_MS
+                    authState = mintWebPlaybackPoTokens(videoId, authState, maximumWaitMillis = waitMs)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (e: Exception) {
+                    Timber.tag(logTag).w(e, "PoToken generation failed for playback request")
+                }
+            } else {
+                // Cold signed-out start: warm WebView BotGuard in background without blocking
+                // direct VISIONOS / ANDROID_VR stream resolution for the first song.
+                backgroundTokenScope.launch {
+                    BotGuardTokenGenerator.preWarm(contentBinding)
+                }
             }
         }
         val authStatus =
@@ -937,7 +949,7 @@ object YTPlayerUtils {
                 hasLoginCookie -> "Cookie-only"
                 else -> "Not logged in"
             }
-        Timber.tag(logTag).v("Session authentication status: $authStatus (sessionId=${sessionId.orEmpty()})")
+        Timber.tag(logTag).v("Session authentication status: $authStatus (binding=${contentBinding.orEmpty()})")
 
         var format: PlayerResponse.StreamingData.Format? = null
         var streamUrl: String? = null
@@ -958,7 +970,7 @@ object YTPlayerUtils {
 
         Timber.tag(logTag).i("Fetching metadata response using client: ${metadataClient.clientName}")
 
-        var metadataPoToken = authState.resolvePlayerPoToken(metadataClient, videoId = videoId)
+        var metadataPoToken = authState.resolveVideoScopedPlayerPoToken(metadataClient, videoId = videoId)
 
         var metadataResult =
             YouTube.player(
@@ -987,12 +999,11 @@ object YTPlayerUtils {
             canUseLoggedInPlayback = false
             clearPlaybackAuthCaches()
 
-            val newSessionId = authState.sessionId
-            if (newSessionId != null) {
+            val newBinding = authState.youtubeiContentBinding()
+            if (newBinding != null && BotGuardTokenGenerator.isWarmForSession(newBinding)) {
                 try {
-                    authState = mintWebPlaybackPoTokens(videoId, authState)
-                    sessionId = authState.sessionId
-                    metadataPoToken = authState.resolvePlayerPoToken(metadataClient, videoId = videoId)
+                    authState = mintWebPlaybackPoTokens(videoId, authState, maximumWaitMillis = WARM_POTOKEN_WAIT_MS)
+                    metadataPoToken = authState.resolveVideoScopedPlayerPoToken(metadataClient, videoId = videoId)
                 } catch (cancellation: CancellationException) {
                     throw cancellation
                 } catch (e: Exception) {
@@ -1012,7 +1023,7 @@ object YTPlayerUtils {
                 )
         }
         if (metadataResult.exceptionOrNull()?.isForbiddenPlayerRequest() == true) {
-            for (fallbackClient in buildStreamClientOrder(preferredStreamClient, authState)) {
+            for (fallbackClient in buildStreamClientOrder(preferredStreamClient, authState, videoId)) {
                 if (fallbackClient == metadataClient) continue
                 val useCookieAuthentication = canUseLoggedInPlayback && fallbackClient.supportsCookieAuthentication
                 if (fallbackClient.loginRequired && !useCookieAuthentication) continue
@@ -1028,6 +1039,7 @@ object YTPlayerUtils {
                         playlistId = playlistId,
                         client = fallbackClient,
                         signatureTimestamp = signatureTimestamp,
+                        poToken = authState.resolveVideoScopedPlayerPoToken(fallbackClient, videoId = videoId),
                         setLogin = useCookieAuthentication,
                         authState = authState,
                     )
@@ -1060,12 +1072,12 @@ object YTPlayerUtils {
                 ?.times(1000L)
 
         val streamClients =
-            buildStreamClientOrder(preferredStreamClient, authState).filterNot { client ->
+            buildStreamClientOrder(preferredStreamClient, authState, videoId).filterNot { client ->
                 val blocked =
                     isStreamClientTemporarilyBlocked(
                         videoId = videoId,
                         clientKey = StreamClientUtils.buildClientKey(client),
-                        authFingerprint = authState.fingerprint,
+                        authFingerprint = authState.streamCacheFingerprint(),
                     )
                 if (blocked) {
                     Timber.tag(logTag).w("Temporarily blocked stream client for $videoId: ${describeClient(client)}")
@@ -1095,23 +1107,6 @@ object YTPlayerUtils {
                 )}",
             )
 
-            if (
-                !didAttemptGvsPoTokenRecovery &&
-                    client != WEB_PRIMARY &&
-                    authState.sessionId != null &&
-                    PlaybackAuthState.supportsGvsPoToken(client) &&
-                    authState.resolveGvsPoToken(client, videoId).isNullOrBlank()
-            ) {
-                didAttemptGvsPoTokenRecovery = true
-                try {
-                    authState = mintWebPlaybackPoTokens(videoId, authState)
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (e: Exception) {
-                    Timber.tag(logTag).w(e, "PoToken generation failed for stream client ${client.clientName}")
-                }
-            }
-
             if (client != MAIN_CLIENT && client.loginRequired && !requestUsesCookieAuthentication) {
                 Timber.tag(logTag).i(
                     "Skipping client ${describeClient(client)} - requires compatible cookie authentication",
@@ -1119,17 +1114,45 @@ object YTPlayerUtils {
                 continue
             }
 
+            val hadPlayerPoTokenBeforeMint =
+                !authState.resolveVideoScopedPlayerPoToken(client, videoId).isNullOrBlank()
+            if (
+                !didAttemptGvsPoTokenRecovery &&
+                    client != WEB_PRIMARY &&
+                    !authState.youtubeiContentBinding().isNullOrBlank() &&
+                    PlaybackAuthState.supportsGvsPoToken(client) &&
+                    authState.resolveVideoScopedGvsPoToken(client, videoId).isNullOrBlank()
+            ) {
+                didAttemptGvsPoTokenRecovery = true
+                try {
+                    authState =
+                        mintWebPlaybackPoTokens(
+                            videoId = videoId,
+                            authState = authState,
+                            maximumWaitMillis = FALLBACK_POTOKEN_WAIT_MS,
+                        )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (e: Exception) {
+                    Timber.tag(logTag).w(e, "PoToken generation failed for stream client ${client.clientName}")
+                }
+            }
+            val mintedFreshPlayerPoToken =
+                !hadPlayerPoTokenBeforeMint &&
+                    !authState.resolveVideoScopedPlayerPoToken(client, videoId).isNullOrBlank()
+
             streamPlayerResponse =
-                if (client == metadataClient) {
+                if (client == metadataClient && !mintedFreshPlayerPoToken) {
                     metadataPlayerResponse
                 } else {
-                    Timber.tag(logTag).i("Fetching player response for fallback client: ${describeClient(client)}")
+                    Timber.tag(logTag).i("Fetching player response for stream client: ${describeClient(client)}")
                     YouTube
                         .player(
                             videoId = videoId,
                             playlistId = playlistId,
                             client = client,
                             signatureTimestamp = signatureTimestamp,
+                            poToken = authState.resolveVideoScopedPlayerPoToken(client, videoId = videoId),
                             setLogin = requestUsesCookieAuthentication,
                             authState = authState,
                         ).also { result ->
@@ -1165,7 +1188,8 @@ object YTPlayerUtils {
                     val shouldUseWebRemix =
                         repairedAuthState.hasPlaybackLoginContext &&
                             hasWebGvsPoToken(repairedAuthState, videoId) &&
-                            client != WEB_REMIX
+                            client != WEB_REMIX &&
+                            WEB_REMIX in streamClients
 
                     if (repairedAuthState.fingerprint != authState.fingerprint || shouldUseWebRemix) {
                         authState = repairedAuthState
@@ -1185,6 +1209,7 @@ object YTPlayerUtils {
                                     playlistId = playlistId,
                                     client = client,
                                     signatureTimestamp = signatureTimestamp,
+                                    poToken = authState.resolveVideoScopedPlayerPoToken(client, videoId = videoId),
                                     setLogin = requestUsesCookieAuthentication,
                                     authState = authState,
                                 ).getPlaybackPlayerResponseOrNull(videoId, authState)
@@ -1218,7 +1243,7 @@ object YTPlayerUtils {
                             videoId = videoId,
                             clientKey = StreamClientUtils.buildClientKey(client),
                             httpStatusCode = null,
-                            authFingerprint = authState.fingerprint,
+                            authFingerprint = authState.streamCacheFingerprint(),
                         )
                         Timber.tag(logTag).v(
                             "Skipping visitor-only client %s because it rejected anonymous playback",
@@ -1261,11 +1286,12 @@ object YTPlayerUtils {
 
             var selectedFormat: PlayerResponse.StreamingData.Format? = null
             var selectedUrl: String? = null
+            val cacheFingerprint = authState.streamCacheFingerprint()
 
             for (candidate in candidates) {
                 if (canUseLoggedInPlayback && expectedDurationMs != null && isLikelyPreview(candidate, expectedDurationMs)) continue
                 if (shouldSkipCipheredWebCandidate(client, candidate, videoId, authState)) continue
-                val cacheKey = buildStreamCacheKey(videoId, candidate.itag, client, authState.fingerprint)
+                val cacheKey = buildStreamCacheKey(videoId, candidate.itag, client, cacheFingerprint)
                 val cached = streamUrlCache[cacheKey]
                 val candidateResult =
                     if (cached != null && cached.expiresAtMs > System.currentTimeMillis() + STREAM_URL_EXPIRY_SAFETY_MS) {
@@ -1286,7 +1312,7 @@ object YTPlayerUtils {
                             videoId = videoId,
                             clientKey = StreamClientUtils.buildClientKey(client),
                             httpStatusCode = null,
-                            authFingerprint = authState.fingerprint,
+                            authFingerprint = cacheFingerprint,
                         )
                         break
                     }
@@ -1402,11 +1428,11 @@ object YTPlayerUtils {
                 "No resolved stream client for validated playback URL"
             }
 
-        streamUrlCache[buildStreamCacheKey(videoId, format.itag, resolvedStreamClient, authState.fingerprint)] =
+        val cacheFingerprint = authState.streamCacheFingerprint()
+        streamUrlCache[buildStreamCacheKey(videoId, format.itag, resolvedStreamClient, cacheFingerprint)] =
             CachedStreamUrl(
                 url = streamUrl,
                 expiresAtMs = System.currentTimeMillis() + (streamExpiresInSeconds * 1000L),
-                authFingerprint = authState.fingerprint,
             )
 
         return PlaybackData(
@@ -1416,7 +1442,7 @@ object YTPlayerUtils {
             format,
             streamUrl,
             streamExpiresInSeconds,
-            authState.fingerprint,
+            cacheFingerprint,
         )
     }
 
@@ -1433,11 +1459,11 @@ object YTPlayerUtils {
 
         val signatureTimestamp = getSignatureTimestampOrNull(videoId)
         var resolvedAuthState = authState
-        val sessionId = resolvedAuthState.sessionId
+        val contentBinding = resolvedAuthState.youtubeiContentBinding()
 
-        if (MAIN_CLIENT.useWebPoTokens && sessionId != null) {
+        if (MAIN_CLIENT.useWebPoTokens && contentBinding != null && BotGuardTokenGenerator.isWarmForSession(contentBinding)) {
             try {
-                resolvedAuthState = mintWebPlaybackPoTokens(videoId, resolvedAuthState)
+                resolvedAuthState = mintWebPlaybackPoTokens(videoId, resolvedAuthState, maximumWaitMillis = WARM_POTOKEN_WAIT_MS)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (e: Exception) {
@@ -1451,7 +1477,7 @@ object YTPlayerUtils {
                 playlistId = playlistId,
                 client = MAIN_CLIENT,
                 signatureTimestamp = signatureTimestamp,
-                poToken = resolvedAuthState.resolvePlayerPoToken(MAIN_CLIENT, videoId = videoId),
+                poToken = resolvedAuthState.resolveVideoScopedPlayerPoToken(MAIN_CLIENT, videoId = videoId),
                 setLogin = true,
                 authState = resolvedAuthState,
             ).onSuccess { Timber.tag(logTag).d("Successfully fetched metadata") }
@@ -1555,12 +1581,11 @@ object YTPlayerUtils {
         videoId: String,
         authState: PlaybackAuthState,
     ): Boolean {
-        val isWebClient = PlaybackAuthState.supportsGvsPoToken(client)
         val isCiphered = isCipheredFormat(format)
-        val hasGvsPoToken = !authState.resolveGvsPoToken(client, videoId).isNullOrBlank()
+        val isWebClient = PlaybackAuthState.supportsGvsPoToken(client)
+        val hasGvsPoToken = !authState.resolveVideoScopedGvsPoToken(client, videoId).isNullOrBlank()
         if (
             !shouldSkipCipheredWebPlaybackCandidate(
-                webClientPoTokenEnabled = authState.webClientPoTokenEnabled,
                 isWebClient = isWebClient,
                 isCiphered = isCiphered,
                 hasGvsPoToken = hasGvsPoToken,
@@ -1570,7 +1595,7 @@ object YTPlayerUtils {
         }
 
         Timber.tag(logTag).w(
-            "Skipping ciphered %s stream candidate because Web PoToken playback is enabled but no GVS token is available",
+            "Skipping ciphered %s stream candidate because no video-scoped GVS PoToken is available",
             client.clientName,
         )
         return true
@@ -1593,29 +1618,40 @@ object YTPlayerUtils {
         return approx in 1L..(minOf(90_000L, (expectedDurationMs * 9L) / 10L))
     }
 
-    /**
-     * Wrapper around the [NewPipeUtils.getSignatureTimestamp] function which reports exceptions
-     */
     private suspend fun getSignatureTimestampOrNull(videoId: String): Int? {
-        signatureTimestampCache[videoId]?.let { cached -> return cached }
+        val now = System.currentTimeMillis()
+        cachedSignatureTimestamp
+            ?.takeIf { now < cachedSignatureTimestampExpiresAtMs }
+            ?.let { return it }
+
         Timber.tag(logTag).i("Getting signature timestamp for videoId: $videoId")
-        return NewPipeUtils
-            .getSignatureTimestamp(videoId)
-            .onSuccess { timestamp ->
-                Timber.tag(logTag).i("Signature timestamp obtained: $timestamp")
-                if (signatureTimestampCache.size >= MAX_SIGNATURE_TIMESTAMP_CACHE_ENTRIES) {
-                    signatureTimestampCache.clear()
+        NewPipeBootstrap.ensureInitialized()
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                withJavaScriptPlayerCacheRecovery {
+                    YoutubeJavaScriptPlayerManager.getSignatureTimestamp(videoId)
                 }
-                signatureTimestampCache[videoId] = timestamp
-            }.onFailure {
-                Timber.tag(logTag).e(it, "Failed to get signature timestamp")
-                reportException(it)
-            }.getOrNull()
+            }.recoverCatching { primaryFailure ->
+                if (MoriCipherRuntime.snapshot.value.status == CipherRuntimeStatus.READY) {
+                    MoriCipherRuntime.signatureTimestamp(videoId).getOrNull() ?: throw primaryFailure
+                } else {
+                    throw primaryFailure
+                }
+            }
+        }.onSuccess { timestamp ->
+            Timber.tag(logTag).i("Signature timestamp obtained: $timestamp")
+            cachedSignatureTimestamp = timestamp
+            cachedSignatureTimestampExpiresAtMs = System.currentTimeMillis() + SIGNATURE_TIMESTAMP_TTL_MS
+        }.onFailure {
+            Timber.tag(logTag).e(it, "Failed to get signature timestamp")
+            reportException(it)
+        }.getOrNull()
     }
 
     /**
-     * Wrapper around the [NewPipeUtils.getStreamUrl] function which reports exceptions.
-     * Also patches cver to match the client version.
+     * Resolves a playable stream URL using NewPipeExtractor v0.26.5's JavaScript player
+     * manager (without blocking on Rhino recompilation or mutating signed `cver` params),
+     * and attaches video-scoped GVS PoTokens for Web clients.
      */
     private suspend fun findUrl(
         format: PlayerResponse.StreamingData.Format,
@@ -1624,11 +1660,125 @@ object YTPlayerUtils {
         authState: PlaybackAuthState,
     ): Result<String> {
         Timber.tag(logTag).i("Finding stream URL for format: ${format.mimeType}, videoId: $videoId")
-        return NewPipeUtils
-            .getStreamUrl(format, videoId, client, authState)
-            .map { url ->
-                if (client == null) url else StreamClientUtils.patchClientVersion(url, client.clientVersion)
-            }.onSuccess { Timber.tag(logTag).i("Stream URL obtained successfully") }
+        NewPipeBootstrap.ensureInitialized()
+        return withContext(Dispatchers.IO) {
+            try {
+                val directUrl = format.url
+                if (directUrl != null) {
+                    val resolvedDirectUrl =
+                        if (directUrl.toHttpUrlOrNull()?.queryParameter("n")?.isNotBlank() == true) {
+                            deobfuscateNParameter(videoId, directUrl)
+                        } else {
+                            directUrl
+                        }
+                    return@withContext Result.success(
+                        applyGvsPoToken(
+                            url = resolvedDirectUrl,
+                            client = client,
+                            videoId = videoId,
+                            authState = authState,
+                        ),
+                    )
+                }
+
+                val cipherString =
+                    format.signatureCipher ?: format.cipher
+                        ?: return@withContext Result.failure(ParsingException("Could not find format url"))
+
+                val params = parseQueryString(cipherString)
+                val obfuscatedSignature = params["s"] ?: throw ParsingException("Could not parse cipher signature")
+                val signatureParam = params["sp"]?.takeIf { it.isNotBlank() } ?: "signature"
+                val urlString = params["url"] ?: throw ParsingException("Could not parse cipher url")
+
+                val resolvedCipherUrl =
+                    runCatching {
+                        val urlBuilder = URLBuilder(urlString)
+                        val deobfuscatedSig =
+                            withJavaScriptPlayerCacheRecovery {
+                                YoutubeJavaScriptPlayerManager.deobfuscateSignature(videoId, obfuscatedSignature)
+                            }
+                        urlBuilder.parameters[signatureParam] = deobfuscatedSig
+                        deobfuscateNParameter(videoId, urlBuilder.buildString())
+                    }.recoverCatching { primaryFailure ->
+                        if (MoriCipherRuntime.snapshot.value.status == CipherRuntimeStatus.READY) {
+                            MoriCipherRuntime.resolveStreamUrl(videoId, cipherString).getOrThrow()
+                        } else {
+                            throw primaryFailure
+                        }
+                    }.getOrThrow()
+
+                Result.success(
+                    applyGvsPoToken(
+                        url = resolvedCipherUrl,
+                        client = client,
+                        videoId = videoId,
+                        authState = authState,
+                    ),
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }.onSuccess { Timber.tag(logTag).i("Stream URL obtained successfully") }
+    }
+
+    private suspend fun deobfuscateNParameter(
+        videoId: String,
+        url: String,
+    ): String =
+        try {
+            withJavaScriptPlayerCacheRecovery {
+                YoutubeJavaScriptPlayerManager.getUrlWithThrottlingParameterDeobfuscated(videoId, url)
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (primaryFailure: Exception) {
+            if (MoriCipherRuntime.snapshot.value.status == CipherRuntimeStatus.READY) {
+                MoriCipherRuntime.transformNParameter(videoId, url).getOrElse { throw primaryFailure }
+            } else {
+                throw primaryFailure
+            }
+        }
+
+    private inline fun <T> withJavaScriptPlayerCacheRecovery(block: () -> T): T {
+        try {
+            return block()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Exception) {
+            if (!error.isJavaScriptPlayerExtractorFailure()) {
+                throw error
+            }
+            cachedSignatureTimestamp = null
+            cachedSignatureTimestampExpiresAtMs = 0L
+            runCatching { YoutubeJavaScriptPlayerManager.clearAllCaches() }
+            try {
+                return block()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (retryFailure: Exception) {
+                retryFailure.addSuppressed(error)
+                throw retryFailure
+            }
+        }
+    }
+
+    private fun applyGvsPoToken(
+        url: String,
+        client: YouTubeClient?,
+        videoId: String,
+        authState: PlaybackAuthState,
+    ): String {
+        val parsed = url.toHttpUrlOrNull() ?: return url
+        if (parsed.queryParameter("sabr") == "1") return url
+        val supportsGvsPoToken = client != null && PlaybackAuthState.supportsGvsPoToken(client)
+        if (!supportsGvsPoToken) {
+            if (parsed.queryParameter("pot") == null) return url
+            return parsed.newBuilder().removeAllQueryParameters("pot").build().toString()
+        }
+        val token = authState.resolveVideoScopedGvsPoToken(client, videoId) ?: return url
+        return parsed.newBuilder().setQueryParameter("pot", token).build().toString()
     }
 
     private fun Throwable.isJavaScriptPlayerExtractorFailure(): Boolean {
@@ -1638,7 +1788,9 @@ object YTPlayerUtils {
             if (
                 message.contains("deobfuscation", ignoreCase = true) ||
                 message.contains("JavaScript player", ignoreCase = true) ||
-                message.contains("base JavaScript player", ignoreCase = true)
+                message.contains("base JavaScript player", ignoreCase = true) ||
+                message.contains("throttling parameter", ignoreCase = true) ||
+                message.contains("signature timestamp", ignoreCase = true)
             ) {
                 return true
             }
@@ -1706,7 +1858,7 @@ object YTPlayerUtils {
     private fun Throwable.isForbiddenPlayerRequest(): Boolean =
         (this as? ClientRequestException)?.response?.status == HttpStatusCode.Forbidden
 
-    private fun isBotDetectionError(reason: String): Boolean {
+    internal fun isBotDetectionError(reason: String): Boolean {
         val lower = reason.lowercase(Locale.US)
         return "bot" in lower ||
             "unusual traffic" in lower ||
