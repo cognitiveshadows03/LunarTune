@@ -763,7 +763,6 @@ enum class PlayerDesignStyle {
     V5,
     V6,
     V7,
-    V7_LEGACY,
     V8,
     V9,
     V10,

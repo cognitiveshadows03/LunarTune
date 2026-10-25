@@ -735,63 +735,6 @@ fun PlayerTopActions(
             }
         }
 
-        PlayerDesignStyle.V7_LEGACY -> {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (currentSongLiked) MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
-                                else Color.Transparent,
-                            )
-                            .clickable {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                playerConnection.toggleLike()
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(if (currentSongLiked) R.drawable.favorite else R.drawable.favorite_border),
-                        contentDescription = stringResource(if (currentSongLiked) R.string.action_remove_like else R.string.action_like),
-                        tint = if (currentSongLiked) MaterialTheme.colorScheme.error else textBackgroundColor.copy(alpha = 0.7f),
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Box(
-                    modifier =
-                        Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                menuState.show {
-                                    PlayerMenu(
-                                        mediaMetadata = mediaMetadata,
-                                        navController = navController,
-                                        playerBottomSheetState = state,
-                                        onShowDetailsDialog = {
-                                            bottomSheetPageState.show { ShowMediaInfo(mediaMetadata.id) }
-                                        },
-                                        onDismiss = menuState::dismiss,
-                                    )
-                                }
-                            },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.more_horiz),
-                        contentDescription = null,
-                        tint = textBackgroundColor.copy(alpha = 0.7f),
-                        modifier = Modifier.size(24.dp),
-                    )
-                }
-            }
-        }
-
         PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.V9 -> {
             Unit
         }
@@ -1854,90 +1797,6 @@ fun PlayerPlaybackControls(
             }
         }
 
-        PlayerDesignStyle.V7_LEGACY -> {
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = PlayerHorizontalPadding),
-            ) {
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        playerConnection.seekToPrevious()
-                    },
-                    enabled = canSkipPrevious,
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(64.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_previous),
-                            contentDescription = null,
-                            tint = textBackgroundColor.copy(alpha = if (canSkipPrevious) 1f else 0.4f),
-                            modifier = Modifier.size(44.dp),
-                        )
-                    }
-                }
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (playbackState == STATE_ENDED) {
-                            playerConnection.player.seekTo(0, 0)
-                            playerConnection.player.playWhenReady = true
-                        } else {
-                            playerConnection.player.togglePlayPause()
-                        }
-                    },
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(72.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        if (isLoading) {
-                            CircularWavyProgressIndicator(modifier = Modifier.size(44.dp), color = textBackgroundColor)
-                        } else {
-                            Icon(
-                                painter =
-                                    painterResource(
-                                        when {
-                                            playbackState == STATE_ENDED -> R.drawable.replay
-                                            isPlaying -> R.drawable.pause
-                                            else -> R.drawable.play
-                                        },
-                                    ),
-                                contentDescription = null,
-                                tint = textBackgroundColor,
-                                modifier = Modifier.size(52.dp),
-                            )
-                        }
-                    }
-                }
-                Surface(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        playerConnection.seekToNext()
-                    },
-                    enabled = canSkipNext,
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    modifier = Modifier.size(64.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_next),
-                            contentDescription = null,
-                            tint = textBackgroundColor.copy(alpha = if (canSkipNext) 1f else 0.4f),
-                            modifier = Modifier.size(44.dp),
-                        )
-                    }
-                }
-            }
-        }
-
         PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.V9 -> {
             Unit
         }
@@ -2040,9 +1899,9 @@ fun PlayerControlsContent(
         position = position,
         duration = duration,
         textBackgroundColor = textBackgroundColor,
-        showRemainingTime = playerDesignStyle == PlayerDesignStyle.V7 || playerDesignStyle == PlayerDesignStyle.V7_LEGACY,
+        showRemainingTime = playerDesignStyle == PlayerDesignStyle.V7,
         centerContent =
-            if ((playerDesignStyle == PlayerDesignStyle.V7 || playerDesignStyle == PlayerDesignStyle.V7_LEGACY) && currentFormat != null) {
+            if (playerDesignStyle == PlayerDesignStyle.V7 && currentFormat != null) {
                 {
                     val codec = currentFormat.mimeType.substringAfter("/").uppercase()
                     val label =

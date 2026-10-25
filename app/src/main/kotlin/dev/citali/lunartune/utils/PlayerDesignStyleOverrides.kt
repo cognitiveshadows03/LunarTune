@@ -22,10 +22,15 @@ fun parsePlayerDesignStyleOverrides(raw: String): Map<String, PlayerDesignStyle>
             val separator = line.lastIndexOf('\t')
             if (separator <= 0 || separator == line.lastIndex) return@mapNotNull null
             val id = line.substring(0, separator)
+            val rawStyle = line.substring(separator + 1)
             val style =
-                runCatching {
-                    PlayerDesignStyle.valueOf(line.substring(separator + 1))
-                }.getOrNull() ?: return@mapNotNull null
+                if (rawStyle == "V7_LEGACY") {
+                    PlayerDesignStyle.V7
+                } else {
+                    runCatching {
+                        PlayerDesignStyle.valueOf(rawStyle)
+                    }.getOrNull() ?: return@mapNotNull null
+                }
             id to style
         }.toMap()
 }

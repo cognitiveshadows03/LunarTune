@@ -405,7 +405,6 @@ fun AppearanceSettings(navController: NavController) {
     val isPlayerBackgroundCustomizationEnabled =
         when (playerDesignStyle) {
             PlayerDesignStyle.V7,
-            PlayerDesignStyle.V7_LEGACY,
             PlayerDesignStyle.V8,
             PlayerDesignStyle.V10,
             PlayerDesignStyle.V9,
@@ -413,9 +412,7 @@ fun AppearanceSettings(navController: NavController) {
 
             else -> true
         }
-    // ArchiveTune 13.4.0 Immersive kept button colors + slider style available.
-    val isPlayerControlsCustomizationEnabled =
-        playerDesignStyle == PlayerDesignStyle.V7_LEGACY || isPlayerBackgroundCustomizationEnabled
+    val isPlayerControlsCustomizationEnabled = isPlayerBackgroundCustomizationEnabled
     val isVolumeBarSupported =
         playerDesignStyle == PlayerDesignStyle.V7 ||
             (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)
@@ -778,7 +775,6 @@ fun AppearanceSettings(navController: NavController) {
                                 PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
                                 PlayerDesignStyle.V6 -> stringResource(R.string.player_design_v6)
                                 PlayerDesignStyle.V7 -> stringResource(R.string.player_design_v7)
-                                PlayerDesignStyle.V7_LEGACY -> stringResource(R.string.player_design_v7_legacy)
                                 PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
                                 PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
                                 PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)

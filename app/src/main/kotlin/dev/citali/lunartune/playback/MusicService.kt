@@ -1291,7 +1291,7 @@ class MusicService :
             )
 
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        audioOutputResolver = AudioOutputResolver(audioManager)
+        audioOutputResolver = AudioOutputResolver(context = this, audioManager = audioManager)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             audioManager.setAllowedCapturePolicy(android.media.AudioAttributes.ALLOW_CAPTURE_BY_ALL)
         }
@@ -2530,10 +2530,10 @@ class MusicService :
 
     private fun onAudioOutputDeviceChanged() {
         if (!::player.isInitialized) return
+        audioOutputResolver.refresh()
         val outputSignature = currentAudioOutputDeviceSignature()
         if (outputSignature == lastAudioOutputDeviceSignature) return
         lastAudioOutputDeviceSignature = outputSignature
-        audioOutputResolver.refresh()
         cancelCrossfade(resetVolume = true, resetPauseAtEnd = true)
         player.setAudioAttributes(playbackAudioAttributes(), false)
         audioRouteRecoveryJob?.cancel()

@@ -533,7 +533,6 @@ fun Thumbnail(
                                     val shouldCropArtwork =
                                         cropThumbnailToSquare &&
                                             playerDesignStyle != PlayerDesignStyle.V7 &&
-                                            playerDesignStyle != PlayerDesignStyle.V7_LEGACY &&
                                             (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10)
 
                                     val baseArtworkUrl =

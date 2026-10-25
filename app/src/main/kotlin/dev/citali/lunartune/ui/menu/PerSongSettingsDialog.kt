@@ -671,7 +671,6 @@ fun playerDesignStyleLabel(style: PlayerDesignStyle): String =
         PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
         PlayerDesignStyle.V6 -> stringResource(R.string.player_design_v6)
         PlayerDesignStyle.V7 -> stringResource(R.string.player_design_v7)
-        PlayerDesignStyle.V7_LEGACY -> stringResource(R.string.player_design_v7_legacy)
         PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
         PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
         PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)

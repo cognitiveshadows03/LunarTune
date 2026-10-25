@@ -506,8 +506,7 @@ fun PlayerMenu(
                                                     playerConnection.refetchCanvasArtwork(
                                                         metadata = mediaMetadata,
                                                         requireVertical =
-                                                            playerDesignStyle == PlayerDesignStyle.V7 ||
-                                                                playerDesignStyle == PlayerDesignStyle.V7_LEGACY,
+                                                            playerDesignStyle == PlayerDesignStyle.V7,
                                                     )
                                                 ) {
                                                     CanvasArtworkRefetchResult.Success -> onDismiss()

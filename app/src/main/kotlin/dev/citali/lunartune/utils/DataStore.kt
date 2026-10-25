@@ -35,6 +35,8 @@ import dev.citali.lunartune.constants.HISTORY_DURATION_LEGACY_FLOAT_KEY
 import dev.citali.lunartune.constants.HISTORY_DURATION_MAX
 import dev.citali.lunartune.constants.HISTORY_DURATION_MIN
 import dev.citali.lunartune.constants.HistoryDuration
+import dev.citali.lunartune.constants.PlayerDesignStyle
+import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.UpdateChannel
 import dev.citali.lunartune.constants.UpdateChannelKey
 import dev.citali.lunartune.extensions.toEnum
@@ -76,6 +78,17 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
                     }
 
                 override suspend fun cleanUp() {}
+            },
+            object : DataMigration<Preferences> {
+                override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+                    currentData[PlayerDesignStyleKey] == "V7_LEGACY"
+
+                override suspend fun migrate(currentData: Preferences): Preferences =
+                    currentData.toMutablePreferences().apply {
+                        this[PlayerDesignStyleKey] = PlayerDesignStyle.V7.name
+                    }
+
+                override suspend fun cleanUp() = Unit
             },
         )
     },

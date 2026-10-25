@@ -85,7 +85,9 @@ import dev.citali.lunartune.db.entities.formattedBitrate
 import dev.citali.lunartune.db.entities.formattedFileSize
 import dev.citali.lunartune.db.entities.formattedSampleRate
 import dev.citali.lunartune.models.ActiveOutputDevice
+import dev.citali.lunartune.models.BluetoothAudioDeviceCategory
 import dev.citali.lunartune.models.MediaMetadata
+import dev.citali.lunartune.models.PlayerOutputDevice
 import dev.citali.lunartune.ui.component.ActionPromptDialog
 import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.bottomSheetDraggable
@@ -1638,14 +1640,29 @@ fun QueueCollapsedContentAppleMusic(
     val tint = textBackgroundColor.copy(alpha = 0.7f)
     val lyricsOpen = lyricsOpenProvider()
     val queueOpen = queueOpenProvider()
+    val isBluetooth = device.type == PlayerOutputDevice.Bluetooth
+    val deviceIconRes =
+        if (isBluetooth) {
+            when (device.bluetoothCategory) {
+                BluetoothAudioDeviceCategory.Car -> R.drawable.am_car
+                BluetoothAudioDeviceCategory.Headphones -> R.drawable.am_airpods_max
+                BluetoothAudioDeviceCategory.Earbuds -> R.drawable.am_airpods
+            }
+        } else {
+            R.drawable.am_airplay_audio
+        }
     Row(
-        horizontalArrangement = Arrangement.spacedBy(36.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Top,
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 16.dp)
-                .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
+                .padding(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = 4.dp,
+                    bottom = if (isBluetooth) 6.dp else 16.dp,
+                ).windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Horizontal))
                 .padding(
                     bottom =
                         (WindowInsets.systemBars.asPaddingValues().calculateBottomPadding() - 4.dp)
@@ -1679,8 +1696,48 @@ fun QueueCollapsedContentAppleMusic(
                 )
             }
         }
-        plain(onDeviceClick) {
-            Icon(painterResource(R.drawable.am_airplay_audio), device.name, tint = tint, modifier = Modifier.size(25.dp))
+        Box(
+            contentAlignment = Alignment.TopCenter,
+            modifier = Modifier.width(112.dp),
+        ) {
+            if (isBluetooth) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(onClick = onDeviceClick)
+                            .padding(top = 9.5.dp, bottom = 2.dp, start = 4.dp, end = 4.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(deviceIconRes),
+                        contentDescription = device.name,
+                        tint = tint,
+                        modifier = Modifier.size(25.dp),
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = device.name,
+                        color = tint,
+                        fontSize = 11.sp,
+                        lineHeight = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            } else {
+                plain(onDeviceClick) {
+                    Icon(
+                        painterResource(R.drawable.am_airplay_audio),
+                        device.name,
+                        tint = tint,
+                        modifier = Modifier.size(25.dp),
+                    )
+                }
+            }
         }
         plain(onExpandQueue, active = queueOpen) {
             Icon(painterResource(R.drawable.am_list_bullet), null, tint = if (queueOpen) Color.White else tint, modifier = Modifier.size(25.dp))
