@@ -43,7 +43,7 @@ internal class PlaybackGainAndSyncAudioProcessor : BaseAudioProcessor() {
 
     private val configuredSampleRateHz = AtomicInteger(0)
     private val configuredBytesPerFrame = AtomicInteger(0)
-    private val configuredPcmEncoding = AtomicInteger(C.Format.NO_VALUE)
+    private val configuredPcmEncoding = AtomicInteger(C.ENCODING_INVALID)
 
     private val forwardedFramesSinceFlush = AtomicLong(0L)
     private val skippedFramesSinceFlush = AtomicLong(0L)
@@ -160,7 +160,7 @@ internal class PlaybackGainAndSyncAudioProcessor : BaseAudioProcessor() {
     override fun onReset() {
         configuredSampleRateHz.set(0)
         configuredBytesPerFrame.set(0)
-        configuredPcmEncoding.set(C.Format.NO_VALUE)
+        configuredPcmEncoding.set(C.ENCODING_INVALID)
         postVolumeGain = 1f
         forwardedFramesSinceFlush.set(0L)
         skippedFramesSinceFlush.set(0L)
