@@ -335,17 +335,15 @@ fun LunarKaraokeLyricsView(
             }
         val topFadeSize =
             when (topFade) {
-                is LyricsFade.None -> 0.dp
-                is LyricsFade.Fixed -> topFade.size
+                is LyricsFade.Fixed -> topFade.length
                 is LyricsFade.Fraction -> maxHeight * topFade.fraction
-                is LyricsFade.ToAnchor -> (anchorOffset - topFade.gap).coerceAtLeast(0.dp)
+                is LyricsFade.ToAnchor -> (anchorOffset - topFade.inset).coerceAtLeast(0.dp)
             }
         val bottomFadeSize =
             when (bottomFade) {
-                is LyricsFade.None -> 0.dp
-                is LyricsFade.Fixed -> bottomFade.size
+                is LyricsFade.Fixed -> bottomFade.length
                 is LyricsFade.Fraction -> maxHeight * bottomFade.fraction
-                is LyricsFade.ToAnchor -> (maxHeight - anchorOffset - bottomFade.gap).coerceAtLeast(0.dp)
+                is LyricsFade.ToAnchor -> (anchorOffset - bottomFade.inset).coerceAtLeast(0.dp)
             }
 
         val contentWidthPx = with(density) { (maxWidth - 32.dp).toPx() }.coerceAtLeast(1f)
