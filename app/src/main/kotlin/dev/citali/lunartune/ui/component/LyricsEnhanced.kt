@@ -273,7 +273,7 @@ internal fun PrewarmLyricsSceneEffect(
         if (bundle.syncedLyrics.lines.isEmpty()) return@LaunchedEffect
 
         val uniqueWidths =
-            buildList {
+            buildList<Dp> {
                 for (w in containerWidthsDp) {
                     if (w > 0.dp && none { kotlin.math.abs((it - w).value) < 0.5f }) add(w)
                 }

@@ -545,7 +545,7 @@ fun BottomSheetPlayer(
         if (currentLyricsEntity != null) return@LaunchedEffect
         try {
             withContext(Dispatchers.IO) {
-                if (playerDatabase.lyrics(targetMetadata.id).first() != null) return@LaunchedEffect
+                if (playerDatabase.lyrics(targetMetadata.id).first() != null) return@withContext
                 val fetched = playerLyricsHelper.getLyricsWithSource(targetMetadata)
                 playerDatabase.query {
                     insertLyricsIfAbsent(
