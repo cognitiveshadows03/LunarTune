@@ -22,15 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,7 +49,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
-import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
@@ -65,7 +59,6 @@ import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.FeatheredBottomArtworkBlur
 import dev.citali.lunartune.ui.component.MenuState
-import dev.citali.lunartune.ui.component.NumberedMediaRow
 import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.utils.displayArtworkUrl
@@ -80,9 +73,6 @@ private const val QuickPickWidthFraction = 0.72f
 
 /** Posters, so a touch taller than wide. */
 private const val QuickPickAspectRatio = 1.28f
-
-/** Height the dense quick-pick rows are laid out at. */
-private val QuickPickRowHeight = 76.dp
 
 /**
  * One entry of a quick-pick carousel, independent of where it came from: the local library or the
@@ -99,20 +89,20 @@ private class QuickPickCardData(
 )
 
 /**
- * The redesigned quick picks (New UI): large poster cards that run off the right edge of the
+ * The third Quick Picks display mode: large poster cards that run off the right edge of the
  * screen, numbered so the strip reads as a ranking rather than a carousel of equal things.
  *
  * Colour is kept to the artwork: a light scrim at the top so the number stays legible on a bright
  * cover and another at the bottom for the title. There is no border and no container — the artwork
- * is the card.
+ * is the card. This mode is chosen from the Quick Picks display mode setting instead of being
+ * tied to the developer redesign switch.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun NewQuickPicksSection(
+internal fun AppleMusicQuickPicksSection(
     quickPicks: List<Song>,
     mediaMetadata: MediaMetadata?,
     isPlaying: Boolean,
-    displayMode: QuickPicksDisplayMode,
     navController: NavController,
     playerConnection: PlayerConnection,
     menuState: MenuState,
@@ -155,27 +145,17 @@ internal fun NewQuickPicksSection(
             )
         }
 
-    if (displayMode == QuickPicksDisplayMode.CARD) {
-        QuickPickCards(cards = cards, isPlaying = isPlaying, modifier = modifier)
-    } else {
-        QuickPickRows(
-            cards = cards,
-            isPlaying = isPlaying,
-            haptic = haptic,
-            modifier = modifier,
-        )
-    }
+    QuickPickCards(cards = cards, isPlaying = isPlaying, modifier = modifier)
 }
 
 /**
- * Same as [NewQuickPicksSection], fed by the remote home feed instead of the local library.
+ * Same as [AppleMusicQuickPicksSection], fed by the remote home feed instead of the local library.
  */
 @Composable
-internal fun NewRemoteQuickPicksSection(
+internal fun AppleMusicRemoteQuickPicksSection(
     section: HomePage.Section,
     mediaMetadata: MediaMetadata?,
     isPlaying: Boolean,
-    displayMode: QuickPicksDisplayMode,
     navController: NavController,
     playerConnection: PlayerConnection,
     menuState: MenuState,
@@ -215,16 +195,7 @@ internal fun NewRemoteQuickPicksSection(
             )
         }
 
-    if (displayMode == QuickPicksDisplayMode.CARD) {
-        QuickPickCards(cards = cards, isPlaying = isPlaying, modifier = modifier)
-    } else {
-        QuickPickRows(
-            cards = cards,
-            isPlaying = isPlaying,
-            haptic = haptic,
-            modifier = modifier,
-        )
-    }
+    QuickPickCards(cards = cards, isPlaying = isPlaying, modifier = modifier)
 }
 
 @Composable
@@ -395,75 +366,6 @@ private fun QuickPickCard(
                     color = Color.White.copy(alpha = 0.84f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-/**
- * The dense variant of the same strip, for people who chose the list layout: two columns of
- * numbered rows instead of posters. Uses the same row as the queue, so the two screens read as one
- * design once the redesign reaches them both.
- */
-@Composable
-private fun QuickPickRows(
-    cards: List<QuickPickCardData>,
-    isPlaying: Boolean,
-    haptic: HapticFeedback,
-    modifier: Modifier = Modifier,
-) {
-    if (cards.isEmpty()) return
-
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val widthFactor = if (maxWidth * 0.475f >= 320.dp) 0.475f else 0.9f
-        val itemWidth = maxWidth * widthFactor
-        val gridState = rememberLazyGridState()
-        LazyHorizontalGrid(
-            state = gridState,
-            rows = GridCells.Fixed(4),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(QuickPickRowHeight * 4),
-        ) {
-            itemsIndexed(
-                items = cards,
-                key = { _, card -> card.key },
-                contentType = { _, _ -> "quick_pick_row" },
-            ) { index, card ->
-                NumberedMediaRow(
-                    position = index + 1,
-                    title = card.title,
-                    subtitle = card.subtitle,
-                    thumbnailUrl = card.thumbnailUrl,
-                    isActive = card.isActive,
-                    isPlaying = isPlaying && card.isActive,
-                    modifier =
-                        Modifier
-                            .width(itemWidth)
-                            .combinedClickable(
-                                onClick = card.onClick,
-                                onLongClick = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    card.onLongClick()
-                                },
-                            ),
-                    trailingContent = {
-                        IconButton(
-                            onClick = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                card.onLongClick()
-                            },
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.more_vert),
-                                contentDescription = null,
-                            )
-                        }
-                    },
                 )
             }
         }

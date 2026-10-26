@@ -380,6 +380,7 @@
     <string name="quick_picks_display_mode">Quick Picks display mode</string>
     <string name="quick_picks_display_mode_card">Card</string>
     <string name="quick_picks_display_mode_list">List</string>
+    <string name="quick_picks_display_mode_apple_music">Apple Music</string>
     <string name="discord">Discord</string>
     <string name="advanced_login">Login with token</string>
     <string name="token_hidden">Tap to show token</string>

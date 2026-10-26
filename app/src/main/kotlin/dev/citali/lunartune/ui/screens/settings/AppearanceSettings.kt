@@ -1187,6 +1187,7 @@ fun AppearanceSettings(navController: NavController) {
                             when (it) {
                                 QuickPicksDisplayMode.CARD -> stringResource(R.string.quick_picks_display_mode_card)
                                 QuickPicksDisplayMode.LIST -> stringResource(R.string.quick_picks_display_mode_list)
+                                QuickPicksDisplayMode.APPLE_MUSIC -> stringResource(R.string.quick_picks_display_mode_apple_music)
                             }
                         },
                     )

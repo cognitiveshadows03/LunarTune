@@ -286,6 +286,19 @@ fun QuickPicksSection(
     val distinctQuickPicks = remember(quickPicks) { quickPicks.distinctBy { it.id } }
 
     when (displayMode) {
+        QuickPicksDisplayMode.APPLE_MUSIC -> {
+            AppleMusicQuickPicksSection(
+                quickPicks = distinctQuickPicks,
+                mediaMetadata = mediaMetadata,
+                isPlaying = isPlaying,
+                navController = navController,
+                playerConnection = playerConnection,
+                menuState = menuState,
+                haptic = haptic,
+                modifier = modifier,
+            )
+        }
+
         QuickPicksDisplayMode.CARD -> {
             BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
                 val heroHeight =
@@ -1573,6 +1586,19 @@ fun RemoteQuickPicksSection(
         }
 
     when (displayMode) {
+        QuickPicksDisplayMode.APPLE_MUSIC -> {
+            AppleMusicRemoteQuickPicksSection(
+                section = section,
+                mediaMetadata = mediaMetadata,
+                isPlaying = isPlaying,
+                navController = navController,
+                playerConnection = playerConnection,
+                menuState = menuState,
+                haptic = haptic,
+                modifier = modifier,
+            )
+        }
+
         QuickPicksDisplayMode.CARD -> {
             BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
                 val heroHeight =
