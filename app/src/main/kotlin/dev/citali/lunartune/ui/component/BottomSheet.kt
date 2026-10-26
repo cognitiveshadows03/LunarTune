@@ -124,7 +124,18 @@ fun BottomSheet(
                         (state.expandedBound - state.value)
                             .roundToPx()
                             .coerceAtLeast(0)
-                    IntOffset(x = 0, y = y)
+                    // A minimise spring settles below the collapsed anchor before it
+                    // rebounds. Drawing that overshoot slides the collapsed row down
+                    // into the navigation bar's footprint, so floor the sheet at the
+                    // anchor for the duration of the settle. Drags, dismissal and the
+                    // dismissed -> collapsed restore still travel freely below it.
+                    val flooredY =
+                        if (state.isMinimising) {
+                            y.coerceAtMost((state.expandedBound - state.collapsedBound).roundToPx())
+                        } else {
+                            y
+                        }
+                    IntOffset(x = 0, y = flooredY)
                 }.then(
                     if (collapsedGesturesEnabled || isAboveCollapsed) {
                         Modifier.bottomSheetDraggable(state, onDismiss)
@@ -225,6 +236,33 @@ class BottomSheetState(
     var targetAnchor by mutableIntStateOf(initialAnchor)
         private set
 
+    /** Only the newest settle may clear [isMinimising]. */
+    private var settleGeneration = 0
+
+    /**
+     * True while a minimise settle (expanded -> collapsed) is running. Its spring may
+     * rebound upward, but the downward overshoot is not rendered: that dip is what
+     * pushes the collapsed row underneath the navigation bar.
+     */
+    var isMinimising by mutableStateOf(false)
+        private set
+
+    private fun beginSettle(minimising: Boolean): Int {
+        val generation = ++settleGeneration
+        isMinimising = minimising
+        return generation
+    }
+
+    private fun endSettle(generation: Int) {
+        if (settleGeneration == generation) isMinimising = false
+    }
+
+    /** A pointer drag owns the sheet, so no settle floor may apply to it. */
+    fun onDragStart() {
+        ++settleGeneration
+        isMinimising = false
+    }
+
     val isDismissed by derivedStateOf {
         value == animatable.lowerBound!!
     }
@@ -251,13 +289,21 @@ class BottomSheetState(
 
     fun collapse(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         updateAnchor(COLLAPSED_ANCHOR)
+        // Restoring from the dismissed anchor travels upwards from below and must keep
+        // its slide-in; only a minimise can overshoot into the navigation bar.
+        val generation = beginSettle(!animationsDisabled && value >= collapsedBound)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(collapsedBound, animationSpec, initialVelocity = initialVelocity)
+            try {
+                animatable.animateTo(collapsedBound, animationSpec, initialVelocity = initialVelocity)
+            } finally {
+                endSettle(generation)
+            }
         }
     }
 
     fun expand(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         updateAnchor(EXPANDED_ANCHOR)
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(animatable.upperBound!!, animationSpec, initialVelocity = initialVelocity)
         }
@@ -283,6 +329,7 @@ class BottomSheetState(
 
     fun dismiss(initialVelocity: Dp = 0.dp) {
         updateAnchor(DISMISSED_ANCHOR)
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(
                 animatable.lowerBound!!,
@@ -301,6 +348,7 @@ class BottomSheetState(
                 else -> COLLAPSED_ANCHOR
             },
         )
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.snapTo(value)
         }
@@ -506,6 +554,7 @@ fun Modifier.bottomSheetDraggable(
                 totalDy += change.positionChange().y
                 if (abs(totalDy) > dragSlop) {
                     dragStarted = true
+                    state.onDragStart()
                     velocityTracker.resetTracking()
                     velocityTracker.addPointerInputChange(change)
                     change.consume()
