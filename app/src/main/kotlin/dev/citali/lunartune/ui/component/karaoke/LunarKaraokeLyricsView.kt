@@ -34,10 +34,12 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextMotion
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
@@ -51,7 +53,6 @@ import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.KaraokeBreathingDo
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.KaraokeBreathingDotsDefaults
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.LyricsAnchor
 import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.LyricsFade
-import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.LyricsLineItem
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLine
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLyrics
 import com.mocharealm.accompanist.lyrics.ui.preparation.prepareLyrics
@@ -79,11 +80,39 @@ private data class LunarSceneCacheKey(
     val layoutDirection: LayoutDirection,
 )
 
+private data class LunarResourcesCacheKey(
+    val colorValue: ULong,
+    val density: Float,
+    val fontScale: Float,
+    val layoutDirection: LayoutDirection,
+)
+
 internal class CachedLunarScene(
     val prepared: PreparedLyrics,
     val items: List<LunarDisplayItem>,
     val breathingLineHeightPx: Float,
-)
+) {
+    private val resourcesCache = HashMap<LunarResourcesCacheKey, LunarRenderResources>(2)
+
+    fun resourcesFor(
+        color: Color,
+        density: Density,
+        layoutDirection: LayoutDirection,
+    ): LunarRenderResources {
+        val key =
+            LunarResourcesCacheKey(
+                colorValue = color.value,
+                density = density.density,
+                fontScale = density.fontScale,
+                layoutDirection = layoutDirection,
+            )
+        return synchronized(resourcesCache) {
+            resourcesCache.getOrPut(key) {
+                LunarRenderResources(color, density, layoutDirection)
+            }
+        }
+    }
+}
 
 internal class LunarDisplayItem(
     val sourceIndex: Int,
@@ -126,6 +155,70 @@ private object LunarKaraokeSceneCache {
     ) {
         synchronized(map) { map[key] = scene }
     }
+}
+
+internal suspend fun prewarmLunarKaraokeScene(
+    lyrics: SyncedLyrics,
+    contentWidthPx: Float,
+    normalStyle: TextStyle,
+    accompanimentStyle: TextStyle,
+    phoneticStyle: TextStyle,
+    translationStyle: TextStyle,
+    textColor: Color,
+    density: Density,
+    layoutDirection: LayoutDirection,
+    measurer: TextMeasurer,
+    currentPositionMs: Int,
+) {
+    if (lyrics.lines.isEmpty() || contentWidthPx <= 1f) return
+    val widthPxInt = contentWidthPx.roundToInt().coerceAtLeast(1)
+    val cacheKey =
+        LunarSceneCacheKey(
+            lyrics = lyrics,
+            widthPx = widthPxInt,
+            normalStyle = normalStyle,
+            accompanimentStyle = accompanimentStyle,
+            phoneticStyle = phoneticStyle,
+            translationStyle = translationStyle,
+            showPhonetic = true,
+            density = density.density,
+            fontScale = density.fontScale,
+            layoutDirection = layoutDirection,
+        )
+    val scene =
+        withContext(Dispatchers.Default) {
+            LunarKaraokeSceneCache.get(cacheKey)
+                ?: buildCachedLunarScene(
+                    lyrics = lyrics,
+                    prepared =
+                        prepareLyrics(
+                            lyrics = lyrics,
+                            profiles = LunarLyricsProfiles,
+                            measurer = measurer,
+                            normalStyle = normalStyle,
+                            accompanimentStyle = accompanimentStyle,
+                            phoneticStyle = phoneticStyle,
+                            width = widthPxInt.toFloat(),
+                            density = density.density,
+                            showPhonetic = true,
+                            fontScale = density.fontScale,
+                            translationStyle = translationStyle,
+                        ),
+                ).also { LunarKaraokeSceneCache.put(cacheKey, it) }
+        }
+
+    val resources = scene.resourcesFor(textColor, density, layoutDirection)
+    val focusIndex = computeLunarFocusState(scene.items, currentPositionMs).scrollTargetItemIndex
+    val startIdx = (focusIndex - 4).coerceAtLeast(0)
+    val endIdx = (focusIndex + 10).coerceAtMost(scene.items.lastIndex)
+    val linesToWarm = ArrayList<PreparedLine>(16)
+    for (i in startIdx..endIdx) {
+        val preparedLine = scene.items[i].prepared ?: continue
+        linesToWarm.add(preparedLine)
+        linesToWarm.addAll(preparedLine.before)
+        linesToWarm.addAll(preparedLine.after)
+    }
+    resources.prewarmLines(linesToWarm)
 }
 
 private fun buildCachedLunarScene(
@@ -422,6 +515,7 @@ fun LunarKaraokeLyricsView(
     scrollAnimationSpec: AnimationSpec<Float> = tween(650, easing = FastOutSlowInEasing),
     autoScrollResumeDelayMillis: Long = 2500L,
     scrollChain: LunarScrollChain? = LunarScrollChain(),
+    isActive: Boolean = true,
 ) {
     val currentProvider by rememberUpdatedState(currentPosition)
     val timeProvider = remember { { currentProvider() } }
@@ -532,7 +626,10 @@ fun LunarKaraokeLyricsView(
         }
 
         val scene = syncPrepared ?: asyncScene ?: return@BoxWithConstraints
-        val resources = rememberLunarRenderResources(scene.prepared, textColor)
+        val resources =
+            remember(scene, textColor, density.density, density.fontScale, layoutDirection) {
+                scene.resourcesFor(textColor, density, layoutDirection)
+            }
         val displayItems = scene.items
         val breathingLineHeight =
             if (scene.breathingLineHeightPx > 0f) {
@@ -547,10 +644,18 @@ fun LunarKaraokeLyricsView(
             }
         }
 
-        // Seed Frame-0 scroll position synchronously before the first LazyLayout measure pass so
-        // cached lyrics open directly on the active line without rushing from item 0.
-        if (autoScrollEnabled && !listState.hasPositionedInitially && displayItems.isNotEmpty()) {
-            listState.ensureInitialPosition(
+        // Seed Frame-0 scroll position synchronously before the first LazyLayout measure pass, and
+        // also snap onto the active line on the exact frame a pre-warmed view becomes visible so
+        // opening lyrics mid-song never sweeps across lines passed while hidden.
+        val previousActive = remember(listState) { booleanArrayOf(isActive) }
+        val becameActive = !previousActive[0] && isActive
+        previousActive[0] = isActive
+        if (
+            autoScrollEnabled &&
+            displayItems.isNotEmpty() &&
+            (!listState.hasPositionedInitially || becameActive)
+        ) {
+            listState.snapToTargetImmediately(
                 targetIndex = computeLunarFocusState(displayItems, timeProvider()).scrollTargetItemIndex,
                 itemCount = displayItems.size,
             )
@@ -624,7 +729,7 @@ fun LunarKaraokeLyricsView(
         val followModifier =
             lunarLyricsAutoScroll(
                 state = listState,
-                autoScrollEnabled = autoScrollEnabled,
+                autoScrollEnabled = autoScrollEnabled && isActive,
                 targetIndex = { focusState.scrollTargetItemIndex },
                 focusEndIndex = { focusState.focusEndItemIndex },
                 animationSpec = scrollAnimationSpec,
@@ -632,12 +737,13 @@ fun LunarKaraokeLyricsView(
                 playbackPosition = timeProvider,
             )
 
-        val effectiveUseBlurEffect = useBlurEffect && supportsLyricsBlur()
-        val focusBlurScale by animateFloatAsState(
-            targetValue = if (listState.isManualScrolling || !effectiveUseBlurEffect) 0f else 1f,
-            animationSpec = tween(durationMillis = if (listState.isManualScrolling) 100 else 300),
-            label = "manualScrollFocusBlur",
-        )
+        val hardwareBlur = supportsHardwareRenderEffectBlur()
+        val focusBlurScaleState =
+            animateFloatAsState(
+                targetValue = if (listState.isManualScrolling || !useBlurEffect) 0f else 1f,
+                animationSpec = tween(durationMillis = if (listState.isManualScrolling) 100 else 300),
+                label = "manualScrollFocusBlur",
+            )
 
         LunarLyricsLazyColumn(
             items = listItems,
@@ -671,15 +777,21 @@ fun LunarKaraokeLyricsView(
                     firstAnchor - itemIndex,
                     itemIndex - lastAnchor,
                 )
-            val animatedBlur =
-                if (effectiveUseBlurEffect) {
-                    animateFloatAsState(
-                        targetValue = distance * blurDelta,
-                        animationSpec = tween(durationMillis = 300),
-                        label = "lineFocusBlur",
-                    ).value
+            val animatedBlurState =
+                animateFloatAsState(
+                    targetValue = if (useBlurEffect) distance * blurDelta else 0f,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "lineFocusBlur",
+                )
+            val lineInactiveAlpha =
+                if (!hardwareBlur && useBlurEffect && !listState.isManualScrolling) {
+                    when {
+                        distance <= 1 -> 0.42f
+                        distance == 2 -> 0.34f
+                        else -> 0.27f
+                    }
                 } else {
-                    0f
+                    0.4f
                 }
 
             Column {
@@ -716,7 +828,7 @@ fun LunarKaraokeLyricsView(
                     )
                 }
 
-                LyricsLineItem(
+                LunarLyricsLineItem(
                     isFocused = isFocused,
                     isRightAligned = item.prepared?.rightAligned == true,
                     onLineClicked = {
@@ -724,7 +836,13 @@ fun LunarKaraokeLyricsView(
                         onLineClicked(item.line)
                     },
                     onLinePressed = { onLinePressed(item.line) },
-                    blurRadius = { animatedBlur * focusBlurScale },
+                    blurRadius =
+                        if (hardwareBlur) {
+                            { animatedBlurState.value * focusBlurScaleState.value }
+                        } else {
+                            { 0f }
+                        },
+                    inactiveAlpha = lineInactiveAlpha,
                     blendMode = blendMode,
                 ) {
                     val preparedLine = item.prepared
@@ -736,6 +854,12 @@ fun LunarKaraokeLyricsView(
                             showPhonetic = showPhonetic,
                             showTranslation = showTranslation,
                             verticalPadding = 0.dp,
+                            softBlurRadiusProvider =
+                                if (hardwareBlur) {
+                                    { 0f }
+                                } else {
+                                    { animatedBlurState.value * focusBlurScaleState.value }
+                                },
                             modifier =
                                 if (item.line is KaraokeLine.AccompanimentKaraokeLine) {
                                     Modifier.padding(horizontal = 16.dp)

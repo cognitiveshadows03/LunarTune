@@ -9,7 +9,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import android.os.Build
 import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -445,7 +444,6 @@ fun LyricsSettings(
                     icon = { Icon(painterResource(R.drawable.lyrics), null) },
                     checked = lyricsLineBlur,
                     onCheckedChange = onLyricsLineBlurChange,
-                    isEnabled = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S,
                 )
             }
 

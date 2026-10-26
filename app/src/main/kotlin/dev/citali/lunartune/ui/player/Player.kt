@@ -83,6 +83,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -101,6 +102,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -122,6 +124,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -157,13 +160,16 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
+import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import dev.citali.lunartune.LocalDatabase
 import dev.citali.lunartune.LocalDownloadUtil
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
@@ -176,6 +182,10 @@ import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
+import dev.citali.lunartune.constants.LyricsBackgroundStyle
+import dev.citali.lunartune.constants.LyricsBackgroundStyleKey
+import dev.citali.lunartune.constants.LyricsMode
+import dev.citali.lunartune.constants.LyricsModeKey
 import dev.citali.lunartune.constants.MaxCanvasCacheSizeKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
 import dev.citali.lunartune.constants.PlayerBackgroundStyleKey
@@ -198,16 +208,19 @@ import dev.citali.lunartune.constants.SliderStyleKey
 import dev.citali.lunartune.constants.ThumbnailCornerRadiusKey
 import dev.citali.lunartune.extensions.metadata
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
+import dev.citali.lunartune.di.LyricsHelperEntryPoint
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.BottomSheet
 import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
+import dev.citali.lunartune.ui.component.PrewarmLyricsSceneEffect
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.menu.PlayerMenu
 import dev.citali.lunartune.ui.screens.LOGIN_ROUTE
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.screens.settings.DarkMode
+import dev.citali.lunartune.ui.utils.highRes
 import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import dev.citali.lunartune.ui.utils.ShowMediaInfo
 import dev.citali.lunartune.ui.utils.YtimgResizePolicy
@@ -518,6 +531,70 @@ fun BottomSheetPlayer(
     LaunchedEffect(mediaMetadata?.id, preparedDurationMs) {
         val currentMediaId = mediaMetadata?.id ?: return@LaunchedEffect
         lyricsRenderViewModel.bind(currentMediaId, preparedDurationMs)
+    }
+
+    val playerDatabase = LocalDatabase.current
+    val playerLyricsHelper =
+        remember(context) {
+            EntryPointAccessors
+                .fromApplication(context.applicationContext, LyricsHelperEntryPoint::class.java)
+                .lyricsHelper()
+        }
+    LaunchedEffect(mediaMetadata?.id, currentLyricsEntity?.lyrics) {
+        val targetMetadata = mediaMetadata ?: return@LaunchedEffect
+        if (currentLyricsEntity != null) return@LaunchedEffect
+        try {
+            withContext(Dispatchers.IO) {
+                if (playerDatabase.lyrics(targetMetadata.id).first() != null) return@LaunchedEffect
+                val fetched = playerLyricsHelper.getLyricsWithSource(targetMetadata)
+                playerDatabase.query {
+                    insertLyricsIfAbsent(
+                        id = targetMetadata.id,
+                        lyrics = fetched.lyrics,
+                        source = fetched.providerName,
+                    )
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+
+    LaunchedEffect(mediaMetadata?.thumbnailUrl) {
+        val thumbUrl = mediaMetadata?.thumbnailUrl ?: return@LaunchedEffect
+        LyricsArtBlurCache.prefetch(context, thumbUrl)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            LyricsArtBlurCache.prefetch(context, thumbUrl.highRes(), 20f)
+        }
+    }
+
+    val playerLyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
+    val configuredLyricsBackground by rememberEnumPreference(LyricsBackgroundStyleKey, LyricsBackgroundStyle.DEFAULT)
+    val resolvedLyricsBackground = configuredLyricsBackground.resolveFor(storedPlayerBackground)
+    val lyricsPrewarmColor =
+        if (resolvedLyricsBackground == LyricsBackgroundStyle.FOLLOW_THEME) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            Color.White
+        }
+    val lyricsRenderStateForPrewarm by lyricsRenderViewModel.state.collectAsStateWithLifecycle()
+    val playerConfiguration = LocalConfiguration.current
+    val fullscreenLyricsContainerWidth =
+        remember(playerConfiguration.screenWidthDp) {
+            listOf((playerConfiguration.screenWidthDp.dp - 40.dp).coerceAtLeast(1.dp))
+        }
+    if (
+        state.isExpandedOrExpanding &&
+        playerDesignStyle != PlayerDesignStyle.V10 &&
+        playerLyricsMode == LyricsMode.ENHANCED
+    ) {
+        PrewarmLyricsSceneEffect(
+            lyricsState = lyricsRenderStateForPrewarm,
+            textColor = lyricsPrewarmColor,
+            currentPositionMsProvider = { expandedPositionState.longValue },
+            containerWidthsDp = fullscreenLyricsContainerWidth,
+        )
     }
     var sliderPosition by remember(mediaMetadata?.id) {
         mutableStateOf<Long?>(null)
@@ -971,23 +1048,49 @@ fun BottomSheetPlayer(
     var isAppleQueueOpen by rememberSaveable { mutableStateOf(false) }
     // Lyrics page transition state lives here (not inside MikoLyricsTransition) so it survives the
     // transition composable being recreated when the lyrics page opens or closes.
+    val usesMikoLyricsOverlay = playerDesignStyle != PlayerDesignStyle.V10
     val mikoLyricsProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     val mikoLyricsMounted = remember { mutableStateOf(false) }
-    LaunchedEffect(isLyricsScreenVisible) {
-        if (isLyricsScreenVisible) {
+    if (usesMikoLyricsOverlay && isLyricsScreenVisible && !mikoLyricsMounted.value) {
+        mikoLyricsMounted.value = true
+    }
+    LaunchedEffect(usesMikoLyricsOverlay, state.isExpanded, state.isDismissed, isLyricsScreenVisible) {
+        if (!usesMikoLyricsOverlay || state.isDismissed) {
+            if (!isLyricsScreenVisible) {
+                mikoLyricsMounted.value = false
+            }
+            return@LaunchedEffect
+        }
+        if (state.isExpanded && !isLyricsScreenVisible && !mikoLyricsMounted.value) {
+            delay(200L)
             mikoLyricsMounted.value = true
-            androidx.compose.runtime.withFrameNanos { }
-            androidx.compose.runtime.withFrameNanos { }
+        }
+    }
+    LaunchedEffect(usesMikoLyricsOverlay, isLyricsScreenVisible) {
+        if (!usesMikoLyricsOverlay) {
+            if (mikoLyricsProgress.value != 0f) {
+                mikoLyricsProgress.snapTo(0f)
+            }
+            return@LaunchedEffect
+        }
+        if (isLyricsScreenVisible) {
+            val wasAlreadyWarm = mikoLyricsMounted.value
+            mikoLyricsMounted.value = true
+            if (!wasAlreadyWarm) {
+                androidx.compose.runtime.withFrameNanos { }
+            }
             mikoLyricsProgress.animateTo(
                 1f,
-                tween(durationMillis = 480, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+                tween(durationMillis = 420, easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)),
             )
-        } else if (mikoLyricsMounted.value) {
+        } else if (mikoLyricsProgress.value > 0f) {
             mikoLyricsProgress.animateTo(
                 0f,
-                tween(durationMillis = 340, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
+                tween(durationMillis = 320, easing = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)),
             )
-            mikoLyricsMounted.value = false
+            if (!state.isExpandedOrExpanding) {
+                mikoLyricsMounted.value = false
+            }
         }
     }
 
@@ -2129,6 +2232,9 @@ private fun PlayerSheetLifecycleEffects(
     }
 }
 
+private val MikoLyricsTransitionShape = RoundedCornerShape(28.dp)
+private val AppleMusicLyricsTransitionShape = RoundedCornerShape(20.dp)
+
 @Composable
 private fun MikoLyricsTransition(
     progress: androidx.compose.animation.core.Animatable<Float, androidx.compose.animation.core.AnimationVector1D>,
@@ -2146,29 +2252,42 @@ private fun MikoLyricsTransition(
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Swipe-up fade: the page rises from a quarter of the screen below while fading and settling
-    // from 94% scale; closing sinks it back down. The animation is started only after the (heavy)
-    // lyrics page has composed and drawn its first invisible frame — previously the tween had
-    // already finished by the time the first frame landed, so the page just popped in.
-    // Always starts hidden, even if this composable is (re)created with visible = true — in the
-    // Immersive styles it is freshly composed at the moment lyrics open, and starting at 1f made
-    // the page pop in with no animation.
-    var mounted by mountedState
-    if (mounted) {
+    val mounted by mountedState
+    val isOverlayAnimating by remember {
+        derivedStateOf { progress.value > 0.001f }
+    }
+    val isLyricsActive = visible || isOverlayAnimating
+    if (mounted || isLyricsActive) {
+        val surfaceColor = MaterialTheme.colorScheme.surface
         Box(
             modifier =
                 modifier
                     .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        val placeable = measurable.measure(constraints)
+                        layout(placeable.width, placeable.height) {
+                            if (visible || isOverlayAnimating) {
+                                placeable.place(0, 0)
+                            } else {
+                                placeable.place(0, placeable.height + 10_000)
+                            }
+                        }
+                    }
                     .graphicsLayer {
                         val t = progress.value.coerceIn(0f, 1f)
                         alpha = t
-                        translationY = size.height * 0.25f * (1f - t)
-                        val scale = 0.94f + 0.06f * t
+                        translationY = size.height * 0.22f * (1f - t)
+                        val scale = 0.95f + 0.05f * t
                         scaleX = scale
                         scaleY = scale
-                        shape = RoundedCornerShape(28.dp * (1f - t))
-                        clip = t < 1f
-                    }.background(MaterialTheme.colorScheme.surface),
+                        shape = MikoLyricsTransitionShape
+                        clip = t < 0.999f
+                    }
+                    .drawWithContent {
+                        if (!visible && progress.value <= 0.001f) return@drawWithContent
+                        drawRect(surfaceColor)
+                        drawContent()
+                    },
         ) {
             LyricsScreen(
                 mediaMetadata = mediaMetadata,
@@ -2178,6 +2297,7 @@ private fun MikoLyricsTransition(
                 onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
                 onQueueClick = onQueueClick,
                 backHandlerEnabled = backHandlerEnabled,
+                isActive = isLyricsActive,
                 rememberedEnhancedListState = enhancedLyricsListState,
                 rememberedV2ListState = v2LyricsListState,
                 lyricsRenderViewModel = lyricsRenderViewModel,
@@ -2202,47 +2322,53 @@ private fun AppleMusicLyricsPageTransition(
     onQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progress by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec =
-            tween(
-                durationMillis = 320,
-                // Closing plays the opening exactly in reverse (mirrored easing). With the forward
-                // curve the doubled alpha collapsed within ~100ms and the page seemed to just vanish.
-                easing =
-                    if (visible) {
-                        androidx.compose.animation.core.FastOutSlowInEasing
-                    } else {
-                        androidx.compose.animation.core.Easing { f ->
-                            1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(1f - f)
-                        }
-                    },
-            ),
-        label = "mikoLyricsTransition",
-    )
+    val progressState =
+        animateFloatAsState(
+            targetValue = if (visible) 1f else 0f,
+            animationSpec =
+                tween(
+                    durationMillis = 300,
+                    easing =
+                        if (visible) {
+                            androidx.compose.animation.core.FastOutSlowInEasing
+                        } else {
+                            androidx.compose.animation.core.Easing { f ->
+                                1f - androidx.compose.animation.core.FastOutSlowInEasing.transform(1f - f)
+                            }
+                        },
+                ),
+            label = "mikoLyricsTransition",
+        )
+    val isOverlayAnimating by remember {
+        derivedStateOf { progressState.value > 0.001f }
+    }
+    val isLyricsActive = visible || isOverlayAnimating
 
-    val boundedProgress = progress.coerceIn(0f, 1f)
-
-    if (visible || boundedProgress > 0.001f) {
-        val alpha = boundedProgress
-        val cornerRadius = 20.dp * (1f - boundedProgress)
-
+    if (isLyricsActive) {
+        val surfaceColor = MaterialTheme.colorScheme.surface
         Box(
             modifier =
                 modifier
                     .fillMaxSize()
-                    .graphicsLayer { this.alpha = boundedProgress }
-                    .background(Color.Black.copy(alpha = 0.28f * boundedProgress)),
+                    .drawWithContent {
+                        val p = progressState.value.coerceIn(0f, 1f)
+                        if (p <= 0.001f) return@drawWithContent
+                        drawRect(Color.Black.copy(alpha = 0.28f * p))
+                        drawContent()
+                    },
         ) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            this.alpha = alpha
-                            translationY = size.height * 0.10f * (1f - boundedProgress)
-                        }.clip(RoundedCornerShape(cornerRadius))
-                        .background(MaterialTheme.colorScheme.surface),
+                            val p = progressState.value.coerceIn(0f, 1f)
+                            alpha = p
+                            translationY = size.height * 0.10f * (1f - p)
+                            shape = AppleMusicLyricsTransitionShape
+                            clip = p < 0.999f
+                        }
+                        .background(surfaceColor),
             ) {
                 LyricsScreen(
                     mediaMetadata = mediaMetadata,
@@ -2252,6 +2378,7 @@ private fun AppleMusicLyricsPageTransition(
                     onLyricsSyncOffsetChange = onLyricsSyncOffsetChange,
                     onQueueClick = onQueueClick,
                     backHandlerEnabled = backHandlerEnabled,
+                    isActive = isLyricsActive,
                     rememberedEnhancedListState = enhancedLyricsListState,
                     rememberedV2ListState = v2LyricsListState,
                     lyricsRenderViewModel = lyricsRenderViewModel,
@@ -2364,38 +2491,57 @@ private fun BackdropBlurApi30(
 ) {
     val context = LocalContext.current
     val imageLoader = context.imageLoader
+    val targetRadius = (blurAmount * 25 / 100f).coerceIn(1f, 25f)
+    val cacheRevision by LyricsArtBlurCache.updates.collectAsState()
+    val cachedBlurred =
+        remember(model, targetRadius, cacheRevision) {
+            LyricsArtBlurCache.peek(model, targetRadius)
+        }
+    var lastBlurred by remember { mutableStateOf<Bitmap?>(null) }
+    if (cachedBlurred != null) {
+        lastBlurred = cachedBlurred
+    }
 
-    val blurredBitmap by produceState<Bitmap?>(null, model, blurAmount) {
-        if (model == null) return@produceState
+    val blurredBitmap by produceState<Bitmap?>(cachedBlurred, model, blurAmount) {
+        if (model == null) {
+            value = null
+            return@produceState
+        }
+        LyricsArtBlurCache.peek(model, targetRadius)?.let {
+            value = it
+            return@produceState
+        }
         value =
             withContext(Dispatchers.IO) {
                 try {
-                    val request =
-                        ImageRequest
-                            .Builder(context)
-                            .data(model)
-                            .memoryCacheKey(model)
-                            .diskCacheKey(model)
-                            .diskCachePolicy(CachePolicy.ENABLED)
-                            .networkCachePolicy(CachePolicy.ENABLED)
-                            .allowHardware(false)
-                            .size(500)
-                            .build()
-                    val result = imageLoader.execute(request)
-                    when (result) {
-                        is SuccessResult -> {
-                            val bitmap = result.image.toBitmap().copy(Bitmap.Config.ARGB_8888, true)
-                            val radius = (blurAmount * 25 / 100f).coerceIn(1f, 25f)
-                            ImageBlurUtils.blur(bitmap, radius)
-                        }
-
-                        else -> {
-                            if (onError != null) {
-                                withContext(Dispatchers.Main) {
-                                    onError(model)
-                                }
+                    LyricsArtBlurCache.prefetch(context, model, targetRadius)
+                    LyricsArtBlurCache.peek(model, targetRadius) ?: run {
+                        val request =
+                            ImageRequest
+                                .Builder(context)
+                                .data(model)
+                                .memoryCacheKey(model)
+                                .diskCacheKey(model)
+                                .diskCachePolicy(CachePolicy.ENABLED)
+                                .networkCachePolicy(CachePolicy.ENABLED)
+                                .allowHardware(false)
+                                .size(500)
+                                .build()
+                        val result = imageLoader.execute(request)
+                        when (result) {
+                            is SuccessResult -> {
+                                val bitmap = result.image.toBitmap().copy(Bitmap.Config.ARGB_8888, true)
+                                ImageBlurUtils.blur(bitmap, targetRadius)
                             }
-                            null
+
+                            else -> {
+                                if (onError != null) {
+                                    withContext(Dispatchers.Main) {
+                                        onError(model)
+                                    }
+                                }
+                                null
+                            }
                         }
                     }
                 } catch (e: CancellationException) {
@@ -2410,8 +2556,11 @@ private fun BackdropBlurApi30(
                 }
             }
     }
+    if (blurredBitmap != null) {
+        lastBlurred = blurredBitmap
+    }
 
-    val loadedBitmap = blurredBitmap
+    val loadedBitmap = blurredBitmap ?: cachedBlurred ?: lastBlurred
     if (loadedBitmap != null) {
         Image(
             painter = BitmapPainter(loadedBitmap.asImageBitmap()),

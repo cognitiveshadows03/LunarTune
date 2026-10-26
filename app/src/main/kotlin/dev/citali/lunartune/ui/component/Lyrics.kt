@@ -1578,9 +1578,7 @@ fun Lyrics(
                                                             }
 
                                                         val wordShadow =
-                                                            if (!supportsLyricsBlur) {
-                                                                null
-                                                            } else if (isWordActive && glowIntensity > 0.05f) {
+                                                            if (isWordActive && glowIntensity > 0.05f) {
                                                                 Shadow(
                                                                     color =
                                                                         lyricsGlowColor.copy(
@@ -1890,8 +1888,7 @@ fun Lyrics(
                                             textAlign = alignment,
                                             lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
                                         )
-                                    } else if (supportsLyricsBlur &&
-                                        isActiveLine &&
+                                    } else if (isActiveLine &&
                                         effectiveAnimationStyle == LyricsAnimationStyle.GLOW &&
                                         !reduceMotionDuringScroll
                                     ) {
@@ -2306,7 +2303,7 @@ fun Lyrics(
 
                                                                         val romAlpha = 0.4f + (0.4f * fillProgress)
                                                                         val romShadow =
-                                                                            if (supportsLyricsBlur && isWordActive && fillProgress > 0.05f) {
+                                                                            if (isWordActive && fillProgress > 0.05f) {
                                                                                 Shadow(
                                                                                     color =
                                                                                         lyricsGlowColor.copy(

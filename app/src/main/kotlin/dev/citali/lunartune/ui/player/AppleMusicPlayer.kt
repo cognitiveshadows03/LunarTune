@@ -168,6 +168,7 @@ import dev.citali.lunartune.ui.component.LyricsEnhanced
 import dev.citali.lunartune.ui.component.LyricsV2
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.PlayerSliderTrack
+import dev.citali.lunartune.ui.component.PrewarmLyricsSceneEffect
 import dev.citali.lunartune.ui.component.ResizableIconButton
 import dev.citali.lunartune.ui.menu.LyricsMenu
 import dev.citali.lunartune.ui.menu.PlayerMenu
@@ -533,11 +534,53 @@ internal fun AppleMusicPortraitContent(
         }
 
         // Lyrics pane between the mini header and the controls (full height once they auto-hide).
-        androidx.compose.animation.AnimatedVisibility(
-            visible = lyricsOpen,
-            enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
-            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)),
-        ) {
+        // Pre-warmed offscreen once the player sheet settles so tapping Lyrics starts gliding on
+        // VSync Frame 1 with zero cold composition or main-thread text shaping stall.
+        val inlineLyricsContainerWidth =
+            remember(maxWidth) {
+                listOf((maxWidth - (AppleMusicGutter - 16.dp) * 2).coerceAtLeast(1.dp))
+            }
+        val latestInlinePosition = androidx.compose.runtime.rememberUpdatedState(sliderPosition ?: position)
+        if (playerSheetState.isExpandedOrExpanding && lyricsMode == LyricsMode.ENHANCED) {
+            PrewarmLyricsSceneEffect(
+                lyricsState = lyricsRenderState,
+                textColor = Color.White,
+                currentPositionMsProvider = { latestInlinePosition.value },
+                containerWidthsDp = inlineLyricsContainerWidth,
+            )
+        }
+
+        var lyricsWarm by remember { mutableStateOf(lyricsOpen) }
+        if (lyricsOpen && !lyricsWarm) {
+            lyricsWarm = true
+        }
+        LaunchedEffect(lyricsOpen, playerSheetState.isExpanded, playerSheetState.isDismissed) {
+            if (lyricsOpen) {
+                lyricsWarm = true
+            } else if (playerSheetState.isDismissed) {
+                lyricsWarm = false
+            } else if (playerSheetState.isExpanded && !lyricsWarm) {
+                delay(200L)
+                lyricsWarm = true
+            }
+        }
+        val lyricsAlphaState =
+            androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (lyricsOpen) 1f else 0f,
+                animationSpec =
+                    androidx.compose.animation.core.tween(
+                        durationMillis = if (lyricsOpen) 340 else 240,
+                        easing = androidx.compose.animation.core.FastOutSlowInEasing,
+                    ),
+                label = "appleMusicInlineLyricsAlpha",
+            )
+        val isLyricsFading by remember {
+            androidx.compose.runtime.derivedStateOf { lyricsAlphaState.value > 0.001f }
+        }
+        val isInlineLyricsActive =
+            playerSheetState.isExpandedOrExpanding && (lyricsOpen || isLyricsFading)
+
+        if (lyricsWarm || lyricsOpen || isLyricsFading) {
             // While the controls are up they own the bottom strip, so the pane is handed the
             // shorter area and its focused line sits higher; once they auto-hide the pane takes
             // the strip back and the lyrics use the whole column, like the lyrics page does.
@@ -547,8 +590,24 @@ internal fun AppleMusicPortraitContent(
                 modifier =
                     Modifier
                         .fillMaxSize()
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            layout(placeable.width, placeable.height) {
+                                if (lyricsOpen || isLyricsFading) {
+                                    placeable.place(0, 0)
+                                } else {
+                                    placeable.place(0, placeable.height + 10_000)
+                                }
+                            }
+                        }
+                        .graphicsLayer {
+                            val a = lyricsAlphaState.value.coerceIn(0f, 1f)
+                            alpha = a
+                            translationY = (1f - a) * 10.dp.toPx()
+                        }
                         .padding(top = miniHeaderHeight)
                         .drawWithContent {
+                            if (lyricsAlphaState.value <= 0.001f) return@drawWithContent
                             // Read in the draw phase: the sweep redraws the pane without
                             // recomposing the lyrics below it.
                             val h = size.height.coerceAtLeast(1f)
@@ -598,6 +657,7 @@ internal fun AppleMusicPortraitContent(
                             textColorOverride = Color.White,
                             rememberedListState = v2LyricsListState,
                             lyricsRenderViewModel = lyricsRenderViewModel,
+                            isActive = isInlineLyricsActive,
                         )
                     LyricsMode.ENHANCED ->
                         LyricsEnhanced(
@@ -609,6 +669,7 @@ internal fun AppleMusicPortraitContent(
                             textColorOverride = Color.White,
                             rememberedKaraokeListState = enhancedLyricsListState,
                             lyricsRenderViewModel = lyricsRenderViewModel,
+                            isActive = isInlineLyricsActive,
                         )
                 }
             }

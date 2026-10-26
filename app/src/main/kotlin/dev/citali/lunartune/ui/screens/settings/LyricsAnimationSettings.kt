@@ -7,7 +7,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import android.os.Build
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
@@ -110,18 +109,15 @@ fun LyricsAnimationSettings(navController: NavController) {
                 }
 
                 item {
-                    val isBlurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
                     PreferenceEntry(
                         title = { Text("Glow Intensity") },
                         description = "Adjust the glow brightness of the sung word (${(glowFactor * 100).toInt()}%)",
                         icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                        isEnabled = isBlurSupported,
                         content = {
                             Slider(
                                 value = glowFactor,
                                 onValueChange = onGlowFactorChange,
                                 valueRange = 0f..2f,
-                                enabled = isBlurSupported,
                             )
                         },
                     )

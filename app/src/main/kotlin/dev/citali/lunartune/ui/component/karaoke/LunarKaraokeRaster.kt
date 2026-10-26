@@ -7,9 +7,14 @@
 
 package dev.citali.lunartune.ui.component.karaoke
 
+import androidx.compose.animation.core.EaseInOut
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -28,26 +34,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.RenderEffect
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -56,19 +71,18 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.mocharealm.accompanist.lyrics.core.model.karaoke.KaraokeLine
-import com.mocharealm.accompanist.lyrics.ui.composable.lyrics.LyricsLineItem
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedGroup
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLine
-import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedLyrics
 import com.mocharealm.accompanist.lyrics.ui.preparation.PreparedRow
 import com.mocharealm.accompanist.lyrics.ui.profile.LyricsProfile
 import com.mocharealm.accompanist.lyrics.ui.profile.ProfileTextUnit
+import dev.citali.lunartune.utils.ImageBlurUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.math.ceil
 import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -80,6 +94,83 @@ private const val ATLAS_PAGE_SIZE = 2048
 private const val GLOW_PAD_PX = 18
 private const val GLOW_BLUR_RADIUS_PX = 15f
 private const val GLOW_ALPHA_FACTOR = 0.56f
+
+// Pre-Android-12 software line-blur tile constants (0.5x downsampled stack-blur in LunarTextAtlas).
+private const val SOFT_BLUR_SCALE = 0.5f
+private const val SOFT_BLUR_PAD_HALF_PX = 8
+private const val SOFT_BLUR_RADIUS_HALF_PX = 3.2f
+private const val SOFT_BLUR_FULL_RADIUS_REF_PX = 4.5f
+
+private object HardwareFocusBlurEffects {
+    val effects: Array<RenderEffect?> by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        Array(65) { index ->
+            if (index == 0) null else BlurEffect(index.toFloat(), index.toFloat(), TileMode.Clamp)
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun LunarLyricsLineItem(
+    isFocused: Boolean,
+    isRightAligned: Boolean,
+    onLineClicked: () -> Unit,
+    onLinePressed: () -> Unit,
+    blurRadius: () -> Float,
+    modifier: Modifier = Modifier,
+    activeAlpha: Float = 1f,
+    inactiveAlpha: Float = 0.4f,
+    blendMode: BlendMode = BlendMode.SrcOver,
+    isInteractive: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val scaleState by animateFloatAsState(
+        targetValue = if (isFocused) 1f else 0.98f,
+        animationSpec =
+            if (isFocused) {
+                tween(durationMillis = 600, easing = LinearOutSlowInEasing)
+            } else {
+                tween(durationMillis = 300, easing = EaseInOut)
+            },
+        label = "lunarLineScale",
+    )
+
+    val alphaState by animateFloatAsState(
+        targetValue = if (isFocused) activeAlpha else inactiveAlpha,
+        animationSpec = tween(durationMillis = 300, easing = EaseInOut),
+        label = "lunarLineAlpha",
+    )
+
+    val hardwareBlur = supportsHardwareRenderEffectBlur()
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = scaleState
+                    scaleY = scaleState
+                    alpha = alphaState
+                    transformOrigin = TransformOrigin(if (isRightAligned) 1f else 0f, 1f)
+                    this.blendMode = blendMode
+                    compositingStrategy = CompositingStrategy.Auto
+                    if (hardwareBlur) {
+                        val radius = blurRadius().takeIf { it.isFinite() } ?: 0f
+                        renderEffect = HardwareFocusBlurEffects.effects[radius.roundToInt().coerceIn(0, 64)]
+                    }
+                },
+    ) {
+        if (isInteractive) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(8.dp))
+                    .combinedClickable(onClick = onLineClicked, onLongClick = onLinePressed),
+            )
+        }
+        content()
+    }
+}
 
 internal class LunarTextLayer(
     private val bitmap: ImageBitmap,
@@ -98,6 +189,35 @@ internal class LunarTextLayer(
             alpha = alpha.coerceIn(0f, 1f),
             filterQuality = FilterQuality.Low,
         )
+    }
+
+    fun DrawScope.drawScaledLayer(
+        dstOffset: IntOffset,
+        dstSize: IntSize,
+        alpha: Float = 1f,
+    ) {
+        if (alpha <= 0.004f || dstSize.width <= 0 || dstSize.height <= 0) return
+        drawImage(
+            image = bitmap,
+            srcOffset = srcOffset,
+            srcSize = srcSize,
+            dstOffset = dstOffset,
+            dstSize = dstSize,
+            alpha = alpha.coerceIn(0f, 1f),
+            filterQuality = FilterQuality.Low,
+        )
+    }
+}
+
+internal class PreparedBlurTile(
+    val layer: LunarTextLayer,
+    val dstOffset: IntOffset,
+    val dstSize: IntSize,
+) {
+    fun DrawScope.drawBlur(alpha: Float) {
+        with(layer) {
+            drawScaledLayer(dstOffset = dstOffset, dstSize = dstSize, alpha = alpha)
+        }
     }
 }
 
@@ -133,6 +253,7 @@ private class LunarAtlasPage(
 internal class LunarTextAtlas {
     private val pages = ArrayList<LunarAtlasPage>(2)
     private val drawScope = CanvasDrawScope()
+    private val bitmapPaint = Paint()
     private val cache = HashMap<Any, LunarTextLayer>(256)
 
     fun getOrPut(
@@ -204,6 +325,75 @@ internal class LunarTextAtlas {
         }
         return layer
     }
+
+    fun putBlurredTile(
+        key: Any?,
+        fullWidthPx: Float,
+        fullHeightPx: Float,
+        density: Density,
+        layoutDirection: LayoutDirection,
+        drawFullRes: DrawScope.() -> Unit,
+    ): PreparedBlurTile? {
+        val fullW = ceil(fullWidthPx).toInt()
+        val fullH = ceil(fullHeightPx).toInt()
+        if (fullW <= 0 || fullH <= 0) return null
+        val halfW = ceil(fullW * SOFT_BLUR_SCALE).toInt().coerceAtLeast(1)
+        val halfH = ceil(fullH * SOFT_BLUR_SCALE).toInt().coerceAtLeast(1)
+        val padHalf = SOFT_BLUR_PAD_HALF_PX
+        val totalHalfW = halfW + padHalf * 2
+        val totalHalfH = halfH + padHalf * 2
+        val padFull = (padHalf / SOFT_BLUR_SCALE).roundToInt()
+        val dstOffset = IntOffset(-padFull, -padFull)
+        val dstSize = IntSize((totalHalfW / SOFT_BLUR_SCALE).roundToInt(), (totalHalfH / SOFT_BLUR_SCALE).roundToInt())
+
+        if (key != null) {
+            cache[key]?.let { cached ->
+                return PreparedBlurTile(cached, dstOffset, dstSize)
+            }
+        }
+
+        val scratch = ImageBitmap(totalHalfW, totalHalfH)
+        val scratchCanvas = Canvas(scratch)
+        drawScope.draw(
+            density = density,
+            layoutDirection = layoutDirection,
+            canvas = scratchCanvas,
+            size = Size(totalHalfW.toFloat(), totalHalfH.toFloat()),
+        ) {
+            translate(padHalf.toFloat(), padHalf.toFloat()) {
+                scale(SOFT_BLUR_SCALE, SOFT_BLUR_SCALE, Offset.Zero, drawFullRes)
+            }
+        }
+        val blurredImage =
+            ImageBlurUtils
+                .blur(scratch.asAndroidBitmap(), SOFT_BLUR_RADIUS_HALF_PX)
+                .asImageBitmap()
+
+        val layer =
+            if (totalHalfW > ATLAS_PAGE_SIZE || totalHalfH > ATLAS_PAGE_SIZE) {
+                LunarTextLayer(blurredImage, IntOffset.Zero, IntSize(totalHalfW, totalHalfH), 0)
+            } else {
+                var page = pages.lastOrNull()
+                var offset = page?.allocate(totalHalfW, totalHalfH)
+                if (offset == null) {
+                    page = LunarAtlasPage()
+                    pages.add(page)
+                    offset = page.allocate(totalHalfW, totalHalfH) ?: return null
+                }
+                val targetPage = page!!
+                targetPage.canvas.drawImage(
+                    blurredImage,
+                    Offset(offset.x.toFloat(), offset.y.toFloat()),
+                    bitmapPaint,
+                )
+                LunarTextLayer(targetPage.bitmap, offset, IntSize(totalHalfW, totalHalfH), 0)
+            }
+
+        if (key != null) {
+            cache[key] = layer
+        }
+        return PreparedBlurTile(layer, dstOffset, dstSize)
+    }
 }
 
 internal class PreparedUnitLayers(
@@ -220,6 +410,8 @@ internal class PreparedGroupLayers(
 
 internal class PreparedRowLayers(
     val runs: List<List<PreparedGroupLayers>>,
+    val blurredMain: PreparedBlurTile?,
+    val blurredPhonetics: PreparedBlurTile?,
 )
 
 private data class UnitRasterKey(
@@ -236,6 +428,7 @@ private data class CaptionRasterKey(
     val text: String,
     val style: Any,
     val colorValue: ULong,
+    val blurred: Boolean = false,
 )
 
 internal class LunarRowRenderState(
@@ -320,6 +513,7 @@ internal class LunarRenderResources(
     private val rasterMutex = Mutex()
     private val rowStates = HashMap<PreparedRow, LunarRowRenderState>(128)
     val preparedRasters = mutableStateMapOf<PreparedRow, PreparedRowLayers>()
+    val blurredCaptions = mutableStateMapOf<TextLayoutResult, PreparedBlurTile>()
 
     fun stateFor(row: PreparedRow): LunarRowRenderState =
         rowStates.getOrPut(row) { LunarRowRenderState(row) }
@@ -336,6 +530,107 @@ internal class LunarRenderResources(
         preparedRasters[row] = built
         return built
     }
+
+    suspend fun ensureCaptionBlur(
+        layout: TextLayoutResult,
+        captionColor: Color,
+    ): PreparedBlurTile? {
+        if (supportsHardwareRenderEffectBlur()) return null
+        blurredCaptions[layout]?.let { return it }
+        val built =
+            withContext(Dispatchers.Default) {
+                rasterMutex.withLock {
+                    blurredCaptions[layout]
+                        ?: atlas.putBlurredTile(
+                            key =
+                                CaptionRasterKey(
+                                    text = layout.layoutInput.text.text,
+                                    style = layout.layoutInput.style,
+                                    colorValue = captionColor.value,
+                                    blurred = true,
+                                ),
+                            fullWidthPx = layout.size.width.toFloat(),
+                            fullHeightPx = layout.size.height.toFloat(),
+                            density = density,
+                            layoutDirection = layoutDirection,
+                        ) {
+                            drawText(layout, color = captionColor)
+                        }
+                }
+            } ?: return null
+        blurredCaptions[layout] = built
+        return built
+    }
+
+    suspend fun prewarmLines(lines: List<PreparedLine>) {
+        if (lines.isEmpty()) return
+        val needSoftBlur = !supportsHardwareRenderEffectBlur()
+        val builtRows = ArrayList<Pair<PreparedRow, PreparedRowLayers>>(lines.size * 2)
+        val builtCaptions = ArrayList<Pair<TextLayoutResult, PreparedBlurTile>>(lines.size * 2)
+        withContext(Dispatchers.Default) {
+            rasterMutex.withLock {
+                for (line in lines) {
+                    for (row in line.rows) {
+                        if (preparedRasters[row] == null) {
+                            builtRows.add(
+                                row to buildRowLayers(row, color, phoneticColor, density, layoutDirection, atlas),
+                            )
+                        }
+                    }
+                    if (needSoftBlur) {
+                        line.phonetic?.let { layout ->
+                            if (blurredCaptions[layout] == null) {
+                                atlas
+                                    .putBlurredTile(
+                                        key =
+                                            CaptionRasterKey(
+                                                text = layout.layoutInput.text.text,
+                                                style = layout.layoutInput.style,
+                                                colorValue = phoneticColor.value,
+                                                blurred = true,
+                                            ),
+                                        fullWidthPx = layout.size.width.toFloat(),
+                                        fullHeightPx = layout.size.height.toFloat(),
+                                        density = density,
+                                        layoutDirection = layoutDirection,
+                                    ) {
+                                        drawText(layout, color = phoneticColor)
+                                    }?.let { builtCaptions.add(layout to it) }
+                            }
+                        }
+                        line.translation?.let { layout ->
+                            if (blurredCaptions[layout] == null) {
+                                atlas
+                                    .putBlurredTile(
+                                        key =
+                                            CaptionRasterKey(
+                                                text = layout.layoutInput.text.text,
+                                                style = layout.layoutInput.style,
+                                                colorValue = translationColor.value,
+                                                blurred = true,
+                                            ),
+                                        fullWidthPx = layout.size.width.toFloat(),
+                                        fullHeightPx = layout.size.height.toFloat(),
+                                        density = density,
+                                        layoutDirection = layoutDirection,
+                                    ) {
+                                        drawText(layout, color = translationColor)
+                                    }?.let { builtCaptions.add(layout to it) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (builtRows.isNotEmpty() || builtCaptions.isNotEmpty()) {
+            for ((row, layers) in builtRows) {
+                preparedRasters[row] = layers
+            }
+            for ((layout, tile) in builtCaptions) {
+                blurredCaptions[layout] = tile
+            }
+        }
+    }
 }
 
 private fun buildRowLayers(
@@ -346,18 +641,14 @@ private fun buildRowLayers(
     layoutDirection: LayoutDirection,
     atlas: LunarTextAtlas,
 ): PreparedRowLayers {
-    val allowCharacterBlur = supportsLyricsBlur()
+    // Held-word Shadow glow is baked into software ARGB_8888 LunarTextAtlas pages and works on all API levels (API 26+).
     val glowShadow =
-        if (allowCharacterBlur) {
-            Shadow(
-                color = color.copy(alpha = color.alpha * GLOW_ALPHA_FACTOR),
-                offset = Offset.Zero,
-                blurRadius = GLOW_BLUR_RADIUS_PX,
-            )
-        } else {
-            null
-        }
-    return PreparedRowLayers(
+        Shadow(
+            color = color.copy(alpha = color.alpha * GLOW_ALPHA_FACTOR),
+            offset = Offset.Zero,
+            blurRadius = GLOW_BLUR_RADIUS_PX,
+        )
+    val runs =
         row.runs.map { run ->
             run.groups.map { group ->
                 val staticUnit = group.staticText
@@ -374,7 +665,7 @@ private fun buildRowLayers(
                         }
                     }
                 val glow =
-                    if (allowCharacterBlur && group.effects.glow && staticUnit != null && glowShadow != null) {
+                    if (group.effects.glow && staticUnit != null) {
                         atlas.getOrPut(
                             key = buildUnitKey(run.profile, staticUnit, color, glow = true),
                             width = staticUnit.width,
@@ -425,7 +716,76 @@ private fun buildRowLayers(
                     }
                 PreparedGroupLayers(combined, glow, units, phoneticIndices)
             }
-        },
+        }
+
+    val needSoftBlur = !supportsHardwareRenderEffectBlur()
+    val mainHeightPx = (row.height - row.phoneticHeight).coerceAtLeast(0f)
+    val rowFullWidthPx = maxOf(row.bounds.right, row.width)
+    val blurredMain =
+        if (needSoftBlur && mainHeightPx > 0.5f && rowFullWidthPx > 0.5f) {
+            atlas.putBlurredTile(
+                key = null,
+                fullWidthPx = rowFullWidthPx,
+                fullHeightPx = mainHeightPx,
+                density = density,
+                layoutDirection = layoutDirection,
+            ) {
+                translate(top = -row.top) {
+                    for (run in row.runs) {
+                        for (group in run.groups) {
+                            val staticText = group.staticText
+                            if (staticText != null) {
+                                translate(group.staticPosition.x, group.staticPosition.y) {
+                                    with(run.profile) { draw(staticText, color, Shadow.None) }
+                                }
+                            } else {
+                                for (unit in group.units) {
+                                    translate(unit.position.x, unit.position.y) {
+                                        with(run.profile) { draw(unit.text, color, Shadow.None) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            null
+        }
+
+    val blurredPhonetics =
+        if (needSoftBlur && row.phoneticHeight > 0.5f && rowFullWidthPx > 0.5f) {
+            atlas.putBlurredTile(
+                key = null,
+                fullWidthPx = rowFullWidthPx,
+                fullHeightPx = row.phoneticHeight,
+                density = density,
+                layoutDirection = layoutDirection,
+            ) {
+                translate(top = -(row.top + mainHeightPx)) {
+                    for (run in row.runs) {
+                        for (group in run.groups) {
+                            for (unit in group.units) {
+                                val layout = unit.phonetic ?: continue
+                                translate(
+                                    unit.position.x + unit.phoneticPosition.x,
+                                    unit.position.y + unit.phoneticPosition.y,
+                                ) {
+                                    drawText(layout, phoneticColor)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            null
+        }
+
+    return PreparedRowLayers(
+        runs = runs,
+        blurredMain = blurredMain,
+        blurredPhonetics = blurredPhonetics,
     )
 }
 
@@ -449,18 +809,6 @@ private fun buildUnitKey(
     )
 }
 
-@Composable
-internal fun rememberLunarRenderResources(
-    prepared: PreparedLyrics,
-    color: Color,
-): LunarRenderResources {
-    val density = LocalDensity.current
-    val layoutDirection = LocalLayoutDirection.current
-    return remember(prepared, color, density.density, density.fontScale, layoutDirection) {
-        LunarRenderResources(color, density, layoutDirection)
-    }
-}
-
 internal fun DrawScope.drawLunarPreparedRow(
     row: PreparedRow,
     time: Int,
@@ -469,14 +817,16 @@ internal fun DrawScope.drawLunarPreparedRow(
     layers: PreparedRowLayers?,
     drawOriginal: Boolean = true,
     drawPhonetics: Boolean = true,
+    alphaMultiplier: Float = 1f,
 ) {
+    if (alphaMultiplier <= 0.004f) return
     val canvas = drawContext.canvas
     val inactive = row.animated && time < row.start
-    val rowAlpha = if (inactive) FocusedRowUnlitAlpha else 1f
+    val rowAlpha = (if (inactive) FocusedRowUnlitAlpha else 1f) * alphaMultiplier.coerceIn(0f, 1f)
     val drawColor =
-        if (inactive) resources.color.copy(alpha = resources.color.alpha * rowAlpha) else resources.color
+        if (rowAlpha < 0.999f) resources.color.copy(alpha = resources.color.alpha * rowAlpha) else resources.color
     val phoneticColor =
-        if (inactive) {
+        if (rowAlpha < 0.999f) {
             resources.phoneticColor.copy(alpha = resources.phoneticColor.alpha * rowAlpha)
         } else {
             resources.phoneticColor
@@ -624,9 +974,9 @@ private fun DrawScope.drawAnimatedGroup(
         }
     val swellPeak = 0.1f * group.intensity
 
-    // Single pre-baked atlas glow draw for held words/phrases on Android 12+ (zero BlurEffect or FBO allocation).
+    // Single pre-baked software atlas glow draw for held words/phrases across all Android versions (zero FBO allocation).
     val glowLayer = cachedGroup?.glow
-    if (supportsLyricsBlur() && group.effects.glow && glowLayer != null) {
+    if (group.effects.glow && glowLayer != null) {
         val glowStrength = glowBounceStrength(groupProgress)
         if (glowStrength > 0.01f) {
             val groupScale =
@@ -745,12 +1095,15 @@ internal fun LunarPreparedLineText(
     showPhonetic: Boolean = true,
     showTranslation: Boolean = true,
     verticalPadding: Dp = 8.dp,
+    softBlurRadiusProvider: () -> Float = { 0f },
     modifier: Modifier = Modifier,
     onChildClick: (PreparedLine) -> Unit = {},
     onChildLongClick: (PreparedLine) -> Unit = {},
 ) {
     val currentTime by rememberUpdatedState(currentTimeProvider)
+    val softBlurRadius by rememberUpdatedState(softBlurRadiusProvider)
     val density = LocalDensity.current
+    val useSoftBlur = !supportsHardwareRenderEffectBlur()
     val isAccompaniment = prepared.source is KaraokeLine.AccompanimentKaraokeLine
     val accompanimentAlpha = if (isAccompaniment) 0.65f else 1f
     val alignment = if (prepared.rightAligned) AbsoluteAlignment.Right else AbsoluteAlignment.Left
@@ -780,7 +1133,7 @@ internal fun LunarPreparedLineText(
                 visible = isChildVisible,
                 fromBottom = child.source.start < prepared.source.start,
             ) {
-                LyricsLineItem(
+                LunarLyricsLineItem(
                     isFocused = isChildFocused,
                     isRightAligned = child.rightAligned,
                     onLineClicked = { onChildClick(child) },
@@ -795,6 +1148,7 @@ internal fun LunarPreparedLineText(
                         showPhonetic = showPhonetic,
                         showTranslation = showTranslation,
                         verticalPadding = 2.dp,
+                        softBlurRadiusProvider = softBlurRadiusProvider,
                         onChildClick = onChildClick,
                         onChildLongClick = onChildLongClick,
                     )
@@ -854,16 +1208,31 @@ internal fun LunarPreparedLineText(
                             .fillMaxWidth()
                             .height(mainHeightDp)
                             .drawBehind {
-                                translate(top = -row.top) {
-                                    drawLunarPreparedRow(
-                                        row = row,
-                                        time = drawTime(),
-                                        state = state,
-                                        resources = resources,
-                                        layers = resources.preparedRasters[row],
-                                        drawOriginal = true,
-                                        drawPhonetics = false,
-                                    )
+                                val rawBlurPx = if (useSoftBlur) softBlurRadius() else 0f
+                                val currentLayers = resources.preparedRasters[row]
+                                val now = drawTime()
+                                val blurTile = if (useSoftBlur) currentLayers?.blurredMain else null
+                                val blurPx = if (blurTile != null) rawBlurPx else 0f
+                                val blurMix = (blurPx / SOFT_BLUR_FULL_RADIUS_REF_PX).coerceIn(0f, 1f)
+                                if (blurMix < 0.99f) {
+                                    translate(top = -row.top) {
+                                        drawLunarPreparedRow(
+                                            row = row,
+                                            time = now,
+                                            state = state,
+                                            resources = resources,
+                                            layers = currentLayers,
+                                            drawOriginal = true,
+                                            drawPhonetics = false,
+                                            alphaMultiplier = 1f - blurMix,
+                                        )
+                                    }
+                                }
+                                if (blurMix > 0.01f && blurTile != null) {
+                                    val baseRowAlpha = if (row.animated && now < row.start) FocusedRowUnlitAlpha else 1f
+                                    with(blurTile) {
+                                        drawBlur(alpha = baseRowAlpha * blurMix)
+                                    }
                                 }
                             },
                 )
@@ -878,16 +1247,32 @@ internal fun LunarPreparedLineText(
                                         .fillMaxWidth()
                                         .height(phoneticHeightDp)
                                         .drawBehind {
-                                            translate(top = -(row.top + mainHeightPx)) {
-                                                drawLunarPreparedRow(
-                                                    row = row,
-                                                    time = drawTime(),
-                                                    state = state,
-                                                    resources = resources,
-                                                    layers = resources.preparedRasters[row],
-                                                    drawOriginal = false,
-                                                    drawPhonetics = true,
-                                                )
+                                            val rawBlurPx = if (useSoftBlur) softBlurRadius() else 0f
+                                            val currentLayers = resources.preparedRasters[row]
+                                            val now = drawTime()
+                                            val blurTile = if (useSoftBlur) currentLayers?.blurredPhonetics else null
+                                            val blurPx = if (blurTile != null) rawBlurPx else 0f
+                                            val blurMix = (blurPx / SOFT_BLUR_FULL_RADIUS_REF_PX).coerceIn(0f, 1f)
+                                            if (blurMix < 0.99f) {
+                                                translate(top = -(row.top + mainHeightPx)) {
+                                                    drawLunarPreparedRow(
+                                                        row = row,
+                                                        time = now,
+                                                        state = state,
+                                                        resources = resources,
+                                                        layers = currentLayers,
+                                                        drawOriginal = false,
+                                                        drawPhonetics = true,
+                                                        alphaMultiplier = 1f - blurMix,
+                                                    )
+                                                }
+                                            }
+                                            if (blurMix > 0.01f && blurTile != null) {
+                                                val baseRowAlpha =
+                                                    if (row.animated && now < row.start) FocusedRowUnlitAlpha else 1f
+                                                with(blurTile) {
+                                                    drawBlur(alpha = baseRowAlpha * blurMix)
+                                                }
                                             }
                                         },
                             )
@@ -902,6 +1287,11 @@ internal fun LunarPreparedLineText(
 
         val linePhonetic = prepared.phonetic
         if (linePhonetic != null) {
+            if (useSoftBlur && resources.blurredCaptions[linePhonetic] == null) {
+                LaunchedEffect(linePhonetic, resources) {
+                    resources.ensureCaptionBlur(linePhonetic, resources.phoneticColor)
+                }
+            }
             LunarLyricsReveal(visible = showPhonetic, keepContent = true) {
                 val wDp = with(density) { linePhonetic.size.width.toDp() }
                 val hDp = with(density) { linePhonetic.size.height.toDp() }
@@ -912,7 +1302,20 @@ internal fun LunarPreparedLineText(
                             .width(wDp)
                             .height(hDp)
                             .drawBehind {
-                                drawText(linePhonetic, color = resources.phoneticColor)
+                                val rawBlurPx = if (useSoftBlur) softBlurRadius() else 0f
+                                val blurTile = if (useSoftBlur) resources.blurredCaptions[linePhonetic] else null
+                                val blurPx = if (blurTile != null) rawBlurPx else 0f
+                                val blurMix = (blurPx / SOFT_BLUR_FULL_RADIUS_REF_PX).coerceIn(0f, 1f)
+                                if (blurMix < 0.99f) {
+                                    val c = resources.phoneticColor
+                                    drawText(
+                                        linePhonetic,
+                                        color = if (blurMix > 0.005f) c.copy(alpha = c.alpha * (1f - blurMix)) else c,
+                                    )
+                                }
+                                if (blurMix > 0.01f && blurTile != null) {
+                                    with(blurTile) { drawBlur(alpha = blurMix) }
+                                }
                             },
                 )
             }
@@ -920,6 +1323,11 @@ internal fun LunarPreparedLineText(
 
         val lineTranslation = prepared.translation
         if (lineTranslation != null) {
+            if (useSoftBlur && resources.blurredCaptions[lineTranslation] == null) {
+                LaunchedEffect(lineTranslation, resources) {
+                    resources.ensureCaptionBlur(lineTranslation, resources.translationColor)
+                }
+            }
             LunarLyricsReveal(visible = showTranslation, keepContent = true) {
                 val wDp = with(density) { lineTranslation.size.width.toDp() }
                 val hDp = with(density) { lineTranslation.size.height.toDp() }
@@ -930,7 +1338,20 @@ internal fun LunarPreparedLineText(
                             .width(wDp)
                             .height(hDp)
                             .drawBehind {
-                                drawText(lineTranslation, color = resources.translationColor)
+                                val rawBlurPx = if (useSoftBlur) softBlurRadius() else 0f
+                                val blurTile = if (useSoftBlur) resources.blurredCaptions[lineTranslation] else null
+                                val blurPx = if (blurTile != null) rawBlurPx else 0f
+                                val blurMix = (blurPx / SOFT_BLUR_FULL_RADIUS_REF_PX).coerceIn(0f, 1f)
+                                if (blurMix < 0.99f) {
+                                    val c = resources.translationColor
+                                    drawText(
+                                        lineTranslation,
+                                        color = if (blurMix > 0.005f) c.copy(alpha = c.alpha * (1f - blurMix)) else c,
+                                    )
+                                }
+                                if (blurMix > 0.01f && blurTile != null) {
+                                    with(blurTile) { drawBlur(alpha = blurMix) }
+                                }
                             },
                 )
             }
@@ -949,7 +1370,7 @@ internal fun LunarPreparedLineText(
                 visible = isChildVisible,
                 fromBottom = child.source.start < prepared.source.start,
             ) {
-                LyricsLineItem(
+                LunarLyricsLineItem(
                     isFocused = isChildFocused,
                     isRightAligned = child.rightAligned,
                     onLineClicked = { onChildClick(child) },
@@ -964,6 +1385,7 @@ internal fun LunarPreparedLineText(
                         showPhonetic = showPhonetic,
                         showTranslation = showTranslation,
                         verticalPadding = 2.dp,
+                        softBlurRadiusProvider = softBlurRadiusProvider,
                         onChildClick = onChildClick,
                         onChildLongClick = onChildLongClick,
                     )

@@ -14,7 +14,6 @@
 package dev.citali.lunartune.ui.component
 
 import android.app.Activity
-import android.os.Build
 import android.os.SystemClock
 import android.view.WindowManager
 import android.widget.Toast
@@ -77,13 +76,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -116,6 +118,7 @@ import dev.citali.lunartune.lyrics.WordTimestamp
 import dev.citali.lunartune.lyrics.toLyricsEntries
 import dev.citali.lunartune.ui.component.karaoke.LunarKaraokeLyricsView
 import dev.citali.lunartune.ui.component.karaoke.LunarLyricsListState
+import dev.citali.lunartune.ui.component.karaoke.prewarmLunarKaraokeScene
 import dev.citali.lunartune.ui.component.karaoke.rememberLunarLyricsListState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerHost
 import dev.citali.lunartune.ui.component.shimmer.TextPlaceholder
@@ -123,7 +126,9 @@ import dev.citali.lunartune.ui.theme.rememberLunarTuneLyricsFontFamily
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.viewmodels.LyricsRenderScreenState
 import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 // Lines flip at their exact onset so the pane does not scroll before the vocal arrives.
@@ -131,6 +136,7 @@ private const val LRC_LEAD_MS = 0L
 private const val MIN_KARAOKE_SYLLABLE_DURATION_MS = 1
 private const val LYRICS_VIEWPORT_OFFSET_RATIO = 0.38f
 private const val LYRICS_ANCHOR_GLIDE_MS = 520
+private const val MAX_PREPARED_SYNCED_CACHE = 6
 private val LyricsEnhancedTopFade = 20.dp
 
 /** Space both lyrics panes keep below their list; the lyrics page relies on it matching. */
@@ -138,6 +144,159 @@ internal val LyricsPaneBottomPadding = 12.dp
 
 /** Height of the fade the lyrics library draws over the bottom of the Enhanced list. */
 internal val LyricsEnhancedBottomFade = 100.dp
+
+private class PreparedSyncedLyricsBundle(
+    val entries: List<LyricsEntry>,
+    val syncedLyrics: SyncedLyrics,
+)
+
+private object PreparedSyncedLyricsCache {
+    private val map =
+        object : LinkedHashMap<PreparedLyrics, PreparedSyncedLyricsBundle>(6, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<PreparedLyrics, PreparedSyncedLyricsBundle>?,
+            ): Boolean = size > MAX_PREPARED_SYNCED_CACHE
+        }
+
+    fun getOrPut(prepared: PreparedLyrics): PreparedSyncedLyricsBundle {
+        synchronized(map) {
+            map[prepared]?.let { return it }
+        }
+        val entries = prepared.toLyricsEntries()
+        val romanization =
+            prepared.lines
+                .mapIndexed { index, line ->
+                    val wordPhonetics = MutableList<String?>(line.main.words.size) { null }
+                    line.phonetics.forEach { phonetic ->
+                        if (phonetic.wordIndex in wordPhonetics.indices) {
+                            wordPhonetics[phonetic.wordIndex] = phonetic.text
+                        }
+                    }
+                    index to LineRomanizationInfo(
+                        wordPhonetics = wordPhonetics.takeIf { list -> list.any { it != null } },
+                        linePhonetic = line.romanizedText,
+                    )
+                }.toMap()
+        val isWordSynced = prepared.syncType == LyricsSyncType.WORD
+        val synced = buildSyncedLyrics(entries, isWordSynced, romanization)
+        val bundle = PreparedSyncedLyricsBundle(entries = entries, syncedLyrics = synced)
+        synchronized(map) {
+            map[prepared] = bundle
+        }
+        return bundle
+    }
+}
+
+/**
+ * Background pre-warmer for Enhanced karaoke scenes & glyph/blur atlases so tapping the Lyrics
+ * button in either normal player styles or Apple Music style hits a warm O(1) cache on Frame 1.
+ */
+@Composable
+internal fun PrewarmLyricsSceneEffect(
+    lyricsState: LyricsRenderScreenState,
+    textColor: Color,
+    currentPositionMsProvider: () -> Long,
+    containerWidthsDp: List<Dp>,
+) {
+    val prepared = (lyricsState as? LyricsRenderScreenState.Success)?.lyrics ?: return
+    if (prepared.syncType == LyricsSyncType.PLAIN || prepared.lines.isEmpty()) return
+
+    val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()
+    val lyricsTextSize = prepared.preferences.textSizeSp
+    val lyricsLineSpacing = prepared.preferences.lineSpacing
+    val headlineBase = MaterialTheme.typography.headlineMedium
+    val titleBase = MaterialTheme.typography.titleLarge
+    val bodyBase = MaterialTheme.typography.bodyMedium
+    val normalTextStyle =
+        remember(headlineBase, lyricsTextSize, lyricsLineSpacing, lyricsFontFamily) {
+            headlineBase.copy(
+                fontSize = lyricsTextSize.sp,
+                lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
+            )
+        }
+    val accompanimentTextStyle =
+        remember(titleBase, lyricsTextSize, lyricsLineSpacing, lyricsFontFamily) {
+            titleBase.copy(
+                fontSize = (lyricsTextSize * 0.80f).sp,
+                lineHeight = (lyricsTextSize * 0.80f * lyricsLineSpacing).sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = lyricsFontFamily ?: titleBase.fontFamily,
+            )
+        }
+    val phoneticTextStyle =
+        remember(bodyBase, lyricsTextSize, lyricsFontFamily) {
+            bodyBase.copy(
+                fontSize = (lyricsTextSize * 0.56f).sp,
+                lineHeight = (lyricsTextSize * 0.74f).sp,
+                fontWeight = FontWeight.Medium,
+                fontFamily = lyricsFontFamily ?: bodyBase.fontFamily,
+            )
+        }
+    val translationTextStyle =
+        remember(bodyBase, lyricsTextSize, lyricsFontFamily) {
+            bodyBase.copy(
+                fontSize = (lyricsTextSize * 0.62f).sp,
+                lineHeight = (lyricsTextSize * 0.84f).sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = lyricsFontFamily ?: bodyBase.fontFamily,
+            )
+        }
+
+    val baseLayoutDirection = LocalLayoutDirection.current
+    val lyricsLayoutDirection =
+        remember(prepared.lines, baseLayoutDirection) {
+            if (prepared.lines.firstOrNull { line -> line.text.isNotBlank() }?.direction == LyricsTextDirection.RTL) {
+                LayoutDirection.Rtl
+            } else {
+                baseLayoutDirection
+            }
+        }
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer(cacheSize = 0)
+    val latestPositionProvider = rememberUpdatedState(currentPositionMsProvider)
+
+    LaunchedEffect(
+        prepared,
+        containerWidthsDp,
+        normalTextStyle,
+        accompanimentTextStyle,
+        phoneticTextStyle,
+        translationTextStyle,
+        textColor,
+        density.density,
+        density.fontScale,
+        lyricsLayoutDirection,
+    ) {
+        val bundle = withContext(Dispatchers.Default) { PreparedSyncedLyricsCache.getOrPut(prepared) }
+        if (bundle.syncedLyrics.lines.isEmpty()) return@LaunchedEffect
+
+        val uniqueWidths =
+            buildList {
+                for (w in containerWidthsDp) {
+                    if (w > 0.dp && none { kotlin.math.abs((it - w).value) < 0.5f }) add(w)
+                }
+            }
+        val posMs = latestPositionProvider.value().coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+        for (containerWidth in uniqueWidths) {
+            val contentWidthPx = with(density) { (containerWidth - 32.dp).toPx() }.coerceAtLeast(1f)
+            prewarmLunarKaraokeScene(
+                lyrics = bundle.syncedLyrics,
+                contentWidthPx = contentWidthPx,
+                normalStyle = normalTextStyle,
+                accompanimentStyle = accompanimentTextStyle,
+                phoneticStyle = phoneticTextStyle,
+                translationStyle = translationTextStyle,
+                textColor = textColor,
+                density = density,
+                layoutDirection = lyricsLayoutDirection,
+                measurer = measurer,
+                currentPositionMs = posMs,
+            )
+        }
+    }
+}
 
 @Composable
 fun LyricsEnhanced(
@@ -149,6 +308,7 @@ fun LyricsEnhanced(
     lyricsLineBlurOverride: Boolean? = null,
     rememberedKaraokeListState: LunarLyricsListState? = null,
     lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
+    isActive: Boolean = true,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -175,9 +335,7 @@ fun LyricsEnhanced(
         } else {
             Color.White
         }
-    val lyricsLineBlur =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            (lyricsLineBlurOverride ?: lyricsLineBlurPreference)
+    val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
 
     var isSelectionModeActive by rememberSaveable { mutableStateOf(false) }
     val selectedLineKeys = remember { mutableStateListOf<String>() }
@@ -207,34 +365,13 @@ fun LyricsEnhanced(
 
     val isSynced = preparedLyrics?.syncType != null && preparedLyrics.syncType != LyricsSyncType.PLAIN
     val isWordSyncedFormat = preparedLyrics?.syncType == LyricsSyncType.WORD
-    val preparedLines = preparedLyrics?.lines
-
-    val lyricsEntries: List<LyricsEntry> =
-        remember(preparedLines, preparedLyrics?.sourceFormat, preparedLyrics?.syncType) {
-            preparedLyrics?.let(PreparedLyrics::toLyricsEntries).orEmpty()
+    val preparedBundle =
+        remember(preparedLyrics) {
+            preparedLyrics?.let(PreparedSyncedLyricsCache::getOrPut)
         }
-
-    val romanizationInfo =
-        remember(preparedLines) {
-            preparedLines
-                ?.mapIndexed { index, line ->
-                    val wordPhonetics = MutableList<String?>(line.main.words.size) { null }
-                    line.phonetics.forEach { phonetic ->
-                        if (phonetic.wordIndex in wordPhonetics.indices) {
-                            wordPhonetics[phonetic.wordIndex] = phonetic.text
-                        }
-                    }
-                    index to LineRomanizationInfo(
-                        wordPhonetics = wordPhonetics.takeIf { list -> list.any { it != null } },
-                        linePhonetic = line.romanizedText,
-                    )
-                }?.toMap()
-                .orEmpty()
-        }
-    val syncedLyrics =
-        remember(lyricsEntries, isWordSyncedFormat, romanizationInfo) {
-            buildSyncedLyrics(lyricsEntries, isWordSyncedFormat, romanizationInfo)
-        }
+    val lyricsEntries: List<LyricsEntry> = preparedBundle?.entries.orEmpty()
+    val syncedLyrics: SyncedLyrics =
+        preparedBundle?.syncedLyrics ?: remember { SyncedLyrics(emptyList()) }
 
     val leadMs =
         if (isWordSyncedFormat || preparedLyrics?.sourceFormat == LyricsSourceFormat.TTML) 0L else LRC_LEAD_MS
@@ -275,12 +412,13 @@ fun LyricsEnhanced(
         onDispose { player.removeListener(listener) }
     }
 
-    LaunchedEffect(player, lifecycleOwner, lyricsRenderViewModel) {
+    LaunchedEffect(player, lifecycleOwner, lyricsRenderViewModel, isActive) {
+        if (!isActive) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             lyricsRenderViewModel.onPlaybackPositionChanged(
                 latestSliderPositionProvider.value() ?: player.currentPosition,
             )
-            while (isActive) {
+            while (coroutineContext.isActive) {
                 withFrameNanos {
                     val sliderPosition = latestSliderPositionProvider.value()
                     lyricsRenderViewModel.onPlaybackFrame(
@@ -329,10 +467,14 @@ fun LyricsEnhanced(
     }
 
     val activity = context as? Activity
-    DisposableEffect(Unit) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    DisposableEffect(activity, isActive) {
+        if (isActive) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onDispose {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        } else {
+            onDispose { }
         }
     }
 
@@ -595,6 +737,7 @@ fun LyricsEnhanced(
                                 topFade = LyricsFade.Fixed(LyricsEnhancedTopFade),
                                 bottomFade = LyricsFade.Fixed(LyricsEnhancedBottomFade),
                                 keepAliveZone = 72.dp,
+                                isActive = isActive,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }

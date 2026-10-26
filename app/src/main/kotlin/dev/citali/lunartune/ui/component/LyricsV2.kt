@@ -93,6 +93,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -191,6 +192,7 @@ fun LyricsV2(
     /** Parent-owned state for hosts that temporarily remove this pane from composition. */
     rememberedListState: LazyListState? = null,
     lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
+    isActive: Boolean = true,
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
@@ -224,7 +226,7 @@ fun LyricsV2(
             Color.White
         }
     val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val lyricsLineBlur = isAndroid12OrLater && (lyricsLineBlurOverride ?: lyricsLineBlurPreference)
+    val lyricsLineBlur = lyricsLineBlurOverride ?: lyricsLineBlurPreference
 
     val inactiveAlpha = 0.35f
 
@@ -288,13 +290,13 @@ fun LyricsV2(
         onDispose { player.removeListener(listener) }
     }
 
-    LaunchedEffect(player, lifecycleOwner, lyricsRenderViewModel, isSynced) {
-        if (!isSynced) return@LaunchedEffect
+    LaunchedEffect(player, lifecycleOwner, lyricsRenderViewModel, isSynced, isActive) {
+        if (!isSynced || !isActive) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             lyricsRenderViewModel.onPlaybackPositionChanged(
                 latestSliderPositionProvider.value() ?: player.currentPosition,
             )
-            while (isActive) {
+            while (coroutineContext.isActive) {
                 withFrameNanos {
                     val sliderPosition = latestSliderPositionProvider.value()
                     lyricsRenderViewModel.onPlaybackFrame(
@@ -368,13 +370,21 @@ fun LyricsV2(
     }
 
     // Auto-scroll to active line
-    LaunchedEffect(currentLineIndex, isManualScrolling, lyricsScroll) {
-        if (!lyricsScroll || isManualScrolling || !isSynced) return@LaunchedEffect
+    var wasActive by remember { mutableStateOf(isActive) }
+    LaunchedEffect(currentLineIndex, isManualScrolling, lyricsScroll, isActive) {
+        val justActivated = !wasActive && isActive
+        wasActive = isActive
+        if (!isActive || !lyricsScroll || isManualScrolling || !isSynced) return@LaunchedEffect
         if (currentLineIndex < 0 || currentLineIndex >= entriesWithWords.size) return@LaunchedEffect
 
         val visibleInfo = listState.layoutInfo
         val viewportHeight = visibleInfo.viewportSize.height
         val targetOffset = (viewportHeight * LYRICS_FOCUS_HEIGHT_RATIO).toInt()
+
+        if (justActivated) {
+            listState.scrollToItem(currentLineIndex, -targetOffset)
+            return@LaunchedEffect
+        }
 
         val distance = abs(currentLineIndex - listState.firstVisibleItemIndex)
         if (distance > 15) {
@@ -409,10 +419,14 @@ fun LyricsV2(
 
     // ── Keep screen alive ──
     val activity = context as? android.app.Activity
-    DisposableEffect(Unit) {
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    DisposableEffect(activity, isActive) {
+        if (isActive) {
+            activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            onDispose {
+                activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        } else {
+            onDispose { }
         }
     }
 
@@ -578,7 +592,7 @@ fun LyricsV2(
                                         },
                                     bottom = (lyricsLineSpacing * 8).dp,
                                 ).then(
-                                    if (lyricsLineBlur) {
+                                    if (isAndroid12OrLater && lyricsLineBlur) {
                                         Modifier.blur(
                                             radiusX = animatedInstrBlur.dp,
                                             radiusY = animatedInstrBlur.dp,
@@ -764,7 +778,7 @@ fun LyricsV2(
                                         },
                                     bottom = (lyricsLineSpacing * 8).dp,
                                 ).then(
-                                    if (lyricsLineBlur) {
+                                    if (isAndroid12OrLater && lyricsLineBlur) {
                                         Modifier.blur(
                                             radiusX = animatedBlur.dp,
                                             radiusY = animatedBlur.dp,
@@ -838,11 +852,32 @@ fun LyricsV2(
                                 )
                             }
 
+                        val softBlurFraction =
+                            if (!isAndroid12OrLater && lyricsLineBlur) {
+                                (animatedBlur / 4f).coerceIn(0f, 1f)
+                            } else {
+                                0f
+                            }
+                        val softBlurRadiusPx =
+                            if (softBlurFraction > 0.01f) {
+                                with(density) { (animatedBlur * 1.35f).dp.toPx() }.coerceIn(0.5f, 24f)
+                            } else {
+                                0f
+                            }
+
                         if (romanizedText != null) {
+                            val baseRomColor = textColor.copy(alpha = if (isActive) 0.78f else 0.68f)
+                            val (romStyle, romColor) =
+                                applySoftTextBlur(
+                                    style = supplementaryTextStyle,
+                                    color = baseRomColor,
+                                    blurRadiusPx = softBlurRadiusPx,
+                                    blurFraction = softBlurFraction,
+                                )
                             Text(
                                 text = romanizedText,
-                                style = supplementaryTextStyle,
-                                color = textColor.copy(alpha = if (isActive) 0.78f else 0.68f),
+                                style = romStyle,
+                                color = romColor,
                                 textAlign = textAlign,
                                 modifier =
                                     Modifier
@@ -874,6 +909,8 @@ fun LyricsV2(
                                 bounceFactor = bounceFactor,
                                 glowFactor = glowFactor,
                                 fillTransitionWidth = fillTransitionWidth,
+                                softBlurRadiusPx = softBlurRadiusPx,
+                                softBlurFraction = softBlurFraction,
                             )
                         } else if (isSynced) {
                             LyricsLineLrcBounce(
@@ -886,29 +923,48 @@ fun LyricsV2(
                                 lyricsFontFamily = lyricsFontFamily,
                                 textAlign = textAlign,
                                 bounceFactor = if (lrcBounceEnabled) bounceFactor else 0f,
+                                softBlurRadiusPx = softBlurRadiusPx,
+                                softBlurFraction = softBlurFraction,
                             )
                         } else {
+                            val plainStyleBase =
+                                MaterialTheme.typography.headlineMedium.copy(
+                                    fontSize = if (isAllBackground) (lyricsTextSize * 0.82f).sp else lyricsTextSize.sp,
+                                    fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                    fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal,
+                                    lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
+                                    fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                                )
+                            val plainColorBase = textColor.copy(alpha = if (isActive) 1f else 0.52f)
+                            val (plainStyle, plainColor) =
+                                applySoftTextBlur(
+                                    style = plainStyleBase,
+                                    color = plainColorBase,
+                                    blurRadiusPx = softBlurRadiusPx,
+                                    blurFraction = softBlurFraction,
+                                )
                             Text(
                                 text = item.text,
-                                style =
-                                    MaterialTheme.typography.headlineMedium.copy(
-                                        fontSize = if (isAllBackground) (lyricsTextSize * 0.82f).sp else lyricsTextSize.sp,
-                                        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.SemiBold,
-                                        fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal,
-                                        lineHeight = (lyricsTextSize * lyricsLineSpacing).sp,
-                                        fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
-                                    ),
-                                color = textColor.copy(alpha = if (isActive) 1f else 0.52f),
+                                style = plainStyle,
+                                color = plainColor,
                                 textAlign = textAlign,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
 
                         if (translationText != null) {
+                            val baseTransColor = textColor.copy(alpha = if (isActive) 0.80f else 0.72f)
+                            val (transStyle, transColor) =
+                                applySoftTextBlur(
+                                    style = translationTextStyle,
+                                    color = baseTransColor,
+                                    blurRadiusPx = softBlurRadiusPx,
+                                    blurFraction = softBlurFraction,
+                                )
                             Text(
                                 text = translationText,
-                                style = translationTextStyle,
-                                color = textColor.copy(alpha = if (isActive) 0.80f else 0.72f),
+                                style = transStyle,
+                                color = transColor,
                                 textAlign = textAlign,
                                 modifier =
                                     Modifier
@@ -1151,6 +1207,23 @@ fun LyricsV2(
 // Line-level composable: renders words with fluid fill animation
 // ──────────────────────────────────────────────────────────────────────
 
+private fun applySoftTextBlur(
+    style: TextStyle,
+    color: Color,
+    blurRadiusPx: Float,
+    blurFraction: Float,
+): Pair<TextStyle, Color> {
+    if (blurFraction <= 0.01f || blurRadiusPx <= 0.4f) return style to color
+    val coreAlpha = (color.alpha * (1f - 0.88f * blurFraction)).coerceIn(0f, 1f)
+    val blurredShadow =
+        Shadow(
+            color = color.copy(alpha = (color.alpha * 0.96f * blurFraction).coerceIn(0f, 1f)),
+            offset = Offset.Zero,
+            blurRadius = blurRadiusPx,
+        )
+    return style.copy(shadow = blurredShadow) to color.copy(alpha = coreAlpha)
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LyricsLineV2(
@@ -1168,6 +1241,8 @@ private fun LyricsLineV2(
     bounceFactor: Float,
     glowFactor: Float,
     fillTransitionWidth: Float,
+    softBlurRadiusPx: Float = 0f,
+    softBlurFraction: Float = 0f,
 ) {
     val arrangement =
         when (textAlign) {
@@ -1177,8 +1252,80 @@ private fun LyricsLineV2(
         }
 
     // Split words into main and background
-    val mainWords = words.filter { !it.isBackground }
-    val bgWords = words.filter { it.isBackground }
+    val mainWords = remember(words) { words.filter { !it.isBackground } }
+    val bgWords = remember(words) { words.filter { it.isBackground } }
+
+    // Fast single-Text path for static unfocused lines (much faster mount + clean pre-Android-12 optical blur)
+    if (!isActive) {
+        val headlineBase = MaterialTheme.typography.headlineMedium
+        if (mainWords.isNotEmpty()) {
+            val mainText = remember(mainWords) { mainWords.joinToString(separator = "") { it.text } }
+            val mainFontSize = if (isLineAllBackground) baseFontSize * 0.82f * 0.85f else baseFontSize
+            val mainWeight = if (isPast) FontWeight.ExtraBold else FontWeight.SemiBold
+            val baseMainColor =
+                textColor.copy(
+                    alpha =
+                        if (isPast) {
+                            if (isLineAllBackground) 0.75f else 1f
+                        } else {
+                            if (isLineAllBackground) inactiveAlpha * 0.7f else inactiveAlpha
+                        },
+                )
+            val (mainStyle, mainColor) =
+                applySoftTextBlur(
+                    style =
+                        headlineBase.copy(
+                            fontSize = mainFontSize.sp,
+                            fontWeight = mainWeight,
+                            fontStyle = FontStyle.Normal,
+                            lineHeight = (mainFontSize * 1.35f).sp,
+                            fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
+                        ),
+                    color = baseMainColor,
+                    blurRadiusPx = softBlurRadiusPx,
+                    blurFraction = softBlurFraction,
+                )
+            Text(
+                text = mainText,
+                style = mainStyle,
+                color = mainColor,
+                textAlign = textAlign,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (bgWords.isNotEmpty()) {
+            if (mainWords.isNotEmpty()) Spacer(modifier = Modifier.height(4.dp))
+            val bgText = remember(bgWords) { bgWords.joinToString(separator = "") { it.text } }
+            val bgFontSize = baseFontSize * 0.65f * 0.85f
+            val bgWeight = if (isPast) FontWeight.ExtraBold else FontWeight.SemiBold
+            val baseBgColor =
+                textColor.copy(
+                    alpha = (if (isPast) 0.75f else inactiveAlpha * 0.7f) * 0.85f,
+                )
+            val (bgStyle, bgColor) =
+                applySoftTextBlur(
+                    style =
+                        headlineBase.copy(
+                            fontSize = bgFontSize.sp,
+                            fontWeight = bgWeight,
+                            fontStyle = FontStyle.Normal,
+                            lineHeight = (bgFontSize * 1.35f).sp,
+                            fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
+                        ),
+                    color = baseBgColor,
+                    blurRadiusPx = softBlurRadiusPx,
+                    blurFraction = softBlurFraction,
+                )
+            Text(
+                text = bgText,
+                style = bgStyle,
+                color = bgColor,
+                textAlign = textAlign,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        return
+    }
 
     // 1. Render main words First (if any)
     if (mainWords.isNotEmpty()) {
@@ -1337,8 +1484,7 @@ private fun AnimatedWordV2(
                 fontFamily = lyricsFontFamily ?: headlineBase.fontFamily,
             )
         }
-    val showStaticWordGlow =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isWordActive && glowFactor > 0.01f
+    val showStaticWordGlow = isWordActive && glowFactor > 0.01f
     val activeWordTextStyle =
         remember(baseWordTextStyle, showStaticWordGlow, textColor, glowFactor) {
             if (showStaticWordGlow) {
@@ -1458,11 +1604,37 @@ private fun LyricsLineLrcBounce(
     lyricsFontFamily: FontFamily?,
     textAlign: TextAlign,
     bounceFactor: Float,
+    softBlurRadiusPx: Float = 0f,
+    softBlurFraction: Float = 0f,
 ) {
-    val words = remember(text) { text.toLyricsWrappingUnits() }
     val effectiveFontSize = if (isAllBackground) fontSize * 0.82f else fontSize
     val fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.SemiBold
     val fontStyle = if (isAllBackground) FontStyle.Italic else FontStyle.Normal
+    if (!isActive || bounceFactor == 0f) {
+        val (style, resolvedColor) =
+            applySoftTextBlur(
+                style =
+                    MaterialTheme.typography.headlineMedium.copy(
+                        fontSize = effectiveFontSize.sp,
+                        fontWeight = fontWeight,
+                        fontStyle = fontStyle,
+                        lineHeight = (effectiveFontSize * lineSpacing).sp,
+                        fontFamily = lyricsFontFamily ?: MaterialTheme.typography.headlineMedium.fontFamily,
+                    ),
+                color = textColor,
+                blurRadiusPx = softBlurRadiusPx,
+                blurFraction = softBlurFraction,
+            )
+        Text(
+            text = text,
+            style = style,
+            color = resolvedColor,
+            textAlign = textAlign,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        return
+    }
+    val words = remember(text) { text.toLyricsWrappingUnits() }
     val scaleAnimatables = remember(words.size) { List(words.size) { Animatable(1f) } }
     val floatAnimatables = remember(words.size) { List(words.size) { Animatable(0f) } }
 

@@ -819,6 +819,14 @@ class LunarLyricsListState(
         itemCount: Int,
     ) {
         if (hasPositionedInitially || itemCount <= 0) return
+        snapToTargetImmediately(targetIndex, itemCount)
+    }
+
+    internal fun snapToTargetImmediately(
+        targetIndex: Int,
+        itemCount: Int,
+    ) {
+        if (itemCount <= 0 || isManualScrolling) return
         val clamped = targetIndex.coerceIn(0, itemCount - 1)
         Snapshot.withoutReadObservation {
             hasPositionedInitially = true

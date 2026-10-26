@@ -249,6 +249,7 @@ fun LyricsScreen(
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     backHandlerEnabled: Boolean = true,
+    isActive: Boolean = true,
     rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
     lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
@@ -322,7 +323,7 @@ fun LyricsScreen(
     // flicker every time this page opened; there the app-wide "Force high refresh rate" setting
     // stays the user's decision, and this leaves it alone.
     val forceHighRefreshRate by rememberPreference(ForceHighRefreshRateKey, false)
-    LyricsRefreshRateBoost(enabled = !forceHighRefreshRate)
+    LyricsRefreshRateBoost(enabled = isActive && !forceHighRefreshRate)
 
     // Apple Music style auto-hide: the controls stay for a few seconds after the last
     // interaction and then fade away; any tap on the page brings them back and restarts
@@ -492,9 +493,9 @@ fun LyricsScreen(
         gradientColorsCache[thumbnailUrl] = gradientColors
     }
 
-    LaunchedEffect(player, playbackState, mediaMetadata.id) {
-        if (playbackState != STATE_READY && playbackState != STATE_BUFFERING) return@LaunchedEffect
-        while (isActive) {
+    LaunchedEffect(player, playbackState, mediaMetadata.id, isActive) {
+        if (!isActive || (playbackState != STATE_READY && playbackState != STATE_BUFFERING)) return@LaunchedEffect
+        while (coroutineContext.isActive) {
             positionState.longValue = player.currentPosition.coerceAtLeast(0L)
             durationState.longValue = player.duration
             delay(250)
@@ -539,6 +540,7 @@ fun LyricsScreen(
             playerCustomBlur = playerCustomBlur,
             playerCustomContrast = playerCustomContrast,
             playerCustomBrightness = playerCustomBrightness,
+            isActive = isActive,
         )
 
         Box(
@@ -582,6 +584,7 @@ fun LyricsScreen(
                         foregroundColor = foregroundColor,
                         sliderPositionProvider = { sliderPosition },
                         lyricsSyncOffset = lyricsSyncOffset,
+                        isActive = isActive,
                         rememberedEnhancedListState = rememberedEnhancedListState,
                         rememberedV2ListState = rememberedV2ListState,
                         modifier =
@@ -664,6 +667,7 @@ fun LyricsScreen(
                             foregroundColor = foregroundColor,
                             sliderPositionProvider = { sliderPosition },
                             lyricsSyncOffset = lyricsSyncOffset,
+                            isActive = isActive,
                             rememberedEnhancedListState = rememberedEnhancedListState,
                             rememberedV2ListState = rememberedV2ListState,
                         )
@@ -737,6 +741,7 @@ private fun LyricsScreenBackground(
     playerCustomBlur: Float,
     playerCustomContrast: Float,
     playerCustomBrightness: Float,
+    isActive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -768,6 +773,7 @@ private fun LyricsScreenBackground(
                     useGpuBlur = useGpuBlur,
                     blurRadius = blurRadius,
                     disableBlur = disableBlur,
+                    isActive = isActive,
                 )
             }
 
@@ -1021,6 +1027,7 @@ private fun MovingBlurBackground(
     useGpuBlur: Boolean,
     blurRadius: Float,
     disableBlur: Boolean,
+    isActive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     // Blurring this hard averages a cover towards its own mean, which costs it both colour and
@@ -1088,7 +1095,7 @@ private fun MovingBlurBackground(
         }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        DriftingBackdrop(active = thumbnailUrl != null) {
+        DriftingBackdrop(active = isActive && thumbnailUrl != null) {
             if (gpuBlur && gpuRequest != null) {
                 // Blur only when there is something to blur: a zero radius is not a no-op at the
                 // RenderEffect level, it is an invalid argument.
@@ -1406,6 +1413,7 @@ private fun AppleMusicLyricsPane(
     sliderPositionProvider: () -> Long?,
     lyricsSyncOffset: Int,
     modifier: Modifier = Modifier,
+    isActive: Boolean = true,
     rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
 ) {
@@ -1415,6 +1423,7 @@ private fun AppleMusicLyricsPane(
         lyricsRenderViewModel = lyricsRenderViewModel,
         sliderPositionProvider = sliderPositionProvider,
         lyricsSyncOffset = lyricsSyncOffset,
+        isActive = isActive,
         rememberedEnhancedListState = rememberedEnhancedListState,
         rememberedV2ListState = rememberedV2ListState,
         modifier =
@@ -1793,6 +1802,7 @@ private fun LyricsContent(
     lyricsSyncOffset: Int,
     textColor: Color,
     modifier: Modifier = Modifier,
+    isActive: Boolean = true,
     rememberedEnhancedListState: LunarLyricsListState? = null,
     rememberedV2ListState: LazyListState? = null,
 ) {
@@ -1806,6 +1816,7 @@ private fun LyricsContent(
                 textColorOverride = textColor,
                 rememberedListState = rememberedV2ListState,
                 lyricsRenderViewModel = lyricsRenderViewModel,
+                isActive = isActive,
             )
         }
 
@@ -1818,6 +1829,7 @@ private fun LyricsContent(
                 textColorOverride = textColor,
                 rememberedKaraokeListState = rememberedEnhancedListState,
                 lyricsRenderViewModel = lyricsRenderViewModel,
+                isActive = isActive,
             )
         }
     }

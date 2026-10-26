@@ -13,7 +13,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.ColorFilter
@@ -78,14 +80,19 @@ internal fun BlurredArtwork(
         remember(url, cpuRadius, revision) {
             LyricsArtBlurCache.peek(url, cpuRadius)
         }
+    var lastBlurred by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    if (blurred != null) {
+        lastBlurred = blurred
+    }
 
     LaunchedEffect(url, cpuRadius) {
         LyricsArtBlurCache.prefetch(context, url, cpuRadius)
     }
 
-    if (blurred != null) {
+    val displayBlurred = blurred ?: lastBlurred
+    if (displayBlurred != null) {
         Image(
-            bitmap = blurred.asImageBitmap(),
+            bitmap = displayBlurred.asImageBitmap(),
             contentDescription = contentDescription,
             contentScale = contentScale,
             colorFilter = colorFilter,
