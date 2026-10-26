@@ -3170,10 +3170,15 @@ class MainActivity : FragmentActivity() {
             }
         }
 
+        // `isExpanded` only flips once the sheet has physically reached the top, so
+        // the immersive styles used to keep the status bar for the entire opening
+        // spring. The target anchor flips the instant expansion starts (tap, fling
+        // or AOD launch) and stays set until a collapse begins, which is the same
+        // point at which the status bar is allowed to come back.
         val shouldHideStatusBars =
             isYearInMusicScreen ||
                 (
-                    playerBottomSheetState.isExpanded &&
+                    playerBottomSheetState.isExpandedOrExpanding &&
                         (
                             playerDesignStyle == PlayerDesignStyle.V7 ||
                                 playerDesignStyle == PlayerDesignStyle.V10
