@@ -54,12 +54,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
-import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -68,9 +69,9 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -129,6 +130,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -247,7 +249,6 @@ import dev.citali.lunartune.constants.NavBarLongPressActionsKey
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
-import dev.citali.lunartune.constants.NavigationBarLegacyLiveBlurKey
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
@@ -293,6 +294,7 @@ import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.AppLockGate
 import dev.citali.lunartune.ui.component.BottomSheetMenu
 import dev.citali.lunartune.ui.component.BottomSheetPage
+import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
 import dev.citali.lunartune.ui.component.PrimaryTabsHost
 import dev.citali.lunartune.ui.component.rememberPrimaryRootDepthState
@@ -304,7 +306,6 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MarkdownText
-import dev.citali.lunartune.ui.component.NavBarBlurState
 import dev.citali.lunartune.ui.component.NetworkStatusBanner
 import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
@@ -312,7 +313,6 @@ import dev.citali.lunartune.ui.component.TvNavigationRail
 import dev.citali.lunartune.ui.component.appLockConfigured
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.component.isSensitiveRoute
-import dev.citali.lunartune.ui.component.navBarLiveBlurSource
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
@@ -638,11 +638,18 @@ class MainActivity : FragmentActivity() {
     }
 
     @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
-    @OptIn(ExperimentalMaterial3Api::class)
+    @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes =
+                window.attributes.apply {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+        }
 
         val initialLocale =
             if (PreferenceStore.get(UseSystemLanguageKey) ?: true) {
@@ -1028,10 +1035,8 @@ class MainActivity : FragmentActivity() {
                 ) {
                     val focusManager = LocalFocusManager.current
                     val density = LocalDensity.current
-                    val windowsInsets = WindowInsets.systemBars
-                    val topInset = with(density) { windowsInsets.getTop(density).toDp() }
+                    val windowsInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
                     val bottomInset = with(density) { windowsInsets.getBottom(density).toDp() }
-                    val bottomInsetDp = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
 
                     val isTvDevice = remember { applicationContext.isTvDevice() }
                     val useRail =
@@ -1183,22 +1188,6 @@ class MainActivity : FragmentActivity() {
                     val isMiniPlayerFrosted = miniPlayerBackgroundStyle == MiniPlayerBackgroundStyle.FROSTED
                     val hazeState = rememberHazeState()
                     val isFrostedNavBar = navigationBarStyle == NavigationBarStyle.FROSTED
-                    // The capsule bar has no RenderEffect path of its own, on any version, so it
-                    // blurs by sampling the content behind it and computing the blur - opt-in,
-                    // because that work is real even when it is small.
-                    val (legacyNavBarBlurEnabled, _) =
-                        rememberPreference(NavigationBarLegacyLiveBlurKey, defaultValue = false)
-                    val capsuleLiveBlurWanted =
-                        legacyNavBarBlurEnabled && navigationBarStyle == NavigationBarStyle.CAPSULE
-                    val navBarBlurState = remember { NavBarBlurState() }
-                    val capsuleLiveBlurSource = if (capsuleLiveBlurWanted) navBarBlurState else null
-                    // The bar only stops being solid once there is actually a sample to show,
-                    // so a device where the capture could not be set up keeps the plain capsule
-                    // instead of turning into a hole. This flips exactly once.
-                    val hasNavBarSample by
-                        remember { derivedStateOf { navBarBlurState.image != null } }
-                    val capsuleLiveBlur =
-                        if (capsuleLiveBlurWanted && hasNavBarSample) navBarBlurState else null
                     // The top-bar menu owns its frost: while it is open the content source
                     // is attached just for the menu, and the (static) blur runs on every
                     // API level instead of only Android 12+.
@@ -1448,55 +1437,24 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    LaunchedEffect(useDarkTheme, playerBottomSheetState.isExpanded, playerBackground, aodModeEnabled) {
-                        if (aodModeEnabled) return@LaunchedEffect
-                        val isDarkStatusBar =
-                            if (playerBottomSheetState.isExpanded &&
-                                playerBackground != PlayerBackgroundStyle.DEFAULT
-                            ) {
-                                true
-                            } else {
-                                useDarkTheme
-                            }
-                        setSystemBarAppearance(isDarkStatusBar)
-                    }
-
-                    val miniPlayerAnchor by remember {
-                        derivedStateOf {
-                            when {
-                                playerBottomSheetState.isExpanded -> EXPANDED_ANCHOR
-                                playerBottomSheetState.isDismissed -> DISMISSED_ANCHOR
-                                else -> COLLAPSED_ANCHOR
-                            }
-                        }
-                    }
-
                     var miniPlayerAnchorPersistenceEnabled by remember(playerConnection) {
                         mutableStateOf(false)
                     }
 
-                    LaunchedEffect(miniPlayerAnchor, isYearInMusicScreen, miniPlayerAnchorPersistenceEnabled) {
-                        if (!isYearInMusicScreen && miniPlayerAnchorPersistenceEnabled) {
-                            setSavedMiniPlayerAnchor(miniPlayerAnchor)
-                        }
-                    }
-
                     var yearInMusicSavedPlayerAnchor by rememberSaveable { mutableStateOf(-1) }
 
-                    val shouldHideStatusBars =
-                        isYearInMusicScreen ||
-                            (
-                                playerBottomSheetState.isExpandedOrExpanding &&
-                                    (
-                                        playerDesignStyle == PlayerDesignStyle.V7 ||
-                                            playerDesignStyle == PlayerDesignStyle.V10
-                                    )
-                            )
-
-                    LaunchedEffect(shouldHideStatusBars, aodModeEnabled) {
-                        if (aodModeEnabled) return@LaunchedEffect
-                        setStatusBarsHidden(shouldHideStatusBars)
-                    }
+                    PlayerSheetSystemEffects(
+                        playerBottomSheetState = playerBottomSheetState,
+                        useDarkTheme = useDarkTheme,
+                        playerBackground = playerBackground,
+                        playerDesignStyle = playerDesignStyle,
+                        aodModeEnabled = aodModeEnabled,
+                        isYearInMusicScreen = isYearInMusicScreen,
+                        miniPlayerAnchorPersistenceEnabled = miniPlayerAnchorPersistenceEnabled,
+                        onSetSystemBarAppearance = ::setSystemBarAppearance,
+                        onSaveMiniPlayerAnchor = setSavedMiniPlayerAnchor,
+                        onSetStatusBarsHidden = ::setStatusBarsHidden,
+                    )
 
                     LaunchedEffect(isYearInMusicScreen, playerConnection) {
                         val connection = playerConnection ?: return@LaunchedEffect
@@ -1535,6 +1493,7 @@ class MainActivity : FragmentActivity() {
 
                     val playerAwareWindowInsets =
                         remember(
+                            windowsInsets,
                             useRail,
                             bottomInset,
                             shouldShowNavigationBar,
@@ -1618,7 +1577,7 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    LaunchedEffect(currentRoute, playerBottomSheetState.isExpanded) {
+                    LaunchedEffect(currentRoute) {
                         if (!playerBottomSheetState.isExpanded) {
                             when (currentRoute) {
                                 Screens.Home.route -> {
@@ -1994,7 +1953,7 @@ class MainActivity : FragmentActivity() {
                                                             .height(
                                                                 AppBarHeight +
                                                                     with(LocalDensity.current) {
-                                                                        WindowInsets.systemBars.getTop(LocalDensity.current).toDp()
+                                                                        windowsInsets.getTop(LocalDensity.current).toDp()
                                                                     },
                                                             ).background(
                                                                 Brush.verticalGradient(
@@ -2022,7 +1981,7 @@ class MainActivity : FragmentActivity() {
                                                 }
                                             TopAppBar(
                                                 windowInsets =
-                                                    WindowInsets.safeDrawing.only(
+                                                    windowsInsets.only(
                                                         (
                                                             if (useRail) {
                                                                 WindowInsetsSides.Right
@@ -2296,7 +2255,7 @@ class MainActivity : FragmentActivity() {
                                             shouldShowNavigationBar &&
                                                 !useRail &&
                                                 !isFloatingNavBar &&
-                                                playerBottomSheetState.isCollapsed
+                                                !playerBottomSheetState.isDismissed
 
                                         // captured here: the drift lambda below runs
                                         // outside composition, where LocalDensity is
@@ -2343,25 +2302,14 @@ class MainActivity : FragmentActivity() {
                                                 Modifier
                                                     .align(Alignment.BottomCenter)
                                                     .height(navSlideDistance)
-                                                    .offset {
-                                                        // Only the player expansion slides the
-                                                        // slot in layout; the hide progress lives
-                                                        // in the graphics layer below, so hiding
-                                                        // never re-layouts anything.
-                                                        val slideOffset =
-                                                            navSlideDistance *
-                                                                playerBottomSheetState.progress.coerceIn(
-                                                                    0f,
-                                                                    1f,
-                                                                )
-                                                        IntOffset(x = 0, y = slideOffset.roundToPx())
-                                                    }.graphicsLayer {
-                                                        // The whole hide motion: translate out and
-                                                        // fade a little ahead of arrival so no
-                                                        // edge of plate, shadow or frost lingers.
-                                                        // Read exclusively on RenderThread so page
-                                                        // transitions and predictive-back swipes
-                                                        // trigger zero main-thread recompositions.
+                                                    .graphicsLayer {
+                                                        // Read both sheet progress and hide motion
+                                                        // exclusively on RenderThread so opening/collapsing
+                                                        // the player, page transitions, and predictive-back
+                                                        // swipes trigger zero layout passes or recompositions.
+                                                        val sheetProgress =
+                                                            playerBottomSheetState.progress.coerceIn(0f, 1f)
+                                                        val slideOffsetPx = navSlideDistance.toPx() * sheetProgress
                                                         val routeHide =
                                                             maxOf(
                                                                 1f - primaryRootDepthState.presence,
@@ -2370,8 +2318,17 @@ class MainActivity : FragmentActivity() {
                                                         val hide =
                                                             maxOf(routeHide, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
-                                                        translationY = navSlideDistance.toPx() * 1.15f * hide
-                                                        alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
+                                                        translationY = slideOffsetPx + navSlideDistance.toPx() * 1.15f * hide
+                                                        alpha =
+                                                            if (sheetProgress >= 0.99f) {
+                                                                0f
+                                                            } else {
+                                                                (1f - hide * 1.6f).coerceIn(0f, 1f)
+                                                            }
+                                                    }.drawWithContent {
+                                                        if (playerBottomSheetState.progress < 0.99f) {
+                                                            drawContent()
+                                                        }
                                                     },
                                         ) {
                                             FloatingNavigationToolbar(
@@ -2450,7 +2407,6 @@ class MainActivity : FragmentActivity() {
                                                     searchSource = SearchSource.ONLINE
                                                     openSearch()
                                                 },
-                                                liveBlur = capsuleLiveBlur,
                                             )
                                         }
 
@@ -2459,7 +2415,7 @@ class MainActivity : FragmentActivity() {
                                                 floatingBarsBottomPadding +
                                                 navVisibleHeight +
                                                 HomeOverflowFabSpacing +
-                                                if (playerBottomSheetState.isCollapsed) {
+                                                if (!playerBottomSheetState.isDismissed) {
                                                     MiniPlayerHeight + MiniPlayerBottomSpacing
                                                 } else {
                                                     0.dp
@@ -2567,21 +2523,24 @@ class MainActivity : FragmentActivity() {
                                 },
                                 modifier = Modifier.fillMaxSize(),
                             ) {
-                                BackHandler(
-                                    enabled =
-                                        isAtPrimaryRoot &&
-                                            !active &&
-                                            !playerBottomSheetState.isExpanded &&
-                                            selectedPrimaryTab.route != initialPrimaryTab.route,
-                                ) {
-                                    selectedPrimaryTabRoute = initialPrimaryTab.route
-                                }
+                                PrimaryTabRootBackHandler(
+                                    isAtPrimaryRoot = isAtPrimaryRoot,
+                                    active = active,
+                                    playerBottomSheetState = playerBottomSheetState,
+                                    selectedPrimaryTabRoute = selectedPrimaryTab.route,
+                                    initialPrimaryTabRoute = initialPrimaryTab.route,
+                                    onReturnToInitialTab = { selectedPrimaryTabRoute = initialPrimaryTab.route },
+                                )
 
                                 Box(
                                     modifier =
                                         Modifier
                                             .fillMaxSize()
-                                            .then(
+                                            .drawWithContent {
+                                                if (!playerBottomSheetState.isExpanded || aodModeEnabled) {
+                                                    drawContent()
+                                                }
+                                            }.then(
                                                 if (isTvDevice) {
                                                     Modifier
                                                         .focusRequester(contentAreaFocusRequester)
@@ -2610,12 +2569,6 @@ class MainActivity : FragmentActivity() {
                                                     )
                                                 ) {
                                                     Modifier.hazeSource(hazeState)
-                                                } else {
-                                                    Modifier
-                                                },
-                                            ).then(
-                                                if (capsuleLiveBlurSource != null) {
-                                                    Modifier.navBarLiveBlurSource(capsuleLiveBlurSource)
                                                 } else {
                                                     Modifier
                                                 },
@@ -2694,9 +2647,10 @@ class MainActivity : FragmentActivity() {
                             }
                         }
 
-                        BackHandler(enabled = playerBottomSheetState.isExpanded && !aodModeEnabled) {
-                            playerBottomSheetState.collapseSoft()
-                        }
+                        PlayerExpandedBackHandler(
+                            playerBottomSheetState = playerBottomSheetState,
+                            aodModeEnabled = aodModeEnabled,
+                        )
 
                         BottomSheetMenu(
                             state = LocalMenuState.current,
@@ -2734,13 +2688,22 @@ class MainActivity : FragmentActivity() {
                             }
                         }
 
+                        val bannerTopInset =
+                            with(LocalDensity.current) {
+                                windowsInsets.getTop(LocalDensity.current).toDp()
+                            }
                         NetworkStatusBanner(
                             state = networkBannerState,
                             modifier =
                                 Modifier
                                     .align(Alignment.TopCenter)
                                     .padding(
-                                        top = if (shouldShowTopBar) topInset + AppBarHeight + 8.dp else topInset + 8.dp,
+                                        top =
+                                            if (shouldShowTopBar) {
+                                                bannerTopInset + AppBarHeight + 8.dp
+                                            } else {
+                                                bannerTopInset + 8.dp
+                                            },
                                         start = 16.dp,
                                         end = 16.dp,
                                     ).zIndex(10f),
@@ -3151,30 +3114,104 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun setStatusBarsHidden(hidden: Boolean) {
+        if (immersiveStatusBarsHidden == hidden) return
         immersiveStatusBarsHidden = hidden
         val controller = WindowCompat.getInsetsController(window, window.decorView)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes =
-                window.attributes.apply {
-                    layoutInDisplayCutoutMode =
-                        if (hidden) {
-                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                        } else {
-                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
-                        }
-                }
-        }
-
         if (hidden) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.statusBars())
         } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
             controller.show(WindowInsetsCompat.Type.statusBars())
+        }
+    }
+
+    @Composable
+    private fun PlayerSheetSystemEffects(
+        playerBottomSheetState: BottomSheetState,
+        useDarkTheme: Boolean,
+        playerBackground: PlayerBackgroundStyle,
+        playerDesignStyle: PlayerDesignStyle,
+        aodModeEnabled: Boolean,
+        isYearInMusicScreen: Boolean,
+        miniPlayerAnchorPersistenceEnabled: Boolean,
+        onSetSystemBarAppearance: (Boolean) -> Unit,
+        onSaveMiniPlayerAnchor: (Int) -> Unit,
+        onSetStatusBarsHidden: (Boolean) -> Unit,
+    ) {
+        LaunchedEffect(useDarkTheme, playerBottomSheetState.isExpanded, playerBackground, aodModeEnabled) {
+            if (aodModeEnabled) return@LaunchedEffect
+            val isDarkStatusBar =
+                if (playerBottomSheetState.isExpanded &&
+                    playerBackground != PlayerBackgroundStyle.DEFAULT
+                ) {
+                    true
+                } else {
+                    useDarkTheme
+                }
+            onSetSystemBarAppearance(isDarkStatusBar)
+        }
+
+        val miniPlayerAnchor by remember(playerBottomSheetState) {
+            derivedStateOf {
+                when {
+                    playerBottomSheetState.isExpanded -> EXPANDED_ANCHOR
+                    playerBottomSheetState.isDismissed -> DISMISSED_ANCHOR
+                    else -> COLLAPSED_ANCHOR
+                }
+            }
+        }
+
+        LaunchedEffect(miniPlayerAnchor, isYearInMusicScreen, miniPlayerAnchorPersistenceEnabled) {
+            if (!isYearInMusicScreen && miniPlayerAnchorPersistenceEnabled) {
+                onSaveMiniPlayerAnchor(miniPlayerAnchor)
+            }
+        }
+
+        val shouldHideStatusBars =
+            isYearInMusicScreen ||
+                (
+                    playerBottomSheetState.isExpanded &&
+                        (
+                            playerDesignStyle == PlayerDesignStyle.V7 ||
+                                playerDesignStyle == PlayerDesignStyle.V10
+                        )
+                )
+
+        LaunchedEffect(shouldHideStatusBars, aodModeEnabled) {
+            if (aodModeEnabled) return@LaunchedEffect
+            onSetStatusBarsHidden(shouldHideStatusBars)
+        }
+    }
+
+    @Composable
+    private fun PrimaryTabRootBackHandler(
+        isAtPrimaryRoot: Boolean,
+        active: Boolean,
+        playerBottomSheetState: BottomSheetState,
+        selectedPrimaryTabRoute: String,
+        initialPrimaryTabRoute: String,
+        onReturnToInitialTab: () -> Unit,
+    ) {
+        BackHandler(
+            enabled =
+                isAtPrimaryRoot &&
+                    !active &&
+                    !playerBottomSheetState.isExpanded &&
+                    selectedPrimaryTabRoute != initialPrimaryTabRoute,
+            onBack = onReturnToInitialTab,
+        )
+    }
+
+    @Composable
+    private fun PlayerExpandedBackHandler(
+        playerBottomSheetState: BottomSheetState,
+        aodModeEnabled: Boolean,
+    ) {
+        BackHandler(enabled = playerBottomSheetState.isExpanded && !aodModeEnabled) {
+            playerBottomSheetState.collapseSoft()
         }
     }
 

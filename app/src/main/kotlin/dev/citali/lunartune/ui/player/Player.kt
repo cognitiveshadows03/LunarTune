@@ -455,18 +455,6 @@ fun BottomSheetPlayer(
                 if (darkTheme == DarkMode.AUTO) isSystemInDarkTheme else darkTheme == DarkMode.ON
             useDarkTheme && pureBlack
         }
-    val backgroundColor =
-        if (useBlackBackground && state.value > state.collapsedBound) {
-            val progress =
-                ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                    .coerceIn(0f, 1f)
-            Color.Black.copy(alpha = progress)
-        } else {
-            val progress =
-                ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                    .coerceIn(0f, 1f)
-            MaterialTheme.colorScheme.surfaceContainer.copy(alpha = progress)
-        }
 
     val playbackState by playerConnection.playbackState.collectAsState()
     val isPlaying by playerConnection.isPlaying.collectAsState()
@@ -506,9 +494,14 @@ fun BottomSheetPlayer(
         CanvasArtworkPlaybackCache.setMaxSize(maxCanvasCacheSize)
     }
 
-    var position by rememberSaveable(mediaMetadata?.id) {
-        mutableLongStateOf(playerConnection.player.currentPosition)
-    }
+    val miniPositionState =
+        remember(mediaMetadata?.id) {
+            mutableLongStateOf(playerConnection.player.currentPosition)
+        }
+    val expandedPositionState =
+        remember(mediaMetadata?.id) {
+            mutableLongStateOf(playerConnection.player.currentPosition)
+        }
     var duration by rememberSaveable(mediaMetadata?.id) {
         mutableLongStateOf(playerConnection.player.duration)
     }
@@ -859,49 +852,77 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
-    LaunchedEffect(mediaMetadata?.id, playbackState, aodModeEnabled) {
+    LaunchedEffect(mediaMetadata?.id, playbackState, isPlaying, isUserSeeking, sliderPosition != null, aodModeEnabled) {
         val startTime = SystemClock.elapsedRealtime()
-        if (playbackState == STATE_READY) {
-            while (isActive) {
-                delay(if (aodModeEnabled) 500L else 100L)
-                val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
-                val currentPlayerPosition = playerConnection.player.currentPosition
-                val currentPlayerDuration = playerConnection.player.duration
+        fun syncOnce(updateExpanded: Boolean) {
+            val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
+            val currentPlayerPosition = playerConnection.player.currentPosition
+            val currentPlayerDuration = playerConnection.player.duration
 
-                if (isTransitioning) {
-                    val elapsedSinceStart = SystemClock.elapsedRealtime() - startTime
-                    position = elapsedSinceStart
+            if (isTransitioning) {
+                val elapsedSinceStart = SystemClock.elapsedRealtime() - startTime
+                miniPositionState.longValue = elapsedSinceStart
+                if (updateExpanded) {
+                    expandedPositionState.longValue = elapsedSinceStart
+                }
+                mediaMetadata?.let {
+                    val metaDuration = it.duration.toLong() * 1000
+                    duration = if (metaDuration > 0) metaDuration else 0L
+                }
+            } else {
+                miniPositionState.longValue = currentPlayerPosition
+                if (updateExpanded) {
+                    expandedPositionState.longValue = currentPlayerPosition
+                }
+                if (currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET) {
+                    duration = currentPlayerDuration
+                } else if (duration <= 0L || duration == C.TIME_UNSET) {
                     mediaMetadata?.let {
-                        val metaDuration = it.duration.toLong() * 1000
-                        duration = if (metaDuration > 0) metaDuration else 0L
+                        val metadataDuration = it.duration.toLong() * 1000
+                        if (metadataDuration > 0L) duration = metadataDuration
                     }
-                } else {
-                    position = currentPlayerPosition
-                    if (currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET) {
-                        duration = currentPlayerDuration
-                    } else if (duration <= 0L || duration == C.TIME_UNSET) {
-                        mediaMetadata?.let {
-                            val metadataDuration = it.duration.toLong() * 1000
-                            if (metadataDuration > 0L) duration = metadataDuration
-                        }
-                    }
-                    if (!isUserSeeking) {
-                        sliderPosition?.let { targetPosition ->
-                            val clampedTargetPosition =
-                                when {
-                                    currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET -> {
-                                        targetPosition.coerceIn(0L, currentPlayerDuration)
-                                    }
-
-                                    else -> {
-                                        targetPosition.coerceAtLeast(0L)
-                                    }
+                }
+                if (!isUserSeeking) {
+                    sliderPosition?.let { targetPosition ->
+                        val clampedTargetPosition =
+                            when {
+                                currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET -> {
+                                    targetPosition.coerceIn(0L, currentPlayerDuration)
                                 }
-                            if (abs(currentPlayerPosition - clampedTargetPosition) <= SeekbarSettleToleranceMs) {
-                                sliderPosition = null
+
+                                else -> {
+                                    targetPosition.coerceAtLeast(0L)
+                                }
                             }
+                        if (abs(currentPlayerPosition - clampedTargetPosition) <= SeekbarSettleToleranceMs) {
+                            sliderPosition = null
                         }
                     }
+                }
+            }
+        }
+
+        if (playbackState == STATE_READY) {
+            syncOnce(updateExpanded = state.isExpandedOrExpanding)
+            if (isPlaying || isUserSeeking || sliderPosition != null) {
+                while (isActive) {
+                    val isSheetTransitioning = !state.isCollapsed && !state.isExpanded && !state.isDismissed
+                    if (isSheetTransitioning) {
+                        delay(50L)
+                        continue
+                    }
+                    val expanded = state.isExpanded
+                    delay(
+                        when {
+                            aodModeEnabled -> 500L
+                            expanded -> 100L
+                            else -> 250L
+                        },
+                    )
+                    if (!state.isCollapsed && !state.isExpanded && !state.isDismissed) {
+                        continue
+                    }
+                    syncOnce(updateExpanded = state.isExpanded)
                 }
             }
         } else {
@@ -911,7 +932,8 @@ fun BottomSheetPlayer(
             }
             val currentPlayerPosition = playerConnection.player.currentPosition
             if (sliderPosition == null && currentPlayerPosition > 0L) {
-                position = currentPlayerPosition
+                miniPositionState.longValue = currentPlayerPosition
+                expandedPositionState.longValue = currentPlayerPosition
             }
         }
     }
@@ -980,32 +1002,40 @@ fun BottomSheetPlayer(
             }
         }
 
-    if (!aodModeEnabled) {
-        BackHandler(
-            enabled =
-                isAppleQueueOpen ||
-                queueSheetState.isExpandedOrExpanding ||
-                    state.isExpandedOrExpanding,
-        ) {
-            when {
-                isAppleQueueOpen && state.isExpandedOrExpanding -> isAppleQueueOpen = false
-                isLyricsScreenVisible && state.isExpandedOrExpanding -> isLyricsScreenVisible = false
-                queueSheetState.isExpandedOrExpanding -> queueSheetState.collapseSoft()
-                state.isExpandedOrExpanding -> state.collapseSoft()
-            }
-        }
-    }
-
     val focusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(state.isExpanded) {
-        if (state.isExpanded) {
-            focusRequester.requestFocus()
+    PlayerSheetLifecycleEffects(
+        state = state,
+        queueSheetState = queueSheetState,
+        aodModeEnabled = aodModeEnabled,
+        isAppleQueueOpen = isAppleQueueOpen,
+        isLyricsScreenVisible = isLyricsScreenVisible,
+        onCloseAppleQueue = { isAppleQueueOpen = false },
+        onCloseLyrics = { isLyricsScreenVisible = false },
+        onExitAod = { playerConnection.aodModeEnabled.value = false },
+        onSyncPositionOnOpen = {
+            if (sliderPosition == null) {
+                val pos = playerConnection.player.currentPosition
+                if (pos >= 0L) {
+                    expandedPositionState.longValue = pos
+                    miniPositionState.longValue = pos
+                }
+            }
+        },
+        focusRequester = focusRequester,
+    )
+
+    val baseSheetScrimColor =
+        when {
+            playerDesignStyle == PlayerDesignStyle.V9 -> dynamicBgColor
+            playerDesignStyle == PlayerDesignStyle.V7 ||
+                playerDesignStyle == PlayerDesignStyle.V8 ||
+                playerDesignStyle == PlayerDesignStyle.V10 -> Color.Black
+            playerBackground == PlayerBackgroundStyle.BLUR ||
+                playerBackground == PlayerBackgroundStyle.GRADIENT -> MaterialTheme.colorScheme.surface
+            useBlackBackground -> Color.Black
+            else -> MaterialTheme.colorScheme.surface
         }
-        if (!state.isExpanded && aodModeEnabled) {
-            playerConnection.aodModeEnabled.value = false
-        }
-    }
 
     BottomSheet(
         state = state,
@@ -1092,73 +1122,19 @@ fun BottomSheetPlayer(
                         }
                     }
                 },
-        backgroundColor =
-            if (playerDesignStyle == PlayerDesignStyle.V9) {
-                val progress =
-                    ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                        .coerceIn(0f, 1f)
-                val fadeProgress =
-                    if (progress < 0.2f) {
-                        ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    }
-                dynamicBgColor.copy(alpha = 1f - fadeProgress)
-            } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
-                val progress =
-                    ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                        .coerceIn(0f, 1f)
-                val fadeProgress =
-                    if (progress < 0.2f) {
-                        ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                    } else {
-                        0f
-                    }
-                Color.Black.copy(alpha = 1f - fadeProgress)
-            } else {
-                when (playerBackground) {
-                    PlayerBackgroundStyle.BLUR, PlayerBackgroundStyle.GRADIENT -> {
-                        // Apply same enhanced fade logic to blur/gradient backgrounds
-                        val progress =
-                            ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                                .coerceIn(0f, 1f)
-
-                        // Only start fading when very close to dismissal (last 20%)
-                        val fadeProgress =
-                            if (progress < 0.2f) {
-                                ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-
-                        MaterialTheme.colorScheme.surface.copy(alpha = 1f - fadeProgress)
-                    }
-
-                    else -> {
-                        // Enhanced background - stable until last 20% of drag (both normal and pure black)
-                        // Calculate progress for fade effect
-                        val progress =
-                            ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
-                                .coerceIn(0f, 1f)
-
-                        // Only start fading when very close to dismissal (last 20%)
-                        val fadeProgress =
-                            if (progress < 0.2f) {
-                                ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
-
-                        if (useBlackBackground) {
-                            // Apply same logic to pure black background
-                            Color.Black.copy(alpha = 1f - fadeProgress)
-                        } else {
-                            // Apply same logic to normal theme
-                            MaterialTheme.colorScheme.surface.copy(alpha = 1f - fadeProgress)
-                        }
-                    }
+        backgroundColor = baseSheetScrimColor,
+        scrimColorProvider = { progress ->
+            val fadeProgress =
+                if (progress < 0.2f) {
+                    ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
+                } else {
+                    0f
                 }
-            },
+            baseSheetScrimColor.copy(
+                alpha = baseSheetScrimColor.alpha * (1f - fadeProgress) * progress,
+            )
+        },
+        keepExpandedContentWarm = true,
         onDismiss = {
             playerConnection.service.stopAndClearPlayback(clearPersistentState = true)
         },
@@ -1166,14 +1142,16 @@ fun BottomSheetPlayer(
         collapsedOffsetPx = { navbarHiddenOffset?.invoke() ?: 0f },
         collapsedContent = {
             MiniPlayer(
-                position = position,
-                duration = duration,
+                positionProvider = { miniPositionState.longValue },
+                durationProvider = { duration },
                 pureBlack = pureBlack,
                 isPairedWithNavigation = isMiniPlayerPairedWithNavigation,
                 hazeState = hazeState,
             )
         },
     ) {
+        var position by expandedPositionState
+        val isPlayerSheetActive = state.isExpandedOrExpanding
         val onSliderValueChange: (Long) -> Unit = {
             isUserSeeking = true
             sliderPosition = it
@@ -1190,6 +1168,7 @@ fun BottomSheetPlayer(
                     playerConnection.player.seekTo(it)
                 }
                 position = it
+                miniPositionState.longValue = it
             }
             isUserSeeking = false
         }
@@ -1380,15 +1359,19 @@ fun BottomSheetPlayer(
             )
         }
 
-        if (!state.isCollapsed &&
-            !aodModeEnabled &&
+        if (!aodModeEnabled &&
             playerDesignStyle != PlayerDesignStyle.V5 &&
             playerDesignStyle != PlayerDesignStyle.V7 &&
             (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10) &&
             playerDesignStyle != PlayerDesignStyle.V9
         ) {
             PlayerBackground(
-                playerBackground = playerBackground,
+                playerBackground =
+                    if (playerBackground == PlayerBackgroundStyle.GLOW_ANIMATED && !isPlayerSheetActive) {
+                        PlayerBackgroundStyle.GLOW
+                    } else {
+                        playerBackground
+                    },
                 mediaMetadata = mediaMetadata,
                 gradientColors = gradientColors,
                 disableBlur = disableBlur,
@@ -1498,9 +1481,9 @@ fun BottomSheetPlayer(
                         V7PlayerBackdrop(
                             thumbnailUrl = v7SwapState.displayUrl,
                             canvasStaticUrl = v7CanvasArtwork?.static,
-                            canvasPrimaryUrl = v7CanvasArtwork?.animatedVertical,
-                            canvasFallbackUrl = v7CanvasArtwork?.videoUrlVertical,
-                            isPlaying = isPlaying,
+                            canvasPrimaryUrl = v7CanvasArtwork?.animatedVertical?.takeIf { isPlayerSheetActive },
+                            canvasFallbackUrl = v7CanvasArtwork?.videoUrlVertical?.takeIf { isPlayerSheetActive },
+                            isPlaying = isPlaying && isPlayerSheetActive,
                             disableBlur = disableBlur,
                             backdropBlurAmount = backdropBlurAmount,
                             label = "v7BackdropLandscape",
@@ -1584,8 +1567,8 @@ fun BottomSheetPlayer(
                                 menuState = menuState,
                                 bottomSheetPageState = bottomSheetPageState,
                                 currentFormat = currentFormat,
-                                canvasPrimaryUrl = artworkCanvas?.animated,
-                                canvasFallbackUrl = artworkCanvas?.videoUrl,
+                                canvasPrimaryUrl = artworkCanvas?.animated?.takeIf { isPlayerSheetActive },
+                                canvasFallbackUrl = artworkCanvas?.videoUrl?.takeIf { isPlayerSheetActive },
                                 onSliderValueChange = onSliderValueChange,
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
@@ -1620,8 +1603,8 @@ fun BottomSheetPlayer(
                             textBackgroundColor = TextBackgroundColor,
                             textButtonColor = textButtonColor,
                             iconButtonColor = iconButtonColor,
-                            canvasPrimaryUrl = artworkCanvas?.animated,
-                            canvasFallbackUrl = artworkCanvas?.videoUrl,
+                            canvasPrimaryUrl = artworkCanvas?.animated?.takeIf { isPlayerSheetActive },
+                            canvasFallbackUrl = artworkCanvas?.videoUrl?.takeIf { isPlayerSheetActive },
                             onCollapseClick = { state.collapseSoft() },
                             onQueueClick = openQueue,
                             onLyricsClick = { isLyricsScreenVisible = true },
@@ -1656,7 +1639,7 @@ fun BottomSheetPlayer(
                             Thumbnail(
                                 sliderPositionProvider = { sliderPosition },
                                 modifier = Modifier.size(thumbnailSize),
-                                isPlayerExpanded = state.isExpanded,
+                                isPlayerExpanded = isPlayerSheetActive,
                             )
                         }
                         Column(
@@ -1776,9 +1759,9 @@ fun BottomSheetPlayer(
                         V7PlayerBackdrop(
                             thumbnailUrl = v7SwapState.displayUrl,
                             canvasStaticUrl = v7CanvasArtwork?.static,
-                            canvasPrimaryUrl = v7CanvasArtwork?.animatedVertical,
-                            canvasFallbackUrl = v7CanvasArtwork?.videoUrlVertical,
-                            isPlaying = isPlaying,
+                            canvasPrimaryUrl = v7CanvasArtwork?.animatedVertical?.takeIf { isPlayerSheetActive },
+                            canvasFallbackUrl = v7CanvasArtwork?.videoUrlVertical?.takeIf { isPlayerSheetActive },
+                            isPlaying = isPlaying && isPlayerSheetActive,
                             disableBlur = disableBlur,
                             backdropBlurAmount = backdropBlurAmount,
                             label = "v7BackdropPortrait",
@@ -1860,8 +1843,8 @@ fun BottomSheetPlayer(
                                 menuState = menuState,
                                 bottomSheetPageState = bottomSheetPageState,
                                 currentFormat = currentFormat,
-                                canvasPrimaryUrl = artworkCanvas?.animated,
-                                canvasFallbackUrl = artworkCanvas?.videoUrl,
+                                canvasPrimaryUrl = artworkCanvas?.animated?.takeIf { isPlayerSheetActive },
+                                canvasFallbackUrl = artworkCanvas?.videoUrl?.takeIf { isPlayerSheetActive },
                                 onSliderValueChange = onSliderValueChange,
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
@@ -1906,8 +1889,8 @@ fun BottomSheetPlayer(
                             textBackgroundColor = TextBackgroundColor,
                             textButtonColor = textButtonColor,
                             iconButtonColor = iconButtonColor,
-                            canvasPrimaryUrl = artworkCanvas?.animated,
-                            canvasFallbackUrl = artworkCanvas?.videoUrl,
+                            canvasPrimaryUrl = artworkCanvas?.animated?.takeIf { isPlayerSheetActive },
+                            canvasFallbackUrl = artworkCanvas?.videoUrl?.takeIf { isPlayerSheetActive },
                             onCollapseClick = { state.collapseSoft() },
                             onQueueClick = openQueue,
                             onLyricsClick = { isLyricsScreenVisible = true },
@@ -1943,7 +1926,7 @@ fun BottomSheetPlayer(
                             Thumbnail(
                                 sliderPositionProvider = { sliderPosition },
                                 modifier = Modifier.nestedScroll(state.preUpPostDownNestedScrollConnection),
-                                isPlayerExpanded = state.isExpanded,
+                                isPlayerExpanded = isPlayerSheetActive,
                             )
                         }
 
@@ -2098,6 +2081,51 @@ fun BottomSheetPlayer(
             onLogin = loginClick,
             onPoTokenLogin = navigateToPoTokenLogin,
         )
+    }
+}
+
+@Composable
+private fun PlayerSheetLifecycleEffects(
+    state: BottomSheetState,
+    queueSheetState: BottomSheetState,
+    aodModeEnabled: Boolean,
+    isAppleQueueOpen: Boolean,
+    isLyricsScreenVisible: Boolean,
+    onCloseAppleQueue: () -> Unit,
+    onCloseLyrics: () -> Unit,
+    onExitAod: () -> Unit,
+    onSyncPositionOnOpen: () -> Unit,
+    focusRequester: FocusRequester,
+) {
+    if (!aodModeEnabled) {
+        BackHandler(
+            enabled =
+                isAppleQueueOpen ||
+                    queueSheetState.isExpandedOrExpanding ||
+                    state.isExpandedOrExpanding,
+        ) {
+            when {
+                isAppleQueueOpen && state.isExpandedOrExpanding -> onCloseAppleQueue()
+                isLyricsScreenVisible && state.isExpandedOrExpanding -> onCloseLyrics()
+                queueSheetState.isExpandedOrExpanding -> queueSheetState.collapseSoft()
+                state.isExpandedOrExpanding -> state.collapseSoft()
+            }
+        }
+    }
+
+    LaunchedEffect(state.isExpandedOrExpanding) {
+        if (state.isExpandedOrExpanding) {
+            onSyncPositionOnOpen()
+        }
+    }
+
+    LaunchedEffect(state.isExpanded) {
+        if (state.isExpanded) {
+            focusRequester.requestFocus()
+        }
+        if (!state.isExpanded && aodModeEnabled) {
+            onExitAod()
+        }
     }
 }
 

@@ -532,8 +532,8 @@ private fun MiniPlayerTransportControls(
 
 @Composable
 fun NewMiniPlayerContent(
-    position: Long,
-    duration: Long,
+    positionProvider: () -> Long,
+    durationProvider: () -> Long,
     playerConnection: PlayerConnection,
     colors: MiniPlayerContentColors,
 ) {
@@ -547,8 +547,11 @@ fun NewMiniPlayerContent(
 
     val isLoading = playbackState == Player.STATE_BUFFERING && !crossfadeInProgress
     val progressProvider =
-        remember(position, duration) {
-            { if (duration > 0) (position.toFloat() / duration).coerceIn(0f, 1f) else 0f }
+        remember(positionProvider, durationProvider) {
+            {
+                val duration = durationProvider()
+                if (duration > 0L) (positionProvider().toFloat() / duration).coerceIn(0f, 1f) else 0f
+            }
         }
 
     Row(

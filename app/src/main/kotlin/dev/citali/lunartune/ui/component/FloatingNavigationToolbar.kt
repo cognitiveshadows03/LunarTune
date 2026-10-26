@@ -71,8 +71,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -106,6 +106,29 @@ private val NavigationIndicatorHeight = 32.dp
 private val FloatingNavigationIndicatorWidth = 64.dp
 private val FloatingNavigationIndicatorHeight = 42.dp
 
+private class NavBarCoordinatesHolder {
+    var container: LayoutCoordinates? = null
+    val icons = HashMap<Int, LayoutCoordinates>(4)
+
+    fun updateIconCenter(
+        index: Int,
+        iconCoords: LayoutCoordinates,
+        iconCenters: MutableMap<Int, Offset>,
+    ) {
+        val root = container ?: return
+        if (!root.isAttached || !iconCoords.isAttached) return
+        val center =
+            root.localPositionOf(
+                iconCoords,
+                Offset(iconCoords.size.width / 2f, iconCoords.size.height / 2f),
+            )
+        val prev = iconCenters[index]
+        if (prev == null || (prev - center).getDistanceSquared() > 0.25f) {
+            iconCenters[index] = center
+        }
+    }
+}
+
 @Composable
 fun FloatingNavigationToolbar(
     items: List<Screens>,
@@ -118,8 +141,6 @@ fun FloatingNavigationToolbar(
     onItemClick: (Screens, Boolean) -> Unit,
     onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
-    /** Live blur sampled from the content behind the bar, for Android 11 and below. */
-    liveBlur: NavBarBlurState? = null,
 ) {
     if (style == NavigationBarStyle.CAPSULE) {
         CapsuleNavigationBar(
@@ -129,7 +150,6 @@ fun FloatingNavigationToolbar(
             onItemClick = onItemClick,
             onItemLongClick = onItemLongClick,
             onSearchItemDoubleClick = onSearchItemDoubleClick,
-            liveBlur = liveBlur,
         )
         return
     }
@@ -213,18 +233,18 @@ fun FloatingNavigationToolbar(
 
     val selectedIndex = items.indexOfFirst { isSelected(it) }
     val iconCenters = remember { mutableStateMapOf<Int, Offset>() }
-    var containerPos by remember { mutableStateOf(Offset.Zero) }
+    val coordsHolder = remember { NavBarCoordinatesHolder() }
     val indicatorX = remember { Animatable(0f) }
     var indicatorY by remember { mutableFloatStateOf(0f) }
     var indicatorPlaced by remember { mutableStateOf(false) }
     val selectedCenter = if (selectedIndex >= 0) iconCenters[selectedIndex] else null
 
-    LaunchedEffect(selectedIndex, selectedCenter, containerPos, indicatorWidth, indicatorHeight) {
+    LaunchedEffect(selectedIndex, selectedCenter, indicatorWidth, indicatorHeight) {
         val center = selectedCenter ?: return@LaunchedEffect
         val widthPx = with(density) { indicatorWidth.toPx() }
         val heightPx = with(density) { indicatorHeight.toPx() }
-        val targetX = (center.x - containerPos.x) - widthPx / 2f
-        indicatorY = (center.y - containerPos.y) - heightPx / 2f
+        val targetX = center.x - widthPx / 2f
+        indicatorY = center.y - heightPx / 2f
         if (!indicatorPlaced) {
             indicatorX.snapTo(targetX)
             indicatorPlaced = true
@@ -327,7 +347,12 @@ fun FloatingNavigationToolbar(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .onGloballyPositioned { containerPos = it.positionInRoot() },
+                            .onGloballyPositioned { coordinates ->
+                                coordsHolder.container = coordinates
+                                coordsHolder.icons.forEach { (idx, iconCoords) ->
+                                    coordsHolder.updateIconCenter(idx, iconCoords, iconCenters)
+                                }
+                            },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (selectedIndex >= 0 && indicatorPlaced) {
@@ -424,12 +449,8 @@ fun FloatingNavigationToolbar(
                                     Box(
                                         modifier =
                                             Modifier.onGloballyPositioned { coordinates ->
-                                                val pos = coordinates.positionInRoot()
-                                                iconCenters[index] =
-                                                    Offset(
-                                                        pos.x + coordinates.size.width / 2f,
-                                                        pos.y + coordinates.size.height / 2f,
-                                                    )
+                                                coordsHolder.icons[index] = coordinates
+                                                coordsHolder.updateIconCenter(index, coordinates, iconCenters)
                                             },
                                         contentAlignment = Alignment.Center,
                                     ) {

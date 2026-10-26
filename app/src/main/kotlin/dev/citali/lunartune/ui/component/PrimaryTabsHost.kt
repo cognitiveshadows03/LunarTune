@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -43,6 +44,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.zIndex
@@ -319,7 +321,13 @@ fun PrimaryTabsHost(
             if (tab.route in effectiveVisitedRoutes) {
                 key(tab.route) {
                     val motion = slotMotions.getValue(tab.route)
-                    val isTabInteractive = isAtPrimaryRoot && tab.route == selectedTab.route
+                    val isSelectedSlot = tab.route == selectedTab.route
+                    val isTabInteractive = isAtPrimaryRoot && isSelectedSlot
+                    val livePlayerAwareInsets = LocalPlayerAwareWindowInsets.current
+                    var slotPlayerAwareInsets by remember { mutableStateOf(livePlayerAwareInsets) }
+                    if (isSelectedSlot) {
+                        slotPlayerAwareInsets = livePlayerAwareInsets
+                    }
                     val slotZIndex =
                         when (tab.route) {
                             selectedTab.route -> 2f
@@ -327,64 +335,66 @@ fun PrimaryTabsHost(
                             else -> 0f
                         }
 
-                    Box(
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .zIndex(slotZIndex)
-                                .focusProperties { canFocus = isTabInteractive }
-                                .graphicsLayer {
-                                    val hostVisible = depthState.presence > 0.001f
-                                    val a = motion.alpha.value.coerceIn(0f, 1f)
-                                    val visible = hostVisible && a > 0.001f
-                                    alpha = if (visible) a else 0f
-                                    translationX = if (visible) motion.offsetXPx.value else OffscreenParkPx
-                                    clip = !visible
-                                }.background(surfaceColor)
-                                .then(
-                                    if (!isTabInteractive) {
-                                        Modifier.pointerInput(Unit) {
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                                    event.changes.fastForEach { it.consume() }
+                    CompositionLocalProvider(LocalPlayerAwareWindowInsets provides slotPlayerAwareInsets) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .zIndex(slotZIndex)
+                                    .focusProperties { canFocus = isTabInteractive }
+                                    .graphicsLayer {
+                                        val hostVisible = depthState.presence > 0.001f
+                                        val a = motion.alpha.value.coerceIn(0f, 1f)
+                                        val visible = hostVisible && a > 0.001f
+                                        alpha = if (visible) a else 0f
+                                        translationX = if (visible) motion.offsetXPx.value else OffscreenParkPx
+                                        clip = !visible
+                                    }.background(surfaceColor)
+                                    .then(
+                                        if (!isTabInteractive) {
+                                            Modifier.pointerInput(Unit) {
+                                                awaitPointerEventScope {
+                                                    while (true) {
+                                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                        event.changes.fastForEach { it.consume() }
+                                                    }
                                                 }
                                             }
+                                        } else {
+                                            Modifier
                                         }
-                                    } else {
-                                        Modifier
-                                    },
-                                ),
-                    ) {
-                        when (tab) {
-                            Screens.Home -> {
-                                HomeScreen(
-                                    navController = navController,
-                                    headerScrollConnection = homeScrollConnection,
-                                    isActiveTab = isTabInteractive,
-                                    scrollToTopTrigger = homeScrollToTopTrigger,
-                                    viewModel = homeViewModel,
-                                )
-                            }
+                                    ),
+                        ) {
+                            when (tab) {
+                                Screens.Home -> {
+                                    HomeScreen(
+                                        navController = navController,
+                                        headerScrollConnection = homeScrollConnection,
+                                        isActiveTab = isTabInteractive,
+                                        scrollToTopTrigger = homeScrollToTopTrigger,
+                                        viewModel = homeViewModel,
+                                    )
+                                }
 
-                            Screens.Search -> {
-                                SearchScreen(
-                                    navController = navController,
-                                    onSearchClick = onOpenSearch,
-                                    headerScrollConnection = searchScrollConnection,
-                                    isActiveTab = isTabInteractive,
-                                    scrollToTopTrigger = searchScrollToTopTrigger,
-                                )
-                            }
+                                Screens.Search -> {
+                                    SearchScreen(
+                                        navController = navController,
+                                        onSearchClick = onOpenSearch,
+                                        headerScrollConnection = searchScrollConnection,
+                                        isActiveTab = isTabInteractive,
+                                        scrollToTopTrigger = searchScrollToTopTrigger,
+                                    )
+                                }
 
-                            Screens.Library -> {
-                                LibraryScreen(
-                                    navController = navController,
-                                    scrollBehavior = scrollBehavior,
-                                )
-                            }
+                                Screens.Library -> {
+                                    LibraryScreen(
+                                        navController = navController,
+                                        scrollBehavior = scrollBehavior,
+                                    )
+                                }
 
-                            else -> Unit
+                                else -> Unit
+                            }
                         }
                     }
                 }
