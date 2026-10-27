@@ -7,6 +7,8 @@
 
 package dev.citali.lunartune.ui.theme
 
+import android.app.WallpaperManager
+import android.content.Context
 import android.graphics.Bitmap
 import android.os.Build
 import android.util.Base64
@@ -45,6 +47,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import dev.citali.lunartune.constants.AppFontPreference
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -83,6 +87,34 @@ fun LunarTuneTheme(
     val context = LocalContext.current
     val useSystemDynamicColor =
         (seedPalette == null && themeColor == DefaultThemeColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+
+    // On Android 12+ WallpaperColors hands out three colours (primary, secondary, tertiary) and
+    // the platform scheme turns them into three different accent palettes. Real Material You
+    // builds every role from ONE seed colour and its tonal shades, so we read only the wallpaper's
+    // primary hint and derive the whole scheme from it. getWallpaperColors() goes through IPC, so
+    // it is read off the main thread; until it arrives (or when the wallpaper reports no colours)
+    // we seed from the platform's single primary accent. Below Android 12 this seed stays null and
+    // the app keeps its own seed-based scheme.
+    val wallpaperSeedState =
+        produceState<Color?>(initialValue = null, context) {
+            value = withContext(Dispatchers.IO) { singleWallpaperSeedColor(context) }
+        }
+    val platformPrimary =
+        if (useSystemDynamicColor) {
+            if (darkTheme) dynamicDarkColorScheme(context).primary else dynamicLightColorScheme(context).primary
+        } else {
+            Color.Unspecified
+        }
+    val systemSeed =
+        remember(useSystemDynamicColor, wallpaperSeedState.value, platformPrimary) {
+            if (!useSystemDynamicColor) {
+                null
+            } else {
+                wallpaperSeedState.value
+                    ?: platformPrimary.takeIf { it != Color.Unspecified }
+                    ?: DefaultThemeColor
+            }
+        }
 
     val customFontFamily =
         produceState<FontFamily?>(
@@ -124,31 +156,34 @@ fun LunarTuneTheme(
         }
 
     val appColorScheme =
-        remember(seedPalette, themeColor, darkTheme) {
-            if (seedPalette != null) {
-                exactPaletteColorScheme(
-                    palette = seedPalette,
-                    isDark = darkTheme,
-                )
-            } else {
-                materialKolorDynamicColorScheme(
-                    keyColor = themeColor,
-                    isDark = darkTheme,
-                    style = paletteStyle,
-                )
+        remember(seedPalette, themeColor, darkTheme, systemSeed) {
+            when {
+                // One colour, its shades everywhere - the way Material You builds a scheme.
+                systemSeed != null ->
+                    materialKolorDynamicColorScheme(
+                        keyColor = systemSeed,
+                        isDark = darkTheme,
+                        style = paletteStyleFor(systemSeed),
+                    )
+
+                seedPalette != null ->
+                    exactPaletteColorScheme(
+                        palette = seedPalette,
+                        isDark = darkTheme,
+                    )
+
+                else ->
+                    materialKolorDynamicColorScheme(
+                        keyColor = themeColor,
+                        isDark = darkTheme,
+                        style = paletteStyle,
+                    )
             }
         }
 
-    val baseColorScheme =
-        if (useSystemDynamicColor) {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        } else {
-            appColorScheme
-        }
-
     val colorScheme =
-        remember(baseColorScheme, pureBlack, darkTheme) {
-            if (darkTheme && pureBlack) baseColorScheme.pureBlack(true) else baseColorScheme
+        remember(appColorScheme, pureBlack, darkTheme) {
+            if (darkTheme && pureBlack) appColorScheme.pureBlack(true) else appColorScheme
         }
 
     val animatedColorScheme =
@@ -379,6 +414,23 @@ private fun materialKolorScheme(
         contrastLevel = contrastLevel,
         style = style,
     )
+
+/**
+ * The one colour the Android 12+ theme is built from. `WallpaperColors` exposes three hints -
+ * primary, secondary and tertiary - but we only take the primary one; every other role comes
+ * from the tonal shades generated from it.
+ */
+private fun singleWallpaperSeedColor(context: Context): Color? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+    return runCatching {
+        WallpaperManager
+            .getInstance(context)
+            .getWallpaperColors(WallpaperManager.FLAG_SYSTEM)
+            ?.primaryColor
+            ?.toArgb()
+            ?.let { Color(it) }
+    }.getOrNull()
+}
 
 private fun paletteStyleFor(seedColor: Color): PaletteStyle {
     val chroma = seedColor.toHct().chroma

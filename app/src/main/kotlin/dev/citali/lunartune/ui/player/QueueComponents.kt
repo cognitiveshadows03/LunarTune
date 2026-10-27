@@ -51,7 +51,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -61,7 +60,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
@@ -122,8 +120,6 @@ fun CurrentSongHeader(
     onLockClick: () -> Unit,
     onInfiniteQueueClick: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Draws the redesign's grouped action tiles instead of the connected toggle group. */
-    newUi: Boolean = false,
 ) {
     val view = LocalView.current
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
@@ -132,13 +128,12 @@ fun CurrentSongHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .then(if (newUi) Modifier else Modifier.background(backgroundColor))
+                .background(backgroundColor)
                 .windowInsetsPadding(WindowInsets.systemBars.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                 .bottomSheetDraggable(sheetState)
                 .padding(horizontal = 16.dp)
-                // No card of its own: the artwork, title, count pill and actions sit straight on
-                // the sheet's glass, which is the pane the whole sheet is made of.
-                .padding(top = if (newUi) 6.dp else 20.dp, bottom = if (newUi) 2.dp else 8.dp),
+                // Artwork, title, count pill and actions sit directly on the sheet surface.
+                .padding(top = 20.dp, bottom = 8.dp),
     ) {
         Box(
             modifier =
@@ -266,23 +261,19 @@ fun CurrentSongHeader(
                         modifier = Modifier.size(20.dp),
                     )
                 }
-                // The redesign moves "clear queue" into the action tiles, where it can be labelled
-                // instead of being an unlabelled bin beside the overflow menu.
-                if (!newUi) {
-                    IconButton(
-                        onClick = onClearQueueClick,
-                        modifier = Modifier.size(40.dp),
-                        colors =
-                            IconButtonDefaults.iconButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error,
-                            ),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.delete),
-                            contentDescription = stringResource(R.string.clear),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
+                IconButton(
+                    onClick = onClearQueueClick,
+                    modifier = Modifier.size(40.dp),
+                    colors =
+                        IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.delete),
+                        contentDescription = stringResource(R.string.clear),
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
 
@@ -298,32 +289,32 @@ fun CurrentSongHeader(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        if (newUi) {
-            QueueActionGrid(
-                infiniteQueueEnabled = infiniteQueueEnabled,
-                infiniteQueueLoading = infiniteQueueLoading,
-                repeatMode = repeatMode,
-                shuffleModeEnabled = shuffleModeEnabled,
-                onBackgroundColor = onBackgroundColor,
-                onInfiniteQueueClick = {
-                    if (enableHapticFeedback) {
-                        view.performHapticFeedback(
-                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                        )
-                    }
-                    onInfiniteQueueClick()
-                },
-                onRepeatClick = {
-                    if (enableHapticFeedback) {
-                        view.performHapticFeedback(
-                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                        )
-                    }
-                    onRepeatClick()
-                },
-                onShuffleClick = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val uncheckedColors =
+                ToggleButtonDefaults.toggleButtonColors(
+                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                    contentColor = onBackgroundColor,
+                )
+            val checkedColors =
+                ToggleButtonDefaults.toggleButtonColors(
+                    checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
+                    checkedContentColor = onBackgroundColor,
+                )
+            val infiniteCheckedColors =
+                ToggleButtonDefaults.toggleButtonColors(
+                    checkedContainerColor = MaterialTheme.colorScheme.primary,
+                    checkedContentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = onBackgroundColor.copy(alpha = 0.12f),
+                    contentColor = onBackgroundColor.copy(alpha = 0.5f),
+                )
+
+            ToggleButton(
+                checked = shuffleModeEnabled,
+                onCheckedChange = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
@@ -332,211 +323,31 @@ fun CurrentSongHeader(
                     }
                     onShuffleClick()
                 },
-                onClearQueueClick = {
+                modifier = Modifier.weight(1f).size(48.dp),
+                shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.shuffle),
+                    contentDescription = stringResource(R.string.action_shuffle_on),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+
+            ToggleButton(
+                checked = repeatMode != Player.REPEAT_MODE_OFF,
+                onCheckedChange = {
                     if (enableHapticFeedback) {
                         view.performHapticFeedback(
                             android.view.HapticFeedbackConstants.CONTEXT_CLICK,
                             android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
                         )
                     }
-                    onClearQueueClick()
+                    onRepeatClick()
                 },
-            )
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val uncheckedColors =
-                    ToggleButtonDefaults.toggleButtonColors(
-                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                        contentColor = onBackgroundColor,
-                    )
-                val checkedColors =
-                    ToggleButtonDefaults.toggleButtonColors(
-                        checkedContainerColor = onBackgroundColor.copy(alpha = 0.22f),
-                        checkedContentColor = onBackgroundColor,
-                    )
-                val infiniteCheckedColors =
-                    ToggleButtonDefaults.toggleButtonColors(
-                        checkedContainerColor = MaterialTheme.colorScheme.primary,
-                        checkedContentColor = MaterialTheme.colorScheme.onPrimary,
-                        containerColor = onBackgroundColor.copy(alpha = 0.12f),
-                        contentColor = onBackgroundColor.copy(alpha = 0.5f),
-                    )
-
-                ToggleButton(
-                    checked = shuffleModeEnabled,
-                    onCheckedChange = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onShuffleClick()
-                    },
-                    modifier = Modifier.weight(1f).size(48.dp),
-                    shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
-                    colors = if (shuffleModeEnabled) checkedColors else uncheckedColors,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.shuffle),
-                        contentDescription = stringResource(R.string.action_shuffle_on),
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-
-                ToggleButton(
-                    checked = repeatMode != Player.REPEAT_MODE_OFF,
-                    onCheckedChange = {
-                        if (enableHapticFeedback) {
-                            view.performHapticFeedback(
-                                android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                            )
-                        }
-                        onRepeatClick()
-                    },
-                    modifier = Modifier.weight(1f).size(48.dp),
-                    shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
-                    colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
-                ) {
-                    Icon(
-                        painter =
-                            painterResource(
-                                when (repeatMode) {
-                                    Player.REPEAT_MODE_ONE -> R.drawable.repeat_one_on
-                                    Player.REPEAT_MODE_ALL -> R.drawable.repeat_on
-                                    else -> R.drawable.repeat
-                                },
-                            ),
-                        contentDescription = null,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-
-                ToggleButton(
-                    checked = infiniteQueueEnabled,
-                    onCheckedChange = { onInfiniteQueueClick() },
-                    modifier = Modifier.weight(1f).size(48.dp),
-                    shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
-                    colors = infiniteCheckedColors,
-                    enabled = !infiniteQueueLoading,
-                ) {
-                    AnimatedContent(
-                        targetState = infiniteQueueLoading,
-                        label = "InfiniteQueueLoading",
-                    ) { loading ->
-                        if (loading) {
-                            CircularWavyProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = LocalContentColor.current,
-                            )
-                        } else {
-                            Icon(
-                                painter = painterResource(R.drawable.all_inclusive),
-                                contentDescription = stringResource(R.string.similar_content),
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // The redesign lets the cards speak for themselves: no section title, no subtitle, just
-        // the rows directly under the actions.
-        if (newUi) {
-            Spacer(modifier = Modifier.height(10.dp))
-        } else {
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = stringResource(R.string.queue_continue_playing),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = onBackgroundColor,
-            )
-
-            Spacer(modifier = Modifier.height(2.dp))
-
-            Text(
-                text = stringResource(R.string.queue_autoplaying_similar),
-                style = MaterialTheme.typography.bodySmall,
-                color = onBackgroundColor.copy(alpha = 0.5f),
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            HorizontalDivider(
-                color = onBackgroundColor.copy(alpha = 0.08f),
-                thickness = 1.dp,
-            )
-        }
-    }
-}
-
-/**
- * The redesign's queue actions: four labelled tiles in two rows — autoplay, repeat, shuffle, and
- * clear, which is the only destructive one and is the only one that is not a toggle.
- *
- * Styled after the control tiles in the notification panel: a toggle that is on becomes a solid
- * rounded rectangle in the accent colour, a toggle that is off stays a glass box with the icon and
- * label in their own colour and nothing filled behind them. Clear is never a state, so it always
- * wears the quiet box - in the error colour, which is enough to read as destructive without a slab
- * of red sitting in the middle of the sheet.
- */
-@Composable
-private fun QueueActionGrid(
-    infiniteQueueEnabled: Boolean,
-    infiniteQueueLoading: Boolean,
-    repeatMode: Int,
-    shuffleModeEnabled: Boolean,
-    onBackgroundColor: Color,
-    onInfiniteQueueClick: () -> Unit,
-    onRepeatClick: () -> Unit,
-    onShuffleClick: () -> Unit,
-    onClearQueueClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(QueueActionGap),
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(QueueActionGap),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            QueueActionTile(
-                label = stringResource(R.string.queue_action_autoplay),
-                active = infiniteQueueEnabled,
-                onBackgroundColor = onBackgroundColor,
-                onClick = { if (!infiniteQueueLoading) onInfiniteQueueClick() },
-                modifier = Modifier.weight(1f),
-            ) {
-                if (infiniteQueueLoading) {
-                    CircularWavyProgressIndicator(
-                        modifier = Modifier.size(QueueActionIconSize),
-                        color = LocalContentColor.current,
-                    )
-                } else {
-                    Icon(
-                        painter = painterResource(R.drawable.all_inclusive),
-                        contentDescription = null,
-                        modifier = Modifier.size(QueueActionIconSize),
-                    )
-                }
-            }
-
-            val repeatOn = repeatMode != Player.REPEAT_MODE_OFF
-            QueueActionTile(
-                label = stringResource(R.string.queue_action_repeat),
-                active = repeatOn,
-                onBackgroundColor = onBackgroundColor,
-                onClick = onRepeatClick,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).size(48.dp),
+                shapes = ButtonGroupDefaults.connectedMiddleButtonShapes(),
+                colors = if (repeatMode != Player.REPEAT_MODE_OFF) checkedColors else uncheckedColors,
             ) {
                 Icon(
                     painter =
@@ -548,116 +359,61 @@ private fun QueueActionGrid(
                             },
                         ),
                     contentDescription = null,
-                    modifier = Modifier.size(QueueActionIconSize),
+                    modifier = Modifier.size(22.dp),
                 )
             }
-        }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(QueueActionGap),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            QueueActionTile(
-                label = stringResource(R.string.queue_action_shuffle),
-                active = shuffleModeEnabled,
-                onBackgroundColor = onBackgroundColor,
-                onClick = onShuffleClick,
-                modifier = Modifier.weight(1f),
+            ToggleButton(
+                checked = infiniteQueueEnabled,
+                onCheckedChange = { onInfiniteQueueClick() },
+                modifier = Modifier.weight(1f).size(48.dp),
+                shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                colors = infiniteCheckedColors,
+                enabled = !infiniteQueueLoading,
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.shuffle),
-                    contentDescription = null,
-                    modifier = Modifier.size(QueueActionIconSize),
-                )
-            }
-
-            QueueActionTile(
-                label = stringResource(R.string.queue_action_clear),
-                active = false,
-                accentColor = MaterialTheme.colorScheme.error,
-                onBackgroundColor = onBackgroundColor,
-                onClick = onClearQueueClick,
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.delete),
-                    contentDescription = null,
-                    modifier = Modifier.size(QueueActionIconSize),
-                )
+                AnimatedContent(
+                    targetState = infiniteQueueLoading,
+                    label = "InfiniteQueueLoading",
+                ) { loading ->
+                    if (loading) {
+                        CircularWavyProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = LocalContentColor.current,
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(R.drawable.all_inclusive),
+                            contentDescription = stringResource(R.string.similar_content),
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+                }
             }
         }
-    }
-}
 
-private val QueueActionHeight = 64.dp
-private val QueueActionGap = 10.dp
-private val QueueActionIconSize = 24.dp
+        Spacer(modifier = Modifier.height(14.dp))
 
-/** A toggle reads as a solid slab; everything else is a glass box. */
-private val QueueActionActiveCorner = 20.dp
-private val QueueActionIdleCorner = 26.dp
-
-@Composable
-private fun QueueActionTile(
-    label: String,
-    active: Boolean,
-    onBackgroundColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    // Colour of the box outline, its icon and its label while the toggle is off.
-    accentColor: Color = onBackgroundColor.copy(alpha = 0.9f),
-    icon: @Composable () -> Unit,
-) {
-    val shape = RoundedCornerShape(if (active) QueueActionActiveCorner else QueueActionIdleCorner)
-    val contentColor =
-        if (active) {
-            MaterialTheme.colorScheme.onPrimary
-        } else {
-            accentColor
-        }
-    // A frosted wash rather than a flat fill: the sheet underneath is blurred artwork, and the
-    // gradient keeps that texture faintly visible through the tile.
-    val idleBrush =
-        Brush.verticalGradient(
-            listOf(
-                onBackgroundColor.copy(alpha = 0.10f),
-                onBackgroundColor.copy(alpha = 0.04f),
-            ),
+        Text(
+            text = stringResource(R.string.queue_continue_playing),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = onBackgroundColor,
         )
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier =
-            modifier
-                .height(QueueActionHeight)
-                .clip(shape)
-                .then(
-                    if (active) {
-                        Modifier.background(accentColor)
-                    } else {
-                        Modifier
-                            .background(brush = idleBrush, shape = shape)
-                            .border(
-                                width = 1.dp,
-                                color = accentColor.copy(alpha = 0.28f),
-                                shape = shape,
-                            )
-                    },
-                ).clickable(onClick = onClick)
-                .padding(horizontal = 16.dp),
-    ) {
-        CompositionLocalProvider(LocalContentColor provides contentColor) {
-            icon()
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = stringResource(R.string.queue_autoplaying_similar),
+            style = MaterialTheme.typography.bodySmall,
+            color = onBackgroundColor.copy(alpha = 0.5f),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        HorizontalDivider(
+            color = onBackgroundColor.copy(alpha = 0.08f),
+            thickness = 1.dp,
+        )
     }
 }
 
