@@ -13,6 +13,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
@@ -40,9 +41,9 @@ import kotlinx.serialization.json.contentOrNull
  * 2. **Duration is always sent when known.** Duration is tolerated within a small
  *    tolerance (200 and 201 both hit), and having it present is what lets the server
  *    match an entry at all in most cases.
- * 3. **A 401 stops the conversation.** Every endpoint on this host shares the same key,
- *    so once one returns 401 the rest will too. Retrying across all three endpoints for
- *    every song is what turns a missing lyric into three dead round trips.
+ * 3. **A 401 pauses only that endpoint.** Each endpoint has its own cache, so a miss on
+ *    `getLyrics` says nothing about `qq/getLyrics`. Backing off the whole host (or breaking
+ *    out of the loop) silently dropped cached results from the other two endpoints.
  */
 internal object BetterLyricsClient {
     private const val LOG_TAG = "BetterLyrics"
@@ -58,6 +59,25 @@ internal object BetterLyricsClient {
 
     /** After a 401, how long to stop asking. Cached entries are added over time. */
     private const val AUTH_BACKOFF_MS = 10 * 60 * 1000L
+
+    /** Per-endpoint 401 backoff: one cache miss must not silence the other endpoints. */
+    private val blockedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /**
+     * Optional key for uncached queries. Setting or clearing it lifts the backoff so the new
+     * credential is tried immediately. Null/blank keeps the current cache-only behaviour.
+     */
+    @Volatile
+    var apiKey: String? = null
+        set(value) {
+            val normalized = value?.trim()?.takeIf { it.isNotBlank() }
+            if (field != normalized) {
+                field = normalized
+                // A new credential deserves an immediate retry, but re-applying the
+                // same value (e.g. every settings recomposition) must not lift the backoff.
+                blockedUntil.clear()
+            }
+        }
 
     private val allEndpoints = listOf(LYRICS_PATH, KUGOU_PATH, PORTATO_PATH)
 
@@ -83,11 +103,8 @@ internal object BetterLyricsClient {
         }
     }
 
-    @Volatile private var authBlockedUntilMs = 0L
-
-    /** True while a recent 401 says this host will not serve uncached queries. */
-    val isAuthBlocked: Boolean
-        get() = System.currentTimeMillis() < authBlockedUntilMs
+    private fun isBlocked(endpoint: String): Boolean =
+        (blockedUntil[endpoint] ?: 0L) > System.currentTimeMillis()
 
     /**
      * Fetch every result the API will give for a track.
@@ -105,15 +122,13 @@ internal object BetterLyricsClient {
         val cleanTitle = title.trim()
         val cleanArtist = artist.trim()
         if (cleanTitle.isBlank() || cleanArtist.isBlank()) return emptyList()
-        if (isAuthBlocked) return emptyList()
 
         val results = mutableListOf<String>()
         for (endpoint in endpoints) {
+            if (isBlocked(endpoint)) continue
             val lyrics = fetchEndpoints(endpoint, cleanTitle, cleanArtist, durationSeconds)
             if (lyrics != null) results += lyrics
-            // A 401 sets the backoff; there is no point walking the remaining endpoints
-            // when they share the same auth state.
-            if (isAuthBlocked) break
+            // Keep going: the next endpoint maintains its own cache and may still have a hit.
         }
         return results
     }
@@ -137,18 +152,19 @@ internal object BetterLyricsClient {
                     parameter("a", artist)
                     // Album deliberately omitted - see the class comment.
                     if (durationSeconds > 0) parameter("d", durationSeconds)
+                    apiKey?.let { header("X-API-Key", it) }
                 }
 
             val status = response.status.value
             GlobalLog.append(Log.INFO, LOG_TAG, "$endpoint response status: $status")
 
             if (status == 401) {
-                authBlockedUntilMs = System.currentTimeMillis() + AUTH_BACKOFF_MS
+                blockedUntil[endpoint] = System.currentTimeMillis() + AUTH_BACKOFF_MS
                 GlobalLog.append(
                     Log.WARN,
                     LOG_TAG,
-                    "Better Lyrics is serving cached lyrics only; pausing requests for " +
-                        "${AUTH_BACKOFF_MS / 60_000} minutes rather than retrying every song",
+                    "$endpoint is serving cached lyrics only; pausing that endpoint for " +
+                        "${AUTH_BACKOFF_MS / 60_000} minutes (the other endpoints stay live)",
                 )
                 return null
             }

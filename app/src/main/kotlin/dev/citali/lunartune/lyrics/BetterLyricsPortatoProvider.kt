@@ -16,9 +16,9 @@ import dev.citali.lunartune.utils.get
  * The QQ/Portato endpoint of the Better Lyrics API, kept as its own provider for the
  * syllable-level QRC timing it returns.
  *
- * Routed through [BetterLyricsClient] so it shares the same host and the same 401
- * backoff as [BetterLyricsProvider]: the key requirement is per host, so if one endpoint
- * is refusing uncached queries the other one is too.
+ * Routed through [BetterLyricsClient] so it shares the same host, credential and
+ * per-endpoint 401 backoff as [BetterLyricsProvider]. A miss on the main endpoint no
+ * longer blocks this one, which keeps its own cache.
  */
 object BetterLyricsPortatoProvider : LyricsProvider {
     override val name = "BetterLyrics Portato"

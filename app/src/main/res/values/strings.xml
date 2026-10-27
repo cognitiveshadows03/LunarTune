@@ -561,6 +561,10 @@
     <string name="stream_bypass_proxy_desc">Use your direct IP for stream playback to avoid IP mismatch</string>
     <string name="enable_betterlyrics">Enable BetterLyrics</string>
     <string name="enable_betterlyrics_portato">Enable BetterLyrics Portato</string>
+    <string name="betterlyrics_api_key">BetterLyrics API key</string>
+    <string name="betterlyrics_api_key_desc">Optional. Without a key, only cached lyrics can be fetched.</string>
+    <string name="betterlyrics_api_key_set">API key set - uncached lyrics are available</string>
+    <string name="betterlyrics_api_key_hint">Paste your API key</string>
     <string name="enable_youlyplus_lyrics">Enable YouLyPlus lyrics</string>
     <string name="enable_unison_lyrics">Enable Unison lyrics</string>
     <string name="enable_simpmusic_lyrics">Enable SimpMusic lyrics</string>
