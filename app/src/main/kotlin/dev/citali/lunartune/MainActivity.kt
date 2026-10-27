@@ -1534,6 +1534,13 @@ class MainActivity : FragmentActivity() {
                                     !playerBottomSheetState.isExpandedOrExpanding
                             },
                         )
+                    val libraryScrollBehavior =
+                        appBarScrollBehavior(
+                            canScroll = {
+                                currentRoute == Screens.Library.route &&
+                                    !playerBottomSheetState.isExpandedOrExpanding
+                            },
+                        )
                     val topAppBarScrollBehavior =
                         appBarScrollBehavior(
                             canScroll = {
@@ -1600,7 +1607,7 @@ class MainActivity : FragmentActivity() {
                             !isAtPrimaryRoot &&
                                 destRoute != null &&
                                 destRoute.startsWith(OnlineSearchResultRoutePrefix) != true
-                        if (isEnteringSubScreen) {
+                        if (isEnteringSubScreen || isAtPrimaryRoot) {
                             topAppBarScrollBehavior.state.heightOffset = 0f
                             topAppBarScrollBehavior.state.contentOffset = 0f
                         }
@@ -1895,17 +1902,26 @@ class MainActivity : FragmentActivity() {
                                             when (selectedPrimaryTab) {
                                                 Screens.Home -> homeScrollBehavior
                                                 Screens.Search -> searchScrollBehavior
+                                                Screens.Library -> libraryScrollBehavior
                                                 else -> topAppBarScrollBehavior
                                             }
                                         var headerHeightPx by remember { mutableStateOf(0) }
                                         LaunchedEffect(currentScrollBehavior, headerHeightPx) {
                                             if (headerHeightPx > 0) {
                                                 val limit = -headerHeightPx.toFloat()
-                                                val state = currentScrollBehavior.state
-                                                if (state.heightOffsetLimit != limit) {
-                                                    state.heightOffsetLimit = limit
-                                                    state.heightOffset = state.heightOffset.coerceIn(limit, 0f)
-                                                }
+                                                // Drill-in screens always use topAppBarScrollBehavior,
+                                                // even when Library owns the primary bar, so both
+                                                // states need the measured collapse limit.
+                                                listOf(currentScrollBehavior, topAppBarScrollBehavior)
+                                                    .distinct()
+                                                    .forEach { behavior ->
+                                                        val state = behavior.state
+                                                        if (state.heightOffsetLimit != limit) {
+                                                            state.heightOffsetLimit = limit
+                                                            state.heightOffset =
+                                                                state.heightOffset.coerceIn(limit, 0f)
+                                                        }
+                                                    }
                                             }
                                         }
 
@@ -1916,11 +1932,7 @@ class MainActivity : FragmentActivity() {
                                                         if (size.height > 0) headerHeightPx = size.height
                                                     }.offset {
                                                         val scrollOffset =
-                                                            if (selectedPrimaryTab == Screens.Library) {
-                                                                0
-                                                            } else {
-                                                                currentScrollBehavior.state.heightOffset.roundToInt()
-                                                            }
+                                                            currentScrollBehavior.state.heightOffset.roundToInt()
                                                         IntOffset(x = 0, y = scrollOffset)
                                                     }.graphicsLayer {
                                                         val p = primaryRootDepthState.presence.coerceIn(0f, 1f)
@@ -2583,7 +2595,7 @@ class MainActivity : FragmentActivity() {
                                         disableAnimations = disableAnimations,
                                         navController = navController,
                                         homeViewModel = homeViewModel,
-                                        scrollBehavior = topAppBarScrollBehavior,
+                                        scrollBehavior = libraryScrollBehavior,
                                         homeScrollConnection = homeScrollBehavior.nestedScrollConnection,
                                         searchScrollConnection = searchScrollBehavior.nestedScrollConnection,
                                         onOpenSearch = openSearch,

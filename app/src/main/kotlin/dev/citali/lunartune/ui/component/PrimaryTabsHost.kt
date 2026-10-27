@@ -390,6 +390,7 @@ fun PrimaryTabsHost(
                                     LibraryScreen(
                                         navController = navController,
                                         scrollBehavior = scrollBehavior,
+                                        isActiveTab = isTabInteractive,
                                     )
                                 }
 

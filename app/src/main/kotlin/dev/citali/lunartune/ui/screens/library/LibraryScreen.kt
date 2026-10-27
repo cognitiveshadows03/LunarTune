@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,6 +60,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.asPaddingValues
@@ -102,6 +107,7 @@ import dev.citali.lunartune.utils.rememberPreference
 fun LibraryScreen(
     navController: NavController,
     scrollBehavior: TopAppBarScrollBehavior,
+    isActiveTab: Boolean = true,
 ) {
     val defaultFilter by rememberEnumPreference(ChipSortTypeKey, LibraryFilter.LIBRARY)
     val database = LocalDatabase.current
@@ -149,7 +155,41 @@ fun LibraryScreen(
     val currentFilter = libraryFilters.getOrElse(pagerState.targetPage) { LibraryFilter.LIBRARY }
 
     val density = LocalDensity.current
+    // Each page owns its own LazyListState, so the artwork follows the pager's
+    // nested scroll instead of a single list. Without this the banner stayed
+    // pinned over the content while the title and chips slid away.
+    var headerScrollPx by remember { mutableFloatStateOf(0f) }
+    val bannerFadePx = with(density) { 300.dp.toPx() }
+    val headerScrollConnection =
+        remember {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    // Only real content movement (and leftover scroll back toward
+                    // the top) moves the banner. A list resting at its bottom emits
+                    // negative leftover, which must not hide the header.
+                    val revealed = available.y.coerceAtLeast(0f)
+                    headerScrollPx = (headerScrollPx - consumed.y - revealed).coerceAtLeast(0f)
+                    return Offset.Zero
+                }
+            }
+        }
     var shellHeightPx by remember { mutableStateOf(0) }
+
+    // Guard against a collapsed header surviving a drill-in or a tab switch:
+    // when the Library root becomes active again, reveal the title, the chips
+    // and the artwork together instead of leaving a stale offset behind.
+    LaunchedEffect(isActiveTab) {
+        if (isActiveTab) {
+            scrollBehavior.state.heightOffset = 0f
+            scrollBehavior.state.contentOffset = 0f
+            headerScrollPx = 0f
+        }
+    }
+
     val pageTopPad =
         if (shellHeightPx == 0) {
             WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight + 64.dp + 4.dp
@@ -173,9 +213,15 @@ fun LibraryScreen(
             ScreenImageHeader(
                 imageUri = effectiveHeaderImageUri,
                 blendColor = MaterialTheme.colorScheme.background,
-                // The banner leads the scroll as the first item of every
-                // page (rukamori shell, adapted): nothing stays pinned.
-                modifier = Modifier.align(Alignment.TopCenter),
+                // Lead the scroll like the first item of every page: nothing
+                // stays pinned over the list when the header is collapsed.
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .graphicsLayer {
+                            translationY = -headerScrollPx
+                            alpha = (1f - headerScrollPx / bannerFadePx).coerceIn(0f, 1f)
+                        },
             )
         } else if (!disableBlur) {
             Box(
@@ -184,6 +230,10 @@ fun LibraryScreen(
                         .fillMaxWidth()
                         .height(430.dp)
                         .align(Alignment.TopCenter)
+                        .graphicsLayer {
+                            translationY = -headerScrollPx
+                            alpha = (1f - headerScrollPx / bannerFadePx).coerceIn(0f, 1f)
+                        }
                         .drawWithCache {
                             val brush =
                                 Brush.verticalGradient(
@@ -207,6 +257,8 @@ fun LibraryScreen(
             LaunchedEffect(pagerState.settledPage, libraryFilters) {
                 // public setter clamps to the limit, same effect
                 scrollBehavior.state.heightOffset = 0f
+                scrollBehavior.state.contentOffset = 0f
+                headerScrollPx = 0f
                 val targetPage = pagerState.settledPage.coerceIn(0, libraryFilters.lastIndex)
                 val targetFilter = libraryFilters.getOrElse(targetPage) { LibraryFilter.LIBRARY }
 
@@ -230,7 +282,11 @@ fun LibraryScreen(
 
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .nestedScroll(scrollBehavior.nestedScrollConnection)
+                    .nestedScroll(headerScrollConnection),
         ) { page ->
                 when (libraryFilters.getOrElse(page) { LibraryFilter.LIBRARY }) {
                     LibraryFilter.LIBRARY -> {
@@ -332,7 +388,7 @@ fun LibraryScreen(
                 Modifier
                     .fillMaxWidth()
                     .onSizeChanged { shellHeightPx = it.height }
-                    // Ride the shared header slide: the chips leave with the
+                    // Ride the Library header slide: the chips leave with the
                     // top bar on scroll down and return with it on scroll up.
                     .offset { IntOffset(0, scrollBehavior.state.heightOffset.roundToInt()) }
                     .windowInsetsPadding(WindowInsets.statusBars)
