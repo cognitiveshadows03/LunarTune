@@ -127,6 +127,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -156,6 +157,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -372,6 +374,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.AlbumItem
 import moe.rukamori.archivetune.innertube.models.ArtistItem
@@ -700,6 +703,22 @@ class MainActivity : FragmentActivity() {
         }
 
         setContent {
+            // Cold start: hold a plain starting surface over everything (including
+            // the navigation bar) until the app has bound and produced a frame.
+            // This removes the empty screen shell / skeleton flash that used to
+            // appear before any content was ready.
+            var appContentReady by remember { mutableStateOf(false) }
+            val startupSurface = colorResource(R.color.window_background)
+
+            LaunchedEffect(Unit) {
+                withFrameNanos { }
+                withTimeoutOrNull(2_000L) {
+                    while (playerConnection == null) delay(50L)
+                }
+                withFrameNanos { }
+                appContentReady = true
+            }
+
             val gatekeeperViewModel: GatekeeperViewModel = hiltViewModel()
             LaunchedEffect(Unit) {
                 gatekeeperViewModel.blockedMessages.collect { message ->
@@ -1013,6 +1032,27 @@ class MainActivity : FragmentActivity() {
                     modifier =
                         Modifier
                             .fillMaxSize()
+                            .drawWithContent {
+                                if (appContentReady) {
+                                    drawContent()
+                                } else {
+                                    drawRect(startupSurface)
+                                }
+                            }
+                            .then(
+                                if (appContentReady) {
+                                    Modifier
+                                } else {
+                                    Modifier.pointerInput(Unit) {
+                                        awaitPointerEventScope {
+                                            while (true) {
+                                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    }
+                                },
+                            )
                             // Records where the finger went down so menus can grow out of
                             // the touched point. Reads at Initial (before children) and
                             // consumes nothing, so gestures underneath are unchanged. Only

@@ -124,18 +124,7 @@ fun BottomSheet(
                         (state.expandedBound - state.value)
                             .roundToPx()
                             .coerceAtLeast(0)
-                    // A minimise spring settles below the collapsed anchor before it
-                    // rebounds. Drawing that overshoot slides the collapsed row down
-                    // into the navigation bar's footprint, so floor the sheet at the
-                    // anchor for the duration of the settle. Drags, dismissal and the
-                    // dismissed -> collapsed restore still travel freely below it.
-                    val flooredY =
-                        if (state.isMinimising) {
-                            y.coerceAtMost((state.expandedBound - state.collapsedBound).roundToPx())
-                        } else {
-                            y
-                        }
-                    IntOffset(x = 0, y = flooredY)
+                    IntOffset(x = 0, y = y)
                 }.then(
                     if (collapsedGesturesEnabled || isAboveCollapsed) {
                         Modifier.bottomSheetDraggable(state, onDismiss)
@@ -189,17 +178,7 @@ fun BottomSheet(
                     Modifier
                         .graphicsLayer {
                             val clampedProgress = state.progress.coerceIn(0f, 1f)
-                            // The navbar-hide drift is only meaningful at or above the
-                            // collapsed anchor. While a minimise spring rebounds below it,
-                            // adding the drift would push the row even further into the
-                            // navigation bar's footprint.
-                            val drift =
-                                if (state.value < state.collapsedBound) {
-                                    0f
-                                } else {
-                                    collapsedOffsetPx()
-                                }
-                            translationY = drift * (1f - clampedProgress)
+                            translationY = collapsedOffsetPx() * (1f - clampedProgress)
                             alpha = 1f - (clampedProgress * 4f).coerceAtMost(1f)
                         }.drawWithContent {
                             if (state.progress < 0.25f) {
@@ -246,35 +225,6 @@ class BottomSheetState(
     var targetAnchor by mutableIntStateOf(initialAnchor)
         private set
 
-    /** Only the newest settle may clear [isMinimising]. */
-    private var settleGeneration = 0
-
-    /**
-     * True while a settle towards the collapsed anchor is running. The collapse spring
-     * is underdamped (dampingRatio 0.85), so it can dip below the anchor before
-     * rebounding; that downward overshoot is not rendered. Rendering it slides the
-     * collapsed mini player into the navigation bar's footprint, where the bar (drawn
-     * afterwards in the scaffold's bottomBar) covers it.
-     */
-    var isMinimising by mutableStateOf(false)
-        private set
-
-    private fun beginSettle(minimising: Boolean): Int {
-        val generation = ++settleGeneration
-        isMinimising = minimising
-        return generation
-    }
-
-    private fun endSettle(generation: Int) {
-        if (settleGeneration == generation) isMinimising = false
-    }
-
-    /** A pointer drag owns the sheet, so no settle floor may apply to it. */
-    fun onDragStart() {
-        ++settleGeneration
-        isMinimising = false
-    }
-
     val isDismissed by derivedStateOf {
         value == animatable.lowerBound!!
     }
@@ -301,29 +251,13 @@ class BottomSheetState(
 
     fun collapse(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         updateAnchor(COLLAPSED_ANCHOR)
-        // Any settle to the collapsed anchor can dip below it: a spring arriving from
-        // above, or a swipe-down drag released just below the anchor carrying downward
-        // momentum. Both draw the collapsed row inside the navigation bar's footprint
-        // before they rebound, which is exactly the "mini player hides behind the nav"
-        // regression. Only a restore from the dismissed anchor (starting at the very
-        // bottom with no downward momentum) keeps its slide-in from below.
-        // Do not gate this on animationsDisabled: callers can still pass a spring()
-        // spec while reduced motion is on (rail/TV navigation), and snap() settles
-        // at the anchor anyway, so the floor is free in that case.
-        val restoringFromDismissed = value <= dismissedBound && initialVelocity >= 0.dp
-        val generation = beginSettle(!restoringFromDismissed)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                animatable.animateTo(collapsedBound, animationSpec, initialVelocity = initialVelocity)
-            } finally {
-                endSettle(generation)
-            }
+            animatable.animateTo(collapsedBound, animationSpec, initialVelocity = initialVelocity)
         }
     }
 
     fun expand(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
         updateAnchor(EXPANDED_ANCHOR)
-        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(animatable.upperBound!!, animationSpec, initialVelocity = initialVelocity)
         }
@@ -349,7 +283,6 @@ class BottomSheetState(
 
     fun dismiss(initialVelocity: Dp = 0.dp) {
         updateAnchor(DISMISSED_ANCHOR)
-        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(
                 animatable.lowerBound!!,
@@ -368,7 +301,6 @@ class BottomSheetState(
                 else -> COLLAPSED_ANCHOR
             },
         )
-        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.snapTo(value)
         }
@@ -523,19 +455,8 @@ fun rememberBottomSheetState(
             }
 
         animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
-        // The state is recreated whenever a bar/inset bound changes. Re-playing a spring
-        // from the old value towards the new collapsed anchor overshoots below it and
-        // draws the mini player under the navigation bar. Collapsed/dismissed restores
-        // adopt the new bound instantly; only restoring an expanded player keeps its
-        // upward spring (it cannot overshoot downwards).
-        val initialSpec: AnimationSpec<Dp> =
-            if (animationsDisabled || previousAnchor != EXPANDED_ANCHOR) {
-                snap()
-            } else {
-                BottomSheetAnimationSpec
-            }
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(initialValue, initialSpec)
+            animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
         }
 
         BottomSheetState(
@@ -585,7 +506,6 @@ fun Modifier.bottomSheetDraggable(
                 totalDy += change.positionChange().y
                 if (abs(totalDy) > dragSlop) {
                     dragStarted = true
-                    state.onDragStart()
                     velocityTracker.resetTracking()
                     velocityTracker.addPointerInputChange(change)
                     change.consume()

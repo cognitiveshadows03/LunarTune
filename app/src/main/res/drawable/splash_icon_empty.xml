@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ shows the active launcher icon on its system splash unless the theme
+  supplies an explicit icon. The launcher icon here is picked at runtime through
+  activity-aliases, so a static icon would be the wrong one. An empty drawable keeps
+  the splash a plain surface with no icon at all.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <size android:width="1dp" android:height="1dp" />
+    <solid android:color="@android:color/transparent" />
+</shape>
