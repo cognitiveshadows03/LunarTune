@@ -41,6 +41,7 @@ val PerSongTagsKey = stringPreferencesKey("perSongTags")
 val NeverRecommendSongIdsKey = stringPreferencesKey("neverRecommendSongIds")
 val ShowPlayerVolumeBarKey = booleanPreferencesKey("showPlayerVolumeBar")
 val HidePlayerThumbnailKey = booleanPreferencesKey("hidePlayerThumbnail")
+val HideStatusBarKey = booleanPreferencesKey("hideStatusBar")
 val LunarTuneCanvasKey = booleanPreferencesKey("archiveTuneCanvas")
 val ThumbnailCornerRadiusKey = floatPreferencesKey("thumbnailCornerRadius")
 val CropThumbnailToSquareKey = booleanPreferencesKey("cropThumbnailToSquare")
@@ -762,6 +763,15 @@ enum class PlayerDesignStyle {
     V8,
     V9,
     V10,
+    ;
+
+    /**
+     * Styles that draw their own chrome edge to edge and expect the status bar
+     * out of the way: the immersive ones (V7, V8) and the full-bleed artwork
+     * style (V10). Everything else keeps the normal status bar.
+     */
+    val hidesStatusBar: Boolean
+        get() = this == V7 || this == V8 || this == V10
 }
 
 enum class PlayerBackgroundStyle {

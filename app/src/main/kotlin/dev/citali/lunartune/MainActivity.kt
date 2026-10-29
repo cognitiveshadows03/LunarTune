@@ -237,6 +237,7 @@ import dev.citali.lunartune.constants.FloatingNavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.FontPreferenceKey
 import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.HasPressedStarKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
 import dev.citali.lunartune.constants.LaunchCountKey
 import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
@@ -1434,6 +1435,15 @@ class MainActivity : FragmentActivity() {
                         playerConnection?.aodModeEnabled ?: MutableStateFlow(false)
                     }.collectAsStateWithLifecycle()
 
+                    val lyricsPageVisible by remember(playerConnection) {
+                        playerConnection?.lyricsPageVisible ?: MutableStateFlow(false)
+                    }.collectAsStateWithLifecycle()
+
+                    val hideStatusBarEnabled by rememberPreference(
+                        HideStatusBarKey,
+                        defaultValue = true,
+                    )
+
                     LaunchedEffect(aodModeLaunchRequestCount, playerConnection) {
                         val launchRequestCount = aodModeLaunchRequestCount
                         if (launchRequestCount == 0) return@LaunchedEffect
@@ -1496,6 +1506,8 @@ class MainActivity : FragmentActivity() {
                         playerDesignStyle = playerDesignStyle,
                         aodModeEnabled = aodModeEnabled,
                         isYearInMusicScreen = isYearInMusicScreen,
+                        hideStatusBarEnabled = hideStatusBarEnabled,
+                        lyricsPageVisible = lyricsPageVisible,
                         miniPlayerAnchorPersistenceEnabled = miniPlayerAnchorPersistenceEnabled,
                         onSetSystemBarAppearance = ::setSystemBarAppearance,
                         onSaveMiniPlayerAnchor = setSavedMiniPlayerAnchor,
@@ -3172,7 +3184,11 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun setStatusBarsHidden(hidden: Boolean) {
-        if (immersiveStatusBarsHidden == hidden) return
+        // No "already in this state" shortcut: the platform can bring the status
+        // bar back on its own (leaving AOD, a popup closing, a resumed window),
+        // and the request used to be dropped because the cached flag still said
+        // "hidden" — which is exactly how the bar stayed on screen for a style
+        // that asks for it gone. Re-applying is a cheap, idempotent call.
         immersiveStatusBarsHidden = hidden
         val controller = WindowCompat.getInsetsController(window, window.decorView)
 
@@ -3194,6 +3210,8 @@ class MainActivity : FragmentActivity() {
         playerDesignStyle: PlayerDesignStyle,
         aodModeEnabled: Boolean,
         isYearInMusicScreen: Boolean,
+        hideStatusBarEnabled: Boolean,
+        lyricsPageVisible: Boolean,
         miniPlayerAnchorPersistenceEnabled: Boolean,
         onSetSystemBarAppearance: (Boolean) -> Unit,
         onSaveMiniPlayerAnchor: (Int) -> Unit,
@@ -3232,14 +3250,20 @@ class MainActivity : FragmentActivity() {
         // the immersive styles used to keep the status bar for the entire opening
         // spring. The target anchor flips the instant expansion starts (tap, fling
         // or AOD launch) and stays set until a collapse begins, which is the same
-        // point at which the status bar is allowed to come back.
+        // point at which the status bar is allowed to come back. Every immersive
+        // style that owns the whole screen gets the bar taken away, and so does the
+        // full-screen lyrics page: it is its own surface with its own close
+        // affordance, so the bar only ever sat on top of it.
         val shouldHideStatusBars =
             isYearInMusicScreen ||
                 (
-                    playerBottomSheetState.isExpandedOrExpanding &&
+                    hideStatusBarEnabled &&
                         (
-                            playerDesignStyle == PlayerDesignStyle.V7 ||
-                                playerDesignStyle == PlayerDesignStyle.V10
+                            (
+                                playerBottomSheetState.isExpandedOrExpanding &&
+                                    playerDesignStyle.hidesStatusBar
+                            ) ||
+                                lyricsPageVisible
                         )
                 )
 

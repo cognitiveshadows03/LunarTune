@@ -203,6 +203,13 @@ class PlayerConnection(
 
     val aodModeEnabled = MutableStateFlow(false)
 
+    /**
+     * True while the full-screen lyrics page is open. It lives here so the
+     * Activity can take the status bar away for the lyrics page the same way it
+     * does for the immersive player styles.
+     */
+    val lyricsPageVisible = MutableStateFlow(false)
+
     val error = MutableStateFlow<PlaybackException?>(null)
     private var dismissedPlaybackError: PlaybackException? = null
     val waitingForNetworkConnection = service.waitingForNetworkConnection

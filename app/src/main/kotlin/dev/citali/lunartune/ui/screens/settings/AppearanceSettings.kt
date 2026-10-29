@@ -97,6 +97,7 @@ import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.GridItemSize
 import dev.citali.lunartune.constants.GridItemsSizeKey
 import dev.citali.lunartune.constants.HidePlayerThumbnailKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.LibraryChipOrderKey
 import dev.citali.lunartune.constants.LibraryFilter
 import dev.citali.lunartune.constants.LyricsBackgroundStyle
@@ -201,6 +202,11 @@ fun AppearanceSettings(navController: NavController) {
         rememberPreference(
             HidePlayerThumbnailKey,
             defaultValue = false,
+        )
+    val (hideStatusBar, onHideStatusBarChange) =
+        rememberPreference(
+            HideStatusBarKey,
+            defaultValue = true,
         )
     val (archiveTuneCanvasEnabled, onLunarTuneCanvasEnabledChange) =
         rememberPreference(
@@ -789,6 +795,16 @@ fun AppearanceSettings(navController: NavController) {
                                 PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)
                             }
                         },
+                    )
+                }
+
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.hide_status_bar)) },
+                        description = stringResource(R.string.hide_status_bar_desc),
+                        icon = { Icon(painterResource(R.drawable.fullscreen), null) },
+                        checked = hideStatusBar,
+                        onCheckedChange = onHideStatusBarChange,
                     )
                 }
 

@@ -1044,6 +1044,15 @@ fun BottomSheetPlayer(
     var isLyricsScreenVisible by rememberSaveable {
         mutableStateOf(false)
     }
+    // The lyrics page is its own full-bleed surface, so the status bar is taken
+    // away for it exactly like the immersive player styles do. Publish the state
+    // up to the Activity, which owns the window insets controller.
+    DisposableEffect(playerConnection) {
+        onDispose { playerConnection.lyricsPageVisible.value = false }
+    }
+    LaunchedEffect(playerConnection, isLyricsScreenVisible) {
+        playerConnection.lyricsPageVisible.value = isLyricsScreenVisible
+    }
     // Apple Music style (portrait): its own inline queue instead of the queue sheet.
     var isAppleQueueOpen by rememberSaveable { mutableStateOf(false) }
     // Lyrics page transition state lives here (not inside MikoLyricsTransition) so it survives the

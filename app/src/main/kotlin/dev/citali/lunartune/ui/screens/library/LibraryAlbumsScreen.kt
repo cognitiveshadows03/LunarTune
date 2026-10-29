@@ -97,6 +97,26 @@ import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.LibraryAlbumsViewModel
 
+/**
+ * Narrowest an album tile may get. The tile has to be wide enough to print an
+ * artist name at 10.sp, so the grid asks for a healthy minimum and lets the
+ * column count fall out of the screen width instead of forcing four columns.
+ */
+private val AlbumGridMinCellWidth = 104.dp
+
+private val AlbumGridSidePadding = 16.dp
+
+private val AlbumGridColumnSpacing = 8.dp
+
+/** Corner radius of an album tile and its cover. */
+private val AlbumTileCorner = 22.dp
+
+/** Side inset that keeps a label clear of the tile's rounded corners. */
+private val AlbumTileLabelSideInset = 5.dp
+
+/** Room under the last label line so the corner arcs cannot reach it. */
+private val AlbumTileLabelBottomInset = 10.dp
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LibraryAlbumsScreen(
@@ -162,14 +182,19 @@ fun LibraryAlbumsScreen(
 
             // Main albums list or grid layout
             if (isGridView) {
+                // Column count follows the screen instead of being pinned to four.
+                // Four on a normal phone left each tile about 70dp wide — narrower
+                // than the artist name it has to print, so names were chopped no
+                // matter how they were ellipsised.
+                val gridColumns = remember { GridCells.Adaptive(minSize = AlbumGridMinCellWidth) }
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(4), // 4-column albums grid
-                    contentPadding = PaddingValues(start = 24.dp, top = topContentPadding, end = 24.dp, bottom = playerAwareBottomPadding),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    columns = gridColumns,
+                    contentPadding = PaddingValues(start = AlbumGridSidePadding, top = topContentPadding, end = AlbumGridSidePadding, bottom = playerAwareBottomPadding),
+                    horizontalArrangement = Arrangement.spacedBy(AlbumGridColumnSpacing),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    item(span = { GridItemSpan(4) }, key = "album_controls", contentType = "controls") {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "album_controls", contentType = "controls") {
             Row(
                 modifier =
                     Modifier
@@ -378,7 +403,7 @@ fun LibraryAlbumsScreen(
             Spacer(modifier = Modifier.height(12.dp))
                     }
                     // Featured Album spotlight card span all 4 columns
-                    item(span = { GridItemSpan(4) }, key = "featured_album_card") {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "featured_album_card") {
                         featuredAlbum?.let { album ->
                             Box(
                                 modifier =
@@ -423,7 +448,7 @@ fun LibraryAlbumsScreen(
                                                 text = album.album.title,
                                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                maxLines = 1,
+                                                maxLines = 2,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                             Text(
@@ -494,16 +519,17 @@ fun LibraryAlbumsScreen(
                         }
                     }
 
-                    // 4-column albums list
+                    // albums grid
                     items(filteredAlbums, key = { it.id }) { album ->
                         Column(
+                            // A small inset inside the rounded tile: the corner
+                            // arcs are 22dp, and a line printed flush against the
+                            // bottom edge loses its first and last glyph to them.
+                            // The labels therefore start clear of the corners.
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    // Clip the press ripple to the tile: unclipped,
-                                    // a tap painted a hard-edged rectangle over the
-                                    // artwork and the labels.
-                                    .clip(RoundedCornerShape(22.dp))
+                                    .clip(RoundedCornerShape(AlbumTileCorner))
                                     .combinedClickable(
                                         onClick = { navController.navigate("album/${album.id}") },
                                         onLongClick = {
@@ -516,20 +542,20 @@ fun LibraryAlbumsScreen(
                                                 )
                                             }
                                         },
-                                    ),
+                                    ).padding(bottom = AlbumTileLabelBottomInset),
                         ) {
                             Box(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .aspectRatio(1f)
-                                        .clip(RoundedCornerShape(22.dp)),
+                                        .clip(RoundedCornerShape(AlbumTileCorner)),
                             ) {
                                 ItemThumbnail(
                                     thumbnailUrl = album.album.thumbnailUrl,
                                     isActive = false,
                                     isPlaying = false,
-                                    shape = RoundedCornerShape(22.dp),
+                                    shape = RoundedCornerShape(AlbumTileCorner),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize(),
                                 )
@@ -560,19 +586,38 @@ fun LibraryAlbumsScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
+                            // Two lines each: an album title or artist that runs
+                            // past the tile now finishes on the next line instead
+                            // of disappearing behind an ellipsis.
                             Text(
                                 text = album.album.title,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style =
+                                    MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        lineHeight = 14.sp,
+                                    ),
                                 color = MaterialTheme.colorScheme.onBackground,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = AlbumTileLabelSideInset),
                             )
                             Text(
                                 text = album.artists.joinToString(", ") { it.name },
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                style =
+                                    MaterialTheme.typography.bodySmall.copy(
+                                        fontSize = 10.sp,
+                                        lineHeight = 13.sp,
+                                    ),
                                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = AlbumTileLabelSideInset),
                             )
                         }
                     }
