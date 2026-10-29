@@ -116,16 +116,29 @@ fun LunarTuneTheme(
             }
         }
 
+    // The saved copy of the custom face is on disk, so it can be rebuilt right
+    // here, synchronously: the first frame already renders in the user's font
+    // instead of flashing the bundled one and snapping over a beat later.
+    val savedCustomFontFamily =
+        remember(fontPreference, customFontUri) {
+            if (fontPreference == AppFontPreference.CUSTOM && customFontUri.isNotBlank()) {
+                CustomFontLoader.cachedFontFamily(context.applicationContext, customFontUri)
+            } else {
+                null
+            }
+        }
     val customFontFamily =
         produceState<FontFamily?>(
-            initialValue = null,
+            initialValue = savedCustomFontFamily,
             context,
             fontPreference,
             customFontUri,
+            savedCustomFontFamily,
         ) {
             value =
                 if (fontPreference == AppFontPreference.CUSTOM && customFontUri.isNotBlank()) {
                     CustomFontLoader.loadFontFamily(context.applicationContext, customFontUri)
+                        ?: savedCustomFontFamily
                 } else {
                     null
                 }

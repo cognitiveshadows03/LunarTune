@@ -122,6 +122,22 @@ object PreferenceStore {
 
     fun <T> get(key: Preferences.Key<T>): T? = _prefs.value?.get(key)
 
+    /**
+     * Applies an edit and publishes the result to the in-memory snapshot before
+     * returning, for start-up work whose outcome has to be visible on the very
+     * first frame instead of a beat later.
+     */
+    suspend fun editAndPublish(
+        context: Context,
+        block: MutablePreferences.() -> Unit,
+    ) {
+        val updated =
+            context.dataStore.edit { prefs ->
+                prefs.block()
+            }
+        _prefs.value = updated
+    }
+
     fun launchEdit(
         dataStore: DataStore<Preferences>,
         block: MutablePreferences.() -> Unit,
@@ -219,12 +235,16 @@ inline fun <reified T : Enum<T>> rememberEnumPreference(
 ): MutableState<T> {
     val context = LocalContext.current
 
+    // Same priming as rememberPreference: the snapshot is already loaded before
+    // the first frame, so the stored value is used from the start instead of
+    // emitting the default once and correcting itself a moment later.
+    val initialValue = PreferenceStore.get(key).toEnum(defaultValue = defaultValue)
     val state =
         remember {
             context.dataStore.data
                 .map { it[key].toEnum(defaultValue = defaultValue) }
                 .distinctUntilChanged()
-        }.collectAsState(defaultValue)
+        }.collectAsState(initialValue)
 
     return remember {
         object : MutableState<T> {

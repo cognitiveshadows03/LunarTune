@@ -500,6 +500,10 @@ fun LibraryAlbumsScreen(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
+                                    // Clip the press ripple to the tile: unclipped,
+                                    // a tap painted a hard-edged rectangle over the
+                                    // artwork and the labels.
+                                    .clip(RoundedCornerShape(22.dp))
                                     .combinedClickable(
                                         onClick = { navController.navigate("album/${album.id}") },
                                         onLongClick = {

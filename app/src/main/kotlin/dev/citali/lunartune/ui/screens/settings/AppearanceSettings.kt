@@ -59,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -72,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import kotlinx.coroutines.launch
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AppFontPreference
@@ -345,6 +347,7 @@ fun AppearanceSettings(navController: NavController) {
     val pickHomeHeader = rememberBannerImageCropper("home_header") { onHomeHeaderImageUriChange(it.toString()) }
     val pickSettingsHeader = rememberBannerImageCropper("settings_header") { onSettingsHeaderImageUriChange(it.toString()) }
 
+    val fontImportScope = rememberCoroutineScope()
     val customFontPickerLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
@@ -368,6 +371,12 @@ fun AppearanceSettings(navController: NavController) {
                 }
             }
 
+            // Copy the pick into private storage straight away: from here on
+            // the app can rebuild the face from a local file at every launch,
+            // with no dependency on the document provider still being there.
+            fontImportScope.launch {
+                CustomFontLoader.importFontFamily(context.applicationContext, uri.toString())
+            }
             onCustomFontUriChange(uri.toString())
             onCustomFontNameChange(CustomFontLoader.displayName(context, uri))
             onFontPreferenceChange(AppFontPreference.CUSTOM)

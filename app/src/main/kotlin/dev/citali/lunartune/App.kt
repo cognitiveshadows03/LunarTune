@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import dev.citali.lunartune.canvas.LunarTuneCanvas
 import dev.citali.lunartune.constants.BetterLyricsApiKeyKey
 import dev.citali.lunartune.constants.*
@@ -58,6 +59,7 @@ import dev.citali.lunartune.storage.StorageFolderKind
 import dev.citali.lunartune.storage.StorageLocationRepository
 import dev.citali.lunartune.ui.player.CanvasArtworkPlaybackCache
 import dev.citali.lunartune.ui.screens.settings.ThemePalettes
+import dev.citali.lunartune.ui.theme.CustomFontLoader
 import dev.citali.lunartune.ui.theme.ThemeSeedPalette
 import dev.citali.lunartune.ui.theme.ThemeSeedPaletteCodec
 import dev.citali.lunartune.utils.MoriCipherUpdateScheduler
@@ -122,6 +124,10 @@ class App :
         PreferenceStore.start(this)
         runBlocking {
             PreferenceStore.awaitReady()
+            // Anything the user made their own — theme colour, custom typeface —
+            // has to be in place before the first frame, otherwise the app opens
+            // on the stock look and visibly corrects itself a moment later.
+            preparePersonalisationBeforeFirstFrame()
         }
         Timber.plant(Timber.DebugTree())
         try {
@@ -135,6 +141,44 @@ class App :
         initializeGatekeeper()
         initializeCriticalSync()
         initializeDeferredAsync()
+    }
+
+    /**
+     * Runs before the first Activity composes, so the app opens already wearing
+     * the user's colours and font.
+     *
+     * The custom face is rebuilt from the private copy saved when it was picked,
+     * and the "random theme on startup" roll happens here — rewritten into the
+     * preference snapshot synchronously — instead of in the deferred background
+     * pass that used to repaint the theme a second or two after launch.
+     */
+    private suspend fun preparePersonalisationBeforeFirstFrame() {
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val fontPreference =
+                    PreferenceStore.get(FontPreferenceKey).toEnum(defaultValue = AppFontPreference.DEFAULT)
+                if (fontPreference == AppFontPreference.CUSTOM) {
+                    PreferenceStore.get(CustomFontUriKey)?.takeIf { it.isNotBlank() }?.let { uri ->
+                        CustomFontLoader.preload(this@App, uri)
+                    }
+                }
+            }.onFailure { Timber.w(it, "Could not preload the custom font") }
+
+            runCatching {
+                if (PreferenceStore.get(RandomThemeOnStartupKey) == true) {
+                    val randomPalette = ThemePalettes.generateRandomPalette()
+                    val seedPalette =
+                        ThemeSeedPalette(
+                            primary = randomPalette.primary,
+                            secondary = randomPalette.secondary,
+                            tertiary = randomPalette.tertiary,
+                            neutral = randomPalette.neutral,
+                        )
+                    val encodedPalette = ThemeSeedPaletteCodec.encodeForPreference(seedPalette, "Random")
+                    PreferenceStore.editAndPublish(this@App) { this[CustomThemeColorKey] = encodedPalette }
+                }
+            }.onFailure { Timber.w(it, "Could not roll the startup theme") }
+        }
     }
 
     private fun initializeGatekeeper() {
@@ -234,22 +278,6 @@ class App :
 
                 if (prefs[UseLoginForBrowse] != false) {
                     YouTube.useLoginForBrowse = true
-                }
-
-                // Apply random theme on startup if enabled
-                if (prefs[RandomThemeOnStartupKey] == true) {
-                    val randomPalette = ThemePalettes.generateRandomPalette()
-                    val seedPalette =
-                        ThemeSeedPalette(
-                            primary = randomPalette.primary,
-                            secondary = randomPalette.secondary,
-                            tertiary = randomPalette.tertiary,
-                            neutral = randomPalette.neutral,
-                        )
-                    val encodedPalette = ThemeSeedPaletteCodec.encodeForPreference(seedPalette, "Random")
-                    dataStore.edit { settings ->
-                        settings[CustomThemeColorKey] = encodedPalette
-                    }
                 }
 
                 isInitialized = true

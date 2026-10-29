@@ -42,7 +42,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -131,16 +130,18 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -954,8 +955,13 @@ class MainActivity : FragmentActivity() {
                     }
                 }
 
+            // Open on the colour the user settled on. Starting from the stock
+            // accent and letting the effect below correct it meant every launch
+            // flashed the default palette before their own appeared.
+            val savedThemeColor =
+                if (!enableDynamicTheme) customThemeColor else DefaultThemeColor
             var themeColor by rememberSaveable(stateSaver = ColorSaver) {
-                mutableStateOf(DefaultThemeColor)
+                mutableStateOf(savedThemeColor)
             }
 
             LaunchedEffect(legacyUseSystemFont) {
@@ -3553,14 +3559,28 @@ private fun TranslucentTopAppBarIconButton(
     )
 }
 
+/** Corner radius of the floating top-bar sheet. */
+private val MenuSheetCorner = 30.dp
+
+/** Corner radius of one action bar inside the floating sheet. */
+private val MenuBarCorner = 20.dp
+
+/** Ring of room kept inside the menu popup for the sheet's own shadow. */
+private val MenuSheetShadowRoom = 10.dp
+
+/** How far the sheet's painted shadow reaches into that ring. */
+private val MenuSheetShadowSpread = 9.dp
+
 /**
  * Replaces the top-bar action cluster with a single trigger that opens an
  * Android 16-style floating menu: a transparent, blurred sheet (Haze live blur
  * of the screen behind it) whose actions are separate rounded bars, each
- * floating on its own with gaps and a soft shadow — the way notifications
- * stack in Android 16's shade. The sheet keeps a hairline border and shadow
- * so it reads as one floating panel; on devices where the blur has no pixels
- * to show, the bars still float over the dimmed fallback tint.
+ * floating on its own with gaps and a soft shade — the way notifications
+ * stack in Android 16's shade. Everything the sheet needs for depth is painted
+ * inside its own popup, because a popup clips at its bounds: an elevation
+ * shadow there gets cut into a hard dark edge, and a hairline border reads as
+ * a second line along the rim. On devices where the blur has no pixels to
+ * show, the bars still float over the dimmed fallback tint.
  */
 @Composable
 private fun FrostedTopBarMenu(
@@ -3570,9 +3590,9 @@ private fun FrostedTopBarMenu(
     updateAvailable: Boolean,
     onNavigate: (String) -> Unit,
 ) {
-    val sheetShape = RoundedCornerShape(30.dp)
-    val barShape = RoundedCornerShape(20.dp)
+    val sheetShape = RoundedCornerShape(MenuSheetCorner)
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
+    val sheetShadow = MaterialTheme.colorScheme.scrim
 
     Box {
         TranslucentTopAppBarIconButton(onClick = { onExpandedChange(!expanded) }) {
@@ -3594,6 +3614,19 @@ private fun FrostedTopBarMenu(
             modifier =
                 Modifier
                     .width(250.dp)
+                    // A popup clips at its own bounds, so a platform elevation
+                    // shadow gets sliced into a hard dark line along the edge —
+                    // and the hairline border drew a second one on top of it.
+                    // The sheet now keeps a ring of room for a shadow it paints
+                    // itself, entirely inside the popup, so nothing is cut off.
+                    .padding(MenuSheetShadowRoom)
+                    .drawBehind {
+                        drawFloatingSheetShadow(
+                            cornerRadiusPx = MenuSheetCorner.toPx(),
+                            spreadPx = MenuSheetShadowSpread.toPx(),
+                            shade = sheetShadow,
+                        )
+                    }.clip(sheetShape)
                     .hazeBlur(
                         input = HazeInput.Sources(hazeState),
                         style =
@@ -3607,13 +3640,12 @@ private fun FrostedTopBarMenu(
             shape = sheetShape,
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
-            shadowElevation = 14.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+            shadowElevation = 0.dp,
         ) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.history,
                 label = stringResource(R.string.history),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3622,7 +3654,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.stats,
                 label = stringResource(R.string.stats),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3631,7 +3663,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3640,7 +3672,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.new_release,
                 label = stringResource(R.string.new_release_albums),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3649,7 +3681,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
                 label = stringResource(R.string.music_together_short),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3664,7 +3696,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.settings,
                 label = stringResource(R.string.settings),
-                barShape = barShape,
+                barCornerRadius = MenuBarCorner,
                 barColor = barColor,
                 trailing = settingsTrailing,
             ) {
@@ -3675,25 +3707,65 @@ private fun FrostedTopBarMenu(
     }
 }
 
-/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shadowed, on the blurred sheet. */
+/**
+ * Soft shadow for the floating menu sheet, drawn in the ring of padding the
+ * sheet keeps for it. Stacked translucent rounded rects approximate a blur and
+ * stay entirely inside the popup, so no edge is ever sliced flat.
+ */
+private fun DrawScope.drawFloatingSheetShadow(
+    cornerRadiusPx: Float,
+    spreadPx: Float,
+    shade: Color,
+) {
+    val steps = 6
+    for (step in steps downTo 1) {
+        val t = step / steps.toFloat()
+        val spread = spreadPx * t
+        drawRoundRect(
+            color = shade.copy(alpha = 0.028f + 0.032f * (1f - t)),
+            topLeft = Offset(-spread, -spread * 0.35f + spreadPx * 0.42f),
+            size = Size(size.width + spread * 2f, size.height + spread * 2f),
+            cornerRadius = CornerRadius(cornerRadiusPx + spread),
+        )
+    }
+}
+
+/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shaded, on the blurred sheet. */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
     label: String,
-    barShape: Shape,
+    barCornerRadius: Dp,
     barColor: Color,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val barShape = remember(barCornerRadius) { RoundedCornerShape(barCornerRadius) }
+    val barShade = MaterialTheme.colorScheme.scrim
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 3.dp)
-                .shadow(elevation = 5.dp, shape = barShape, clip = false)
                 .clip(barShape)
                 .background(barColor.copy(alpha = 0.95f))
-                .clickable(onClick = onClick)
+                // Depth is painted inside the bar instead of by an elevation
+                // layer: the menu's scroll container clips anything drawn
+                // outside a child, and that clipped edge is what showed up as
+                // a hard line across the sheet.
+                .drawWithContent {
+                    drawRoundRect(
+                        brush =
+                            Brush.verticalGradient(
+                                0f to Color.White.copy(alpha = 0.10f),
+                                0.35f to Color.Transparent,
+                                0.72f to Color.Transparent,
+                                1f to barShade.copy(alpha = 0.14f),
+                            ),
+                        cornerRadius = CornerRadius(barCornerRadius.toPx()),
+                    )
+                    drawContent()
+                }.clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
