@@ -74,8 +74,10 @@ import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
  * purpose — the sheet already travels the full distance, so this only supplies the
  * "the card became the player" read. Tune here, not at the call sites.
  */
-private const val BetaMorphCollapsedGrowth = 0.9f
-private const val BetaMorphContentStartScale = 0.92f
+private const val BetaMorphCollapsedGrowth = 0.35f
+
+/** Where the player starts its life in the morph, as a fraction of full size. */
+private const val BetaMorphContentStartScale = 0.32f
 
 /**
  * Bottom Sheet
@@ -138,15 +140,25 @@ fun BottomSheet(
                         .graphicsLayer {
                             val progress = state.progress.coerceIn(0f, 1f)
                             if (betaMorph) {
-                                // Opens up sooner and settles in from a touch smaller, so
-                                // the content reads as arriving from the collapsed row
-                                // rather than as a separate screen fading in.
-                                alpha = ((progress - 0.05f) / 0.45f).coerceIn(0f, 1f)
+                                // The player itself grows out of the collapsed row: it is
+                                // scaled about the row's centre, which stays put, so the
+                                // artwork and controls appear to expand from the mini
+                                // player instead of fading in on top of it.
+                                alpha = ((progress - 0.02f) / 0.45f).coerceIn(0f, 1f)
+                                val eased = 1f - (1f - progress) * (1f - progress)
                                 val scale =
                                     BetaMorphContentStartScale +
-                                        (1f - BetaMorphContentStartScale) * progress
+                                        (1f - BetaMorphContentStartScale) * eased
                                 scaleX = scale
                                 scaleY = scale
+                                if (size.height > 0f) {
+                                    val rowCentre = state.collapsedBound.toPx() * 0.5f
+                                    transformOrigin =
+                                        TransformOrigin(
+                                            pivotFractionX = 0.5f,
+                                            pivotFractionY = (size.height - rowCentre) / size.height,
+                                        )
+                                }
                             } else {
                                 alpha = ((progress - 0.25f) * 4).coerceIn(0f, 1f)
                             }
