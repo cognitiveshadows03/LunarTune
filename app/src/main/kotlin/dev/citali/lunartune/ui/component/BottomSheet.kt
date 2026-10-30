@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -68,6 +69,15 @@ import dev.citali.lunartune.constants.BottomSheetCollapseAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
 
 /**
+ * Beta motion: as the sheet opens, the collapsed row grows a little and hands over to
+ * the expanded content, which settles in from slightly smaller. Small numbers on
+ * purpose — the sheet already travels the full distance, so this only supplies the
+ * "the card became the player" read. Tune here, not at the call sites.
+ */
+private const val BetaMorphCollapsedGrowth = 0.9f
+private const val BetaMorphContentStartScale = 0.92f
+
+/**
  * Bottom Sheet
  * Modified from [ViMusic](https://github.com/vfsfitvnm/ViMusic)
  */
@@ -82,6 +92,8 @@ fun BottomSheet(
     /** Extra downward drift (px) for the collapsed row while the navigation
      * bar is hidden; scaled down as the sheet expands so the player is untouched. */
     collapsedOffsetPx: () -> Float = { 0f },
+    /** Opt-in beta motion: grow the collapsed row into the sheet while it opens. */
+    betaMorph: Boolean = false,
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -124,7 +136,20 @@ fun BottomSheet(
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = ((state.progress - 0.25f) * 4).coerceIn(0f, 1f)
+                            val progress = state.progress.coerceIn(0f, 1f)
+                            if (betaMorph) {
+                                // Opens up sooner and settles in from a touch smaller, so
+                                // the content reads as arriving from the collapsed row
+                                // rather than as a separate screen fading in.
+                                alpha = ((progress - 0.05f) / 0.45f).coerceIn(0f, 1f)
+                                val scale =
+                                    BetaMorphContentStartScale +
+                                        (1f - BetaMorphContentStartScale) * progress
+                                scaleX = scale
+                                scaleY = scale
+                            } else {
+                                alpha = ((progress - 0.25f) * 4).coerceIn(0f, 1f)
+                            }
                         },
                 content = content,
             )
@@ -140,7 +165,20 @@ fun BottomSheet(
                                 y = (collapsedOffsetPx() * (1f - state.progress)).roundToInt(),
                             )
                         }.graphicsLayer {
-                            alpha = 1f - (state.progress * 4).coerceAtMost(1f)
+                            var fade = 1f - (state.progress * 4).coerceAtMost(1f)
+                            if (betaMorph) {
+                                val progress = state.progress.coerceIn(0f, 1f)
+                                fade = (1f - progress * 1.5f).coerceIn(0f, 1f)
+                                val scale = 1f + BetaMorphCollapsedGrowth * progress
+                                scaleX = scale
+                                scaleY = scale
+                                // Grow out of the artwork rather than out of the middle of
+                                // the row, so the thumbnail is what appears to expand into
+                                // the player's hero image. 0.12 is roughly the centre of the
+                                // leading artwork at phone widths.
+                                transformOrigin = TransformOrigin(0.12f, 0.5f)
+                            }
+                            alpha = fade
                         }.then(
                             if (collapsedGesturesEnabled) {
                                 Modifier.clickable(

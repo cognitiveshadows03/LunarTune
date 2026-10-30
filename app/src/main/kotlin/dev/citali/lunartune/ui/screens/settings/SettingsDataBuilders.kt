@@ -465,6 +465,7 @@ fun buildSettingsGroups(
                 SettingsChild("Manual source login", "manual_source_login", listOf("manual source login", "manual login", "dev source login")),
                 SettingsChild("YTM sync", "ytm_sync", listOf("ytm sync", "youtube music sync", "sync library")),
                 SettingsChild("Force sync on account switch", "force_sync_account_switch", listOf("force sync", "account switch sync", "sync on switch")),
+                SettingsChild("Beta animations", "beta_animations", listOf("beta", "animation", "motion", "transition", "shared element", "player morph")),
             ),
         )
     val defaultLinks =

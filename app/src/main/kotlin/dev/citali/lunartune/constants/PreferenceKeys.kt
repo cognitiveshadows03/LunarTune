@@ -304,6 +304,13 @@ val PreloadNextSongKey = booleanPreferencesKey("preloadNextSong")
  * created, so toggling it takes effect on the next app start.
  */
 val FastPlaybackStartKey = booleanPreferencesKey("fastPlaybackStart")
+
+/**
+ * Developer options → "Beta animations". Gates the experimental motion work
+ * (currently the mini player / player morph) so it can ship before it is judged
+ * smooth enough to be on by default.
+ */
+val BetaAnimationsKey = booleanPreferencesKey("dev_beta_animations")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
 enum class AudioQuality {
