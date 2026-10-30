@@ -23,13 +23,6 @@ val NavigationBarHorizontalPadding = 12.dp
 val NavigationBarBottomPadding = 10.dp
 val NavigationBarMaxWidth = 420.dp
 val NavigationBarHeight = 78.dp
-
-/**
- * How fast a bar-less layout closes up behind a bar that is fading out. The
- * navigation bar is gone from the screen by 62% of its hide progress, so rows
- * that move into its footprint use the same rate and arrive together.
- */
-const val MenuAnchorFadeRate = 1.6f
 val FloatingNavigationBarHorizontalPadding = 24.dp
 val FloatingNavigationBarBottomPadding = 16.dp
 val FloatingNavigationBarMaxWidth = 360.dp

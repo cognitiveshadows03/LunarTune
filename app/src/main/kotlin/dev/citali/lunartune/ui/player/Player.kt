@@ -171,14 +171,12 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.LocalDatabase
 import dev.citali.lunartune.LocalDownloadUtil
-import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.canvas.models.CanvasArtwork
 import dev.citali.lunartune.constants.LunarTuneCanvasKey
 import dev.citali.lunartune.constants.BackdropBlurAmountKey
 import dev.citali.lunartune.constants.BackdropEnabledKey
-import dev.citali.lunartune.constants.BetaAnimationsKey
 import dev.citali.lunartune.constants.BlurRadiusKey
 import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DisableBlurKey
@@ -403,7 +401,6 @@ fun BottomSheetPlayer(
         defaultValue = PlayerDesignStyle.V7,
     )
     val (playerStyleOverrides) = rememberPreference(PlayerDesignStyleOverridesKey, "")
-    val (betaAnimations) = rememberPreference(BetaAnimationsKey, false)
     val playerDesignStyle =
         remember(settingsPlayerDesignStyle, playerStyleOverrides, mediaMetadata?.id) {
             resolvePlayerDesignStyle(mediaMetadata?.id, playerStyleOverrides, settingsPlayerDesignStyle)
@@ -1145,7 +1142,6 @@ fun BottomSheetPlayer(
 
     BottomSheet(
         state = state,
-        betaMorph = betaAnimations && !LocalAnimationsDisabled.current,
         modifier =
             modifier
                 .focusRequester(focusRequester)
