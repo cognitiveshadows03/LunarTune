@@ -70,7 +70,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -129,7 +129,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -226,6 +225,7 @@ import dev.citali.lunartune.constants.HasPressedStarKey
 import dev.citali.lunartune.constants.LaunchCountKey
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
+import dev.citali.lunartune.constants.MenuAnchorFadeRate
 import dev.citali.lunartune.constants.MiniPlayerBottomSpacing
 import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.MiniPlayerLastAnchorKey
@@ -2266,25 +2266,49 @@ class MainActivity : FragmentActivity() {
                                             isMiniPlayerPairedWithNavigation = areBottomBarsPaired,
                                             hazeState = hazeState,
                                             navbarHiddenOffset = {
-                                                // While the bar is away the collapsed mini
-                                                // player drifts down into its footprint on
-                                                // the same progress; idle there is no row.
-                                                if (
-                                                    shouldShowNavigationBar && !useRail &&
-                                                    !playerBottomSheetState.isDismissed
-                                                ) {
-                                                    val routeHide =
-                                                        maxOf(
-                                                            routeHideFraction,
-                                                            activeSearchBarHideState.value,
-                                                        )
-                                                    with(navDriftDensity) {
-                                                        (floatingBarsBottomPadding + navVisibleHeight).toPx() *
-                                                            maxOf(routeHide, navHideAnim.value)
-                                                                .coerceIn(0f, 1f)
-                                                    }
-                                                } else {
+                                                // One motion for the row, not two. Two things
+                                                // happen when the bar is asked to hide: the
+                                                // sheet's anchor instantly loses the bar's
+                                                // footprint (a layout jump of the whole row)
+                                                // and this drift used to move the row down by
+                                                // the same distance a second time, so the row
+                                                // travelled twice as far as the bar and the two
+                                                // crossed while the bar was still half visible.
+                                                // The drift now cancels that jump first and only
+                                                // lets the row fall as the bar's own spring runs
+                                                // out, so both ride the same animation. The
+                                                // scroll-hide keeps the bar's layout frozen, so
+                                                // there the drift is the entire motion.
+                                                if (playerBottomSheetState.isDismissed || useRail) {
                                                     0f
+                                                } else {
+                                                    val footprintPx =
+                                                        with(navDriftDensity) {
+                                                            (floatingBarsBottomPadding + navVisibleHeight).toPx()
+                                                        }
+                                                    if (shouldShowNavigationBar) {
+                                                        // Scroll hide: the bar's layout is
+                                                        // frozen, so the row follows the hide
+                                                        // 1:1 and nothing else moves it.
+                                                        footprintPx * navHideAnim.value
+                                                    } else {
+                                                        // Route hide: cancel the anchor jump
+                                                        // with the bar's own reveal, then close
+                                                        // the remaining gap at the bar's fade
+                                                        // rate so the row has arrived by the
+                                                        // time the bar is invisible.
+                                                        val reveal =
+                                                            if (navVisibleHeight > 0.dp) {
+                                                                (bottomNavigationBarHeight / navVisibleHeight)
+                                                                    .coerceIn(0f, 1f)
+                                                            } else {
+                                                                0f
+                                                            }
+                                                        val follow =
+                                                            (navHideAnim.value * MenuAnchorFadeRate)
+                                                                .coerceAtMost(1f)
+                                                        footprintPx * (follow - reveal)
+                                                    }
                                                 }
                                             },
                                         )
@@ -3390,6 +3414,13 @@ private val MenuBarCorner = 20.dp
 /** Width of the sheet's content, before the ring of room for its shadow. */
 private val MenuSheetContentWidth = 250.dp
 
+/**
+ * Upper bound for the sheet. The width used to be fixed, which ellipsised the
+ * longer labels ("New release albu…") as soon as the user picked a wider font;
+ * the sheet now grows to fit its longest row and stops here.
+ */
+private val MenuSheetMaxWidth = 320.dp
+
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
 private val MenuSheetShadowRoom = 10.dp
 
@@ -3439,7 +3470,7 @@ private fun FrostedTopBarMenu(
             onDismissRequest = { onExpandedChange(false) },
             modifier =
                 Modifier
-                    .width(MenuSheetContentWidth)
+                    .widthIn(min = MenuSheetContentWidth, max = MenuSheetMaxWidth)
                     // A popup clips at its own bounds, so a platform elevation
                     // shadow gets sliced into a hard dark line along the edge.
                     // The sheet keeps a ring of room for a shadow it paints
@@ -3497,7 +3528,7 @@ private fun FrostedTopBarMenu(
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.new_release,
-                label = stringResource(R.string.new_release_albums),
+                label = stringResource(R.string.new_release_albums_short),
                 barShape = barShape,
                 barColor = barColor,
             ) {
@@ -3570,10 +3601,9 @@ private fun FrostedTopBarMenuRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 3.dp)
-                .shadow(elevation = 5.dp, shape = barShape, clip = false)
+                .padding(vertical = 2.dp)
                 .clip(barShape)
-                .background(barColor.copy(alpha = 0.95f))
+                .background(barColor)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
