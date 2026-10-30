@@ -283,6 +283,11 @@ dependencies {
     implementation(libs.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.fragment)
+    // Theme attributes (selectableItemBackground, background) that some of our
+    // libraries reference in their styles. They used to arrive transitively with
+    // androidx.biometric and with mediarouter on the gms flavour only, so the foss
+    // release build could not link its resources without this.
+    implementation(libs.appcompat)
 
     implementation(libs.material3)
     implementation(libs.palette)
