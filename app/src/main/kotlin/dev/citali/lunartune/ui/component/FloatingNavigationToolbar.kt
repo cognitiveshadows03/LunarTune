@@ -124,9 +124,7 @@ fun FloatingNavigationToolbar(
         return
     }
     val isFloating =
-        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED ||
-            style == NavigationBarStyle.OUTLINED
-    val isOutlined = style == NavigationBarStyle.OUTLINED
+        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED
     val isFrosted = style == NavigationBarStyle.FROSTED
     // No RenderEffect below Android 12, and Haze's RenderScript fallback
     // renders garbage on several old GPUs — those devices get the dim veil
@@ -147,9 +145,9 @@ fun FloatingNavigationToolbar(
     val (hideNavigationLabels) = rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
     val resolvedBarHeight = NavigationBarHeight * navBarHeightMultiplier
     val navigationShape =
-        remember(isPairedWithMiniPlayer, isFloating, isFrosted, isOutlined, navBarCornerRadius) {
+        remember(isPairedWithMiniPlayer, isFloating, isFrosted, navBarCornerRadius) {
             when {
-                isFrosted || isOutlined -> RoundedCornerShape(percent = 50)
+                isFrosted -> RoundedCornerShape(percent = 50)
                 isFloating -> RoundedCornerShape(navBarCornerRadius.dp)
                 isPairedWithMiniPlayer ->
                     RoundedCornerShape(
@@ -260,13 +258,11 @@ fun FloatingNavigationToolbar(
                     .fillMaxWidth(if (isFloating) navBarWidthFraction.coerceIn(0.5f, 1f) else 1f)
                     .height(resolvedBarHeight),
             shape = navigationShape,
-            color = if (isFrosted || isOutlined) Color.Transparent else navigationContainerColor,
-            tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
+            color = if (isFrosted) Color.Transparent else navigationContainerColor,
+            tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
             border =
-                if (isOutlined) {
-                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                } else if (isFrosted) {
+                if (isFrosted) {
                     BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.primary.copy(alpha = frostedGlow.coerceIn(0f, 1f)),
