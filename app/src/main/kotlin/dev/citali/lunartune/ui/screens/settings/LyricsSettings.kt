@@ -60,7 +60,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -68,10 +67,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
-import dev.citali.lunartune.lyrics.BetterLyricsClient
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackState
-import dev.citali.lunartune.constants.BetterLyricsApiKeyKey
 import dev.citali.lunartune.constants.EnableBetterLyricsKey
 import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.constants.EnableKugouKey
@@ -113,7 +110,6 @@ import dev.citali.lunartune.ui.component.NumberPickerPreference
 import dev.citali.lunartune.ui.component.PreferenceEntry
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
-import dev.citali.lunartune.ui.component.TextFieldDialog
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -173,28 +169,6 @@ fun LyricsSettings(
             state = statsState,
             onDismiss = { showPaxsenixStatsDialog = false },
             onRetry = { viewModel.fetchPaxsenixStats() },
-        )
-    }
-
-    val (betterLyricsApiKey, onBetterLyricsApiKeyChange) =
-        rememberPreference(key = BetterLyricsApiKeyKey, defaultValue = "")
-    var showBetterLyricsApiKeyDialog by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(betterLyricsApiKey) {
-        BetterLyricsClient.apiKey = betterLyricsApiKey
-    }
-
-    if (showBetterLyricsApiKeyDialog) {
-        TextFieldDialog(
-            initialTextFieldValue = TextFieldValue(betterLyricsApiKey),
-            title = { Text(stringResource(R.string.betterlyrics_api_key)) },
-            placeholder = { Text(stringResource(R.string.betterlyrics_api_key_hint)) },
-            isInputValid = { true },
-            onDone = { value ->
-                onBetterLyricsApiKeyChange(value.trim())
-                showBetterLyricsApiKeyDialog = false
-            },
-            onDismiss = { showBetterLyricsApiKeyDialog = false },
         )
     }
 
@@ -508,20 +482,6 @@ fun LyricsSettings(
                     icon = { Icon(painterResource(R.drawable.lyrics), null) },
                     checked = enableBetterLyricsPortato,
                     onCheckedChange = onEnableBetterLyricsPortatoChange,
-                )
-            }
-
-            item {
-                PreferenceEntry(
-                    title = { Text(stringResource(R.string.betterlyrics_api_key)) },
-                    description =
-                        if (betterLyricsApiKey.isBlank()) {
-                            stringResource(R.string.betterlyrics_api_key_desc)
-                        } else {
-                            stringResource(R.string.betterlyrics_api_key_set)
-                        },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    onClick = { showBetterLyricsApiKeyDialog = true },
                 )
             }
 

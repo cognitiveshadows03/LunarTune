@@ -38,10 +38,6 @@ import androidx.navigation.NavController
 import dev.citali.lunartune.LocalDatabase
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
-import dev.citali.lunartune.constants.AppLockEnabledKey
-import dev.citali.lunartune.constants.AppLockPinHashKey
-import dev.citali.lunartune.constants.AppLockType
-import dev.citali.lunartune.constants.AppLockTypeKey
 import dev.citali.lunartune.constants.DisableScreenshotKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.PauseListenHistoryKey
@@ -52,7 +48,6 @@ import dev.citali.lunartune.ui.component.PreferenceEntry
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
 import dev.citali.lunartune.ui.utils.backToMain
-import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -79,22 +74,6 @@ fun PrivacySettings(navController: NavController) {
             key = EnableHapticFeedbackKey,
             defaultValue = true,
         )
-    val (appLockEnabled) = rememberPreference(AppLockEnabledKey, defaultValue = false)
-    val (appLockType) = rememberEnumPreference(AppLockTypeKey, defaultValue = AppLockType.NONE)
-    val (appLockPinHash) = rememberPreference(AppLockPinHashKey, defaultValue = "")
-
-    val appLockConfigured =
-        appLockEnabled &&
-            (appLockType == AppLockType.BIOMETRIC || (appLockType == AppLockType.PIN && appLockPinHash.isNotBlank()))
-
-    val appLockSummary =
-        when {
-            !appLockEnabled -> stringResource(R.string.no_lock)
-            appLockType == AppLockType.BIOMETRIC -> stringResource(R.string.same_as_screen_lock)
-            appLockType == AppLockType.PIN && appLockPinHash.isNotBlank() -> stringResource(R.string.custom_pin)
-            else -> stringResource(R.string.no_lock)
-        }
-
     var showClearListenHistoryDialog by remember {
         mutableStateOf(false)
     }
@@ -196,17 +175,6 @@ fun PrivacySettings(navController: NavController) {
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = SettingsDimensions.ScreenBottomPadding),
         ) {
-            PreferenceGroup(title = stringResource(R.string.security)) {
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.app_lock)) },
-                        description = appLockSummary,
-                        icon = { Icon(painterResource(R.drawable.lock), null) },
-                        onClick = { navController.navigate("settings/app_lock") },
-                    )
-                }
-            }
-
             PreferenceGroup(title = stringResource(R.string.listen_history)) {
                 item {
                     SwitchPreference(
@@ -257,21 +225,12 @@ fun PrivacySettings(navController: NavController) {
                 }
 
                 item {
-                    // An app lock keeps the secure flag on: otherwise Recents would keep
-                    // a thumbnail of what the lock is there to hide. The switch shows the
-                    // forced state and stays put until the lock is removed.
                     SwitchPreference(
                         title = { Text(stringResource(R.string.disable_screenshot)) },
-                        description =
-                            if (appLockConfigured) {
-                                stringResource(R.string.disable_screenshot_locked_desc)
-                            } else {
-                                stringResource(R.string.disable_screenshot_desc)
-                            },
+                        description = stringResource(R.string.disable_screenshot_desc),
                         icon = { Icon(painterResource(R.drawable.screenshot), null) },
-                        checked = disableScreenshot || appLockConfigured,
+                        checked = disableScreenshot,
                         onCheckedChange = onDisableScreenshotChange,
-                        isEnabled = !appLockConfigured,
                     )
                 }
             }

@@ -65,12 +65,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.HideNavigationBarLabelsKey
-import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
-import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
-import dev.citali.lunartune.constants.NavBarLongPressAction
-import dev.citali.lunartune.constants.NavBarLongPressActionsKey
 import dev.citali.lunartune.constants.NavBarHideOnScrollKey
-import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.NAVIGATION_BAR_CORNER_RADIUS_DEFAULT
 import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NAVIGATION_BAR_LABEL_SPACING_DEFAULT
@@ -111,14 +106,6 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
-private fun longPressActionLabel(action: NavBarLongPressAction): String =
-    when (action) {
-        NavBarLongPressAction.NONE -> stringResource(R.string.navbar_long_press_action_none)
-        NavBarLongPressAction.PLAY_RANDOM_SONG -> stringResource(R.string.navbar_long_press_action_random_song)
-        NavBarLongPressAction.MUSIC_RECOGNITION -> stringResource(R.string.navbar_long_press_action_music_recognition)
-    }
-
-@Composable
 fun NavigationBarSettings(navController: NavController) {
     val (navigationBarStyle, onNavigationBarStyleChange) =
         rememberEnumPreference(
@@ -127,25 +114,8 @@ fun NavigationBarSettings(navController: NavController) {
         )
     val (hideNavigationBarLabels, onHideNavigationBarLabelsChange) =
         rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
-    val (navBarLongPressActions, onNavBarLongPressActionsChange) =
-        rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
     val (navBarHideOnScroll, onNavBarHideOnScrollChange) =
         rememberPreference(NavBarHideOnScrollKey, defaultValue = false)
-    val (homeLongPressAction, onHomeLongPressActionChange) =
-        rememberEnumPreference(
-            HomeNavBarLongPressActionKey,
-            defaultValue = NavBarLongPressAction.PLAY_RANDOM_SONG,
-        )
-    val (searchLongPressAction, onSearchLongPressActionChange) =
-        rememberEnumPreference(
-            SearchNavBarLongPressActionKey,
-            defaultValue = NavBarLongPressAction.MUSIC_RECOGNITION,
-        )
-    val (libraryLongPressAction, onLibraryLongPressActionChange) =
-        rememberEnumPreference(
-            LibraryNavBarLongPressActionKey,
-            defaultValue = NavBarLongPressAction.NONE,
-        )
     val (navigationBarWidth, onNavigationBarWidthChange) =
         rememberPreference(NavigationBarWidthKey, defaultValue = NAVIGATION_BAR_WIDTH_DEFAULT)
     val (navigationBarHeight, onNavigationBarHeightChange) =
@@ -227,8 +197,6 @@ fun NavigationBarSettings(navController: NavController) {
                                     stringResource(R.string.navigation_bar_style_floating)
                                 NavigationBarStyle.FROSTED ->
                                     stringResource(R.string.navigation_bar_style_frosted)
-                                NavigationBarStyle.OUTLINED ->
-                                    stringResource(R.string.navigation_bar_style_outlined)
                                 NavigationBarStyle.CAPSULE ->
                                     stringResource(R.string.navigation_bar_style_capsule)
                             }
@@ -248,59 +216,11 @@ fun NavigationBarSettings(navController: NavController) {
 
                 item {
                     SwitchPreference(
-                        title = { Text(stringResource(R.string.navbar_long_press_actions)) },
-                        description = stringResource(R.string.navbar_long_press_actions_desc),
-                        icon = { Icon(painterResource(R.drawable.shuffle), null) },
-                        checked = navBarLongPressActions,
-                        onCheckedChange = onNavBarLongPressActionsChange,
-                    )
-                }
-
-                item {
-                    SwitchPreference(
                         title = { Text(stringResource(R.string.nav_bar_hide_on_scroll)) },
                         description = stringResource(R.string.nav_bar_hide_on_scroll_desc),
                         icon = { Icon(painterResource(R.drawable.animation), null) },
                         checked = navBarHideOnScroll,
                         onCheckedChange = onNavBarHideOnScrollChange,
-                    )
-                }
-            }
-
-            PreferenceGroup(title = stringResource(R.string.navbar_long_press_mappings)) {
-                item {
-                    EnumListPreference(
-                        title = { Text(stringResource(R.string.navbar_home_long_press_action)) },
-                        description = stringResource(R.string.navbar_long_press_mapping_desc),
-                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
-                        selectedValue = homeLongPressAction,
-                        valueText = { longPressActionLabel(it) },
-                        onValueSelected = onHomeLongPressActionChange,
-                        isEnabled = navBarLongPressActions,
-                    )
-                }
-
-                item {
-                    EnumListPreference(
-                        title = { Text(stringResource(R.string.navbar_search_long_press_action)) },
-                        description = stringResource(R.string.navbar_long_press_mapping_desc),
-                        icon = { Icon(painterResource(R.drawable.search), null) },
-                        selectedValue = searchLongPressAction,
-                        valueText = { longPressActionLabel(it) },
-                        onValueSelected = onSearchLongPressActionChange,
-                        isEnabled = navBarLongPressActions,
-                    )
-                }
-
-                item {
-                    EnumListPreference(
-                        title = { Text(stringResource(R.string.navbar_library_long_press_action)) },
-                        description = stringResource(R.string.navbar_long_press_mapping_desc),
-                        icon = { Icon(painterResource(R.drawable.library_outlined), null) },
-                        selectedValue = libraryLongPressAction,
-                        valueText = { longPressActionLabel(it) },
-                        onValueSelected = onLibraryLongPressActionChange,
-                        isEnabled = navBarLongPressActions,
                     )
                 }
             }
@@ -721,14 +641,12 @@ private fun NavBarPreview(
     val glow = (frostedGlow ?: storedGlow).coerceIn(0f, 1f)
     val bgGlow = (frostedBgGlow ?: storedBgGlow).coerceIn(0f, 1f)
     val isFloating =
-        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED ||
-            style == NavigationBarStyle.OUTLINED
-    val isOutlined = style == NavigationBarStyle.OUTLINED
+        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED
     val isFrosted = style == NavigationBarStyle.FROSTED
     val previewHazeState = rememberHazeState()
     val resolvedBarHeight = NavigationBarHeight * heightMultiplier
     val shape =
-        if (isFrosted || isOutlined) {
+        if (isFrosted) {
             RoundedCornerShape(percent = 50)
         } else if (isFloating) {
             RoundedCornerShape(cornerRadius.dp)
@@ -789,13 +707,11 @@ private fun NavBarPreview(
                     ).fillMaxWidth(if (isFloating) widthFraction.coerceIn(0.5f, 1f) else 1f)
                     .height(resolvedBarHeight),
             shape = shape,
-            color = if (isFrosted || isOutlined) Color.Transparent else barColor,
-            tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
+            color = if (isFrosted) Color.Transparent else barColor,
+            tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
             border =
-                if (isOutlined) {
-                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                } else if (isFrosted) {
+                if (isFrosted) {
                     BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.primary.copy(alpha = glow),

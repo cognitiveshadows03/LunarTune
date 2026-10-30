@@ -97,7 +97,6 @@ import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.GridItemSize
 import dev.citali.lunartune.constants.GridItemsSizeKey
 import dev.citali.lunartune.constants.HidePlayerThumbnailKey
-import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.LibraryChipOrderKey
 import dev.citali.lunartune.constants.LibraryFilter
 import dev.citali.lunartune.constants.LyricsBackgroundStyle
@@ -202,11 +201,6 @@ fun AppearanceSettings(navController: NavController) {
         rememberPreference(
             HidePlayerThumbnailKey,
             defaultValue = false,
-        )
-    val (hideStatusBar, onHideStatusBarChange) =
-        rememberPreference(
-            HideStatusBarKey,
-            defaultValue = true,
         )
     val (archiveTuneCanvasEnabled, onLunarTuneCanvasEnabledChange) =
         rememberPreference(
@@ -411,7 +405,6 @@ fun AppearanceSettings(navController: NavController) {
         remember {
             listOf(
                 LyricsBackgroundStyle.DEFAULT,
-                LyricsBackgroundStyle.FOLLOW_THEME,
                 LyricsBackgroundStyle.COLORING,
                 LyricsBackgroundStyle.MOVING_BLUR,
             )
@@ -800,16 +793,6 @@ fun AppearanceSettings(navController: NavController) {
 
                 item {
                     SwitchPreference(
-                        title = { Text(stringResource(R.string.hide_status_bar)) },
-                        description = stringResource(R.string.hide_status_bar_desc),
-                        icon = { Icon(painterResource(R.drawable.fullscreen), null) },
-                        checked = hideStatusBar,
-                        onCheckedChange = onHideStatusBarChange,
-                    )
-                }
-
-                item {
-                    SwitchPreference(
                         title = { Text(stringResource(R.string.show_player_volume_bar)) },
                         description =
                             if (isVolumeBarSupported) {
@@ -874,7 +857,6 @@ fun AppearanceSettings(navController: NavController) {
                         valueText = {
                             when (it) {
                                 LyricsBackgroundStyle.DEFAULT -> stringResource(R.string.lyrics_background_default)
-                                LyricsBackgroundStyle.FOLLOW_THEME -> stringResource(R.string.follow_theme)
                                 LyricsBackgroundStyle.COLORING -> stringResource(R.string.coloring)
                                 LyricsBackgroundStyle.CUSTOM -> stringResource(R.string.custom)
                                 LyricsBackgroundStyle.MOVING_BLUR -> stringResource(R.string.lyrics_background_moving_blur)

@@ -250,8 +250,6 @@
     <string name="loudness">Loudness</string>
     <string name="volume">Volume</string>
     <string name="show_player_volume_bar">Show volume bar</string>
-    <string name="hide_status_bar">Hide status bar</string>
-    <string name="hide_status_bar_desc">Hides the status bar in the immersive player styles and on the lyrics page</string>
     <string name="player_volume_bar_v7_v8_only">Available only with V7 and V8 player styles</string>
     <string name="file_size">File size</string>
     <string name="unknown">Unknown</string>
@@ -563,10 +561,6 @@
     <string name="stream_bypass_proxy_desc">Use your direct IP for stream playback to avoid IP mismatch</string>
     <string name="enable_betterlyrics">Enable BetterLyrics</string>
     <string name="enable_betterlyrics_portato">Enable BetterLyrics Portato</string>
-    <string name="betterlyrics_api_key">BetterLyrics API key</string>
-    <string name="betterlyrics_api_key_desc">Optional. Without a key, only cached lyrics can be fetched.</string>
-    <string name="betterlyrics_api_key_set">API key set - uncached lyrics are available</string>
-    <string name="betterlyrics_api_key_hint">Paste your API key</string>
     <string name="enable_youlyplus_lyrics">Enable YouLyPlus lyrics</string>
     <string name="enable_unison_lyrics">Enable Unison lyrics</string>
     <string name="enable_simpmusic_lyrics">Enable SimpMusic lyrics</string>
@@ -1177,7 +1171,6 @@
     <string name="frosted_glow_desc">Outline glow</string>
     <string name="frosted_bg_glow">Background glow</string>
     <string name="frosted_bg_glow_desc">Background glow and blur</string>
-    <string name="navigation_bar_style_outlined">Outlined</string>
     <string name="navigation_bar_style_capsule">Capsule</string>
     <string name="navigation_bar_settings_title">Navigation bar</string>
     <string name="navigation_bar_settings_subtitle">Style, labels, and dimensions</string>
@@ -1185,18 +1178,6 @@
     <string name="hide_navigation_bar_labels_desc">Show icons only</string>
     <string name="nav_bar_hide_on_scroll">Hide bar on scroll (Beta)</string>
     <string name="nav_bar_hide_on_scroll_desc">Hide the bar on scroll down; show it again on scroll up.</string>
-    <string name="navbar_long_press_actions">Navigation bar long-press</string>
-    <string name="navbar_long_press_actions_desc">Set long-press actions for Home, Search, and Library.</string>
-    <string name="navbar_long_press_mappings">Long-press mappings</string>
-    <string name="navbar_long_press_mapping_desc">Action for this tab.</string>
-    <string name="navbar_home_long_press_action">Home long-press</string>
-    <string name="navbar_search_long_press_action">Search long-press</string>
-    <string name="navbar_library_long_press_action">Library long-press</string>
-    <string name="navbar_long_press_action_none">Do nothing</string>
-    <string name="navbar_long_press_action_random_song">Play random song</string>
-    <string name="navbar_long_press_action_music_recognition">Music recognition</string>
-    <string name="navbar_long_press_no_history">No listening history yet</string>
-    <string name="navbar_long_press_no_offline_songs">No local, downloaded, or fully cached songs are available offline.</string>
     <string name="navigation_bar_dimensions">Dimensions</string>
     <string name="navigation_bar_width">Width</string>
     <string name="navigation_bar_width_desc">Bar width (screen fraction)</string>
@@ -1212,16 +1193,11 @@
     <string name="navigation_bar_corner_radius_desc">Corner radius (dp)</string>
     <string name="navigation_bar_reset_dimensions">Reset dimensions to default</string>
     <!-- App lock -->
-    <string name="security">Security</string>
-    <string name="app_lock">App lock</string>
     <string name="app_lock_desc">Require a PIN or your screen lock to open the app</string>
     <string name="lock_your_music">Lock your music</string>
     <string name="lock_music_desc">Keep your library private by adding an extra layer of security</string>
     <string name="ways_to_lock">Ways to lock</string>
-    <string name="same_as_screen_lock">Same as screen lock</string>
     <string name="same_as_screen_lock_desc">Fingerprint, face or the PIN you unlock your phone with</string>
-    <string name="custom_pin">Custom PIN</string>
-    <string name="no_lock">No lock</string>
     <string name="enter_pin">Enter PIN</string>
     <string name="create_pin">Create a PIN</string>
     <string name="confirm_pin">Confirm your PIN</string>
@@ -1250,7 +1226,6 @@
     <string name="lock_scope_whole_app_desc">Ask before anything is shown</string>
     <string name="lock_scope_sensitive">Personal screens only</string>
     <string name="lock_scope_sensitive_desc">Library, history, stats, account and settings. Home, search and the player stay open.</string>
-    <string name="disable_screenshot_locked_desc">Kept on while an app lock is set, so the app\'s view in Recents cannot show what the lock hides.</string>
     <!-- Moving blur lyrics background -->
     <string name="lyrics_background_moving_blur">Moving blur</string>
     <string name="use_gpu_blur">Use GPU blur</string>

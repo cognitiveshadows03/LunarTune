@@ -87,10 +87,8 @@ import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
 
 private fun searchableSettingsRoute(parentKey: String, scrollKey: String?): String? {
-    // Sub screens with a route of their own win over the parent screen, so
-    // searching "app lock" lands on the lock screen instead of the privacy one.
+    // Sub screens with a route of their own win over the parent screen.
     when (scrollKey) {
-        "app_lock", "biometric_lock" -> return "settings/app_lock"
         "cross_service_import" -> return "settings/music_transfer"
     }
     val route =

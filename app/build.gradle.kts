@@ -282,7 +282,6 @@ dependencies {
     implementation(libs.viewmodel)
     implementation(libs.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
-    implementation(libs.biometric)
     implementation(libs.fragment)
 
     implementation(libs.material3)

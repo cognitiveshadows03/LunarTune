@@ -71,7 +71,6 @@ fun CapsuleNavigationBar(
     modifier: Modifier = Modifier,
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
-    onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
 ) {
     Box(
@@ -122,7 +121,6 @@ fun CapsuleNavigationBar(
                             screen = screen,
                             selected = isSelected(screen),
                             onItemClick = onItemClick,
-                            onItemLongClick = onItemLongClick,
                             onSearchItemDoubleClick = onSearchItemDoubleClick,
                         )
                     }
@@ -138,7 +136,6 @@ private fun DockItem(
     screen: Screens,
     selected: Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
-    onItemLongClick: ((Screens) -> Unit)?,
     onSearchItemDoubleClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -199,10 +196,6 @@ private fun DockItem(
                             onItemClick(screen, selected)
                         }
                     },
-                    onLongClick =
-                        onItemLongClick?.let { longClick ->
-                            { longClick(screen) }
-                        },
                     interactionSource = interactionSource,
                     indication = null,
                 ),

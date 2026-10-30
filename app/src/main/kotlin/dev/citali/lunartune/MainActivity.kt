@@ -16,13 +16,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.view.View
 import android.view.WindowManager
@@ -42,6 +39,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -118,7 +116,6 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -131,6 +128,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -140,6 +138,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
@@ -182,17 +181,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.datastore.preferences.core.edit
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata.MEDIA_TYPE_MUSIC
 import androidx.media3.common.Player
 import androidx.media3.common.Timeline
-import androidx.media3.datasource.cache.ContentMetadata
-import androidx.media3.exoplayer.offline.Download
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -215,15 +209,6 @@ import dev.citali.lunartune.constants.AodModeEnabledKey
 import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.AppFontPreference
 import dev.citali.lunartune.constants.AppLanguageKey
-import dev.citali.lunartune.constants.AppLockBiometricUnlockKey
-import dev.citali.lunartune.constants.AppLockEnabledKey
-import dev.citali.lunartune.constants.AppLockPinHashKey
-import dev.citali.lunartune.constants.AppLockScope
-import dev.citali.lunartune.constants.AppLockScopeKey
-import dev.citali.lunartune.constants.AppLockTimeout
-import dev.citali.lunartune.constants.AppLockTimeoutKey
-import dev.citali.lunartune.constants.AppLockType
-import dev.citali.lunartune.constants.AppLockTypeKey
 import dev.citali.lunartune.constants.CustomFontUriKey
 import dev.citali.lunartune.constants.CustomThemeColorKey
 import dev.citali.lunartune.constants.DarkModeKey
@@ -237,10 +222,7 @@ import dev.citali.lunartune.constants.FloatingNavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.FontPreferenceKey
 import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.HasPressedStarKey
-import dev.citali.lunartune.constants.HideStatusBarKey
-import dev.citali.lunartune.constants.HomeNavBarLongPressActionKey
 import dev.citali.lunartune.constants.LaunchCountKey
-import dev.citali.lunartune.constants.LibraryNavBarLongPressActionKey
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
 import dev.citali.lunartune.constants.MiniPlayerBottomSpacing
@@ -248,8 +230,6 @@ import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.MiniPlayerLastAnchorKey
 import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NavBarHideOnScrollKey
-import dev.citali.lunartune.constants.NavBarLongPressAction
-import dev.citali.lunartune.constants.NavBarLongPressActionsKey
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
@@ -265,7 +245,6 @@ import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.PureBlackKey
 import dev.citali.lunartune.constants.RemindAfterKey
 import dev.citali.lunartune.constants.SYSTEM_DEFAULT
-import dev.citali.lunartune.constants.SearchNavBarLongPressActionKey
 import dev.citali.lunartune.constants.SearchSource
 import dev.citali.lunartune.constants.SearchSourceKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
@@ -295,7 +274,6 @@ import dev.citali.lunartune.playback.queues.LocalAlbumRadio
 import dev.citali.lunartune.playback.queues.Queue
 import dev.citali.lunartune.playback.queues.YouTubeAlbumRadio
 import dev.citali.lunartune.playback.queues.YouTubeQueue
-import dev.citali.lunartune.ui.component.AppLockGate
 import dev.citali.lunartune.ui.component.BottomSheetMenu
 import dev.citali.lunartune.ui.component.BottomSheetPage
 import dev.citali.lunartune.ui.component.BottomSheetState
@@ -314,9 +292,7 @@ import dev.citali.lunartune.ui.component.NetworkStatusBanner
 import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
 import dev.citali.lunartune.ui.component.TvNavigationRail
-import dev.citali.lunartune.ui.component.appLockConfigured
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
-import dev.citali.lunartune.ui.component.isSensitiveRoute
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
@@ -532,72 +508,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    private suspend fun selectNavBarLongPressSong(): Pair<Song?, Boolean> =
-        withContext(Dispatchers.IO) {
-            val isOnline = hasValidatedInternetConnection()
-            val hasUnblockedArtists: (Song) -> Boolean = { song ->
-                song.artists.none { it.blockedAt != null }
-            }
-
-            if (isOnline) {
-                val from = System.currentTimeMillis() - 90L * 24 * 60 * 60 * 1000
-                val favorites = database.mostPlayedSongs(from, limit = 24).first().filter(hasUnblockedArtists)
-                val song =
-                    favorites.randomOrNull()
-                        ?: database.recentSongs(40).first().filter(hasUnblockedArtists).randomOrNull()
-                song to false
-            } else {
-                val localSongs = database.localSongs().first()
-                val downloadedSongs = runCatching { database.downloadedSongsList() }.getOrDefault(emptyList())
-                val cachedSongIds = fullyCachedNavBarSongIds()
-                val cachedSongs =
-                    if (cachedSongIds.isEmpty()) {
-                        emptyList()
-                    } else {
-                        database.getSongsByIds(cachedSongIds)
-                    }
-                val song =
-                    (localSongs + downloadedSongs + cachedSongs)
-                        .distinctBy { it.id }
-                        .filter(hasUnblockedArtists)
-                        .randomOrNull()
-                song to true
-            }
-        }
-
-    private fun fullyCachedNavBarSongIds(): List<String> {
-        val cachedIds = mutableSetOf<String>()
-        downloadUtil.downloads.value
-            .filterValues { it.state == Download.STATE_COMPLETED }
-            .keys
-            .forEach { cachedIds += it }
-
-        listOf(downloadUtil.downloadCache, downloadUtil.playerCache).forEach { cache ->
-            val cacheKeys = runCatching { cache.keys }.getOrDefault(emptySet())
-            cacheKeys.forEach { mediaId ->
-                val contentLength =
-                    runCatching {
-                        cache.getContentMetadata(mediaId).get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
-                    }.getOrDefault(-1L)
-                if (contentLength > 0L &&
-                    runCatching { cache.isCached(mediaId, 0L, contentLength) }.getOrDefault(false)
-                ) {
-                    cachedIds += mediaId
-                }
-            }
-        }
-        return cachedIds.toList()
-    }
-
-    private fun hasValidatedInternetConnection(): Boolean =
-        runCatching {
-            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-            capabilities != null &&
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        }.getOrDefault(false)
-
     override fun onStop() {
         if (!isMusicServiceBound || playerConnection?.aodModeEnabled?.value == true) {
             super.onStop()
@@ -685,10 +595,7 @@ class MainActivity : FragmentActivity() {
 
         lifecycleScope.launch(Dispatchers.IO) {
             dataStore.data
-                // An app lock implies the secure flag: without it the task switcher
-                // keeps a thumbnail of whatever was on screen when the app was left,
-                // which is exactly what the lock is meant to hide.
-                .map { (it[DisableScreenshotKey] ?: false) || it.appLockConfigured() }
+                .map { it[DisableScreenshotKey] ?: false }
                 .distinctUntilChanged()
                 .collectLatest {
                     withContext(Dispatchers.Main) {
@@ -1239,13 +1146,12 @@ class MainActivity : FragmentActivity() {
                     // is attached just for the menu, and the (static) blur runs on every
                     // API level instead of only Android 12+.
                     var topBarMenuExpanded by rememberSaveable { mutableStateOf(false) }
-                    val isOutlinedNavBar = navigationBarStyle == NavigationBarStyle.OUTLINED
                     val navigationBarHeightMultiplier by rememberPreference(
                         NavigationBarHeightKey,
                         defaultValue = NAVIGATION_BAR_HEIGHT_DEFAULT,
                     )
                     val isFloatingNavBar =
-                        navigationBarStyle == NavigationBarStyle.FLOATING || isFrostedNavBar || isOutlinedNavBar ||
+                        navigationBarStyle == NavigationBarStyle.FLOATING || isFrostedNavBar ||
                             navigationBarStyle == NavigationBarStyle.CAPSULE
                     val floatingBarsBottomPadding =
                         if (isFloatingNavBar) FloatingNavigationBarBottomPadding else NavigationBarBottomPadding
@@ -1439,11 +1345,6 @@ class MainActivity : FragmentActivity() {
                         playerConnection?.lyricsPageVisible ?: MutableStateFlow(false)
                     }.collectAsStateWithLifecycle()
 
-                    val hideStatusBarEnabled by rememberPreference(
-                        HideStatusBarKey,
-                        defaultValue = true,
-                    )
-
                     LaunchedEffect(aodModeLaunchRequestCount, playerConnection) {
                         val launchRequestCount = aodModeLaunchRequestCount
                         if (launchRequestCount == 0) return@LaunchedEffect
@@ -1506,7 +1407,6 @@ class MainActivity : FragmentActivity() {
                         playerDesignStyle = playerDesignStyle,
                         aodModeEnabled = aodModeEnabled,
                         isYearInMusicScreen = isYearInMusicScreen,
-                        hideStatusBarEnabled = hideStatusBarEnabled,
                         lyricsPageVisible = lyricsPageVisible,
                         miniPlayerAnchorPersistenceEnabled = miniPlayerAnchorPersistenceEnabled,
                         onSetSystemBarAppearance = ::setSystemBarAppearance,
@@ -1824,22 +1724,6 @@ class MainActivity : FragmentActivity() {
                             handleIntent(intent, navController)
                         }
                     }
-                    val (navBarLongPressActions) = rememberPreference(NavBarLongPressActionsKey, defaultValue = true)
-                    val homeLongPressAction by
-                        rememberEnumPreference(
-                            HomeNavBarLongPressActionKey,
-                            defaultValue = NavBarLongPressAction.PLAY_RANDOM_SONG,
-                        )
-                    val searchLongPressAction by
-                        rememberEnumPreference(
-                            SearchNavBarLongPressActionKey,
-                            defaultValue = NavBarLongPressAction.MUSIC_RECOGNITION,
-                        )
-                    val libraryLongPressAction by
-                        rememberEnumPreference(
-                            LibraryNavBarLongPressActionKey,
-                            defaultValue = NavBarLongPressAction.NONE,
-                        )
                     val haptic = LocalHapticFeedback.current
                     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
                     val customHaptic =
@@ -2421,58 +2305,6 @@ class MainActivity : FragmentActivity() {
                                                 onItemClick = { screen, isSelected ->
                                                     handlePrimaryNavigationClick(screen, isSelected)
                                                 },
-                                                onItemLongClick =
-                                                    if (navBarLongPressActions) {
-                                                        { screen ->
-                                                            val action =
-                                                                when (screen) {
-                                                                    Screens.Home -> homeLongPressAction
-                                                                    Screens.Search -> searchLongPressAction
-                                                                    Screens.Library -> libraryLongPressAction
-                                                                    else -> NavBarLongPressAction.NONE
-                                                                }
-                                                            when (action) {
-                                                                NavBarLongPressAction.NONE -> Unit
-                                                                NavBarLongPressAction.PLAY_RANDOM_SONG -> {
-                                                                    coroutineScope.launch {
-                                                                        val (song, usedOfflineFallback) = selectNavBarLongPressSong()
-                                                                        if (song == null) {
-                                                                            val messageRes =
-                                                                                if (usedOfflineFallback) {
-                                                                                    R.string.navbar_long_press_no_offline_songs
-                                                                                } else {
-                                                                                    R.string.navbar_long_press_no_history
-                                                                                }
-                                                                            Toast
-                                                                                .makeText(
-                                                                                    this@MainActivity,
-                                                                                    getString(messageRes),
-                                                                                    Toast.LENGTH_SHORT,
-                                                                                ).show()
-                                                                            return@launch
-                                                                        }
-                                                                        playerConnection?.playQueue(
-                                                                            if (usedOfflineFallback || song.song.isLocal) {
-                                                                                ListQueue(items = listOf(song.toMediaItem()))
-                                                                            } else {
-                                                                                YouTubeQueue(
-                                                                                    endpoint =
-                                                                                        moe.rukamori.archivetune.innertube.models
-                                                                                            .WatchEndpoint(videoId = song.id),
-                                                                                    preloadItem = null,
-                                                                                    followAutomixPreview = true,
-                                                                                )
-                                                                            },
-                                                                        )
-                                                                    }
-                                                                }
-                                                                NavBarLongPressAction.MUSIC_RECOGNITION ->
-                                                                    navController.navigate(MusicRecognitionRoute)
-                                                            }
-                                                        }
-                                                    } else {
-                                                        null
-                                                    },
                                                 onSearchItemDoubleClick = {
                                                     searchSource = SearchSource.ONLINE
                                                     openSearch()
@@ -2809,83 +2641,6 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    val appLockEnabled by rememberPreference(AppLockEnabledKey, defaultValue = false)
-                    val appLockType by rememberEnumPreference(AppLockTypeKey, defaultValue = AppLockType.NONE)
-                    val appLockPinHash by rememberPreference(AppLockPinHashKey, defaultValue = "")
-                    val appLockBiometricUnlock by rememberPreference(AppLockBiometricUnlockKey, defaultValue = false)
-                    val appLockTimeout by rememberEnumPreference(AppLockTimeoutKey, defaultValue = AppLockTimeout.IMMEDIATELY)
-                    val appLockScope by rememberEnumPreference(AppLockScopeKey, defaultValue = AppLockScope.WHOLE_APP)
-
-                    val appLockActive =
-                        appLockEnabled &&
-                            (
-                                appLockType == AppLockType.BIOMETRIC ||
-                                    (appLockType == AppLockType.PIN && appLockPinHash.isNotBlank())
-                            )
-                    var isLocked by rememberSaveable { mutableStateOf(appLockActive) }
-                    var unlockedOnce by rememberSaveable { mutableStateOf(false) }
-                    // When the app went to the background, or 0 while it is in front.
-                    // Kept across rotation so a config change cannot be used to skip the timeout.
-                    var leftAt by rememberSaveable { mutableLongStateOf(0L) }
-
-                    LaunchedEffect(appLockActive) {
-                        if (!appLockActive) {
-                            isLocked = false
-                        } else if (!isLocked && !unlockedOnce) {
-                            // Covers the case where the cached preference had not been read
-                            // when the first frame was composed. Turning the lock on from the
-                            // settings does not lock the session that is already open.
-                            isLocked = true
-                        }
-                    }
-
-                    DisposableEffect(appLockActive, appLockTimeout) {
-                        val observer =
-                            object : DefaultLifecycleObserver {
-                                override fun onStop(owner: LifecycleOwner) {
-                                    if (!appLockActive) return
-                                    if (appLockTimeout == AppLockTimeout.IMMEDIATELY) {
-                                        isLocked = true
-                                    } else {
-                                        leftAt = SystemClock.elapsedRealtime()
-                                    }
-                                }
-
-                                override fun onStart(owner: LifecycleOwner) {
-                                    if (!appLockActive || leftAt == 0L) return
-                                    // elapsedRealtime cannot be wound back by changing the clock.
-                                    if (SystemClock.elapsedRealtime() - leftAt >= appLockTimeout.millis) {
-                                        isLocked = true
-                                    }
-                                    leftAt = 0L
-                                }
-                            }
-                        ProcessLifecycleOwner.get().lifecycle.addObserver(observer)
-                        onDispose { ProcessLifecycleOwner.get().lifecycle.removeObserver(observer) }
-                    }
-
-                    // With the lock scoped to sensitive screens, the gate only drops over
-                    // the screens that hold personal data. Everything else stays usable,
-                    // and the lock waits until such a screen is opened.
-                    val appLockGateVisible =
-                        isLocked &&
-                            appLockActive &&
-                            (
-                                appLockScope == AppLockScope.WHOLE_APP ||
-                                    isSensitiveRoute(navBackStackEntry?.destination?.route)
-                            )
-
-                    if (appLockGateVisible) {
-                        AppLockGate(
-                            lockType = appLockType,
-                            pinHash = appLockPinHash,
-                            biometricUnlock = appLockBiometricUnlock,
-                            onUnlocked = {
-                                isLocked = false
-                                unlockedOnce = true
-                            },
-                        )
-                    }
                 }
             }
         }
@@ -3210,7 +2965,6 @@ class MainActivity : FragmentActivity() {
         playerDesignStyle: PlayerDesignStyle,
         aodModeEnabled: Boolean,
         isYearInMusicScreen: Boolean,
-        hideStatusBarEnabled: Boolean,
         lyricsPageVisible: Boolean,
         miniPlayerAnchorPersistenceEnabled: Boolean,
         onSetSystemBarAppearance: (Boolean) -> Unit,
@@ -3257,15 +3011,10 @@ class MainActivity : FragmentActivity() {
         val shouldHideStatusBars =
             isYearInMusicScreen ||
                 (
-                    hideStatusBarEnabled &&
-                        (
-                            (
-                                playerBottomSheetState.isExpandedOrExpanding &&
-                                    playerDesignStyle.hidesStatusBar
-                            ) ||
-                                lyricsPageVisible
-                        )
-                )
+                    playerBottomSheetState.isExpandedOrExpanding &&
+                        playerDesignStyle.hidesStatusBar
+                ) ||
+                lyricsPageVisible
 
         LaunchedEffect(shouldHideStatusBars, aodModeEnabled) {
             if (aodModeEnabled) return@LaunchedEffect
@@ -3589,11 +3338,14 @@ private val MenuSheetCorner = 30.dp
 /** Corner radius of one action bar inside the floating sheet. */
 private val MenuBarCorner = 20.dp
 
+/** Width of the sheet's content, before the ring of room for its shadow. */
+private val MenuSheetContentWidth = 250.dp
+
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
 private val MenuSheetShadowRoom = 10.dp
 
 /** How far the sheet's painted shadow reaches into that ring. */
-private val MenuSheetShadowSpread = 9.dp
+private val MenuSheetShadowSpread = 10.dp
 
 /**
  * Replaces the top-bar action cluster with a single trigger that opens an
@@ -3615,6 +3367,7 @@ private fun FrostedTopBarMenu(
     onNavigate: (String) -> Unit,
 ) {
     val sheetShape = RoundedCornerShape(MenuSheetCorner)
+    val barShape = RoundedCornerShape(MenuBarCorner)
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val sheetShadow = MaterialTheme.colorScheme.scrim
 
@@ -3637,11 +3390,10 @@ private fun FrostedTopBarMenu(
             onDismissRequest = { onExpandedChange(false) },
             modifier =
                 Modifier
-                    .width(250.dp)
+                    .width(MenuSheetContentWidth)
                     // A popup clips at its own bounds, so a platform elevation
-                    // shadow gets sliced into a hard dark line along the edge —
-                    // and the hairline border drew a second one on top of it.
-                    // The sheet now keeps a ring of room for a shadow it paints
+                    // shadow gets sliced into a hard dark line along the edge.
+                    // The sheet keeps a ring of room for a shadow it paints
                     // itself, entirely inside the popup, so nothing is cut off.
                     .padding(MenuSheetShadowRoom)
                     .drawBehind {
@@ -3665,11 +3417,12 @@ private fun FrostedTopBarMenu(
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         ) {
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.history,
                 label = stringResource(R.string.history),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3678,7 +3431,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.stats,
                 label = stringResource(R.string.stats),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3687,7 +3440,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3696,7 +3449,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.new_release,
                 label = stringResource(R.string.new_release_albums),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3705,7 +3458,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
                 label = stringResource(R.string.music_together_short),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
             ) {
                 onExpandedChange(false)
@@ -3720,7 +3473,7 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.settings,
                 label = stringResource(R.string.settings),
-                barCornerRadius = MenuBarCorner,
+                barShape = barShape,
                 barColor = barColor,
                 trailing = settingsTrailing,
             ) {
@@ -3754,42 +3507,25 @@ private fun DrawScope.drawFloatingSheetShadow(
     }
 }
 
-/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shaded, on the blurred sheet. */
+/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shadowed, on the blurred sheet. */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
     label: String,
-    barCornerRadius: Dp,
+    barShape: Shape,
     barColor: Color,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    val barShape = remember(barCornerRadius) { RoundedCornerShape(barCornerRadius) }
-    val barShade = MaterialTheme.colorScheme.scrim
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 3.dp)
+                .shadow(elevation = 5.dp, shape = barShape, clip = false)
                 .clip(barShape)
                 .background(barColor.copy(alpha = 0.95f))
-                // Depth is painted inside the bar instead of by an elevation
-                // layer: the menu's scroll container clips anything drawn
-                // outside a child, and that clipped edge is what showed up as
-                // a hard line across the sheet.
-                .drawWithContent {
-                    drawRoundRect(
-                        brush =
-                            Brush.verticalGradient(
-                                0f to Color.White.copy(alpha = 0.10f),
-                                0.35f to Color.Transparent,
-                                0.72f to Color.Transparent,
-                                1f to barShade.copy(alpha = 0.14f),
-                            ),
-                        cornerRadius = CornerRadius(barCornerRadius.toPx()),
-                    )
-                    drawContent()
-                }.clickable(onClick = onClick)
+                .clickable(onClick = onClick)
                 .padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

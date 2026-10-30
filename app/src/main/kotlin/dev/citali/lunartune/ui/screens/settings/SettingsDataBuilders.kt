@@ -32,11 +32,6 @@ import dev.citali.lunartune.constants.CrossfadeEnabledKey
 import dev.citali.lunartune.constants.CrossfadeGaplessKey
 import dev.citali.lunartune.constants.DisableAnimationsKey
 import dev.citali.lunartune.constants.DisableBlurKey
-import dev.citali.lunartune.constants.AppLockEnabledKey
-import dev.citali.lunartune.constants.AppLockPinHashKey
-import dev.citali.lunartune.constants.AppLockType
-import dev.citali.lunartune.constants.AppLockTypeKey
-import dev.citali.lunartune.constants.DisableScreenshotKey
 import dev.citali.lunartune.constants.DynamicThemeKey
 import dev.citali.lunartune.constants.EnableDiscordRPCKey
 import dev.citali.lunartune.constants.EnableLastFMScrobblingKey
@@ -46,7 +41,6 @@ import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.HideExplicitKey
 import dev.citali.lunartune.constants.HideNavigationBarLabelsKey
 import dev.citali.lunartune.constants.HidePlayerThumbnailKey
-import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.HideVideoKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.ListenBrainzEnabledKey
@@ -79,7 +73,6 @@ import dev.citali.lunartune.constants.UseLyricsV2Key
 import dev.citali.lunartune.constants.UseSystemFontKey
 import dev.citali.lunartune.constants.UseGpuBlurKey
 import dev.citali.lunartune.constants.WakelockKey
-import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 
 @Composable
@@ -93,22 +86,6 @@ private fun SearchResultSwitch(
         checked = checked,
         onCheckedChange = onCheckedChange,
         enabled = enabled,
-    )
-}
-
-/** Same forced-on state as the Privacy page: an app lock keeps the secure flag set. */
-@Composable
-private fun DisableScreenshotSearchSwitch() {
-    val (checked, onCheckedChange) = rememberPreference(DisableScreenshotKey, false)
-    val (lockEnabled) = rememberPreference(AppLockEnabledKey, false)
-    val (lockType) = rememberEnumPreference(AppLockTypeKey, AppLockType.NONE)
-    val (pinHash) = rememberPreference(AppLockPinHashKey, "")
-    val lockConfigured =
-        lockEnabled && (lockType == AppLockType.BIOMETRIC || (lockType == AppLockType.PIN && pinHash.isNotBlank()))
-    Switch(
-        checked = checked || lockConfigured,
-        onCheckedChange = onCheckedChange,
-        enabled = !lockConfigured,
     )
 }
 
@@ -182,7 +159,6 @@ fun buildSettingsGroups(
                 SettingsChild("Swipe to song", "swipe_to_song", listOf("swipe to song", "swipe next", "swipe track")) { SearchResultSwitch(SwipeToSongKey, false) },
                 SettingsChild("Swipe sensitivity", "swipe_sensitivity", listOf("swipe", "gesture", "sensitivity")),
                 SettingsChild("Disable animations", "disable_animations", listOf("animation", "disable animations", "no animations", "performance")) { SearchResultSwitch(DisableAnimationsKey, false) },
-                SettingsChild("Hide status bar", "hide_status_bar", listOf("status bar", "hide status", "immersive", "fullscreen", "hide bar")) { SearchResultSwitch(HideStatusBarKey, true) },
                 SettingsChild("Force high refresh rate", "force_high_refresh_rate", listOf("refresh rate", "high refresh", "120hz", "90hz", "smooth")) { SearchResultSwitch(ForceHighRefreshRateKey, false) },
                 SettingsChild("Navigation bar style", "navigation_bar_style", listOf("navigation bar", "nav bar", "bottom bar")),
                 SettingsChild("Frosted navigation bar", "frosted_nav_bar", listOf("frosted nav", "frosted navigation", "frosted blur")),
@@ -305,7 +281,7 @@ fun buildSettingsGroups(
             title = stringResource(R.string.settings_behavior_title),
             subtitle = stringResource(R.string.settings_behavior_subtitle),
             accentColor = MaterialTheme.colorScheme.primary,
-            keywords = listOf("behavior", "privacy", "swipe", "gesture", "history", "cache", "data", "screenshot", "haptic", "vibrate", "lock", "pin", "biometric", "security"),
+            keywords = listOf("behavior", "privacy", "swipe", "gesture", "history", "cache", "data", "screenshot", "haptic", "vibrate"),
             onClick = { navController.navigate("settings/privacy") },
             children = listOf(
                 SettingsChild("Pause listen history", "pause_listen_history", listOf("pause listen", "stop history", "private listening")) { SearchResultSwitch(PauseListenHistoryKey, false) },
@@ -317,8 +293,6 @@ fun buildSettingsGroups(
                 SettingsChild("Disable screenshot", "disable_screenshot", listOf("screenshot", "screen capture", "privacy", "no screenshot")) { DisableScreenshotSearchSwitch() },
                 SettingsChild("Network metered", "network_metered", listOf("metered", "mobile data", "cellular", "data saver")) { SearchResultSwitch(NetworkMeteredKey, false) },
                 SettingsChild("Show tags in library", "show_tags_in_library", listOf("tags", "library tags", "show tags")),
-                SettingsChild("App lock", "app_lock", listOf("app lock", "lock", "pin", "security", "privacy", "unlock")),
-                SettingsChild("Biometric lock", "biometric_lock", listOf("biometric", "fingerprint", "face unlock", "screen lock", "unlock")),
             ),
         )
     val integration =

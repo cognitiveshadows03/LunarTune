@@ -14,15 +14,11 @@ import android.os.SystemClock
 import android.view.ViewConfiguration
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.citali.lunartune.ui.theme.LunarMotion
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -70,7 +66,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -139,7 +134,6 @@ fun FloatingNavigationToolbar(
     hazeState: HazeState? = null,
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
-    onItemLongClick: ((Screens) -> Unit)? = null,
     onSearchItemDoubleClick: (() -> Unit)? = null,
 ) {
     if (style == NavigationBarStyle.CAPSULE) {
@@ -148,15 +142,12 @@ fun FloatingNavigationToolbar(
             modifier = modifier,
             isSelected = isSelected,
             onItemClick = onItemClick,
-            onItemLongClick = onItemLongClick,
             onSearchItemDoubleClick = onSearchItemDoubleClick,
         )
         return
     }
     val isFloating =
-        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED ||
-            style == NavigationBarStyle.OUTLINED
-    val isOutlined = style == NavigationBarStyle.OUTLINED
+        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED
     val isFrosted = style == NavigationBarStyle.FROSTED
     // No RenderEffect below Android 12, and Haze's RenderScript fallback
     // renders garbage on several old GPUs — those devices get the dim veil
@@ -177,9 +168,9 @@ fun FloatingNavigationToolbar(
     val (hideNavigationLabels) = rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
     val resolvedBarHeight = NavigationBarHeight * navBarHeightMultiplier
     val navigationShape =
-        remember(isPairedWithMiniPlayer, isFloating, isFrosted, isOutlined, navBarCornerRadius) {
+        remember(isPairedWithMiniPlayer, isFloating, isFrosted, navBarCornerRadius) {
             when {
-                isFrosted || isOutlined -> RoundedCornerShape(percent = 50)
+                isFrosted -> RoundedCornerShape(percent = 50)
                 isFloating -> RoundedCornerShape(navBarCornerRadius.dp)
                 isPairedWithMiniPlayer ->
                     RoundedCornerShape(
@@ -290,13 +281,11 @@ fun FloatingNavigationToolbar(
                     .fillMaxWidth(if (isFloating) navBarWidthFraction.coerceIn(0.5f, 1f) else 1f)
                     .height(resolvedBarHeight),
             shape = navigationShape,
-            color = if (isFrosted || isOutlined) Color.Transparent else navigationContainerColor,
-            tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
+            color = if (isFrosted) Color.Transparent else navigationContainerColor,
+            tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
             border =
-                if (isOutlined) {
-                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                } else if (isFrosted) {
+                if (isFrosted) {
                     BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.primary.copy(alpha = frostedGlow.coerceIn(0f, 1f)),
@@ -402,23 +391,18 @@ fun FloatingNavigationToolbar(
                                     if (screen == Screens.Search) onSearchItemDoubleClick else null
                                 }
                             val lastClickTime = remember(screen) { mutableLongStateOf(0L) }
-                            var ignoreNextClick by remember(screen) { mutableStateOf(false) }
                             val onClick =
                                 remember(screen, selected, onItemClick, onDoubleClick) {
                                     {
-                                        if (ignoreNextClick) {
-                                            ignoreNextClick = false
+                                        val currentTime = SystemClock.uptimeMillis()
+                                        val isDoubleClick =
+                                            onDoubleClick != null &&
+                                                currentTime - lastClickTime.longValue <= ViewConfiguration.getDoubleTapTimeout()
+                                        lastClickTime.longValue = if (isDoubleClick) 0L else currentTime
+                                        if (isDoubleClick) {
+                                            onDoubleClick.invoke()
                                         } else {
-                                            val currentTime = SystemClock.uptimeMillis()
-                                            val isDoubleClick =
-                                                onDoubleClick != null &&
-                                                    currentTime - lastClickTime.longValue <= ViewConfiguration.getDoubleTapTimeout()
-                                            lastClickTime.longValue = if (isDoubleClick) 0L else currentTime
-                                            if (isDoubleClick) {
-                                                onDoubleClick.invoke()
-                                            } else {
-                                                onItemClick(screen, selected)
-                                            }
+                                            onItemClick(screen, selected)
                                         }
                                     }
                                 }
@@ -429,22 +413,7 @@ fun FloatingNavigationToolbar(
                                 colors = itemColors,
                                 modifier =
                                     Modifier
-                                        .weight(1f)
-                                        .pointerInput(screen, onItemLongClick) {
-                                            if (onItemLongClick == null) return@pointerInput
-                                            awaitEachGesture {
-                                                awaitFirstDown(requireUnconsumed = false)
-                                                val longPressed =
-                                                    withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis.toLong()) {
-                                                        waitForUpOrCancellation()
-                                                        false
-                                                    } == null
-                                                if (longPressed) {
-                                                    ignoreNextClick = true
-                                                    onItemLongClick(screen)
-                                                }
-                                            }
-                                        },
+                                        .weight(1f),
                                 icon = {
                                     Box(
                                         modifier =

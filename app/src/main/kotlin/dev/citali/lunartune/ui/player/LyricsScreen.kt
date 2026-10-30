@@ -278,7 +278,18 @@ fun LyricsScreen(
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
     val playerBackground by rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
     val configuredLyricsBackground by rememberEnumPreference(LyricsBackgroundStyleKey, LyricsBackgroundStyle.DEFAULT)
-    val lyricsBackground = configuredLyricsBackground.resolveFor(playerBackground)
+    val resolvedLyricsBackground = configuredLyricsBackground.resolveFor(playerBackground)
+    // The page is torn down while its exit animation is still running, and the
+    // background style is read from the same preferences the settings screen
+    // edits. Reading it live during the close let the sheet fall back to the
+    // default style for a frame or two before it went away. The style is
+    // latched while the page is open, so the way out keeps the look that was
+    // actually on screen.
+    var latchedLyricsBackground by remember { mutableStateOf(resolvedLyricsBackground) }
+    LaunchedEffect(isActive, resolvedLyricsBackground) {
+        if (isActive) latchedLyricsBackground = resolvedLyricsBackground
+    }
+    val lyricsBackground = if (isActive) resolvedLyricsBackground else latchedLyricsBackground
     val disableBlur by rememberPreference(DisableBlurKey, false)
     val useGpuBlur by rememberPreference(UseGpuBlurKey, true)
     val blurRadius by rememberPreference(BlurRadiusKey, 48f)
@@ -286,12 +297,7 @@ fun LyricsScreen(
     val playerCustomBlur by rememberPreference(PlayerCustomBlurKey, 0f)
     val playerCustomContrast by rememberPreference(PlayerCustomContrastKey, 1f)
     val playerCustomBrightness by rememberPreference(PlayerCustomBrightnessKey, 1f)
-    val foregroundColor =
-        if (lyricsBackground == LyricsBackgroundStyle.FOLLOW_THEME) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            Color.White
-        }
+    val foregroundColor = Color.White
     val showPlayerControlsState =
         rememberPreference(ShowLyricsPlayerControlsKey, true)
     val showPlayerControls by showPlayerControlsState
@@ -748,13 +754,7 @@ private fun LyricsScreenBackground(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(
-                    if (style == LyricsBackgroundStyle.FOLLOW_THEME) {
-                        MaterialTheme.colorScheme.surface
-                    } else {
-                        Color.Black
-                    },
-                ),
+                .background(Color.Black),
     ) {
         when (style) {
             LyricsBackgroundStyle.DEFAULT -> {
@@ -763,8 +763,6 @@ private fun LyricsScreenBackground(
                     gradientColors = gradientColors,
                 )
             }
-
-            LyricsBackgroundStyle.FOLLOW_THEME -> Unit
 
             LyricsBackgroundStyle.MOVING_BLUR -> {
                 MovingBlurBackground(

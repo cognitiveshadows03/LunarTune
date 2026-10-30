@@ -41,7 +41,6 @@ val PerSongTagsKey = stringPreferencesKey("perSongTags")
 val NeverRecommendSongIdsKey = stringPreferencesKey("neverRecommendSongIds")
 val ShowPlayerVolumeBarKey = booleanPreferencesKey("showPlayerVolumeBar")
 val HidePlayerThumbnailKey = booleanPreferencesKey("hidePlayerThumbnail")
-val HideStatusBarKey = booleanPreferencesKey("hideStatusBar")
 val LunarTuneCanvasKey = booleanPreferencesKey("archiveTuneCanvas")
 val ThumbnailCornerRadiusKey = floatPreferencesKey("thumbnailCornerRadius")
 val CropThumbnailToSquareKey = booleanPreferencesKey("cropThumbnailToSquare")
@@ -196,7 +195,6 @@ val EnableLrcLibKey = booleanPreferencesKey("enableLrclib")
 val EnableBetterLyricsKey = booleanPreferencesKey("enableBetterLyrics")
 val EnableBetterLyricsPortatoKey = booleanPreferencesKey("enableBetterLyricsPortato")
 /** Optional API key used for uncached BetterLyrics queries. Empty = cached results only. */
-val BetterLyricsApiKeyKey = stringPreferencesKey("betterLyricsApiKey")
 val EnableYouLyPlusLyricsKey = booleanPreferencesKey("enableYouLyPlusLyrics")
 val EnableSimpMusicLyricsKey = booleanPreferencesKey("enableSimpMusicLyrics")
 val EnableMegalobizLyricsKey = booleanPreferencesKey("enableMegalobizLyrics")
@@ -787,7 +785,6 @@ enum class PlayerBackgroundStyle {
 
 enum class LyricsBackgroundStyle {
     DEFAULT,
-    FOLLOW_THEME,
     COLORING,
     CUSTOM,
     MOVING_BLUR;
@@ -1043,7 +1040,6 @@ enum class NavigationBarStyle {
     DEFAULT,
     FLOATING,
     FROSTED,
-    OUTLINED,
     CAPSULE,
 }
 
@@ -1051,17 +1047,6 @@ val NavigationBarStyleKey = stringPreferencesKey("navigationBarStyle")
 val NavBarHideOnScrollKey = booleanPreferencesKey("navBarHideOnScroll")
 
 val HideNavigationBarLabelsKey = booleanPreferencesKey("hideNavigationBarLabels")
-val NavBarLongPressActionsKey = booleanPreferencesKey("navBarLongPressActions")
-
-enum class NavBarLongPressAction {
-    NONE,
-    PLAY_RANDOM_SONG,
-    MUSIC_RECOGNITION,
-}
-
-val HomeNavBarLongPressActionKey = stringPreferencesKey("homeNavBarLongPressAction")
-val SearchNavBarLongPressActionKey = stringPreferencesKey("searchNavBarLongPressAction")
-val LibraryNavBarLongPressActionKey = stringPreferencesKey("libraryNavBarLongPressAction")
 
 val NavigationBarWidthKey = floatPreferencesKey("navigationBarWidth")
 const val NAVIGATION_BAR_WIDTH_DEFAULT = 0.8f
@@ -1080,41 +1065,6 @@ const val NAVIGATION_BAR_LABEL_SPACING_DEFAULT = 4f
 
 val NavigationBarCornerRadiusKey = floatPreferencesKey("navigationBarCornerRadius")
 const val NAVIGATION_BAR_CORNER_RADIUS_DEFAULT = 28f
-
-// App lock
-val AppLockEnabledKey = booleanPreferencesKey("appLockEnabled")
-val AppLockTypeKey = stringPreferencesKey("appLockType")
-val AppLockPinHashKey = stringPreferencesKey("appLockPinHash")
-val AppLockPinLengthKey = stringPreferencesKey("appLockPinLength")
-val AppLockBiometricUnlockKey = booleanPreferencesKey("appLockBiometricUnlock")
-val AppLockTimeoutKey = stringPreferencesKey("appLockTimeout")
-val AppLockScopeKey = stringPreferencesKey("appLockScope")
-
-enum class AppLockType {
-    NONE,
-    PIN,
-    BIOMETRIC,
-}
-
-enum class AppLockPinLength(val digits: Int) {
-    FOUR(4),
-    SIX(6),
-}
-
-/** How long the app may stay in the background before it locks again. */
-enum class AppLockTimeout(val millis: Long) {
-    IMMEDIATELY(0L),
-    THIRTY_SECONDS(30_000L),
-    ONE_MINUTE(60_000L),
-    FIVE_MINUTES(5 * 60_000L),
-    FIFTEEN_MINUTES(15 * 60_000L),
-}
-
-/** What the lock covers: the whole app, or only the screens that hold personal data. */
-enum class AppLockScope {
-    WHOLE_APP,
-    SENSITIVE_ONLY,
-}
 
 
 enum class UpdateChannel {

@@ -39,7 +39,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.canvas.LunarTuneCanvas
-import dev.citali.lunartune.constants.BetterLyricsApiKeyKey
 import dev.citali.lunartune.constants.*
 import dev.citali.lunartune.discord.DiscordOAuthRepository
 import dev.citali.lunartune.extensions.*
@@ -50,7 +49,6 @@ import moe.rukamori.archivetune.innertube.models.YouTubeLocale
 import moe.rukamori.archivetune.kugou.KuGou
 import dev.citali.lunartune.lastfm.LastFM
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
-import dev.citali.lunartune.lyrics.BetterLyricsClient
 import moe.rukamori.archivetune.morideobfuscator.MoriCipherConfig
 import moe.rukamori.archivetune.morideobfuscator.MoriCipherRuntime
 import moe.rukamori.archivetune.paxsenix.PaxsenixLyrics
@@ -247,7 +245,6 @@ class App :
 
                 // Uncached BetterLyrics queries need a key; without one only cached
                 // results are served. Allow an optional user-supplied key.
-                BetterLyricsClient.apiKey = prefs[BetterLyricsApiKeyKey]
 
                 prefs[ContentCountryKey]?.takeIf { it != SYSTEM_DEFAULT }?.let { country ->
                     YouTube.locale = YouTube.locale.copy(gl = country)

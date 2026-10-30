@@ -182,8 +182,6 @@ import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
-import dev.citali.lunartune.constants.LyricsBackgroundStyle
-import dev.citali.lunartune.constants.LyricsBackgroundStyleKey
 import dev.citali.lunartune.constants.LyricsMode
 import dev.citali.lunartune.constants.LyricsModeKey
 import dev.citali.lunartune.constants.MaxCanvasCacheSizeKey
@@ -570,14 +568,7 @@ fun BottomSheetPlayer(
     }
 
     val playerLyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
-    val configuredLyricsBackground by rememberEnumPreference(LyricsBackgroundStyleKey, LyricsBackgroundStyle.DEFAULT)
-    val resolvedLyricsBackground = configuredLyricsBackground.resolveFor(storedPlayerBackground)
-    val lyricsPrewarmColor =
-        if (resolvedLyricsBackground == LyricsBackgroundStyle.FOLLOW_THEME) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            Color.White
-        }
+    val lyricsPrewarmColor = Color.White
     val lyricsRenderStateForPrewarm by lyricsRenderViewModel.state.collectAsStateWithLifecycle()
     val playerConfiguration = LocalConfiguration.current
     val fullscreenLyricsContainerWidth =
