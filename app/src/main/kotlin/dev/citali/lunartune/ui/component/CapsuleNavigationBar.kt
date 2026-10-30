@@ -72,6 +72,8 @@ fun CapsuleNavigationBar(
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onSearchItemDoubleClick: (() -> Unit)? = null,
+    /** Live blur sampled from the content behind the bar; null keeps the solid capsule. */
+    liveBlur: NavBarBlurState? = null,
 ) {
     Box(
         modifier = modifier.fillMaxWidth(),
@@ -79,7 +81,14 @@ fun CapsuleNavigationBar(
     ) {
         Surface(
             shape = RoundedCornerShape(32.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            color =
+                if (liveBlur != null) {
+                    // The backdrop paints both the sample and the tint, in that order, so the
+                    // surface itself must stay out of the way.
+                    Color.Transparent
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
             tonalElevation = 6.dp,
             shadowElevation = 0.dp,
             modifier =
@@ -94,6 +103,11 @@ fun CapsuleNavigationBar(
                     ),
         ) {
             Box(contentAlignment = Alignment.Center) {
+                NavBarBlurBackdrop(
+                    state = liveBlur,
+                    tint = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.matchParentSize(),
+                )
                 // Fake glass edge: a 1dp gradient sheen, API-29 safe.
                 Box(
                     modifier =

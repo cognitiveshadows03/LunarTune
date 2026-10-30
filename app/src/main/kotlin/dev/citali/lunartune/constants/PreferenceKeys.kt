@@ -1060,6 +1060,15 @@ const val NAVIGATION_BAR_OPACITY_DEFAULT = 1.0f
 val NavigationBarTransparencyKey = floatPreferencesKey("navigationBarTransparency")
 const val NAVIGATION_BAR_TRANSPARENCY_DEFAULT = 0.0f
 
+/**
+ * Live blur for the capsule navigation bar, off by default.
+ *
+ * The capsule dock has no RenderEffect path on any Android version, so its blur has to be sampled
+ * from the content behind it and computed on the CPU (see NavBarLiveBlur.kt). That is affordable
+ * but not free, so it is a choice rather than something the app does behind the user's back.
+ */
+val NavigationBarLegacyLiveBlurKey = booleanPreferencesKey("navigationBarLegacyLiveBlur")
+
 val NavigationBarLabelSpacingKey = floatPreferencesKey("navigationBarLabelSpacing")
 const val NAVIGATION_BAR_LABEL_SPACING_DEFAULT = 4f
 

@@ -1225,19 +1225,21 @@ fun BottomSheetPlayer(
                         }
                     }
                 },
-        backgroundColor = baseSheetScrimColor,
-        scrimColorProvider = { progress ->
-            val fadeProgress =
-                if (progress < 0.2f) {
-                    ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-            baseSheetScrimColor.copy(
-                alpha = baseSheetScrimColor.alpha * (1f - fadeProgress) * progress,
-            )
-        },
-        keepExpandedContentWarm = true,
+        backgroundColor =
+            run {
+                // The scrim holds its colour and only starts fading in the last 20% of
+                // a drag, so a short pull does not wash the sheet out early.
+                val progress =
+                    ((state.value - state.collapsedBound) / (state.expandedBound - state.collapsedBound))
+                        .coerceIn(0f, 1f)
+                val fadeProgress =
+                    if (progress < 0.2f) {
+                        ((0.2f - progress) / 0.2f).coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                baseSheetScrimColor.copy(alpha = 1f - fadeProgress)
+            },
         onDismiss = {
             playerConnection.service.stopAndClearPlayback(clearPersistentState = true)
         },
@@ -1245,8 +1247,8 @@ fun BottomSheetPlayer(
         collapsedOffsetPx = { navbarHiddenOffset?.invoke() ?: 0f },
         collapsedContent = {
             MiniPlayer(
-                positionProvider = { miniPositionState.longValue },
-                durationProvider = { duration },
+                position = miniPositionState.longValue,
+                duration = duration,
                 pureBlack = pureBlack,
                 isPairedWithNavigation = isMiniPlayerPairedWithNavigation,
                 hazeState = hazeState,

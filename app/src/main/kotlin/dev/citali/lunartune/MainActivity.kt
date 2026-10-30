@@ -31,6 +31,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -230,9 +231,11 @@ import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.MiniPlayerLastAnchorKey
 import dev.citali.lunartune.constants.NAVIGATION_BAR_HEIGHT_DEFAULT
 import dev.citali.lunartune.constants.NavBarHideOnScrollKey
+import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
+import dev.citali.lunartune.constants.NavigationBarLegacyLiveBlurKey
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
@@ -288,11 +291,13 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MarkdownText
+import dev.citali.lunartune.ui.component.NavBarBlurState
 import dev.citali.lunartune.ui.component.NetworkStatusBanner
 import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
 import dev.citali.lunartune.ui.component.TvNavigationRail
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
+import dev.citali.lunartune.ui.component.navBarLiveBlurSource
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
@@ -1142,6 +1147,22 @@ class MainActivity : FragmentActivity() {
                     val isMiniPlayerFrosted = miniPlayerBackgroundStyle == MiniPlayerBackgroundStyle.FROSTED
                     val hazeState = rememberHazeState()
                     val isFrostedNavBar = navigationBarStyle == NavigationBarStyle.FROSTED
+                    // The capsule bar has no RenderEffect path of its own, on any version, so it
+                    // blurs by sampling the content behind it and computing the blur - opt-in,
+                    // because that work is real even when it is small.
+                    val (legacyNavBarBlurEnabled, _) =
+                        rememberPreference(NavigationBarLegacyLiveBlurKey, defaultValue = false)
+                    val capsuleLiveBlurWanted =
+                        legacyNavBarBlurEnabled && navigationBarStyle == NavigationBarStyle.CAPSULE
+                    val navBarBlurState = remember { NavBarBlurState() }
+                    val capsuleLiveBlurSource = if (capsuleLiveBlurWanted) navBarBlurState else null
+                    // The bar only stops being solid once there is actually a sample to show,
+                    // so a device where the capture could not be set up keeps the plain capsule
+                    // instead of turning into a hole. This flips exactly once.
+                    val hasNavBarSample by
+                        remember { derivedStateOf { navBarBlurState.image != null } }
+                    val capsuleLiveBlur =
+                        if (capsuleLiveBlurWanted && hasNavBarSample) navBarBlurState else null
                     // The top-bar menu owns its frost: while it is open the content source
                     // is attached just for the menu, and the (static) blur runs on every
                     // API level instead of only Android 12+.
@@ -1277,9 +1298,22 @@ class MainActivity : FragmentActivity() {
                             0.dp
                         }
 
-                    // Deferred 0..1 hide state for active search bar / rail; read only inside
-                    // draw / offset lambdas alongside primaryRootDepthState.presence so bottomBar
-                    // never recomposes on the main thread during page or predictive-back motion.
+                    // The bar animates its own height on the navigation spring, and the
+                    // hide progress is read off that animation: the bar and the mini
+                    // player that drifts with it move on the same bounce.
+                    val bottomNavigationBarHeight by animateDpAsState(
+                        targetValue =
+                            if (shouldShowNavigationBar && !useRail) {
+                                navVisibleHeight
+                            } else {
+                                0.dp
+                            },
+                        animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
+                        label = "",
+                    )
+
+                    // Deferred 0..1 hide state for the active search bar / rail, read inside the
+                    // bar's draw lambda and combined with the route hide fraction.
                     val activeSearchBarHideState =
                         animateFloatAsState(
                             targetValue = if (active || useRail) 1f else 0f,
@@ -2211,6 +2245,15 @@ class MainActivity : FragmentActivity() {
                                                 !isFloatingNavBar &&
                                                 !playerBottomSheetState.isDismissed
 
+                                        // Routes that hide the bar animate its height away on
+                                        // the navigation spring; the hide progress is read back
+                                        // off that animation, so the bar and the mini player
+                                        // that leans on it share one bounce.
+                                        val routeHideFraction =
+                                            1f -
+                                                bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
+                                                    navVisibleHeight
+
                                         // captured here: the drift lambda below runs
                                         // outside composition, where LocalDensity is
                                         // not readable
@@ -2232,7 +2275,7 @@ class MainActivity : FragmentActivity() {
                                                 ) {
                                                     val routeHide =
                                                         maxOf(
-                                                            1f - primaryRootDepthState.presence,
+                                                            routeHideFraction,
                                                             activeSearchBarHideState.value,
                                                         )
                                                     with(navDriftDensity) {
@@ -2256,33 +2299,32 @@ class MainActivity : FragmentActivity() {
                                                 Modifier
                                                     .align(Alignment.BottomCenter)
                                                     .height(navSlideDistance)
-                                                    .graphicsLayer {
-                                                        // Read both sheet progress and hide motion
-                                                        // exclusively on RenderThread so opening/collapsing
-                                                        // the player, page transitions, and predictive-back
-                                                        // swipes trigger zero layout passes or recompositions.
-                                                        val sheetProgress =
-                                                            playerBottomSheetState.progress.coerceIn(0f, 1f)
-                                                        val slideOffsetPx = navSlideDistance.toPx() * sheetProgress
+                                                    .offset {
+                                                        // Only the player expansion slides the
+                                                        // slot in layout; the hide progress lives
+                                                        // in the graphics layer below, so hiding
+                                                        // never re-lays out anything.
+                                                        val slideOffset =
+                                                            navSlideDistance *
+                                                                playerBottomSheetState.progress.coerceIn(
+                                                                    0f,
+                                                                    1f,
+                                                                )
+                                                        IntOffset(x = 0, y = slideOffset.roundToPx())
+                                                    }.graphicsLayer {
+                                                        // The hide motion: translate out and fade a
+                                                        // little ahead of arrival so no edge of
+                                                        // plate, shadow or frost lingers.
                                                         val routeHide =
                                                             maxOf(
-                                                                1f - primaryRootDepthState.presence,
+                                                                routeHideFraction,
                                                                 activeSearchBarHideState.value,
                                                             )
                                                         val hide =
                                                             maxOf(routeHide, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
-                                                        translationY = slideOffsetPx + navSlideDistance.toPx() * 1.15f * hide
-                                                        alpha =
-                                                            if (sheetProgress >= 0.99f) {
-                                                                0f
-                                                            } else {
-                                                                (1f - hide * 1.6f).coerceIn(0f, 1f)
-                                                            }
-                                                    }.drawWithContent {
-                                                        if (playerBottomSheetState.progress < 0.99f) {
-                                                            drawContent()
-                                                        }
+                                                        translationY = navSlideDistance.toPx() * 1.15f * hide
+                                                        alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
                                                     },
                                         ) {
                                             FloatingNavigationToolbar(
@@ -2309,6 +2351,7 @@ class MainActivity : FragmentActivity() {
                                                     searchSource = SearchSource.ONLINE
                                                     openSearch()
                                                 },
+                                                liveBlur = capsuleLiveBlur,
                                             )
                                         }
 
@@ -2471,6 +2514,12 @@ class MainActivity : FragmentActivity() {
                                                     )
                                                 ) {
                                                     Modifier.hazeSource(hazeState)
+                                                } else {
+                                                    Modifier
+                                                },
+                                            ).then(
+                                                if (capsuleLiveBlurSource != null) {
+                                                    Modifier.navBarLiveBlurSource(capsuleLiveBlurSource)
                                                 } else {
                                                     Modifier
                                                 },

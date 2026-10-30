@@ -76,6 +76,7 @@ import dev.citali.lunartune.constants.NavigationBarCornerRadiusKey
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
 import dev.citali.lunartune.constants.NavigationBarLabelSpacingKey
+import dev.citali.lunartune.constants.NavigationBarLegacyLiveBlurKey
 import dev.citali.lunartune.constants.NavigationBarOpacityKey
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
@@ -145,6 +146,8 @@ fun NavigationBarSettings(navController: NavController) {
         rememberPreference(FrostedGlowKey, defaultValue = FrostedGlowDefault)
     val (frostedBgGlow, onFrostedBgGlowChange) =
         rememberPreference(FrostedBgGlowKey, defaultValue = FrostedBgGlowDefault)
+    val (legacyLiveBlur, onLegacyLiveBlurChange) =
+        rememberPreference(NavigationBarLegacyLiveBlurKey, defaultValue = false)
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -202,6 +205,18 @@ fun NavigationBarSettings(navController: NavController) {
                             }
                         },
                     )
+                }
+
+                if (navigationBarStyle == NavigationBarStyle.CAPSULE) {
+                    item {
+                        SwitchPreference(
+                            title = { Text(stringResource(R.string.navbar_legacy_live_blur)) },
+                            description = stringResource(R.string.navbar_legacy_live_blur_desc),
+                            icon = { Icon(painterResource(R.drawable.blur_on), null) },
+                            checked = legacyLiveBlur,
+                            onCheckedChange = onLegacyLiveBlurChange,
+                        )
+                    }
                 }
 
                 item {

@@ -1176,6 +1176,8 @@
     <string name="navigation_bar_settings_subtitle">Style, labels, and dimensions</string>
     <string name="hide_navigation_bar_labels">Hide labels in navigation bar</string>
     <string name="hide_navigation_bar_labels_desc">Show icons only</string>
+    <string name="navbar_legacy_live_blur">Live blur behind the bar</string>
+    <string name="navbar_legacy_live_blur_desc">The bar samples what is behind it and blurs it on the CPU about five times a second, following the animated banner and scrolling closely. It costs a little battery and CPU. Turn it off to go back to the solid bar.</string>
     <string name="nav_bar_hide_on_scroll">Hide bar on scroll (Beta)</string>
     <string name="nav_bar_hide_on_scroll_desc">Hide the bar on scroll down; show it again on scroll up.</string>
     <string name="navigation_bar_dimensions">Dimensions</string>

@@ -21,18 +21,17 @@ import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,10 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -60,8 +57,8 @@ import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
 import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.CoroutineScope
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
@@ -69,9 +66,6 @@ import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetCollapseAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
-
-private val SheetCollapsedShape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-private const val ExpandedPrewarmDelayMs = 350L
 
 /**
  * Bottom Sheet
@@ -82,8 +76,6 @@ fun BottomSheet(
     state: BottomSheetState,
     modifier: Modifier = Modifier,
     backgroundColor: Color,
-    scrimColorProvider: ((Float) -> Color)? = null,
-    keepExpandedContentWarm: Boolean = false,
     onDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = true,
     collapsedGesturesEnabled: Boolean = true,
@@ -93,28 +85,6 @@ fun BottomSheet(
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
-    val isAboveCollapsed by remember(state) {
-        derivedStateOf { state.value > state.collapsedBound }
-    }
-    var expandedContentWarmed by remember { mutableStateOf(false) }
-    if (isAboveCollapsed && keepExpandedContentWarm && !expandedContentWarmed) {
-        expandedContentWarmed = true
-    } else if (state.isDismissed && expandedContentWarmed) {
-        expandedContentWarmed = false
-    }
-
-    LaunchedEffect(keepExpandedContentWarm, state.isCollapsed, state.isDismissed) {
-        if (keepExpandedContentWarm && state.isCollapsed && !state.isDismissed && !expandedContentWarmed) {
-            delay(ExpandedPrewarmDelayMs)
-            if (state.isCollapsed && !state.isDismissed) {
-                expandedContentWarmed = true
-            }
-        }
-    }
-
-    val shouldMountExpandedContent =
-        isAboveCollapsed || (keepExpandedContentWarm && expandedContentWarmed && !state.isDismissed)
-
     Box(
         modifier =
             modifier
@@ -125,48 +95,36 @@ fun BottomSheet(
                             .roundToPx()
                             .coerceAtLeast(0)
                     IntOffset(x = 0, y = y)
-                }.then(
-                    if (collapsedGesturesEnabled || isAboveCollapsed) {
-                        Modifier.bottomSheetDraggable(state, onDismiss)
-                    } else {
-                        Modifier
+                }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
+                .clip(
+                    RoundedCornerShape(
+                        topStart = if (!state.isExpanded) 16.dp else 0.dp,
+                        topEnd = if (!state.isExpanded) 16.dp else 0.dp,
+                    ),
+                )
+                    // drawBehind, not background(): the sheet's value moves every frame of a
+                    // drag, so reading `progress` here during composition recomposed this node
+                    // and its whole content on every frame. Deferring the read to the draw
+                    // phase turns a drag into a redraw instead of a recomposition.
+                    .drawBehind {
+                        drawRect(
+                            backgroundColor.copy(
+                                alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
+                            ),
+                        )
                     },
-                ).clip(if (!state.isExpanded) SheetCollapsedShape else RectangleShape)
-                // drawBehind, not background(): the sheet's value moves every frame of a
-                // drag, so reading `progress` here during composition recomposed this node
-                // and its whole content on every frame. Deferring the read to the draw
-                // phase turns a drag into a redraw instead of a recomposition.
-                .drawBehind {
-                    val progress = state.progress.coerceIn(0f, 1f)
-                    val color =
-                        scrimColorProvider?.invoke(progress)
-                            ?: backgroundColor.copy(alpha = backgroundColor.alpha * progress)
-                    if (color.alpha > 0f) {
-                        drawRect(color)
-                    }
-                },
     ) {
         if (state.isExpandedOrExpanding && backHandlerEnabled) {
             BackHandler(onBack = state::collapseSoft)
         }
 
-        if (shouldMountExpandedContent) {
-            Box(
+        if (!state.isCollapsed) {
+            BoxWithConstraints(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = ((state.progress - 0.25f) * 4f).coerceIn(0f, 1f)
-                            translationY =
-                                if (state.value <= state.collapsedBound) {
-                                    size.height.toFloat().coerceAtLeast(10_000f)
-                                } else {
-                                    0f
-                                }
-                        }.drawWithContent {
-                            if (state.progress > 0.25f) {
-                                drawContent()
-                            }
+                            alpha = ((state.progress - 0.25f) * 4).coerceIn(0f, 1f)
                         },
                 content = content,
             )
@@ -176,14 +134,13 @@ fun BottomSheet(
             Box(
                 modifier =
                     Modifier
-                        .graphicsLayer {
-                            val clampedProgress = state.progress.coerceIn(0f, 1f)
-                            translationY = collapsedOffsetPx() * (1f - clampedProgress)
-                            alpha = 1f - (clampedProgress * 4f).coerceAtMost(1f)
-                        }.drawWithContent {
-                            if (state.progress < 0.25f) {
-                                drawContent()
-                            }
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = (collapsedOffsetPx() * (1f - state.progress)).roundToInt(),
+                            )
+                        }.graphicsLayer {
+                            alpha = 1f - (state.progress * 4).coerceAtMost(1f)
                         }.then(
                             if (collapsedGesturesEnabled) {
                                 Modifier.clickable(

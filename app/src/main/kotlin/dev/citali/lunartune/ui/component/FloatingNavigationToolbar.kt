@@ -18,15 +18,12 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
-import dev.citali.lunartune.ui.theme.LunarMotion
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -66,8 +63,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -101,29 +98,6 @@ private val NavigationIndicatorHeight = 32.dp
 private val FloatingNavigationIndicatorWidth = 64.dp
 private val FloatingNavigationIndicatorHeight = 42.dp
 
-private class NavBarCoordinatesHolder {
-    var container: LayoutCoordinates? = null
-    val icons = HashMap<Int, LayoutCoordinates>(4)
-
-    fun updateIconCenter(
-        index: Int,
-        iconCoords: LayoutCoordinates,
-        iconCenters: MutableMap<Int, Offset>,
-    ) {
-        val root = container ?: return
-        if (!root.isAttached || !iconCoords.isAttached) return
-        val center =
-            root.localPositionOf(
-                iconCoords,
-                Offset(iconCoords.size.width / 2f, iconCoords.size.height / 2f),
-            )
-        val prev = iconCenters[index]
-        if (prev == null || (prev - center).getDistanceSquared() > 0.25f) {
-            iconCenters[index] = center
-        }
-    }
-}
-
 @Composable
 fun FloatingNavigationToolbar(
     items: List<Screens>,
@@ -135,6 +109,8 @@ fun FloatingNavigationToolbar(
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onSearchItemDoubleClick: (() -> Unit)? = null,
+    /** Live blur sampled from the content behind the bar, for Android 11 and below. */
+    liveBlur: NavBarBlurState? = null,
 ) {
     if (style == NavigationBarStyle.CAPSULE) {
         CapsuleNavigationBar(
@@ -143,11 +119,14 @@ fun FloatingNavigationToolbar(
             isSelected = isSelected,
             onItemClick = onItemClick,
             onSearchItemDoubleClick = onSearchItemDoubleClick,
+            liveBlur = liveBlur,
         )
         return
     }
     val isFloating =
-        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED
+        style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED ||
+            style == NavigationBarStyle.OUTLINED
+    val isOutlined = style == NavigationBarStyle.OUTLINED
     val isFrosted = style == NavigationBarStyle.FROSTED
     // No RenderEffect below Android 12, and Haze's RenderScript fallback
     // renders garbage on several old GPUs — those devices get the dim veil
@@ -168,9 +147,9 @@ fun FloatingNavigationToolbar(
     val (hideNavigationLabels) = rememberPreference(HideNavigationBarLabelsKey, defaultValue = false)
     val resolvedBarHeight = NavigationBarHeight * navBarHeightMultiplier
     val navigationShape =
-        remember(isPairedWithMiniPlayer, isFloating, isFrosted, navBarCornerRadius) {
+        remember(isPairedWithMiniPlayer, isFloating, isFrosted, isOutlined, navBarCornerRadius) {
             when {
-                isFrosted -> RoundedCornerShape(percent = 50)
+                isFrosted || isOutlined -> RoundedCornerShape(percent = 50)
                 isFloating -> RoundedCornerShape(navBarCornerRadius.dp)
                 isPairedWithMiniPlayer ->
                     RoundedCornerShape(
@@ -224,18 +203,18 @@ fun FloatingNavigationToolbar(
 
     val selectedIndex = items.indexOfFirst { isSelected(it) }
     val iconCenters = remember { mutableStateMapOf<Int, Offset>() }
-    val coordsHolder = remember { NavBarCoordinatesHolder() }
+    var containerPos by remember { mutableStateOf(Offset.Zero) }
     val indicatorX = remember { Animatable(0f) }
     var indicatorY by remember { mutableFloatStateOf(0f) }
     var indicatorPlaced by remember { mutableStateOf(false) }
     val selectedCenter = if (selectedIndex >= 0) iconCenters[selectedIndex] else null
 
-    LaunchedEffect(selectedIndex, selectedCenter, indicatorWidth, indicatorHeight) {
+    LaunchedEffect(selectedIndex, selectedCenter, containerPos, indicatorWidth, indicatorHeight) {
         val center = selectedCenter ?: return@LaunchedEffect
         val widthPx = with(density) { indicatorWidth.toPx() }
         val heightPx = with(density) { indicatorHeight.toPx() }
-        val targetX = center.x - widthPx / 2f
-        indicatorY = center.y - heightPx / 2f
+        val targetX = (center.x - containerPos.x) - widthPx / 2f
+        indicatorY = (center.y - containerPos.y) - heightPx / 2f
         if (!indicatorPlaced) {
             indicatorX.snapTo(targetX)
             indicatorPlaced = true
@@ -281,11 +260,13 @@ fun FloatingNavigationToolbar(
                     .fillMaxWidth(if (isFloating) navBarWidthFraction.coerceIn(0.5f, 1f) else 1f)
                     .height(resolvedBarHeight),
             shape = navigationShape,
-            color = if (isFrosted) Color.Transparent else navigationContainerColor,
-            tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
+            color = if (isFrosted || isOutlined) Color.Transparent else navigationContainerColor,
+            tonalElevation = if (isFrosted || isOutlined) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
             border =
-                if (isFrosted) {
+                if (isOutlined) {
+                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                } else if (isFrosted) {
                     BorderStroke(
                         1.dp,
                         MaterialTheme.colorScheme.primary.copy(alpha = frostedGlow.coerceIn(0f, 1f)),
@@ -336,12 +317,7 @@ fun FloatingNavigationToolbar(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .onGloballyPositioned { coordinates ->
-                                coordsHolder.container = coordinates
-                                coordsHolder.icons.forEach { (idx, iconCoords) ->
-                                    coordsHolder.updateIconCenter(idx, iconCoords, iconCenters)
-                                }
-                            },
+                            .onGloballyPositioned { containerPos = it.positionInRoot() },
                     contentAlignment = Alignment.Center,
                 ) {
                     if (selectedIndex >= 0 && indicatorPlaced) {
@@ -418,8 +394,12 @@ fun FloatingNavigationToolbar(
                                     Box(
                                         modifier =
                                             Modifier.onGloballyPositioned { coordinates ->
-                                                coordsHolder.icons[index] = coordinates
-                                                coordsHolder.updateIconCenter(index, coordinates, iconCenters)
+                                                val pos = coordinates.positionInRoot()
+                                                iconCenters[index] =
+                                                    Offset(
+                                                        pos.x + coordinates.size.width / 2f,
+                                                        pos.y + coordinates.size.height / 2f,
+                                                    )
                                             },
                                         contentAlignment = Alignment.Center,
                                     ) {
