@@ -371,7 +371,7 @@ fun PlayerTopActions(
             }
         }
 
-        PlayerDesignStyle.V3, PlayerDesignStyle.V5 -> {
+        PlayerDesignStyle.V5 -> {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -544,72 +544,6 @@ fun PlayerTopActions(
                         )
                     }
                 }
-            }
-        }
-
-        PlayerDesignStyle.V1 -> {
-            Box(
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(textButtonColor)
-                        .clickable {
-                            val intent =
-                                Intent().apply {
-                                    action = Intent.ACTION_SEND
-                                    type = "text/plain"
-                                    putExtra(
-                                        Intent.EXTRA_TEXT,
-                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
-                                    )
-                                }
-                            context.startActivity(Intent.createChooser(intent, null))
-                        },
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.share),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(iconButtonColor),
-                    modifier =
-                        Modifier
-                            .align(Alignment.Center)
-                            .size(24.dp),
-                )
-            }
-
-            Spacer(modifier = Modifier.size(12.dp))
-
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(textButtonColor)
-                        .clickable {
-                            menuState.show {
-                                PlayerMenu(
-                                    mediaMetadata = mediaMetadata,
-                                    navController = navController,
-                                    playerBottomSheetState = state,
-                                    onShowDetailsDialog = {
-                                        mediaMetadata.id.let {
-                                            bottomSheetPageState.show {
-                                                ShowMediaInfo(it)
-                                            }
-                                        }
-                                    },
-                                    onDismiss = menuState::dismiss,
-                                )
-                            }
-                        },
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.more_horiz),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(iconButtonColor),
-                )
             }
         }
 
@@ -1061,157 +995,6 @@ fun PlayerPlaybackControls(
             }
         }
 
-        PlayerDesignStyle.V3 -> {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = PlayerHorizontalPadding),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    playerConnection.player.shuffleModeEnabled = !shuffleModeEnabled
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.shuffle),
-                            contentDescription = null,
-                            tint =
-                                textBackgroundColor.copy(
-                                    alpha = if (shuffleModeEnabled) 1f else 0.4f,
-                                ),
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(textBackgroundColor.copy(alpha = 0.08f))
-                                .clickable(enabled = canSkipPrevious) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    playerConnection.seekToPrevious()
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_previous),
-                            contentDescription = null,
-                            tint = textBackgroundColor.copy(alpha = if (canSkipPrevious) 0.9f else 0.4f),
-                            modifier = Modifier.size(26.dp),
-                        )
-                    }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(70.dp)
-                                .clip(RoundedCornerShape(50))
-                                .background(textBackgroundColor)
-                                .clickable {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    if (playbackState == STATE_ENDED) {
-                                        playerConnection.player.seekTo(0, 0)
-                                        playerConnection.player.playWhenReady = true
-                                    } else {
-                                        playerConnection.togglePlayPause()
-                                    }
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (isLoading) {
-                            CircularWavyProgressIndicator(
-                                modifier = Modifier.size(32.dp),
-                                color = icBackgroundColor,
-                            )
-                        } else {
-                            Icon(
-                                painter =
-                                    painterResource(
-                                        when {
-                                            playbackState == STATE_ENDED -> R.drawable.replay
-                                            isPlaying -> R.drawable.pause
-                                            else -> R.drawable.play
-                                        },
-                                    ),
-                                contentDescription = null,
-                                tint = icBackgroundColor,
-                                modifier = Modifier.size(34.dp),
-                            )
-                        }
-                    }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(textBackgroundColor.copy(alpha = 0.08f))
-                                .clickable(enabled = canSkipNext) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    playerConnection.seekToNext()
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.skip_next),
-                            contentDescription = null,
-                            tint = textBackgroundColor.copy(alpha = if (canSkipNext) 0.9f else 0.4f),
-                            modifier = Modifier.size(26.dp),
-                        )
-                    }
-
-                    Box(
-                        modifier =
-                            Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    if (enableHapticFeedback) {
-                                        view.performHapticFeedback(
-                                            android.view.HapticFeedbackConstants.CONTEXT_CLICK,
-                                            android.view.HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING,
-                                        )
-                                    }
-                                    playerConnection.player.toggleRepeatMode()
-                                },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            painter =
-                                painterResource(
-                                    when (repeatMode) {
-                                        Player.REPEAT_MODE_OFF, Player.REPEAT_MODE_ALL -> R.drawable.repeat
-                                        Player.REPEAT_MODE_ONE -> R.drawable.repeat_one
-                                        else -> R.drawable.repeat
-                                    },
-                                ),
-                            contentDescription = null,
-                            tint =
-                                textBackgroundColor.copy(
-                                    alpha = if (repeatMode == Player.REPEAT_MODE_OFF) 0.4f else 1f,
-                                ),
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
-                }
-            }
-        }
-
         PlayerDesignStyle.V4 -> {
             BoxWithConstraints(
                 modifier =
@@ -1429,7 +1212,7 @@ fun PlayerPlaybackControls(
             }
         }
 
-        PlayerDesignStyle.V1, PlayerDesignStyle.V5 -> {
+        PlayerDesignStyle.V5 -> {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier =
@@ -3905,7 +3688,6 @@ private fun V9PlaybackProgress(
         }
     }
 }
-
 
 @Composable
 private fun V9BottomToggleRow(

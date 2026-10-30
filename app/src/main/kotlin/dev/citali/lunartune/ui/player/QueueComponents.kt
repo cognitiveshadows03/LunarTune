@@ -764,10 +764,10 @@ fun QueueCollapsedContentV2(
 }
 
 /**
- * V3 Design Style collapsed queue content.
+ * Compact collapsed queue content, used by the Little player style.
  */
 @Composable
-fun QueueCollapsedContentV3(
+fun QueueCollapsedContentCompact(
     showCodecOnPlayer: Boolean,
     currentFormat: FormatEntity?,
     textBackgroundColor: Color,
@@ -910,150 +910,6 @@ fun QueueCollapsedContentV3(
                     modifier = Modifier.size(18.dp),
                     tint = textBackgroundColor.copy(alpha = 0.7f),
                 )
-            }
-        }
-    }
-}
-
-/**
- * V1 Design Style collapsed queue content (text buttons).
- */
-@Composable
-fun QueueCollapsedContentV1(
-    showCodecOnPlayer: Boolean,
-    currentFormat: FormatEntity?,
-    textBackgroundColor: Color,
-    sleepTimerEnabled: Boolean,
-    sleepTimerTimeLeft: Long,
-    onExpandQueue: () -> Unit,
-    onSleepTimerClick: () -> Unit,
-    onShowLyrics: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        if (showCodecOnPlayer && currentFormat != null) {
-            val container = currentFormat.containerLabel()
-            val bitrate = currentFormat.autoRateDisplay()
-            val fileSize = currentFormat.formattedFileSize()
-
-            CodecInfoRow(
-                codec = container,
-                bitrate = bitrate,
-                fileSize = fileSize,
-                textColor = textBackgroundColor.copy(alpha = 0.7f),
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 30.dp, vertical = 12.dp)
-                    .windowInsetsPadding(
-                        WindowInsets.systemBars
-                            .only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
-                    ),
-        ) {
-            TextButton(
-                onClick = onExpandQueue,
-                modifier = Modifier.weight(1f),
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.queue_music),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = textBackgroundColor,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(id = R.string.queue),
-                        color = textBackgroundColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.basicMarquee(),
-                    )
-                }
-            }
-
-            TextButton(
-                onClick = onSleepTimerClick,
-                modifier = Modifier.weight(1.2f),
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.bedtime),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = textBackgroundColor,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    AnimatedContent(
-                        label = "sleepTimer",
-                        targetState = sleepTimerEnabled,
-                    ) { enabled ->
-                        if (enabled) {
-                            Text(
-                                text = makeTimeString(sleepTimerTimeLeft),
-                                color = textBackgroundColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.basicMarquee(),
-                            )
-                        } else {
-                            Text(
-                                text = stringResource(id = R.string.sleep_timer),
-                                color = textBackgroundColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.basicMarquee(),
-                            )
-                        }
-                    }
-                }
-            }
-
-            TextButton(
-                onClick = onShowLyrics,
-                modifier = Modifier.weight(1f),
-                shapes = ButtonDefaults.shapes(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.lyrics),
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = textBackgroundColor,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = stringResource(id = R.string.lyrics),
-                        color = textBackgroundColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.basicMarquee(),
-                    )
-                }
             }
         }
     }

@@ -67,9 +67,7 @@
     <string name="follow_theme">跟随主题</string>
     <string name="gradient">梯度</string>
     <string name="player_design_style">播放器设计风格</string>
-    <string name="player_design_v1">经典</string>
     <string name="player_design_v2">现代</string>
-    <string name="player_design_v3">最小</string>
     <string name="player_design_v4">空间感</string>
     <string name="player_design_v5">小</string>
     <string name="player_background_blur">模糊</string>

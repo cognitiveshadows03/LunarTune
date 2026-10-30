@@ -64,9 +64,7 @@
     <string name="follow_theme">Suivre le thème</string>
     <string name="gradient">Dégradé</string>
     <string name="player_design_style">Style de conception du lecteur</string>
-    <string name="player_design_v1">Classique</string>
     <string name="player_design_v2">Moderne</string>
-    <string name="player_design_v3">Élégant</string>
     <string name="player_background_blur">Brouillé</string>
     <string name="coloring">Coloration</string>
     <string name="blur_gradient">Dégradé de flou</string>

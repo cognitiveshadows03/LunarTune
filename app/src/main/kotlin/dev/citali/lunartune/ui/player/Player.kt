@@ -398,7 +398,7 @@ fun BottomSheetPlayer(
 
     val settingsPlayerDesignStyle by rememberEnumPreference(
         key = PlayerDesignStyleKey,
-        defaultValue = PlayerDesignStyle.V4,
+        defaultValue = PlayerDesignStyle.V7,
     )
     val (playerStyleOverrides) = rememberPreference(PlayerDesignStyleOverridesKey, "")
     val playerDesignStyle =

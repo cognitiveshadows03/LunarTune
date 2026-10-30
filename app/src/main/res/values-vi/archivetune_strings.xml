@@ -75,9 +75,7 @@
     <string name="follow_theme">Theo giao diện</string>
     <string name="gradient">Gradient</string>
     <string name="player_design_style">Kiểu thiết kế trình phát</string>
-    <string name="player_design_v1">Cổ điển</string>
     <string name="player_design_v2">Hiện đại</string>
-    <string name="player_design_v3">Tối giản</string>
     <string name="player_design_v4">Điện ảnh</string>
     <string name="player_background_blur">Làm mờ</string>
     <string name="coloring">Tô màu</string>

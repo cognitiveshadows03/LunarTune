@@ -165,7 +165,7 @@ fun PlayerMenu(
     val (externalDownloaderEnabled) = rememberPreference(ExternalDownloaderEnabledKey, defaultValue = false)
     val (externalDownloaderPackage) = rememberPreference(ExternalDownloaderPackageKey, defaultValue = "")
     val (archiveTuneCanvasEnabled) = rememberPreference(LunarTuneCanvasKey, defaultValue = false)
-    val settingsPlayerDesignStyle by rememberEnumPreference(PlayerDesignStyleKey, defaultValue = PlayerDesignStyle.V4)
+    val settingsPlayerDesignStyle by rememberEnumPreference(PlayerDesignStyleKey, defaultValue = PlayerDesignStyle.V7)
     val (playerStyleOverrides) =
         rememberPreference(PlayerDesignStyleOverridesKey, "")
     val playerDesignStyle =

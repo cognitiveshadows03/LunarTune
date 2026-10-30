@@ -253,9 +253,7 @@
     <string name="follow_theme">テーマに合わせる</string>
     <string name="gradient">グラデーション</string>
     <string name="player_design_style">プレイヤーデザインスタイル</string>
-    <string name="player_design_v1">クラシック</string>
     <string name="player_design_v2">モダン</string>
-    <string name="player_design_v3">ミニマル</string>
     <string name="player_design_v4">シネマティック</string>
     <string name="player_design_v5">リトル</string>
     <string name="player_design_v6">エクスプレッシブ</string>

@@ -80,8 +80,16 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(
                 override suspend fun cleanUp() {}
             },
             object : DataMigration<Preferences> {
+                /**
+                 * Values that no longer exist as styles: V1 and V3 were removed, and
+                 * V7_LEGACY was the old spelling of the immersive style. Anyone still
+                 * holding one of those lands on the default immersive player instead of
+                 * falling through to a style they never picked.
+                 */
+                private val retiredStyles = setOf("V1", "V3", "V7_LEGACY")
+
                 override suspend fun shouldMigrate(currentData: Preferences): Boolean =
-                    currentData[PlayerDesignStyleKey] == "V7_LEGACY"
+                    currentData[PlayerDesignStyleKey]?.let { it in retiredStyles } == true
 
                 override suspend fun migrate(currentData: Preferences): Preferences =
                     currentData.toMutablePreferences().apply {

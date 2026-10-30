@@ -100,7 +100,7 @@ fun PerSongSettingsDialog(
     thumbnailUrl: String? = null,
 ) {
     val context = LocalContext.current
-    val settingsPlayerDesignStyle by rememberEnumPreference(PlayerDesignStyleKey, defaultValue = PlayerDesignStyle.V4)
+    val settingsPlayerDesignStyle by rememberEnumPreference(PlayerDesignStyleKey, defaultValue = PlayerDesignStyle.V7)
     val (playerStyleOverrides, onPlayerStyleOverridesChange) =
         rememberPreference(PlayerDesignStyleOverridesKey, "")
     val (albumArtOverrides, onAlbumArtOverridesChange) =
@@ -664,9 +664,7 @@ private fun PerSongTagRow(
 @Composable
 fun playerDesignStyleLabel(style: PlayerDesignStyle): String =
     when (style) {
-        PlayerDesignStyle.V1 -> stringResource(R.string.player_design_v1)
         PlayerDesignStyle.V2 -> stringResource(R.string.player_design_v2)
-        PlayerDesignStyle.V3 -> stringResource(R.string.player_design_v3)
         PlayerDesignStyle.V4 -> stringResource(R.string.player_design_v4)
         PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
         PlayerDesignStyle.V6 -> stringResource(R.string.player_design_v6)

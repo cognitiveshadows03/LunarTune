@@ -77,9 +77,7 @@
     <string name="follow_theme">Seguir tema</string>
     <string name="gradient">Gradiente</string>
     <string name="player_design_style">Estilo del diseño del reproductor</string>
-    <string name="player_design_v1">Clásico</string>
     <string name="player_design_v2">Moderno</string>
-    <string name="player_design_v3">Mínimo</string>
     <string name="player_design_v4">Cinemático</string>
     <string name="player_design_v5">Pequeño</string>
     <string name="player_background_blur">Desenfoque</string>

@@ -278,9 +278,7 @@
     <string name="follow_theme">跟隨主題</string>
     <string name="gradient">梯度</string>
     <string name="player_design_style">播放器設計樣式</string>
-    <string name="player_design_v1">經典</string>
     <string name="player_design_v2">現代</string>
-    <string name="player_design_v3">小型</string>
     <string name="player_design_v4">空間感</string>
     <string name="player_design_v5">橫向</string>
     <string name="player_design_v6">生動</string>

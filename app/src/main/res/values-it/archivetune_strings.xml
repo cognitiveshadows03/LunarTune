@@ -78,9 +78,7 @@
     <string name="follow_theme">Segui tema</string>
     <string name="gradient">Gradiente</string>
     <string name="player_design_style">Stile design del player</string>
-    <string name="player_design_v1">Classico</string>
     <string name="player_design_v2">Moderno</string>
-    <string name="player_design_v3">Minimal</string>
     <string name="player_design_v4">Cinematografico</string>
     <string name="player_design_v5">Piccolo</string>
     <string name="player_background_blur">Sfoca</string>
