@@ -3524,7 +3524,7 @@ private fun FrostedTopBarMenu(
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.newspaper,
-                label = stringResource(R.string.news),
+                label = stringResource(R.string.news_feed_title),
                 barShape = barShape,
                 barColor = barColor,
             ) {

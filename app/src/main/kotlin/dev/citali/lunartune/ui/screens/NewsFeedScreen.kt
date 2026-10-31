@@ -116,10 +116,10 @@ fun NewsFeedScreen(navController: NavController) {
             TopAppBar(
                 title = {
                     Column {
-                        Text(text = stringResource(R.string.news), style = MaterialTheme.typography.titleLarge)
+                        Text(text = stringResource(R.string.news_feed_title), style = MaterialTheme.typography.titleLarge)
                         if (articles.isNotEmpty()) {
                             Text(
-                                text = stringResource(R.string.news_article_count, articles.size),
+                                text = stringResource(R.string.news_feed_count, articles.size),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -138,7 +138,7 @@ fun NewsFeedScreen(navController: NavController) {
                     IconButton(onClick = { coroutineScope.launch { load(force = true) } }) {
                         Icon(
                             painter = painterResource(R.drawable.sync),
-                            contentDescription = stringResource(R.string.news_refresh),
+                            contentDescription = stringResource(R.string.news_feed_refresh),
                         )
                     }
                 },
@@ -177,18 +177,18 @@ fun NewsFeedScreen(navController: NavController) {
 
                 error != null ->
                     EmptyNews(
-                        title = stringResource(R.string.news_unavailable),
+                        title = stringResource(R.string.news_feed_unavailable),
                         description = error.orEmpty(),
-                        actionLabel = stringResource(R.string.news_retry),
+                        actionLabel = stringResource(R.string.news_feed_retry),
                         onAction = { coroutineScope.launch { load(force = true) } },
                         modifier = Modifier.align(Alignment.Center),
                     )
 
                 else ->
                     EmptyNews(
-                        title = stringResource(R.string.news_empty),
-                        description = stringResource(R.string.news_empty_description),
-                        actionLabel = stringResource(R.string.news_retry),
+                        title = stringResource(R.string.news_feed_empty),
+                        description = stringResource(R.string.news_feed_empty_description),
+                        actionLabel = stringResource(R.string.news_feed_retry),
                         onAction = { coroutineScope.launch { load(force = true) } },
                         modifier = Modifier.align(Alignment.Center),
                     )

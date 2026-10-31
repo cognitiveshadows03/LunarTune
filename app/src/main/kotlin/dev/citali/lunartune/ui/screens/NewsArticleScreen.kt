@@ -84,7 +84,7 @@ fun NewsArticleScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = article?.title ?: stringResource(R.string.news),
+                        text = article?.title ?: stringResource(R.string.news_feed_title),
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                     )
@@ -168,7 +168,7 @@ fun NewsArticleScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Text(
-                            text = stringResource(R.string.news_unavailable),
+                            text = stringResource(R.string.news_feed_unavailable),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(
