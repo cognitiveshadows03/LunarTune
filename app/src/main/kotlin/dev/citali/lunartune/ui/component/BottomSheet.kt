@@ -13,7 +13,10 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.snap
-import androidx.compose.foundation.background
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -50,12 +53,10 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
 import kotlinx.coroutines.CoroutineScope
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -87,23 +88,37 @@ fun BottomSheet(
         modifier =
             modifier
                 .fillMaxSize()
-                .offset {
-                    val y =
-                        (state.expandedBound - state.value)
-                            .roundToPx()
-                            .coerceAtLeast(0)
-                    IntOffset(x = 0, y = y)
+                // Draw phase, not layout. This used to be `offset { }`, which re-laid out
+                // the whole player (and the mini player inside it) on every frame of the
+                // spring — the open/collapse stutter. A translation here is a redraw.
+                .graphicsLayer {
+                    var y = (state.expandedBound - state.value).toPx().coerceAtLeast(0f)
+                    // A minimise spring settles below the collapsed anchor before it
+                    // rebounds (damping 0.85). Rendering that dip is what slid the
+                    // collapsed row down into the navigation bar's footprint. The settle
+                    // keeps its feel; only the part of it that goes below the anchor is
+                    // not drawn. Drags, dismissal and the dismissed → collapsed restore
+                    // keep their full travel.
+                    if (state.isMinimising) {
+                        y = y.coerceAtMost((state.expandedBound - state.collapsedBound).toPx())
+                    }
+                    translationY = y
                 }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
                 .clip(
                     RoundedCornerShape(
                         topStart = if (!state.isExpanded) 16.dp else 0.dp,
                         topEnd = if (!state.isExpanded) 16.dp else 0.dp,
                     ),
-                ).background(
-                    backgroundColor.copy(
-                        alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
-                    ),
-                ),
+                )
+                // drawBehind, not background(): reading progress during composition
+                // recomposed this node and its content on every drag frame.
+                .drawBehind {
+                    drawRect(
+                        backgroundColor.copy(
+                            alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
+                        ),
+                    )
+                },
     ) {
         if (state.isExpandedOrExpanding && backHandlerEnabled) {
             BackHandler(onBack = state::collapseSoft)
@@ -125,13 +140,14 @@ fun BottomSheet(
             Box(
                 modifier =
                     Modifier
-                        .offset {
-                            IntOffset(
-                                x = 0,
-                                y = (collapsedOffsetPx() * (1f - state.progress)).roundToInt(),
-                            )
-                        }.graphicsLayer {
-                            alpha = 1f - (state.progress * 4).coerceAtMost(1f)
+                        .graphicsLayer {
+                            // progress is clamped: during a minimise the underlying value
+                            // dips below the anchor, which used to make (1 - progress)
+                            // greater than 1 and drift the row further than the bar's
+                            // footprint on top of the sheet's own dip.
+                            val progress = state.progress.coerceIn(0f, 1f)
+                            translationY = collapsedOffsetPx() * (1f - progress)
+                            alpha = 1f - (progress * 4).coerceAtMost(1f)
                         }.then(
                             if (collapsedGesturesEnabled) {
                                 Modifier.clickable(
@@ -196,15 +212,50 @@ class BottomSheetState(
         onAnchorChanged(anchor)
     }
 
+    /** Only the newest settle may clear [isMinimising]. */
+    private var settleGeneration = 0
+
+    /**
+     * True while a minimise settle (expanded → collapsed) is running. The spring may
+     * rebound, but its excursion below the collapsed anchor is not rendered — that dip
+     * is what pushed the collapsed row down into the navigation bar.
+     */
+    var isMinimising by mutableStateOf(false)
+        private set
+
+    private fun beginSettle(minimising: Boolean): Int {
+        val generation = ++settleGeneration
+        isMinimising = minimising
+        return generation
+    }
+
+    private fun endSettle(generation: Int) {
+        if (settleGeneration == generation) isMinimising = false
+    }
+
+    /** A pointer drag owns the sheet, so no settle floor may apply to it. */
+    fun onDragStart() {
+        ++settleGeneration
+        isMinimising = false
+    }
+
     fun collapse(animationSpec: AnimationSpec<Dp>) {
         updateAnchor(COLLAPSED_ANCHOR)
+        // Restoring from the dismissed anchor travels upwards from below and must keep
+        // its slide-in; only a minimise can overshoot past the anchor.
+        val generation = beginSettle(!animationsDisabled && value >= collapsedBound)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(collapsedBound, animationSpec)
+            try {
+                animatable.animateTo(collapsedBound, animationSpec)
+            } finally {
+                endSettle(generation)
+            }
         }
     }
 
     fun expand(animationSpec: AnimationSpec<Dp>) {
         updateAnchor(EXPANDED_ANCHOR)
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(animatable.upperBound!!, animationSpec)
         }
@@ -228,6 +279,7 @@ class BottomSheetState(
 
     fun dismiss() {
         updateAnchor(DISMISSED_ANCHOR)
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.animateTo(animatable.lowerBound!!, if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
         }
@@ -242,6 +294,7 @@ class BottomSheetState(
                 else -> COLLAPSED_ANCHOR
             },
         )
+        beginSettle(false)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.snapTo(value)
         }
@@ -434,6 +487,7 @@ fun Modifier.bottomSheetDraggable(
                 totalDy += change.positionChange().y
                 if (abs(totalDy) > dragSlop) {
                     dragStarted = true
+                    state.onDragStart()
                     velocityTracker.resetTracking()
                     velocityTracker.addPointerInputChange(change)
                     change.consume()

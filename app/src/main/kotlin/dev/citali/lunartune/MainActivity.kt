@@ -2273,8 +2273,20 @@ class MainActivity : FragmentActivity() {
                                                     !playerBottomSheetState.isDismissed
                                                 ) {
                                                     with(navDriftDensity) {
-                                                        (floatingBarsBottomPadding + navVisibleHeight).toPx() *
-                                                            maxOf(routeHideFraction, navHideAnim.value)
+                                                        // Exactly the value the bar hides on — the same
+                                                        // three inputs, in the same order. The row and
+                                                        // the bar are one motion: when the bar started
+                                                        // leaving on the search-bar animation while the
+                                                        // row only followed the slower route spring,
+                                                        // they drifted apart for half a second and the
+                                                        // row was left hanging over the bar's slot.
+                                                        val hide =
+                                                            maxOf(
+                                                                routeHideFraction,
+                                                                activeSearchBarHideState.value,
+                                                                navHideAnim.value,
+                                                            ).coerceIn(0f, 1f)
+                                                        (floatingBarsBottomPadding + navVisibleHeight).toPx() * hide
                                                     }
                                                 } else {
                                                     0f
