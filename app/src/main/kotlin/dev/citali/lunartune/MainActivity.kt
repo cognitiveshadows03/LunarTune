@@ -2388,7 +2388,7 @@ class MainActivity : FragmentActivity() {
                                                                     }.randomOrNull()
                                                                 picked?.let { song ->
                                                                     playerConnection?.playQueue(
-                                                                        if (song.isLocal) {
+                                                                        if (song.song.isLocal) {
                                                                             ListQueue(
                                                                                 items = listOf(song.toMediaItem()),
                                                                             )

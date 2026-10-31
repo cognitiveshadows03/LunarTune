@@ -220,8 +220,6 @@ class BottomSheetState(
     /** Only the newest settle may clear the bookkeeping of the one it replaced. */
     private var settleGeneration = 0
 
-    private var settleGeneration = 0
-
     /** The settle in flight, so a geometry change can retarget it instead of killing it. */
     private var settleJob: Job? = null
     private var settleAnchor: Int? = null
