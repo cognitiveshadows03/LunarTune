@@ -135,7 +135,10 @@ fun NewsFeedScreen(navController: NavController) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { coroutineScope.launch { load(force = true) } }) {
+                    IconButton(
+                        onClick = { coroutineScope.launch { load(force = true) } },
+                        onLongClick = { coroutineScope.launch { load(force = true) } },
+                    ) {
                         Icon(
                             painter = painterResource(R.drawable.sync),
                             contentDescription = stringResource(R.string.news_feed_refresh),

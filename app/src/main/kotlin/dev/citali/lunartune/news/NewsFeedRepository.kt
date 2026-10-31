@@ -114,7 +114,7 @@ object NewsFeedRepository {
                 val articles =
                     files
                         .take(MaxArticles)
-                        .mapNotNull { file -> fetchArticle(file) }
+                        .mapNotNull { file -> fetchArticle(file.name) }
                         .sortedWith(
                             // Dated files newest first; undated ones after them, by name.
                             compareByDescending<NewsArticle> { it.publishedAt ?: "" }
