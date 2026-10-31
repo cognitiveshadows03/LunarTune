@@ -13,6 +13,7 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.snap
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.DraggableState
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -38,7 +39,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -49,13 +49,11 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
-import dev.citali.lunartune.ui.theme.LunarMotion
 import kotlinx.coroutines.CoroutineScope
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineStart
@@ -101,18 +99,11 @@ fun BottomSheet(
                         topStart = if (!state.isExpanded) 16.dp else 0.dp,
                         topEnd = if (!state.isExpanded) 16.dp else 0.dp,
                     ),
-                )
-                    // drawBehind, not background(): the sheet's value moves every frame of a
-                    // drag, so reading `progress` here during composition recomposed this node
-                    // and its whole content on every frame. Deferring the read to the draw
-                    // phase turns a drag into a redraw instead of a recomposition.
-                    .drawBehind {
-                        drawRect(
-                            backgroundColor.copy(
-                                alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
-                            ),
-                        )
-                    },
+                ).background(
+                    backgroundColor.copy(
+                        alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
+                    ),
+                ),
     ) {
         if (state.isExpandedOrExpanding && backHandlerEnabled) {
             BackHandler(onBack = state::collapseSoft)
@@ -134,12 +125,12 @@ fun BottomSheet(
             Box(
                 modifier =
                     Modifier
-                        // Draw phase, not layout: the drift is driven by an animation, and
-                        // reading it in offset{} re-laid out this row on every frame of a
-                        // navigation transition (which showed up as the row lagging behind
-                        // the bar). As a graphics translation it is a redraw.
-                        .graphicsLayer {
-                            translationY = collapsedOffsetPx() * (1f - state.progress)
+                        .offset {
+                            IntOffset(
+                                x = 0,
+                                y = (collapsedOffsetPx() * (1f - state.progress)).roundToInt(),
+                            )
+                        }.graphicsLayer {
                             alpha = 1f - (state.progress * 4).coerceAtMost(1f)
                         }.then(
                             if (collapsedGesturesEnabled) {
@@ -163,7 +154,6 @@ fun BottomSheet(
 class BottomSheetState(
     draggableState: DraggableState,
     private val coroutineScope: CoroutineScope,
-    private val density: Density,
     private val animatable: Animatable<Dp, AnimationVector1D>,
     private val onAnchorChanged: (Int) -> Unit,
     private val animationsDisabled: Boolean,
@@ -206,29 +196,27 @@ class BottomSheetState(
         onAnchorChanged(anchor)
     }
 
-    fun collapse(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
+    fun collapse(animationSpec: AnimationSpec<Dp>) {
         updateAnchor(COLLAPSED_ANCHOR)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(collapsedBound, animationSpec, initialVelocity = initialVelocity)
+            animatable.animateTo(collapsedBound, animationSpec)
         }
     }
 
-    fun expand(animationSpec: AnimationSpec<Dp>, initialVelocity: Dp = 0.dp) {
+    fun expand(animationSpec: AnimationSpec<Dp>) {
         updateAnchor(EXPANDED_ANCHOR)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(animatable.upperBound!!, animationSpec, initialVelocity = initialVelocity)
+            animatable.animateTo(animatable.upperBound!!, animationSpec)
         }
     }
 
-    /** Spec used for a released drag; snap() must never inherit momentum. */
-    private fun anchorSpec(): AnimationSpec<Dp> =
-        if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec
+    private fun collapse() {
+        collapse(if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
+    }
 
-    private fun collapse(initialVelocity: Dp = 0.dp) =
-        collapse(anchorSpec(), if (animationsDisabled) 0.dp else initialVelocity)
-
-    private fun expand(initialVelocity: Dp = 0.dp) =
-        expand(anchorSpec(), if (animationsDisabled) 0.dp else initialVelocity)
+    private fun expand() {
+        expand(if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
+    }
 
     fun collapseSoft() {
         collapse(if (animationsDisabled) snap() else BottomSheetCollapseAnimationSpec)
@@ -238,14 +226,10 @@ class BottomSheetState(
         expand(if (animationsDisabled) snap() else BottomSheetSoftAnimationSpec)
     }
 
-    fun dismiss(initialVelocity: Dp = 0.dp) {
+    fun dismiss() {
         updateAnchor(DISMISSED_ANCHOR)
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(
-                animatable.lowerBound!!,
-                anchorSpec(),
-                initialVelocity = if (animationsDisabled) 0.dp else initialVelocity,
-            )
+            animatable.animateTo(animatable.lowerBound!!, if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
         }
     }
 
@@ -267,54 +251,42 @@ class BottomSheetState(
         velocity: Float,
         onDismiss: (() -> Unit)?,
     ) {
-        // velocity arrives in px/s with "up the screen" positive, matching the animatable's
-        // growth toward the expanded anchor. Trimmed so a violent flick still settles.
-        val carried = with(density) { LunarMotion.clampVelocity(velocity).toDp() }
-
-        // Direction chosen by the flick: the finger already told us where this is going, so
-        // the sheet continues at the speed it was thrown instead of starting from rest.
         if (velocity > 250) {
-            expand(carried)
-            return
-        }
-        if (velocity < -250) {
+            expand()
+        } else if (velocity < -250) {
             if (value < collapsedBound && onDismiss != null) {
-                dismiss(carried)
+                dismiss()
                 onDismiss.invoke()
             } else {
-                collapse(carried)
-            }
-            return
-        }
-
-        // Slow release: position decides the anchor, not speed. Carrying the (small) velocity
-        // here would be wrong — it can point the opposite way to the chosen anchor and read as
-        // a stutter at the start of the settle.
-        val l0 = dismissedBound
-        val l1 = (collapsedBound - dismissedBound) / 2
-        val l2 = (expandedBound - collapsedBound) / 2
-        val l3 = expandedBound
-
-        when (value) {
-            in l0..l1 -> {
-                if (onDismiss != null) {
-                    dismiss()
-                    onDismiss.invoke()
-                } else {
-                    collapse()
-                }
-            }
-
-            in l1..l2 -> {
                 collapse()
             }
+        } else {
+            val l0 = dismissedBound
+            val l1 = (collapsedBound - dismissedBound) / 2
+            val l2 = (expandedBound - collapsedBound) / 2
+            val l3 = expandedBound
 
-            in l2..l3 -> {
-                expand()
-            }
+            when (value) {
+                in l0..l1 -> {
+                    if (onDismiss != null) {
+                        dismiss()
+                        onDismiss.invoke()
+                    } else {
+                        collapse()
+                    }
+                }
 
-            else -> {
-                Unit
+                in l1..l2 -> {
+                    collapse()
+                }
+
+                in l2..l3 -> {
+                    expand()
+                }
+
+                else -> {
+                    Unit
+                }
             }
         }
     }
@@ -417,7 +389,6 @@ fun rememberBottomSheetState(
         }
 
         BottomSheetState(
-            density = density,
             draggableState =
                 DraggableState { delta ->
                     coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {

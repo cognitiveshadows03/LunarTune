@@ -1328,22 +1328,13 @@ class MainActivity : FragmentActivity() {
                             label = "activeSearchBarHide",
                         )
 
-                    // The collapsed bound is a fixed footprint, even on routes that
-                    // hide the bar. It used to shrink the moment the bar went away, and
-                    // rememberBottomSheetState keys on that value: every root → child
-                    // navigation rebuilt the whole sheet state, whose fresh animatable
-                    // starts at the dismissed edge and springs up to the anchor. That
-                    // spring overshoot is what made the mini player dip below its resting
-                    // place, and the rebuild is what made opening and closing feel slow.
-                    // The bar's departure is now expressed only by the row drift below,
-                    // which stays inside the draw phase.
                     val playerBottomSheetState =
                         rememberBottomSheetState(
                             dismissedBound = 0.dp,
                             collapsedBound =
                                 bottomInset +
-                                    (if (!useRail) floatingBarsBottomPadding else 0.dp) +
-                                    (if (!useRail) navVisibleHeight else 0.dp) +
+                                    (if (shouldShowNavigationBar && !useRail) floatingBarsBottomPadding else 0.dp) +
+                                    getBottomNavPadding() +
                                     MiniPlayerBottomSpacing +
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
@@ -2274,34 +2265,19 @@ class MainActivity : FragmentActivity() {
                                             isMiniPlayerPairedWithNavigation = areBottomBarsPaired,
                                             hazeState = hazeState,
                                             navbarHiddenOffset = {
-                                                // The row keeps the bar's footprint reserved even
-                                                // while the bar is away, so one offset has to
-                                                // account for it: the row slides down by exactly
-                                                // what is no longer there.
-                                                //
-                                                // The offset is read off the bar's own motion, not
-                                                // off a progress of its own. When the bar leaves
-                                                // the layout, the row follows the bar's height
-                                                // spring; when the bar only translates (scroll
-                                                // hide), the row follows that progress. A second,
-                                                // faster curve made the row reach the bottom first
-                                                // and cross the bar on its way out.
-                                                if (playerBottomSheetState.isDismissed || useRail) {
-                                                    0f
-                                                } else {
-                                                    val footprintPx =
-                                                        with(navDriftDensity) {
-                                                            (floatingBarsBottomPadding + navVisibleHeight).toPx()
-                                                        }
-                                                    when {
-                                                        shouldShowNavigationBar -> footprintPx * navHideAnim.value
-                                                        navVisibleHeight > 0.dp ->
-                                                            footprintPx *
-                                                                (1f -
-                                                                    (bottomNavigationBarHeight / navVisibleHeight)
-                                                                        .coerceIn(0f, 1f))
-                                                        else -> 0f
+                                                // While the bar is away the collapsed mini
+                                                // player drifts down into its footprint on
+                                                // the same progress; idle there is no row.
+                                                if (
+                                                    shouldShowNavigationBar && !useRail &&
+                                                    !playerBottomSheetState.isDismissed
+                                                ) {
+                                                    with(navDriftDensity) {
+                                                        (floatingBarsBottomPadding + navVisibleHeight).toPx() *
+                                                            maxOf(routeHideFraction, navHideAnim.value)
                                                     }
+                                                } else {
+                                                    0f
                                                 }
                                             },
                                         )
@@ -2340,13 +2316,11 @@ class MainActivity : FragmentActivity() {
                                                         val hide =
                                                             maxOf(routeHide, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
-                                                        // Fade and travel finish together: the
-                                                        // bar used to fade out at 62% of its
-                                                        // travel, so it vanished while still on
-                                                        // screen and never looked like it had
-                                                        // reached the bottom.
-                                                        translationY = navSlideDistance.toPx() * hide
-                                                        alpha = (1f - hide).coerceIn(0f, 1f)
+                                                        // The whole hide motion: translate out and
+                                                        // fade a little ahead of arrival so no
+                                                        // edge of plate, shadow or frost lingers.
+                                                        translationY = navSlideDistance.toPx() * 1.15f * hide
+                                                        alpha = (1f - hide * 1.6f).coerceIn(0f, 1f)
                                                     },
                                         ) {
                                             FloatingNavigationToolbar(
@@ -3485,17 +3459,14 @@ private fun FrostedTopBarMenu(
                         input = HazeInput.Sources(hazeState),
                         style =
                             frostedTopMenuStyle(
-                                scrim = barColor.copy(alpha = 0.88f),
-                                fallbackScrim = barColor,
+                                // Light enough that the blur from the screen behind
+                                // actually reads through the panel: the frost lives in the
+                                // gap between the rows, and an opaque fill hid all of it.
+                                scrim = barColor.copy(alpha = 0.42f),
+                                fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
                             ),
                         performanceMode = HazePerformanceMode.Performance,
-                    )
-                    // The panel used to sit at 0.28 alpha with a hairline border, so
-                    // its edge showed up as a faint outline floating around the rows
-                    // instead of reading as the sheet they live on. It is a surface
-                    // now: the frost stays, the ink behind it does not show through
-                    // enough to draw that ring.
-                    .background(barColor.copy(alpha = 0.92f))
+                    ).background(barColor.copy(alpha = 0.30f))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             shape = sheetShape,
             containerColor = Color.Transparent,
