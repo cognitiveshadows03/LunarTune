@@ -302,7 +302,6 @@ import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.player.BottomSheetPlayer
 import dev.citali.lunartune.ui.screens.LOGIN_URL_ARGUMENT
-import dev.citali.lunartune.ui.screens.NewsRoute
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.screens.navigationBuilder
@@ -2275,17 +2274,25 @@ class MainActivity : FragmentActivity() {
                                                 ) {
                                                     with(navDriftDensity) {
                                                         // Exactly the value the bar hides on — the same
-                                                        // three inputs, in the same order. The row and
+                                                        // inputs, in the same order. The row and
                                                         // the bar are one motion: when the bar started
                                                         // leaving on the search-bar animation while the
                                                         // row only followed the slower route spring,
                                                         // they drifted apart for half a second and the
                                                         // row was left hanging over the bar's slot.
+                                                        // The sheet's own progress belongs here too: while
+                                                        // the player closes, the bar's slot travels up on
+                                                        // that progress (layout, one Box above), so the
+                                                        // row has to travel with it. Without this term the
+                                                        // row arrived first and sat waiting for the bar
+                                                        // to catch up. It is 0 whenever the sheet rests,
+                                                        // so nothing else about the drift changes.
                                                         val hide =
                                                             maxOf(
                                                                 routeHideFraction,
                                                                 activeSearchBarHideState.value,
                                                                 navHideAnim.value,
+                                                                playerBottomSheetState.progress,
                                                             ).coerceIn(0f, 1f)
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() * hide
                                                     }
@@ -3496,15 +3503,6 @@ private fun FrostedTopBarMenu(
                 onNavigate("history")
             }
             FrostedTopBarMenuRow(
-                iconRes = R.drawable.stats,
-                label = stringResource(R.string.stats),
-                barShape = barShape,
-                barColor = barColor,
-            ) {
-                onExpandedChange(false)
-                onNavigate("stats")
-            }
-            FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
                 barShape = barShape,
@@ -3521,15 +3519,6 @@ private fun FrostedTopBarMenu(
             ) {
                 onExpandedChange(false)
                 onNavigate("new_release")
-            }
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.newspaper,
-                label = stringResource(R.string.news_feed_title),
-                barShape = barShape,
-                barColor = barColor,
-            ) {
-                onExpandedChange(false)
-                onNavigate(NewsRoute)
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,

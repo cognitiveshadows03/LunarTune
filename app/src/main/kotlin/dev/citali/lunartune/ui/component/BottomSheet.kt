@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
@@ -174,9 +176,17 @@ class BottomSheetState(
     private val onAnchorChanged: (Int) -> Unit,
     private val animationsDisabled: Boolean,
     private val motionMiniBounce: Boolean = true,
-    val collapsedBound: Dp,
+    collapsedBound: Dp,
     initialAnchor: Int = DISMISSED_ANCHOR,
 ) : DraggableState by draggableState {
+    /**
+     * Not a constructor constant: the collapsed anchor moves whenever the window
+     * insets move (see [onBoundsChanged]), and the sheet has to follow it instead
+     * of being rebuilt.
+     */
+    var collapsedBound by mutableStateOf(collapsedBound)
+        private set
+
     val dismissedBound: Dp
         get() = animatable.lowerBound!!
 
@@ -223,10 +233,105 @@ class BottomSheetState(
     var isMinimising by mutableStateOf(false)
         private set
 
+    /** The settle in flight, so a geometry change can retarget it instead of killing it. */
+    private var settleJob: Job? = null
+    private var settleAnchor: Int? = null
+    private var settleSpec: AnimationSpec<Dp>? = null
+
     private fun beginSettle(minimising: Boolean): Int {
         val generation = ++settleGeneration
         isMinimising = minimising
         return generation
+    }
+
+    /**
+     * Every settle goes through here so [onBoundsChanged] knows what is in flight and
+     * on which spec to continue it.
+     */
+    private fun settleTo(
+        target: Dp,
+        animationSpec: AnimationSpec<Dp>,
+        anchor: Int,
+        minimising: Boolean,
+    ) {
+        updateAnchor(anchor)
+        settleJob?.cancel()
+        val generation = beginSettle(minimising)
+        settleAnchor = anchor
+        settleSpec = animationSpec
+        settleJob =
+            coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                try {
+                    animatable.animateTo(target, animationSpec)
+                } finally {
+                    if (settleGeneration == generation) {
+                        settleAnchor = null
+                        settleSpec = null
+                        settleJob = null
+                    }
+                    endSettle(generation)
+                }
+            }
+    }
+
+    /**
+     * The window insets moved under the sheet.
+     *
+     * Hiding the status bar in the player takes the bottom inset away, and bringing
+     * it back gives it again, so the collapsed anchor shifts by that inset exactly
+     * while a minimise is running. Rebuilding the state for that (as `remember(...)`
+     * used to) handed the sheet a fresh spring with no floor and no anchor, which is
+     * the overshoot that only appeared after the bars had been hidden. Here the same
+     * instance keeps its settle, its anchor and its floor and simply follows the new
+     * geometry.
+     */
+    fun onBoundsChanged(
+        dismissed: Dp,
+        collapsed: Dp,
+        expanded: Dp,
+    ) {
+        if (dismissedBound == dismissed && collapsedBound == collapsed && expandedBound == expanded) return
+        // Captured before the bounds move: after that these comparisons are gone.
+        val anchor = settleAnchor
+        val runningSpec = settleSpec
+        val wasMinimising = isMinimising
+        val atExpanded = isExpanded
+        val atCollapsed = isCollapsed
+        val atDismissed = isDismissed
+        animatable.updateBounds(dismissed.coerceAtMost(expanded), expanded)
+        collapsedBound = collapsed
+        val target =
+            when (anchor) {
+                EXPANDED_ANCHOR -> expanded
+                COLLAPSED_ANCHOR -> collapsed
+                DISMISSED_ANCHOR -> dismissed
+                else -> null
+            }
+        if (anchor != null && target != null) {
+            // Same settle, new anchor: the floor (a minimise stays a minimise) and the
+            // spec are carried over so the motion is continuous, not restarted.
+            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor, wasMinimising)
+        } else if (atExpanded || atCollapsed || atDismissed) {
+            // Idle on an anchor that just moved: follow it, nothing is in flight.
+            val restingAnchor =
+                when {
+                    atExpanded -> EXPANDED_ANCHOR
+                    atDismissed -> DISMISSED_ANCHOR
+                    else -> COLLAPSED_ANCHOR
+                }
+            // Quiet on purpose: re-anchoring is the paper moving under a sheet that is
+            // already at rest, so it must not be another bounce.
+            settleTo(
+                when (restingAnchor) {
+                    EXPANDED_ANCHOR -> expanded
+                    DISMISSED_ANCHOR -> dismissed
+                    else -> collapsed
+                },
+                BottomSheetSoftAnimationSpec,
+                restingAnchor,
+                minimising = false,
+            )
+        }
     }
 
     private fun endSettle(generation: Int) {
@@ -237,28 +342,29 @@ class BottomSheetState(
     fun onDragStart() {
         ++settleGeneration
         isMinimising = false
+        settleAnchor = null
+        settleSpec = null
+        settleJob = null
     }
 
     fun collapse(animationSpec: AnimationSpec<Dp>) {
-        updateAnchor(COLLAPSED_ANCHOR)
         // Restoring from the dismissed anchor travels upwards from below and must keep
         // its slide-in; only a minimise can overshoot past the anchor.
-        val generation = beginSettle(!animationsDisabled && value >= collapsedBound)
-        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                animatable.animateTo(collapsedBound, animationSpec)
-            } finally {
-                endSettle(generation)
-            }
-        }
+        settleTo(
+            target = collapsedBound,
+            animationSpec = animationSpec,
+            anchor = COLLAPSED_ANCHOR,
+            minimising = !animationsDisabled && value >= collapsedBound,
+        )
     }
 
     fun expand(animationSpec: AnimationSpec<Dp>) {
-        updateAnchor(EXPANDED_ANCHOR)
-        beginSettle(false)
-        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(animatable.upperBound!!, animationSpec)
-        }
+        settleTo(
+            target = expandedBound,
+            animationSpec = animationSpec,
+            anchor = EXPANDED_ANCHOR,
+            minimising = false,
+        )
     }
 
     private fun collapse() {
@@ -278,14 +384,24 @@ class BottomSheetState(
     }
 
     fun dismiss() {
-        updateAnchor(DISMISSED_ANCHOR)
-        beginSettle(false)
-        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(animatable.lowerBound!!, if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
-        }
+        settleTo(
+            target = dismissedBound,
+            animationSpec =
+                if (animationsDisabled) {
+                    snap()
+                } else if (motionMiniBounce) {
+                    BottomSheetAnimationSpec
+                } else {
+                    BottomSheetCalmAnimationSpec
+                },
+            anchor = DISMISSED_ANCHOR,
+            minimising = false,
+        )
     }
 
     fun snapTo(value: Dp) {
+        settleAnchor = null
+        settleSpec = null
         updateAnchor(
             when (value) {
                 expandedBound -> EXPANDED_ANCHOR
@@ -427,37 +543,46 @@ fun rememberBottomSheetState(
             Animatable(0.dp, Dp.VectorConverter)
         }
 
-    return remember(dismissedBound, expandedBound, collapsedBound, coroutineScope, animationsDisabled) {
-        val initialValue =
-            when (previousAnchor) {
-                EXPANDED_ANCHOR -> expandedBound
-                COLLAPSED_ANCHOR -> collapsedBound
-                DISMISSED_ANCHOR -> dismissedBound
-                else -> error("Unknown BottomSheet anchor")
+    val state =
+        remember(coroutineScope, animationsDisabled) {
+            val initialValue =
+                when (previousAnchor) {
+                    EXPANDED_ANCHOR -> expandedBound
+                    COLLAPSED_ANCHOR -> collapsedBound
+                    DISMISSED_ANCHOR -> dismissedBound
+                    else -> error("Unknown BottomSheet anchor")
+                }
+
+            animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
+            coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
             }
 
-        animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
-        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
+            BottomSheetState(
+                draggableState =
+                    DraggableState { delta ->
+                        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                            animatable.snapTo(animatable.value - with(density) { delta.toDp() })
+                        }
+                    },
+                onAnchorChanged = { previousAnchor = it },
+                coroutineScope = coroutineScope,
+                animatable = animatable,
+                animationsDisabled = animationsDisabled,
+                // LunarMotion is gone; the mini player keeps its bounce.
+                motionMiniBounce = true,
+                collapsedBound = collapsedBound,
+                initialAnchor = previousAnchor,
+            )
         }
 
-        BottomSheetState(
-            draggableState =
-                DraggableState { delta ->
-                    coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                        animatable.snapTo(animatable.value - with(density) { delta.toDp() })
-                    }
-                },
-            onAnchorChanged = { previousAnchor = it },
-            coroutineScope = coroutineScope,
-            animatable = animatable,
-            animationsDisabled = animationsDisabled,
-            // LunarMotion is gone; the mini player keeps its bounce.
-            motionMiniBounce = true,
-            collapsedBound = collapsedBound,
-            initialAnchor = previousAnchor,
-        )
+    // Geometry changes are handed to the state instead of rebuilding it (see
+    // BottomSheetState.onBoundsChanged): a settle keeps running through them.
+    LaunchedEffect(state, dismissedBound, expandedBound, collapsedBound) {
+        state.onBoundsChanged(dismissedBound, collapsedBound, expandedBound)
     }
+
+    return state
 }
 
 @Composable
