@@ -187,6 +187,25 @@ fun NavGraphBuilder.navigationBuilder(
             NewsScreen(navController)
         }
     }
+    composable(NewsRoute) {
+        DrillPageContainer(pureBlack) {
+            NewsFeedScreen(navController)
+        }
+    }
+    composable(
+        route = "$NewsArticleRoutePrefix{slug}",
+        arguments =
+            listOf(
+                navArgument("slug") { type = NavType.StringType },
+            ),
+    ) { backStackEntry ->
+        DrillPageContainer(pureBlack) {
+            NewsArticleScreen(
+                navController = navController,
+                slug = backStackEntry.arguments?.getString("slug").orEmpty(),
+            )
+        }
+    }
     composable(
         route = "view_news/{newsId}",
         arguments =

@@ -1021,6 +1021,9 @@ val GitHubTranslationContributorsLastCheckedAtKey = longPreferencesKey("github_t
 
 val GitHubReleasesEtagKey = stringPreferencesKey("github_releases_etag")
 val GitHubReleasesJsonKey = stringPreferencesKey("github_releases_json")
+
+/** Cached listing + bodies of the repository's `news` folder (JSON). */
+val NewsCacheKey = stringPreferencesKey("news_cache_json")
 val GitHubReleasesLastCheckedAtKey = longPreferencesKey("github_releases_last_checked_at")
 val GitHubReleasesFingerprintKey = stringPreferencesKey("github_releases_fingerprint")
 

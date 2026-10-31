@@ -1,0 +1,16 @@
+LunarTune — plain text post
+===========================
+
+This file is here to show that .txt works too.
+
+Plain text is shown exactly as written, in a monospace block, with no markdown
+interpreted. Use it for things like patch notes, a short release summary, or any
+text you do not want reformatted.
+
+Notes about the app in general:
+
+- News lives in this folder and is read over the network, never bundled.
+- The list sorts by the date in the file name, newest first.
+- Files starting with . or _ are ignored.
+
+— cognitiveshadows03

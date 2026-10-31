@@ -302,6 +302,7 @@ import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.player.BottomSheetPlayer
 import dev.citali.lunartune.ui.screens.LOGIN_URL_ARGUMENT
+import dev.citali.lunartune.ui.screens.NewsRoute
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.screens.navigationBuilder
@@ -3520,6 +3521,15 @@ private fun FrostedTopBarMenu(
             ) {
                 onExpandedChange(false)
                 onNavigate("new_release")
+            }
+            FrostedTopBarMenuRow(
+                iconRes = R.drawable.newspaper,
+                label = stringResource(R.string.news),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate(NewsRoute)
             }
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
