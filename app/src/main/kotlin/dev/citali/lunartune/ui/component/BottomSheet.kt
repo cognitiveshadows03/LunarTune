@@ -94,17 +94,12 @@ fun BottomSheet(
                 // the whole player (and the mini player inside it) on every frame of the
                 // spring — the open/collapse stutter. A translation here is a redraw.
                 .graphicsLayer {
-                    var y = (state.expandedBound - state.value).toPx().coerceAtLeast(0f)
-                    // A minimise spring settles below the collapsed anchor before it
-                    // rebounds (damping 0.85). Rendering that dip is what slid the
-                    // collapsed row down into the navigation bar's footprint. The settle
-                    // keeps its feel; only the part of it that goes below the anchor is
-                    // not drawn. Drags, dismissal and the dismissed → collapsed restore
-                    // keep their full travel.
-                    if (state.isMinimising) {
-                        y = y.coerceAtMost((state.expandedBound - state.collapsedBound).toPx())
-                    }
-                    translationY = y
+                    // The minimise keeps its rebound: the spring dips a few dp past the
+                    // collapsed anchor and comes back, and that dip is the bounce. It
+                    // only ever looked like a shove into the navigation bar because the
+                    // state was rebuilt mid-settle whenever the insets moved, which
+                    // restarted the spring from wherever the sheet happened to be.
+                    translationY = (state.expandedBound - state.value).toPx().coerceAtLeast(0f)
                 }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
                 .clip(
                     RoundedCornerShape(
@@ -222,27 +217,15 @@ class BottomSheetState(
         onAnchorChanged(anchor)
     }
 
-    /** Only the newest settle may clear [isMinimising]. */
+    /** Only the newest settle may clear the bookkeeping of the one it replaced. */
     private var settleGeneration = 0
 
-    /**
-     * True while a minimise settle (expanded → collapsed) is running. The spring may
-     * rebound, but its excursion below the collapsed anchor is not rendered — that dip
-     * is what pushed the collapsed row down into the navigation bar.
-     */
-    var isMinimising by mutableStateOf(false)
-        private set
+    private var settleGeneration = 0
 
     /** The settle in flight, so a geometry change can retarget it instead of killing it. */
     private var settleJob: Job? = null
     private var settleAnchor: Int? = null
     private var settleSpec: AnimationSpec<Dp>? = null
-
-    private fun beginSettle(minimising: Boolean): Int {
-        val generation = ++settleGeneration
-        isMinimising = minimising
-        return generation
-    }
 
     /**
      * Every settle goes through here so [onBoundsChanged] knows what is in flight and
@@ -252,11 +235,10 @@ class BottomSheetState(
         target: Dp,
         animationSpec: AnimationSpec<Dp>,
         anchor: Int,
-        minimising: Boolean,
     ) {
         updateAnchor(anchor)
         settleJob?.cancel()
-        val generation = beginSettle(minimising)
+        val generation = ++settleGeneration
         settleAnchor = anchor
         settleSpec = animationSpec
         settleJob =
@@ -269,7 +251,6 @@ class BottomSheetState(
                         settleSpec = null
                         settleJob = null
                     }
-                    endSettle(generation)
                 }
             }
     }
@@ -282,7 +263,7 @@ class BottomSheetState(
      * while a minimise is running. Rebuilding the state for that (as `remember(...)`
      * used to) handed the sheet a fresh spring with no floor and no anchor, which is
      * the overshoot that only appeared after the bars had been hidden. Here the same
-     * instance keeps its settle, its anchor and its floor and simply follows the new
+     * instance keeps its settle, its anchor and its spec and simply follows the new
      * geometry.
      */
     fun onBoundsChanged(
@@ -294,7 +275,6 @@ class BottomSheetState(
         // Captured before the bounds move: after that these comparisons are gone.
         val anchor = settleAnchor
         val runningSpec = settleSpec
-        val wasMinimising = isMinimising
         val atExpanded = isExpanded
         val atCollapsed = isCollapsed
         val atDismissed = isDismissed
@@ -308,9 +288,9 @@ class BottomSheetState(
                 else -> null
             }
         if (anchor != null && target != null) {
-            // Same settle, new anchor: the floor (a minimise stays a minimise) and the
-            // spec are carried over so the motion is continuous, not restarted.
-            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor, wasMinimising)
+            // Same settle, new anchor: the spec is carried over so the motion is
+            // continuous instead of restarting from a standstill.
+            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor)
         } else if (atExpanded || atCollapsed || atDismissed) {
             // Idle on an anchor that just moved: follow it, nothing is in flight.
             val restingAnchor =
@@ -329,32 +309,23 @@ class BottomSheetState(
                 },
                 BottomSheetSoftAnimationSpec,
                 restingAnchor,
-                minimising = false,
             )
         }
     }
 
-    private fun endSettle(generation: Int) {
-        if (settleGeneration == generation) isMinimising = false
-    }
-
-    /** A pointer drag owns the sheet, so no settle floor may apply to it. */
+    /** A pointer drag owns the sheet, so no settle may be resumed under it. */
     fun onDragStart() {
         ++settleGeneration
-        isMinimising = false
         settleAnchor = null
         settleSpec = null
         settleJob = null
     }
 
     fun collapse(animationSpec: AnimationSpec<Dp>) {
-        // Restoring from the dismissed anchor travels upwards from below and must keep
-        // its slide-in; only a minimise can overshoot past the anchor.
         settleTo(
             target = collapsedBound,
             animationSpec = animationSpec,
             anchor = COLLAPSED_ANCHOR,
-            minimising = !animationsDisabled && value >= collapsedBound,
         )
     }
 
@@ -363,7 +334,6 @@ class BottomSheetState(
             target = expandedBound,
             animationSpec = animationSpec,
             anchor = EXPANDED_ANCHOR,
-            minimising = false,
         )
     }
 
@@ -395,13 +365,10 @@ class BottomSheetState(
                     BottomSheetCalmAnimationSpec
                 },
             anchor = DISMISSED_ANCHOR,
-            minimising = false,
         )
     }
 
     fun snapTo(value: Dp) {
-        settleAnchor = null
-        settleSpec = null
         updateAnchor(
             when (value) {
                 expandedBound -> EXPANDED_ANCHOR
@@ -410,7 +377,9 @@ class BottomSheetState(
                 else -> COLLAPSED_ANCHOR
             },
         )
-        beginSettle(false)
+        settleJob?.cancel()
+        settleAnchor = null
+        settleSpec = null
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
             animatable.snapTo(value)
         }

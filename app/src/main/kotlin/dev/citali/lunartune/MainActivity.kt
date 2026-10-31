@@ -2367,6 +2367,46 @@ class MainActivity : FragmentActivity() {
                                                     searchSource = SearchSource.ONLINE
                                                     openSearch()
                                                 },
+                                                onItemLongClick = { screen ->
+                                                    when (screen) {
+                                                        Screens.Home -> {
+                                                            // A song out of what this listener
+                                                            // actually plays, not out of the
+                                                            // library: the last few hundred
+                                                            // plays, deduplicated.
+                                                            coroutineScope.launch(Dispatchers.Main) {
+                                                                val picked =
+                                                                    withContext(Dispatchers.IO) {
+                                                                        runCatching {
+                                                                            database
+                                                                                .events(
+                                                                                    limit = HistorySampleSize,
+                                                                                    offset = 0,
+                                                                                ).map { it.song }
+                                                                                .distinctBy { it.id }
+                                                                        }.getOrDefault(emptyList())
+                                                                    }.randomOrNull()
+                                                                picked?.let { song ->
+                                                                    playerConnection?.playQueue(
+                                                                        if (song.isLocal) {
+                                                                            ListQueue(
+                                                                                items = listOf(song.toMediaItem()),
+                                                                            )
+                                                                        } else {
+                                                                            YouTubeQueue.radio(song.toMediaMetadata())
+                                                                        },
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+
+                                                        Screens.Search -> {
+                                                            navController.openMusicRecognition()
+                                                        }
+
+                                                        else -> Unit
+                                                    }
+                                                },
                                                 liveBlur = capsuleLiveBlur,
                                             )
                                         }
@@ -3377,6 +3417,13 @@ private fun HomeOverflowMenuIcon(
 }
 
 private const val TopAppBarIconButtonContainerAlpha = 0.48f
+
+/**
+ * How much listening history the home long press draws from. Wide enough that the
+ * pick is not the same handful of songs every time, small enough to stay one cheap
+ * query on the UI's account.
+ */
+private const val HistorySampleSize = 300
 
 @Composable
 private fun TranslucentTopAppBarIconButton(

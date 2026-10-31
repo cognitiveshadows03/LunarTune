@@ -22,6 +22,8 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -63,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -89,6 +92,7 @@ import dev.citali.lunartune.constants.NavigationBarTransparencyKey
 import dev.citali.lunartune.constants.NavigationBarWidthKey
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.utils.rememberPreference
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.roundToInt
 
 private val NavigationItemsMaxWidth = 360.dp
@@ -109,6 +113,8 @@ fun FloatingNavigationToolbar(
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onSearchItemDoubleClick: (() -> Unit)? = null,
+    /** Fired when an item is held. The tap that would follow the hold is swallowed. */
+    onItemLongClick: ((Screens) -> Unit)? = null,
     /** Live blur sampled from the content behind the bar, for Android 11 and below. */
     liveBlur: NavBarBlurState? = null,
 ) {
@@ -119,6 +125,7 @@ fun FloatingNavigationToolbar(
             isSelected = isSelected,
             onItemClick = onItemClick,
             onSearchItemDoubleClick = onSearchItemDoubleClick,
+            onItemLongClick = onItemLongClick,
             liveBlur = liveBlur,
         )
         return
@@ -363,18 +370,57 @@ fun FloatingNavigationToolbar(
                                     if (screen == Screens.Search) onSearchItemDoubleClick else null
                                 }
                             val lastClickTime = remember(screen) { mutableLongStateOf(0L) }
+                            // A hold fires its own action; the release that follows must
+                            // not also count as a tap, so the press is flagged here and
+                            // the click below steps aside for it exactly once.
+                            val longPressHandled = remember(screen) { mutableStateOf(false) }
                             val onClick =
                                 remember(screen, selected, onItemClick, onDoubleClick) {
                                     {
-                                        val currentTime = SystemClock.uptimeMillis()
-                                        val isDoubleClick =
-                                            onDoubleClick != null &&
-                                                currentTime - lastClickTime.longValue <= ViewConfiguration.getDoubleTapTimeout()
-                                        lastClickTime.longValue = if (isDoubleClick) 0L else currentTime
-                                        if (isDoubleClick) {
-                                            onDoubleClick.invoke()
+                                        if (longPressHandled.value) {
+                                            longPressHandled.value = false
                                         } else {
-                                            onItemClick(screen, selected)
+                                            val currentTime = SystemClock.uptimeMillis()
+                                            val isDoubleClick =
+                                                onDoubleClick != null &&
+                                                    currentTime - lastClickTime.longValue <= ViewConfiguration.getDoubleTapTimeout()
+                                            lastClickTime.longValue = if (isDoubleClick) 0L else currentTime
+                                            if (isDoubleClick) {
+                                                onDoubleClick.invoke()
+                                            } else {
+                                                onItemClick(screen, selected)
+                                            }
+                                        }
+                                    }
+                                }
+                            // ShortNavigationBarItem only takes a click, and wrapping it
+                            // in another clickable would fight its own: this watches the
+                            // gesture beside it, consumes nothing, and lets the tap
+                            // through untouched.
+                            val longPressModifier =
+                                if (onItemLongClick == null) {
+                                    Modifier
+                                } else {
+                                    Modifier.pointerInput(screen, onItemLongClick) {
+                                        awaitEachGesture {
+                                            val down = awaitFirstDown(requireUnconsumed = false)
+                                            val pointerId = down.id
+                                            longPressHandled.value = false
+                                            val released =
+                                                withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                                    var pressed = true
+                                                    while (pressed) {
+                                                        val event = awaitPointerEvent()
+                                                        val change =
+                                                            event.changes.firstOrNull { it.id == pointerId }
+                                                        pressed = change?.pressed ?: false
+                                                    }
+                                                    true
+                                                }
+                                            if (released == null) {
+                                                longPressHandled.value = true
+                                                onItemLongClick?.invoke(screen)
+                                            }
                                         }
                                     }
                                 }
@@ -385,7 +431,8 @@ fun FloatingNavigationToolbar(
                                 colors = itemColors,
                                 modifier =
                                     Modifier
-                                        .weight(1f),
+                                        .weight(1f)
+                                        .then(longPressModifier),
                                 icon = {
                                     Box(
                                         modifier =

@@ -72,6 +72,8 @@ fun CapsuleNavigationBar(
     isSelected: (Screens) -> Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onSearchItemDoubleClick: (() -> Unit)? = null,
+    /** Fired when an item is held; a hold never also counts as a tap. */
+    onItemLongClick: ((Screens) -> Unit)? = null,
     /** Live blur sampled from the content behind the bar; null keeps the solid capsule. */
     liveBlur: NavBarBlurState? = null,
 ) {
@@ -136,6 +138,7 @@ fun CapsuleNavigationBar(
                             selected = isSelected(screen),
                             onItemClick = onItemClick,
                             onSearchItemDoubleClick = onSearchItemDoubleClick,
+                            onItemLongClick = onItemLongClick,
                         )
                     }
                 }
@@ -151,6 +154,7 @@ private fun DockItem(
     selected: Boolean,
     onItemClick: (Screens, Boolean) -> Unit,
     onSearchItemDoubleClick: (() -> Unit)?,
+    onItemLongClick: ((Screens) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -210,6 +214,7 @@ private fun DockItem(
                             onItemClick(screen, selected)
                         }
                     },
+                    onLongClick = onItemLongClick?.let { { it(screen) } },
                     interactionSource = interactionSource,
                     indication = null,
                 ),

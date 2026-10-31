@@ -763,11 +763,12 @@ enum class PlayerDesignStyle {
 
     /**
      * Styles that draw their own chrome edge to edge and expect the status bar
-     * out of the way: the immersive ones (V7, V8) and the full-bleed artwork
-     * style (V10). Everything else keeps the normal status bar.
+     * out of the way: Immersive (V7) and the full-bleed artwork style (V10).
+     * Immersive Extended (V8) keeps the normal status bar - it lays out against
+     * the system bars rather than painting through them.
      */
     val hidesStatusBar: Boolean
-        get() = this == V7 || this == V8 || this == V10
+        get() = this == V7 || this == V10
 }
 
 enum class PlayerBackgroundStyle {
