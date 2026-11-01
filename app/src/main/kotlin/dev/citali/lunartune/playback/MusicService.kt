@@ -1414,10 +1414,14 @@ class MusicService :
             val offload = prefs[AudioOffload] ?: false
             val crossfadePrefEnabled = prefs[CrossfadeEnabledKey] ?: false
             val eqEnabled = prefs[EqualizerEnabledKey] ?: false
+            val skipSilencePref = prefs[SkipSilenceKey] ?: false
             withContext(Dispatchers.Main) {
                 player.repeatMode = repeatMode
                 playerVolume.value = volume
-                updateAudioOffload(offload && !crossfadePrefEnabled && !eqEnabled)
+                val effectiveOffload =
+                    offload && !crossfadePrefEnabled && !eqEnabled && !skipSilencePref
+                updateAudioOffload(effectiveOffload)
+                applySkipSilence(requested = skipSilencePref, offloadActive = effectiveOffload)
             }
         }
 
@@ -1488,13 +1492,8 @@ class MusicService :
             }
         }
 
-        dataStore.data
-            .map { it[SkipSilenceKey] ?: false }
-            .distinctUntilChanged()
-            .collectLatest(scope) {
-                localPlayer.skipSilenceEnabled = it
-                secondaryCrossfadePlayer?.skipSilenceEnabled = it
-            }
+        // Skip silence is applied by the offload collector above, which is the only
+        // place that knows whether the stream can actually be trimmed right now.
 
         dataStore.data
             .map { it[PreloadNextSongKey] ?: false }
@@ -1548,22 +1547,29 @@ class MusicService :
             dataStore.data.map { it[AudioOffload] ?: false },
             dataStore.data.map { it[CrossfadeEnabledKey] ?: false },
             dataStore.data.map { it[EqualizerEnabledKey] ?: false },
-        ) { offloadEnabled, crossfadeEnabled, eqEnabled ->
-            Triple(offloadEnabled, crossfadeEnabled, eqEnabled)
+            dataStore.data.map { it[SkipSilenceKey] ?: false },
+        ) { offloadEnabled, crossfadeEnabled, eqEnabled, skipSilenceEnabled ->
+            OffloadInputs(offloadEnabled, crossfadeEnabled, eqEnabled, skipSilenceEnabled)
         }.distinctUntilChanged()
-            .collectLatest(scope) { (offloadEnabled, crossfadeEnabled, eqEnabled) ->
-                // Audio effects cannot attach to offloaded sessions, so the in-app
-                // equalizer takes precedence over offload (same as crossfade).
-                val effectiveOffload = offloadEnabled && !crossfadeEnabled && !eqEnabled
+            .collectLatest(scope) { inputs ->
+                // Everything Media3 has to keep its hands on the PCM stream for.
+                // Silence skipping is in that list: the sink silently refuses it while
+                // offloading and switches the player's own flag back off, so with
+                // offload on the switch did nothing at all. It now wins instead, the
+                // way the equalizer and crossfade already did.
+                val effectiveOffload =
+                    inputs.offloadEnabled &&
+                        !inputs.crossfadeEnabled &&
+                        !inputs.eqEnabled &&
+                        !inputs.skipSilenceEnabled
                 updateAudioOffload(effectiveOffload)
                 reconcileAudioEffectSession()
-                if (effectiveOffload) {
-                    val skipSilenceEnabled = dataStore.get(SkipSilenceKey, false)
-                    if (skipSilenceEnabled) {
-                        dataStore.edit { it[SkipSilenceKey] = false }
-                        localPlayer.skipSilenceEnabled = false
-                    }
-                }
+                // The user's choice is never rewritten: the preference keeps saying
+                // what they asked for, and only the player's copy follows reality.
+                applySkipSilence(
+                    requested = inputs.skipSilenceEnabled,
+                    offloadActive = effectiveOffload,
+                )
             }
 
         combine(dataStore.data, togetherSessionState) { prefs, togetherState ->
@@ -9158,6 +9164,28 @@ class MusicService :
         }
     }
 
+    /**
+     * Applies the user's skip-silence choice to both players, minus the cases the
+     * audio sink cannot honour: silence trimming needs the PCM stream, so it is off
+     * while the stream is offloaded. The player's flag is the only thing that gives
+     * way here - the preference is left alone.
+     */
+    private fun applySkipSilence(
+        requested: Boolean,
+        offloadActive: Boolean,
+    ) {
+        val effective = requested && !offloadActive
+        localPlayer.skipSilenceEnabled = effective
+        secondaryCrossfadePlayer?.skipSilenceEnabled = effective
+    }
+
+    private data class OffloadInputs(
+        val offloadEnabled: Boolean,
+        val crossfadeEnabled: Boolean,
+        val eqEnabled: Boolean,
+        val skipSilenceEnabled: Boolean,
+    )
+
     private fun updateAudioOffload(enabled: Boolean) {
         val effectiveEnabled = enabled && !crossfadeEnabled
         runCatching {
@@ -9241,11 +9269,20 @@ class MusicService :
                         gainAndSyncProcessor = gainAndSyncProcessor,
                         silenceSkippingAudioProcessor =
                             SilenceSkippingAudioProcessor(
-                                1_500_000L,
-                                0.35f,
-                                500_000L,
-                                10,
-                                150.toShort(),
+                                // (minimum silence, retention ratio, cap on kept silence,
+                                //  floor volume, sample level counted as silent)
+                                //
+                                // The old values asked for 1.5 s of unbroken silence
+                                // before anything was trimmed and then kept a third of
+                                // it, so on music - where the gaps are hundreds of ms -
+                                // the feature had almost nothing to act on and read as
+                                // broken. This trims from 300 ms, keeps a sliver so
+                                // endings do not clip, and never leaves more than 400 ms.
+                                SkipSilenceMinimumSilenceUs,
+                                SkipSilenceRetentionRatio,
+                                SkipSilenceMaxKeptUs,
+                                SkipSilenceMinVolumePercent,
+                                SkipSilenceThresholdLevel,
                             ),
                         sonicAudioProcessor = SonicAudioProcessor(),
                     ),
@@ -9997,3 +10034,15 @@ class MusicService :
         const val AUDIBLE_PLAYBACK_VOLUME_CHECK_MS = 2_000L
     }
 }
+
+/**
+ * Silence trimming, in the units [SilenceSkippingAudioProcessor] takes: microseconds
+ * for the durations, a percentage for the volume floor, and a raw 16-bit sample level
+ * for "this sample is silent" (500 of 32767 is about -36 dBFS - quiet room tone
+ * registers, tape hiss and breathing do not).
+ */
+private const val SkipSilenceMinimumSilenceUs = 300_000L
+private const val SkipSilenceRetentionRatio = 0.15f
+private const val SkipSilenceMaxKeptUs = 400_000L
+private const val SkipSilenceMinVolumePercent = 10
+private const val SkipSilenceThresholdLevel: Short = 500

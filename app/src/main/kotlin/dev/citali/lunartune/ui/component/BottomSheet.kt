@@ -53,10 +53,12 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import dev.citali.lunartune.constants.BottomSheetCalmAnimationSpec
+import dev.citali.lunartune.constants.BottomSheetAnimationSpec
+import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -167,6 +169,7 @@ class BottomSheetState(
     private val animatable: Animatable<Dp, AnimationVector1D>,
     private val onAnchorChanged: (Int) -> Unit,
     private val animationsDisabled: Boolean,
+    private val density: Density,
     collapsedBound: Dp,
     initialAnchor: Int = DISMISSED_ANCHOR,
 ) : DraggableState by draggableState {
@@ -198,7 +201,7 @@ class BottomSheetState(
     }
 
     val isExpanded by derivedStateOf {
-        value == animatable.upperBound
+        value >= animatable.upperBound!! - HalfDp
     }
 
     val isExpandedOrExpanding: Boolean
@@ -229,6 +232,7 @@ class BottomSheetState(
         target: Dp,
         animationSpec: AnimationSpec<Dp>,
         anchor: Int,
+        initialVelocityPx: Float = 0f,
     ) {
         updateAnchor(anchor)
         settleJob?.cancel()
@@ -238,7 +242,15 @@ class BottomSheetState(
         settleJob =
             coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
                 try {
-                    animatable.animateTo(target, animationSpec)
+                    animatable.animateTo(
+                        targetValue = target,
+                        animationSpec = animationSpec,
+                        // A flick throws the sheet at the anchor, so the spring starts
+                        // with that speed and the rebound grows with the flick. Ported
+                        // from the reference implementation's motion, which is the only
+                        // part of it worth having.
+                        initialVelocity = with(density) { initialVelocityPx.toDp() },
+                    )
                 } finally {
                     if (settleGeneration == generation) {
                         settleAnchor = null
@@ -284,7 +296,7 @@ class BottomSheetState(
         if (anchor != null && target != null) {
             // Same settle, new anchor: the spec is carried over so the motion is
             // continuous instead of restarting from a standstill.
-            settleTo(target, runningSpec ?: BottomSheetCalmAnimationSpec, anchor)
+            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor)
         } else if (atExpanded || atCollapsed || atDismissed) {
             // Idle on an anchor that just moved: follow it, nothing is in flight.
             val restingAnchor =
@@ -301,7 +313,7 @@ class BottomSheetState(
                     DISMISSED_ANCHOR -> dismissed
                     else -> collapsed
                 },
-                BottomSheetCalmAnimationSpec,
+                BottomSheetSoftAnimationSpec,
                 restingAnchor,
             )
         }
@@ -315,49 +327,62 @@ class BottomSheetState(
         settleJob = null
     }
 
-    fun collapse(animationSpec: AnimationSpec<Dp>) {
+    fun collapse(
+        animationSpec: AnimationSpec<Dp>,
+        velocityPx: Float = 0f,
+    ) {
         settleTo(
             target = collapsedBound,
             animationSpec = animationSpec,
             anchor = COLLAPSED_ANCHOR,
+            initialVelocityPx = velocityPx,
         )
     }
 
-    fun expand(animationSpec: AnimationSpec<Dp>) {
+    fun expand(
+        animationSpec: AnimationSpec<Dp>,
+        velocityPx: Float = 0f,
+    ) {
         settleTo(
             target = expandedBound,
             animationSpec = animationSpec,
             anchor = EXPANDED_ANCHOR,
+            initialVelocityPx = velocityPx,
         )
     }
 
     /**
-     * No bounce, anywhere: the mini player settles on one quiet spring for expand,
-     * minimise, fling-collapse and dismiss alike. The rebound is being rebuilt from
-     * scratch, and until it is, nothing in the sheet is allowed to overshoot its
-     * anchor - an overshoot past the collapsed anchor is also what used to leave the
-     * row sitting under the navigation bar.
+     * The mini player's own spring: under-damped, so it arrives a touch late and
+     * rebounds. Used for expand, minimise, fling-collapse and dismiss alike, which is
+     * what makes those four read as one motion rather than four.
      */
-    private fun collapse() {
-        collapse(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
+    private fun collapse(velocityPx: Float = 0f) {
+        collapse(
+            if (animationsDisabled) snap() else BottomSheetAnimationSpec,
+            velocityPx,
+        )
     }
 
-    private fun expand() {
-        expand(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
+    private fun expand(velocityPx: Float = 0f) {
+        expand(
+            if (animationsDisabled) snap() else BottomSheetAnimationSpec,
+            velocityPx,
+        )
     }
 
+    /** The quiet pair, for the back gesture and for the mini player tap. */
     fun collapseSoft() {
-        collapse(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
+        collapse(if (animationsDisabled) snap() else BottomSheetSoftAnimationSpec)
     }
 
     fun expandSoft() {
-        expand(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
+        expand(if (animationsDisabled) snap() else BottomSheetSoftAnimationSpec)
     }
 
     fun dismiss() {
         settleTo(
             target = dismissedBound,
-            animationSpec = if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec,
+            animationSpec = if (animationsDisabled) snap() else BottomSheetAnimationSpec,
             anchor = DISMISSED_ANCHOR,
         )
     }
@@ -384,13 +409,13 @@ class BottomSheetState(
         onDismiss: (() -> Unit)?,
     ) {
         if (velocity > 250) {
-            expand()
+            expand(velocity)
         } else if (velocity < -250) {
             if (value < collapsedBound && onDismiss != null) {
                 dismiss()
                 onDismiss.invoke()
             } else {
-                collapse()
+                collapse(velocity)
             }
         } else {
             val l0 = dismissedBound
@@ -518,7 +543,7 @@ fun rememberBottomSheetState(
 
             animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
             coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
+                animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
             }
 
             BottomSheetState(
@@ -532,6 +557,7 @@ fun rememberBottomSheetState(
                 coroutineScope = coroutineScope,
                 animatable = animatable,
                 animationsDisabled = animationsDisabled,
+                density = density,
                 collapsedBound = collapsedBound,
                 initialAnchor = previousAnchor,
             )
@@ -594,3 +620,6 @@ fun Modifier.bottomSheetDraggable(
     }
 
 private const val SheetDragSlopMultiplier = 2.5f
+
+/** Tolerance for "has arrived": a spring lands on its anchor, floating point does not. */
+private val HalfDp = 0.5.dp
