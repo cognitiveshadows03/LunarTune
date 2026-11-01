@@ -1328,13 +1328,32 @@ class MainActivity : FragmentActivity() {
                             label = "activeSearchBarHide",
                         )
 
+                    // One owner for how much of the bottom of the window the bar holds,
+                    // on the same navigation spring the bar's own travel is read from.
+                    //
+                    // The row's collapsed anchor is built from this and nothing else, so
+                    // the row and the bar are moved by one animation instead of two: the
+                    // anchor used to be a plain `if` on the route, which changes in one
+                    // frame, while the bar eased in on its spring. For the length of that
+                    // spring the row sat where the bar was about to be, and the two were
+                    // drawn on top of each other - the row inside the capsule.
+                    val bottomBarReservedHeight by animateDpAsState(
+                        targetValue =
+                            if (shouldShowNavigationBar && !useRail) {
+                                floatingBarsBottomPadding + navVisibleHeight
+                            } else {
+                                0.dp
+                            },
+                        animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
+                        label = "",
+                    )
+
                     val playerBottomSheetState =
                         rememberBottomSheetState(
                             dismissedBound = 0.dp,
                             collapsedBound =
                                 bottomInset +
-                                    (if (shouldShowNavigationBar && !useRail) floatingBarsBottomPadding else 0.dp) +
-                                    getBottomNavPadding() +
+                                    bottomBarReservedHeight +
                                     MiniPlayerBottomSpacing +
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
@@ -3052,11 +3071,21 @@ class MainActivity : FragmentActivity() {
         immersiveStatusBarsHidden = hidden
         val controller = WindowCompat.getInsetsController(window, window.decorView)
 
+        // The window flag travels with the request. Asking the insets controller on
+        // its own leaves the window still believing it owes the display a status bar
+        // strip, so the area it reports moves in a step the moment the request lands -
+        // under a sheet that is already travelling. Flag and controller go together,
+        // so nothing else in the window notices the change. (The cutout mode stays
+        // short-edges throughout: this app draws its own edge-to-edge surface, and
+        // handing the cutout band back for the status bar would put a plain strip on
+        // top of it.)
         if (hidden) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             controller.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             controller.hide(WindowInsetsCompat.Type.statusBars())
         } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
             controller.show(WindowInsetsCompat.Type.statusBars())
         }

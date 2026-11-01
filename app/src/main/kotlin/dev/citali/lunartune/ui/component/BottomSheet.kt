@@ -111,7 +111,13 @@ fun BottomSheet(
                         }
                     translationY =
                         (state.expandedBound - restedValue).toPx().coerceAtLeast(0f)
-                }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
+                }.then(
+                    if (collapsedGesturesEnabled || state.isAwayFromCollapsedAnchor) {
+                        Modifier.bottomSheetDraggable(state, onDismiss)
+                    } else {
+                        Modifier
+                    },
+                )
                 .clip(
                     RoundedCornerShape(
                         topStart = if (!state.isExpanded) 16.dp else 0.dp,
@@ -208,8 +214,25 @@ class BottomSheetState(
         value == animatable.lowerBound!!
     }
 
+    /**
+     * Tolerant on purpose. The collapsed anchor moves whenever the window insets or
+     * the navigation bar move, and a spring that was aimed at the old anchor stops a
+     * fraction of a dp off the new one. An exact comparison read that speck as "the
+     * sheet is not collapsed", which re-armed the drag gesture on a collapsed sheet -
+     * visible as a swipe up on the row opening the queue in the styles that ask for
+     * no such gesture.
+     */
     val isCollapsed by derivedStateOf {
-        value == collapsedBound
+        abs((value - collapsedBound).value) < HalfDp.value
+    }
+
+    /**
+     * True once the sheet has actually been pulled clear of its collapsed anchor, so
+     * a caller that forbids the gesture can still let a finger drag an already-open
+     * sheet back down.
+     */
+    val isAwayFromCollapsedAnchor: Boolean by derivedStateOf {
+        value > collapsedBound + HalfDp
     }
 
     val isExpanded by derivedStateOf {
@@ -268,8 +291,15 @@ class BottomSheetState(
     /**
      * Move to wherever the sheet is anchored now, without a bounce: this is paper
      * moving under something already at rest, not a new motion.
+     *
+     * [snap] is for the collapsed anchor, which is the only one a second surface is
+     * drawn against: the collapsed row has to be on the new anchor in the same frame
+     * the new anchor exists, or the row spends the length of a soft spring sitting
+     * where the navigation bar now is. An anchor that arrives with the bar and a row
+     * that eases to it are two clocks, and two clocks on one slot is exactly how the
+     * row and the bar end up drawn on top of each other.
      */
-    private fun reanchorQuietly() {
+    private fun reanchorQuietly(snap: Boolean = false) {
         val target =
             when (targetAnchor) {
                 EXPANDED_ANCHOR -> expandedBound
@@ -277,7 +307,18 @@ class BottomSheetState(
                 else -> collapsedBound
             }
         if (abs((target - value).value) < HalfDp.value) return
-        settleTo(BottomSheetSoftAnimationSpec, targetAnchor)
+        if (!snap) {
+            settleTo(BottomSheetSoftAnimationSpec, targetAnchor)
+            return
+        }
+        settleJob?.cancel()
+        ++settleGeneration
+        settleAnchor = null
+        settleSpec = null
+        settleJob = null
+        coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            animatable.snapTo(target)
+        }
     }
 
     /**
@@ -366,10 +407,13 @@ class BottomSheetState(
             pendingGeometry = Triple(dismissed, collapsed, expanded)
             return
         }
-        val atRest = isExpanded || isCollapsed || isDismissed
+        // Asked before the geometry is taken up, so it answers about the anchors the
+        // value was actually aimed at.
+        val wasAtCollapsed = isCollapsed
+        val atRest = isExpanded || wasAtCollapsed || isDismissed
         pendingGeometry = Triple(dismissed, collapsed, expanded)
         applyPendingGeometry()
-        if (atRest) reanchorQuietly()
+        if (atRest) reanchorQuietly(snap = wasAtCollapsed)
     }
 
     /** A pointer drag owns the sheet, so no settle may be resumed under it. */
