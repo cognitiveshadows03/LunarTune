@@ -3096,6 +3096,68 @@ fun V9PlayerContent(
     }
 }
 
+/**
+ * The Material Extended backdrop: the cover itself, blurred wide and dimmed to the
+ * sheet's own fill so the type and the controls still sit on a readable surface.
+ *
+ * It is a background and nothing else - the cover in the middle is still the only
+ * sharp artwork - so the layout above it is untouched.
+ */
+@Composable
+internal fun V9PlayerBackdrop(
+    thumbnailUrl: String?,
+    dimColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    val url = remember(thumbnailUrl) { thumbnailUrl?.highRes() }
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .background(dimColor),
+    ) {
+        AnimatedContent(
+            targetState = url,
+            transitionSpec = { fadeIn(tween(600)) togetherWith fadeOut(tween(600)) },
+            label = "v9BackdropArtwork",
+        ) { artwork ->
+            if (artwork != null) {
+                BlurredArtwork(
+                    model = artwork,
+                    radius = V9BackdropBlurRadius,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                // Scaled past the edges so the blur has no soft border to
+                                // show once the layers are mixed.
+                                scaleX = 1.18f
+                                scaleY = 1.18f
+                            },
+                )
+            }
+        }
+
+        // The dim. Heaviest at the bottom, where the title, the slider and the controls
+        // live, so the backdrop stays a backdrop instead of competing with them.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0f to dimColor.copy(alpha = 0.62f),
+                            0.42f to dimColor.copy(alpha = 0.72f),
+                            1f to dimColor.copy(alpha = 0.88f),
+                        ),
+                    ),
+        )
+    }
+}
+
+private val V9BackdropBlurRadius = 64.dp
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun V9PortraitContent(

@@ -3599,6 +3599,15 @@ private fun FrostedTopBarMenu(
                 onNavigate("history")
             }
             FrostedTopBarMenuRow(
+                iconRes = R.drawable.stats,
+                label = stringResource(R.string.stats),
+                barShape = barShape,
+                barColor = barColor,
+            ) {
+                onExpandedChange(false)
+                onNavigate("stats")
+            }
+            FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
                 barShape = barShape,

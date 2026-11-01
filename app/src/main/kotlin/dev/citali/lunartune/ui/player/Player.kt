@@ -1464,6 +1464,18 @@ fun BottomSheetPlayer(
             )
         }
 
+        // Material Extended (V9): the cover itself, blurred wide and dimmed to the
+        // sheet's own fill, drawn once for the whole sheet rather than inside the
+        // content - so it runs under the peek strip too and there is no seam where
+        // the padded content stops. Painted before the content and before the queue
+        // sheet, both of which stack above it.
+        if (!aodModeEnabled && playerDesignStyle == PlayerDesignStyle.V9) {
+            V9PlayerBackdrop(
+                thumbnailUrl = mediaMetadata?.thumbnailUrl,
+                dimColor = dynamicBgColor,
+            )
+        }
+
         if (!aodModeEnabled &&
             playerDesignStyle != PlayerDesignStyle.V5 &&
             playerDesignStyle != PlayerDesignStyle.V7 &&
