@@ -2273,26 +2273,20 @@ class MainActivity : FragmentActivity() {
                                                     !playerBottomSheetState.isDismissed
                                                 ) {
                                                     with(navDriftDensity) {
-                                                        // Exactly the value the bar hides on — the same
-                                                        // inputs, in the same order. The row and
-                                                        // the bar are one motion: when the bar started
-                                                        // leaving on the search-bar animation while the
-                                                        // row only followed the slower route spring,
-                                                        // they drifted apart for half a second and the
-                                                        // row was left hanging over the bar's slot.
-                                                        // Three inputs, one hide value: the row and the
-                                                        // bar move on the same number.
-                                                        //
-                                                        // The sheet's own progress must NOT be one of
-                                                        // them. The row's resting place already leaves
-                                                        // the bar its room, so scaling a full drift by the
-                                                        // closing progress pushed the row down into the
-                                                        // bar's slot for the whole minimise - the bar's
-                                                        // slot travels up on that progress on its own,
-                                                        // and the row is supposed to stay above it.
+                                                        // The route fraction deliberately does NOT feed
+                                                        // this. Crossing between a page with a navigation
+                                                        // bar and one without already moves the row's own
+                                                        // anchor - the sheet glides to it - so adding the
+                                                        // route travel on top pushed the row down by a
+                                                        // whole navigation bar exactly while a bar was
+                                                        // arriving beside it, and the two drew on top of
+                                                        // each other. Only cases where the bar leaves but
+                                                        // the row's anchor stays put belong here: the
+                                                        // scroll hide and the active search bar. The
+                                                        // sheet's own progress does not belong here
+                                                        // either: the slot travels on that by itself.
                                                         val hide =
                                                             maxOf(
-                                                                routeHideFraction,
                                                                 activeSearchBarHideState.value,
                                                                 navHideAnim.value,
                                                             ).coerceIn(0f, 1f)

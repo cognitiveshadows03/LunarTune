@@ -94,11 +94,23 @@ fun BottomSheet(
                 // spring — the open/collapse stutter. A translation here is a redraw.
                 .graphicsLayer {
                     // The minimise keeps its rebound: the spring dips a few dp past the
-                    // collapsed anchor and comes back, and that dip is the bounce. It
-                    // only ever looked like a shove into the navigation bar because the
-                    // state was rebuilt mid-settle whenever the insets moved, which
-                    // restarted the spring from wherever the sheet happened to be.
-                    translationY = (state.expandedBound - state.value).toPx().coerceAtLeast(0f)
+                    // collapsed anchor and comes back, and that dip is the bounce.
+                    //
+                    // At rest the value must equal the collapsed anchor, so anything
+                    // below it at rest means the anchor moved (a page gained or lost its
+                    // navigation bar) and the sheet has not caught up yet. Drawing that
+                    // would put the row down inside the bar - so at rest, and only at
+                    // rest, it is floored at the anchor. The rebound is untouched.
+                    val restedValue =
+                        if (state.isSettling) {
+                            state.value
+                        } else {
+                            state.value.coerceAtLeast(
+                                minOf(state.collapsedBound, state.expandedBound),
+                            )
+                        }
+                    translationY =
+                        (state.expandedBound - restedValue).toPx().coerceAtLeast(0f)
                 }.then(if (collapsedGesturesEnabled || !state.isCollapsed) Modifier.bottomSheetDraggable(state, onDismiss) else Modifier)
                 .clip(
                     RoundedCornerShape(
@@ -219,6 +231,14 @@ class BottomSheetState(
     /** Only the newest settle may clear the bookkeeping of the one it replaced. */
     private var settleGeneration = 0
 
+    /**
+     * True while a settle is running. It is the only time the sheet may legitimately
+     * sit below its collapsed anchor (the rebound); at rest it must never be, and the
+     * draw phase below uses that to guarantee it.
+     */
+    val isSettling: Boolean
+        get() = settleJob?.isActive == true
+
     /** The settle in flight, so a geometry change can retarget it instead of killing it. */
     private var settleJob: Job? = null
     private var settleAnchor: Int? = null
@@ -302,12 +322,13 @@ class BottomSheetState(
                         settleAnchor = null
                         settleSpec = null
                         settleJob = null
-                        if (pendingGeometry != null) {
-                            // Landed on the old geometry; follow the new one quietly
-                            // instead of having jumped to it half way through.
-                            applyPendingGeometry()
-                            reanchorQuietly()
-                        }
+                    }
+                    // Outside the generation check on purpose: if this settle was
+                    // superseded or cancelled, the change parked under it still has to
+                    // be taken up, or the sheet keeps the old geometry for good.
+                    if (pendingGeometry != null && settleJob?.isActive != true) {
+                        applyPendingGeometry()
+                        reanchorQuietly()
                     }
                 }
             }
@@ -336,8 +357,12 @@ class BottomSheetState(
         ) {
             return
         }
-        if (settleAnchor != null) {
-            // A settle owns the motion: park the change, apply it when it lands.
+        // `settleJob.isActive`, not "an anchor was set": a job that has finished or
+        // been cancelled leaves a stale anchor behind, and treating that as "in flight"
+        // parked the change with nobody left to apply it. That is precisely how the row
+        // could end up still anchored to the geometry of a page without a navigation
+        // bar while being drawn on a page that has one - the row sitting in the bar.
+        if (settleJob?.isActive == true) {
             pendingGeometry = Triple(dismissed, collapsed, expanded)
             return
         }
@@ -415,6 +440,8 @@ class BottomSheetState(
     }
 
     fun snapTo(value: Dp) {
+        settleJob?.cancel()
+        applyPendingGeometry()
         updateAnchor(
             when (value) {
                 expandedBound -> EXPANDED_ANCHOR
