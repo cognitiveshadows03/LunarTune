@@ -2280,19 +2280,21 @@ class MainActivity : FragmentActivity() {
                                                         // row only followed the slower route spring,
                                                         // they drifted apart for half a second and the
                                                         // row was left hanging over the bar's slot.
-                                                        // The sheet's own progress belongs here too: while
-                                                        // the player closes, the bar's slot travels up on
-                                                        // that progress (layout, one Box above), so the
-                                                        // row has to travel with it. Without this term the
-                                                        // row arrived first and sat waiting for the bar
-                                                        // to catch up. It is 0 whenever the sheet rests,
-                                                        // so nothing else about the drift changes.
+                                                        // Three inputs, one hide value: the row and the
+                                                        // bar move on the same number.
+                                                        //
+                                                        // The sheet's own progress must NOT be one of
+                                                        // them. The row's resting place already leaves
+                                                        // the bar its room, so scaling a full drift by the
+                                                        // closing progress pushed the row down into the
+                                                        // bar's slot for the whole minimise - the bar's
+                                                        // slot travels up on that progress on its own,
+                                                        // and the row is supposed to stay above it.
                                                         val hide =
                                                             maxOf(
                                                                 routeHideFraction,
                                                                 activeSearchBarHideState.value,
                                                                 navHideAnim.value,
-                                                                playerBottomSheetState.progress,
                                                             ).coerceIn(0f, 1f)
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() * hide
                                                     }

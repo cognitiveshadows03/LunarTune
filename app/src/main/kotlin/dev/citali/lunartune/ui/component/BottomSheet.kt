@@ -64,9 +64,6 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
 import dev.citali.lunartune.LocalAnimationsDisabled
-import dev.citali.lunartune.constants.BottomSheetAnimationSpec
-import dev.citali.lunartune.constants.BottomSheetCollapseAnimationSpec
-import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
 
 /**
  * Bottom Sheet
@@ -170,7 +167,6 @@ class BottomSheetState(
     private val animatable: Animatable<Dp, AnimationVector1D>,
     private val onAnchorChanged: (Int) -> Unit,
     private val animationsDisabled: Boolean,
-    private val motionMiniBounce: Boolean = true,
     collapsedBound: Dp,
     initialAnchor: Int = DISMISSED_ANCHOR,
 ) : DraggableState by draggableState {
@@ -288,7 +284,7 @@ class BottomSheetState(
         if (anchor != null && target != null) {
             // Same settle, new anchor: the spec is carried over so the motion is
             // continuous instead of restarting from a standstill.
-            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor)
+            settleTo(target, runningSpec ?: BottomSheetCalmAnimationSpec, anchor)
         } else if (atExpanded || atCollapsed || atDismissed) {
             // Idle on an anchor that just moved: follow it, nothing is in flight.
             val restingAnchor =
@@ -305,7 +301,7 @@ class BottomSheetState(
                     DISMISSED_ANCHOR -> dismissed
                     else -> collapsed
                 },
-                BottomSheetSoftAnimationSpec,
+                BottomSheetCalmAnimationSpec,
                 restingAnchor,
             )
         }
@@ -335,33 +331,33 @@ class BottomSheetState(
         )
     }
 
+    /**
+     * No bounce, anywhere: the mini player settles on one quiet spring for expand,
+     * minimise, fling-collapse and dismiss alike. The rebound is being rebuilt from
+     * scratch, and until it is, nothing in the sheet is allowed to overshoot its
+     * anchor - an overshoot past the collapsed anchor is also what used to leave the
+     * row sitting under the navigation bar.
+     */
     private fun collapse() {
-        collapse(if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
+        collapse(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
     }
 
     private fun expand() {
-        expand(if (animationsDisabled) snap() else if (motionMiniBounce) BottomSheetAnimationSpec else BottomSheetCalmAnimationSpec)
+        expand(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
     }
 
     fun collapseSoft() {
-        collapse(if (animationsDisabled) snap() else BottomSheetCollapseAnimationSpec)
+        collapse(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
     }
 
     fun expandSoft() {
-        expand(if (animationsDisabled) snap() else BottomSheetSoftAnimationSpec)
+        expand(if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
     }
 
     fun dismiss() {
         settleTo(
             target = dismissedBound,
-            animationSpec =
-                if (animationsDisabled) {
-                    snap()
-                } else if (motionMiniBounce) {
-                    BottomSheetAnimationSpec
-                } else {
-                    BottomSheetCalmAnimationSpec
-                },
+            animationSpec = if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec,
             anchor = DISMISSED_ANCHOR,
         )
     }
@@ -522,7 +518,7 @@ fun rememberBottomSheetState(
 
             animatable.updateBounds(dismissedBound.coerceAtMost(expandedBound), expandedBound)
             coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetAnimationSpec)
+                animatable.animateTo(initialValue, if (animationsDisabled) snap() else BottomSheetCalmAnimationSpec)
             }
 
             BottomSheetState(
@@ -536,8 +532,6 @@ fun rememberBottomSheetState(
                 coroutineScope = coroutineScope,
                 animatable = animatable,
                 animationsDisabled = animationsDisabled,
-                // LunarMotion is gone; the mini player keeps its bounce.
-                motionMiniBounce = true,
                 collapsedBound = collapsedBound,
                 initialAnchor = previousAnchor,
             )
