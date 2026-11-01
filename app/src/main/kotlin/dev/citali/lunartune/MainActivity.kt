@@ -1337,16 +1337,19 @@ class MainActivity : FragmentActivity() {
                     // frame, while the bar eased in on its spring. For the length of that
                     // spring the row sat where the bar was about to be, and the two were
                     // drawn on top of each other - the row inside the capsule.
-                    val bottomBarReservedHeight by animateDpAsState(
-                        targetValue =
-                            if (shouldShowNavigationBar && !useRail) {
-                                floatingBarsBottomPadding + navVisibleHeight
-                            } else {
-                                0.dp
-                            },
-                        animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
-                        label = "",
-                    )
+                    // Not animated, on purpose. The bar eases into place, but the space it
+                    // ends up holding is a layout fact from the first frame of the route
+                    // change: the row, the sheet's own anchor and every page's bottom
+                    // padding have to agree on it immediately. Handing them a value that
+                    // lags by a spring is what put the row inside the bar on one page and
+                    // left an empty band under the content on another, for as long as the
+                    // spring ran.
+                    val bottomBarReservedHeight =
+                        if (shouldShowNavigationBar && !useRail) {
+                            floatingBarsBottomPadding + navVisibleHeight
+                        } else {
+                            0.dp
+                        }
 
                     val playerBottomSheetState =
                         rememberBottomSheetState(
@@ -1358,6 +1361,25 @@ class MainActivity : FragmentActivity() {
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
                         )
+                    // One line per geometry change, in the app's own log viewer: when the
+                    // row and the bar disagree, these are the numbers that say which of
+                    // them moved.
+                    LaunchedEffect(
+                        bottomInset,
+                        bottomBarReservedHeight,
+                        shouldShowNavigationBar,
+                        isAtPrimaryRoot,
+                        active,
+                    ) {
+                        android.util.Log.d(
+                            "LunarLayout",
+                            "root=$isAtPrimaryRoot searchActive=$active barShown=$shouldShowNavigationBar " +
+                                "inset=$bottomInset reserved=$bottomBarReservedHeight " +
+                                "rowAnchor=${bottomInset + bottomBarReservedHeight + MiniPlayerBottomSpacing + MiniPlayerHeight} " +
+                                "dismissed=${playerBottomSheetState.isDismissed}",
+                        )
+                    }
+
                     var homeOverflowMenuExpanded by rememberSaveable { mutableStateOf(false) }
                     val showHomeOverflowFab = false
 

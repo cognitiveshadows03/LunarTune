@@ -183,6 +183,13 @@
     <string name="refetch">Refetch</string>
     <string name="refetch_canvas">Refetch canvas</string>
     <string name="canvas_refetch_failed">Couldn\'t refresh animated canvas</string>
+    <string name="share_card">Share card</string>
+    <string name="song_card">Song card</string>
+    <string name="lyrics_card">Lyrics card</string>
+    <string name="card_theme">Card theme</string>
+    <string name="card_light">Light</string>
+    <string name="card_dark">Dark</string>
+    <string name="card_saved">Card saved to your gallery</string>
     <string name="share">Share</string>
     <string name="delete">Delete</string>
     <string name="lossless_source">Lossless source</string>
