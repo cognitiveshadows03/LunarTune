@@ -64,25 +64,6 @@
     <string name="remote_history">عن بُعد</string>
     <string name="charts">الأشهر دلوقتي</string>
     <string name="back_button_desc">رجوع</string>
-    <string name="news">أخبار من المطورين</string>
-    <string name="news_loading">جاري تحميل الأخبار…</string>
-    <string name="news_empty_title">مفيش حاجة هنا لسه</string>
-    <string name="news_empty_desc">مفيش إعلانات دلوقتي. ابقى ارجع تاني بعدين.</string>
-    <string name="news_error_title">معرفناش نحمل الأخبار</string>
-    <string name="news_error_desc">اتأكد من اتصالك بالإنترنت وجرب تاني.</string>
-    <string name="news_retry">إعادة المحاولة</string>
-    <string name="news_search_placeholder">دور في الأخبار…</string>
-    <string name="news_search_results_title">نتايج البحث</string>
-    <string name="news_no_results_title">مفيش مقالات مطابقة</string>
-    <string name="news_no_results_desc">جرب كلمة بحث تانية.</string>
-    <string name="news_important_badge">هام</string>
-    <string name="news_tooltip_title">إعلانات جديدة</string>
-    <string name="news_tooltip_body">عندك إعلانات جديدة من المطورين لسه مقريتهاش.</string>
-    <string name="news_author_on_date">%1$s · %2$s</string>
-    <plurals name="news_article_count">
-        <item quantity="one">ولا مقال</item>
-        <item quantity="other">مقال واحد</item>
-    </plurals>
     <string name="no_title">من غير عنوان</string>
     <string name="unknown_artist">فنان مش معروف</string>
     <string name="aod_customize_title">تخصيص الشاشة الدائمة (AOD)</string>

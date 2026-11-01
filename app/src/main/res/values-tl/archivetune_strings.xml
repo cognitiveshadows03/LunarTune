@@ -88,25 +88,6 @@
     <string name="remote_history">Remote</string>
     <string name="charts">Mga Chart</string>
     <string name="back_button_desc">Bumalik</string>
-    <string name="news">Balita Mula sa Developers</string>
-    <string name="news_loading">Hinahakot ang balita…</string>
-    <string name="news_empty_title">Wala pa rito</string>
-    <string name="news_empty_desc">Wala pang anunsyo sa ngayon. Tignan ulit sa susunod.</string>
-    <string name="news_error_title">Hindi mahakot ang balita</string>
-    <string name="news_error_desc">Tignan ang koneksyon sa internet at subukan ulit.</string>
-    <string name="news_retry">Subukan ulit</string>
-    <string name="news_search_placeholder">Maghanap ng balita…</string>
-    <string name="news_search_results_title">Resulta sa paghahanap</string>
-    <string name="news_no_results_title">Walang kaparis na artikulo</string>
-    <string name="news_no_results_desc">Sumubok ng ibang search term.</string>
-    <string name="news_important_badge">Mahalaga</string>
-    <string name="news_tooltip_title">Bagong Anunsyo</string>
-    <string name="news_tooltip_body">May mga hindi pa nabasang anunsyo mula sa mga developer.</string>
-    <string name="news_author_on_date">%1$s · %2$s</string>
-    <plurals name="news_article_count">
-        <item quantity="one">%d artikulo</item>
-        <item quantity="other">%d mga artikulo</item>
-    </plurals>
     <string name="no_title">Walang titulo</string>
     <string name="unknown_artist">\'Di-kilalang musikero</string>
     <string name="aod_customize_title">AOD customization</string>

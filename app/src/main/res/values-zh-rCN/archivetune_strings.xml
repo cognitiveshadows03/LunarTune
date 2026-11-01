@@ -291,24 +291,6 @@
     <string name="local_songs_scan_folders_add">添加排除目录</string>
     <string name="local_songs_no_matches_desc">请尝试使用其他歌曲、艺人或专辑名称进行搜索</string>
     <string name="sort_by_album">专辑</string>
-    <string name="news">开发者动态</string>
-    <string name="news_loading">正在加载动态…</string>
-    <string name="news_empty_title">暂无内容</string>
-    <string name="news_empty_desc">暂时没有新的动态，请稍后再来查看</string>
-    <string name="news_error_title">无法加载动态</string>
-    <string name="news_error_desc">请检查你的网络连接后重试</string>
-    <string name="news_retry">重试</string>
-    <string name="news_search_placeholder">搜索动态…</string>
-    <string name="news_search_results_title">搜索结果</string>
-    <string name="news_no_results_title">未找到匹配文章</string>
-    <string name="news_no_results_desc">请尝试其他搜索词</string>
-    <string name="news_important_badge">重要公告</string>
-    <string name="news_tooltip_title">新公告提示</string>
-    <string name="news_tooltip_body">你有来自开发者的未读公告</string>
-    <string name="news_author_on_date">%1$s · %2$s</string>
-    <plurals name="news_article_count">
-        <item quantity="other">%d 篇文章</item>
-    </plurals>
     <string name="aod_customize_title">熄屏显示自定义</string>
     <string name="aod_customize_subtitle">形状、布局、控制组件与氛围效果定制</string>
     <string name="aod_customize_entry_desc">个性化设置熄屏播放界面</string>

@@ -2321,9 +2321,13 @@ class MainActivity : FragmentActivity() {
                                                         // never re-lays out anything.
                                                         val slideOffset =
                                                             navSlideDistance *
-                                                                playerBottomSheetState.progress.coerceIn(
-                                                                    0f,
-                                                                    1f,
+                                                                barTravelFraction(
+                                                                    progress =
+                                                                        playerBottomSheetState.progress,
+                                                                    arriving =
+                                                                        playerBottomSheetState.targetAnchor ==
+                                                                            COLLAPSED_ANCHOR &&
+                                                                            !playerBottomSheetState.isCollapsed,
                                                                 )
                                                         IntOffset(x = 0, y = slideOffset.roundToPx())
                                                     }.graphicsLayer {
@@ -3426,6 +3430,26 @@ private const val TopAppBarIconButtonContainerAlpha = 0.48f
  * query on the UI's account.
  */
 private const val HistorySampleSize = 300
+
+/**
+ * How far the navigation bar's slot has travelled out of the way, 0..1.
+ *
+ * Proportional on the way out, so the bar leaves exactly in step with the player
+ * that is sliding over it. On the way back in the travel is front-loaded, so the bar
+ * is home a beat *before* the collapsed row lands rather than arriving last: tied
+ * 1:1 it only reaches its slot on the very last frame of the settle, which reads as
+ * the bar climbing up from the bottom of the screen after everything else has
+ * stopped. The quarter-power term is enough to take most of the travel early without
+ * the bar visibly outrunning the sheet.
+ */
+private fun barTravelFraction(
+    progress: Float,
+    arriving: Boolean,
+): Float {
+    val clamped = progress.coerceIn(0f, 1f)
+    if (!arriving) return clamped
+    return clamped * (0.5f + 0.5f * clamped)
+}
 
 @Composable
 private fun TranslucentTopAppBarIconButton(

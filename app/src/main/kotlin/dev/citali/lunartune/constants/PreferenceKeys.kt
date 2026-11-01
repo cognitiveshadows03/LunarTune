@@ -523,7 +523,6 @@ val AlbumViewTypeKey = stringPreferencesKey("albumViewType")
 val PlaylistEditLockKey = booleanPreferencesKey("playlistEditLock")
 val QuickPicksKey = stringPreferencesKey("discover")
 
-val NewsLastReadTimestampKey = longPreferencesKey("news_last_read_timestamp")
 val SpeedDialSongIdsKey = stringPreferencesKey("speedDialSongIds")
 val PreferredLyricsProviderKey = stringPreferencesKey("lyricsProvider")
 val LyricsProviderOrderKey = stringPreferencesKey("lyricsProviderOrder")
@@ -1023,8 +1022,6 @@ val GitHubTranslationContributorsLastCheckedAtKey = longPreferencesKey("github_t
 val GitHubReleasesEtagKey = stringPreferencesKey("github_releases_etag")
 val GitHubReleasesJsonKey = stringPreferencesKey("github_releases_json")
 
-/** Cached listing + bodies of the repository's `news` folder (JSON). */
-val NewsCacheKey = stringPreferencesKey("news_cache_json")
 val GitHubReleasesLastCheckedAtKey = longPreferencesKey("github_releases_last_checked_at")
 val GitHubReleasesFingerprintKey = stringPreferencesKey("github_releases_fingerprint")
 

@@ -182,41 +182,6 @@ fun NavGraphBuilder.navigationBuilder(
             StatsScreen(navController)
         }
     }
-    composable("news") {
-        DrillPageContainer(pureBlack) {
-            NewsScreen(navController)
-        }
-    }
-    composable(NewsRoute) {
-        DrillPageContainer(pureBlack) {
-            NewsFeedScreen(navController)
-        }
-    }
-    composable(
-        route = "$NewsArticleRoutePrefix{slug}",
-        arguments =
-            listOf(
-                navArgument("slug") { type = NavType.StringType },
-            ),
-    ) { backStackEntry ->
-        DrillPageContainer(pureBlack) {
-            NewsArticleScreen(
-                navController = navController,
-                slug = backStackEntry.arguments?.getString("slug").orEmpty(),
-            )
-        }
-    }
-    composable(
-        route = "view_news/{newsId}",
-        arguments =
-            listOf(
-                navArgument("newsId") { type = NavType.StringType },
-            ),
-    ) {
-        DrillPageContainer(pureBlack) {
-            ViewNewsScreen(navController)
-        }
-    }
     composable(
         route = "year_in_music?year={year}",
         arguments =

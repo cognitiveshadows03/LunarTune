@@ -225,16 +225,62 @@ class BottomSheetState(
     private var settleSpec: AnimationSpec<Dp>? = null
 
     /**
+     * Geometry that asked to change while a settle was in flight.
+     *
+     * Applying it mid-flight is what used to break the collapse on the styles that
+     * hide the status bar: the bars come back the instant collapsing starts, the
+     * window loses that much height, and moving the bounds under a running spring
+     * either snaps the sheet down (value coerced into the new, smaller range) or
+     * relaunches it from a standstill. Either way the sheet loses a beat, the row
+     * dips, and the navigation bar - whose slot travels on the sheet - arrives late.
+     * So the change is parked here and taken up once the settle has landed.
+     */
+    private var pendingGeometry: Triple<Dp, Dp, Dp>? = null
+
+    /** Apply a parked geometry change, if there is one. */
+    private fun applyPendingGeometry() {
+        val pending = pendingGeometry ?: return
+        pendingGeometry = null
+        animatable.updateBounds(pending.first.coerceAtMost(pending.third), pending.third)
+        collapsedBound = pending.second
+    }
+
+    /**
+     * Move to wherever the sheet is anchored now, without a bounce: this is paper
+     * moving under something already at rest, not a new motion.
+     */
+    private fun reanchorQuietly() {
+        val target =
+            when (targetAnchor) {
+                EXPANDED_ANCHOR -> expandedBound
+                DISMISSED_ANCHOR -> dismissedBound
+                else -> collapsedBound
+            }
+        if (abs((target - value).value) < HalfDp.value) return
+        settleTo(BottomSheetSoftAnimationSpec, targetAnchor)
+    }
+
+    /**
      * Every settle goes through here so [onBoundsChanged] knows what is in flight and
      * on which spec to continue it.
      */
     private fun settleTo(
-        target: Dp,
         animationSpec: AnimationSpec<Dp>,
         anchor: Int,
         initialVelocityPx: Float = 0f,
     ) {
+        // A new settle is a good moment to adopt geometry that was parked: the
+        // animation starts from the current value either way.
+        applyPendingGeometry()
         updateAnchor(anchor)
+        // Resolved here, after the geometry is up to date, so a settle can never be
+        // aimed at an anchor that has since moved.
+        val target =
+            when (anchor) {
+                EXPANDED_ANCHOR -> expandedBound
+                DISMISSED_ANCHOR -> dismissedBound
+                else -> collapsedBound
+            }
         settleJob?.cancel()
         val generation = ++settleGeneration
         settleAnchor = anchor
@@ -256,6 +302,12 @@ class BottomSheetState(
                         settleAnchor = null
                         settleSpec = null
                         settleJob = null
+                        if (pendingGeometry != null) {
+                            // Landed on the old geometry; follow the new one quietly
+                            // instead of having jumped to it half way through.
+                            applyPendingGeometry()
+                            reanchorQuietly()
+                        }
                     }
                 }
             }
@@ -277,46 +329,22 @@ class BottomSheetState(
         collapsed: Dp,
         expanded: Dp,
     ) {
-        if (dismissedBound == dismissed && collapsedBound == collapsed && expandedBound == expanded) return
-        // Captured before the bounds move: after that these comparisons are gone.
-        val anchor = settleAnchor
-        val runningSpec = settleSpec
-        val atExpanded = isExpanded
-        val atCollapsed = isCollapsed
-        val atDismissed = isDismissed
-        animatable.updateBounds(dismissed.coerceAtMost(expanded), expanded)
-        collapsedBound = collapsed
-        val target =
-            when (anchor) {
-                EXPANDED_ANCHOR -> expanded
-                COLLAPSED_ANCHOR -> collapsed
-                DISMISSED_ANCHOR -> dismissed
-                else -> null
-            }
-        if (anchor != null && target != null) {
-            // Same settle, new anchor: the spec is carried over so the motion is
-            // continuous instead of restarting from a standstill.
-            settleTo(target, runningSpec ?: BottomSheetAnimationSpec, anchor)
-        } else if (atExpanded || atCollapsed || atDismissed) {
-            // Idle on an anchor that just moved: follow it, nothing is in flight.
-            val restingAnchor =
-                when {
-                    atExpanded -> EXPANDED_ANCHOR
-                    atDismissed -> DISMISSED_ANCHOR
-                    else -> COLLAPSED_ANCHOR
-                }
-            // Quiet on purpose: re-anchoring is the paper moving under a sheet that is
-            // already at rest, so it must not be another bounce.
-            settleTo(
-                when (restingAnchor) {
-                    EXPANDED_ANCHOR -> expanded
-                    DISMISSED_ANCHOR -> dismissed
-                    else -> collapsed
-                },
-                BottomSheetSoftAnimationSpec,
-                restingAnchor,
-            )
+        if (pendingGeometry == null &&
+            dismissedBound == dismissed &&
+            collapsedBound == collapsed &&
+            expandedBound == expanded
+        ) {
+            return
         }
+        if (settleAnchor != null) {
+            // A settle owns the motion: park the change, apply it when it lands.
+            pendingGeometry = Triple(dismissed, collapsed, expanded)
+            return
+        }
+        val atRest = isExpanded || isCollapsed || isDismissed
+        pendingGeometry = Triple(dismissed, collapsed, expanded)
+        applyPendingGeometry()
+        if (atRest) reanchorQuietly()
     }
 
     /** A pointer drag owns the sheet, so no settle may be resumed under it. */
@@ -325,6 +353,8 @@ class BottomSheetState(
         settleAnchor = null
         settleSpec = null
         settleJob = null
+        // The finger owns the sheet now; it can move on the new geometry directly.
+        applyPendingGeometry()
     }
 
     fun collapse(
@@ -332,7 +362,6 @@ class BottomSheetState(
         velocityPx: Float = 0f,
     ) {
         settleTo(
-            target = collapsedBound,
             animationSpec = animationSpec,
             anchor = COLLAPSED_ANCHOR,
             initialVelocityPx = velocityPx,
@@ -344,7 +373,6 @@ class BottomSheetState(
         velocityPx: Float = 0f,
     ) {
         settleTo(
-            target = expandedBound,
             animationSpec = animationSpec,
             anchor = EXPANDED_ANCHOR,
             initialVelocityPx = velocityPx,
@@ -381,7 +409,6 @@ class BottomSheetState(
 
     fun dismiss() {
         settleTo(
-            target = dismissedBound,
             animationSpec = if (animationsDisabled) snap() else BottomSheetAnimationSpec,
             anchor = DISMISSED_ANCHOR,
         )
