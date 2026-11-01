@@ -79,6 +79,12 @@ fun BottomSheet(
     onDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = true,
     collapsedGesturesEnabled: Boolean = true,
+    /**
+     * What a tap on the collapsed row does. Defaults to the quiet settle, which is
+     * right for the player; a sheet that is opened by a gesture elsewhere passes
+     * [BottomSheetState.openByGesture] instead, so both routes reach the same place.
+     */
+    collapsedClick: (() -> Unit)? = null,
     /** Extra downward drift (px) for the collapsed row while the navigation
      * bar is hidden; scaled down as the sheet expands so the player is untouched. */
     collapsedOffsetPx: () -> Float = { 0f },
@@ -167,7 +173,7 @@ fun BottomSheet(
                                 Modifier.clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
-                                    onClick = state::expandSoft,
+                                    onClick = collapsedClick ?: state::expandSoft,
                                 )
                             } else {
                                 Modifier
@@ -467,6 +473,27 @@ class BottomSheetState(
         )
     }
 
+    /**
+     * Open the sheet the way a swipe-up does.
+     *
+     * A swipe is not just "settle to the expanded anchor": the drag first takes the
+     * sheet, which drops the settle bookkeeping, cancels whatever settle was in
+     * flight and takes up any geometry parked under it - and only then does the fling
+     * ask for the expanded anchor, on the shared motion spring and with the finger's
+     * speed. A tap has none of that behind it. It arrives with the sheet at rest, so
+     * it asks for the same anchor from a different starting state, and on the styles
+     * where the collapsed row is only reachable by touch it asked for it and nothing
+     * happened.
+     *
+     * So a tap does what the drag does first, then asks for the anchor the same way.
+     * Same start, same spring, same arrival: a tap and a swipe now open the sheet
+     * identically instead of by two routes.
+     */
+    fun openByGesture(velocityPx: Float = OpenByGestureVelocityPx) {
+        onDragStart()
+        performFling(velocityPx, null)
+    }
+
     /** The quiet pair, for the back gesture and for the mini player tap. */
     fun collapseSoft() {
         collapse(if (animationsDisabled) snap() else BottomSheetSoftAnimationSpec)
@@ -721,3 +748,6 @@ private const val SheetDragSlopMultiplier = 2.5f
 
 /** Tolerance for "has arrived": a spring lands on its anchor, floating point does not. */
 private val HalfDp = 0.5.dp
+
+/** A gentle swipe-up, reused when a tap asks for the same thing. */
+private const val OpenByGestureVelocityPx = 600f

@@ -430,6 +430,10 @@ fun Queue(
         backgroundColor = Color.Unspecified,
         modifier = modifier,
         collapsedGesturesEnabled = !(playerDesignStyle == PlayerDesignStyle.V10 && isPortraitForSheet),
+        // A tap on the row opens the queue on the same motion as the swipe does: on a
+        // tap there is no gesture behind the sheet, and a plain settle from there is
+        // what left the tap doing nothing.
+        collapsedClick = { state.openByGesture() },
         collapsedContent = {
             when (playerDesignStyle) {
                 PlayerDesignStyle.V2 -> {

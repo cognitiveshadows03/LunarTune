@@ -1101,7 +1101,11 @@ fun BottomSheetPlayer(
                 if (!state.isExpandedOrExpanding) {
                     state.expandSoft()
                 }
-                queueSheetState.expandSoft()
+                // Opened the way the swipe opens it, not by a plain settle: the tap
+                // arrives with no gesture behind it, and asking for the anchor from
+                // there is what used to do nothing on the styles whose row is only
+                // reachable by touch.
+                queueSheetState.openByGesture()
             }
         }
 
