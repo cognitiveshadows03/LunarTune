@@ -335,7 +335,7 @@ fun LyricsMenu(
             lyrics = currentLyrics,
             currentLyricLine = currentLyricsLine(currentLyrics, sharePosition),
             position = sharePosition,
-            duration = shareMetadata.duration,
+            duration = shareMetadata.duration.toLong(),
             onDismiss = { showShareCardDialog = false },
         )
     }
