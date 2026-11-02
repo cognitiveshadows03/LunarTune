@@ -31,6 +31,8 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -38,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.constants.HeaderImageDimKey
+import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
@@ -61,14 +64,27 @@ fun ScreenImageHeader(
     // Appearance only ever scales what is drawn here, so the page join at the bottom stays
     // whole whatever it is set to.
     val (headerImageDim) = rememberPreference(HeaderImageDimKey, 1f)
+    // A custom banner is the one piece of the UI the user can fill with any image they like.
+    // In the calm look it is muted rather than removed: the artwork stays personal but stops
+    // competing with the text, chips and cards around it.
+    val cleanUi = LocalCleanUi.current
+    val bannerColorFilter =
+        remember(cleanUi) {
+            if (cleanUi) {
+                ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.42f) })
+            } else {
+                null
+            }
+        }
     Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
         if (imageUri.substringBefore('?').endsWith(".gif", ignoreCase = true)) {
-            PersistentGifImage(imageUri, Modifier.fillMaxSize())
+            PersistentGifImage(imageUri, Modifier.fillMaxSize(), cleanUi)
         } else {
             AsyncImage(
                 model = imageUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = bannerColorFilter,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -81,7 +97,9 @@ fun ScreenImageHeader(
         BannerScrim(
             blendColor = blendColor,
             veil = veil,
-            strength = headerImageDim,
+            // Keep a floor under the dim in the calm look, even when the slider is at zero, so
+            // a very bright custom image still reads as a quiet backdrop.
+            strength = if (cleanUi) (0.30f + headerImageDim * 0.70f) else headerImageDim,
             modifier = Modifier.fillMaxSize(),
         )
         content()
@@ -281,8 +299,32 @@ private fun getGifPlayback(context: android.content.Context, imageUri: String): 
 private fun PersistentGifImage(
     imageUri: String,
     modifier: Modifier = Modifier,
+    cleanUi: Boolean = false,
 ) {
     val context = LocalContext.current
+    // The same muted treatment as a still banner, applied to the animated frames (and to the
+    // still frame Coil shows while a cold cache miss is decoding).
+    val gifColorFilter =
+        remember(cleanUi) {
+            if (cleanUi) {
+                ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.42f) })
+            } else {
+                null
+            }
+        }
+    val gifPaint =
+        remember(cleanUi) {
+            if (cleanUi) {
+                Paint().apply {
+                    colorFilter =
+                        android.graphics.ColorMatrixColorFilter(
+                            android.graphics.ColorMatrix().apply { setSaturation(0.42f) },
+                        )
+                }
+            } else {
+                null
+            }
+        }
     var playback by remember(imageUri) { mutableStateOf(gifPlaybackCache[imageUri]) }
     LaunchedEffect(context, imageUri) {
         if (playback == null) {
@@ -304,6 +346,7 @@ private fun PersistentGifImage(
                 model = imageUri,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = gifColorFilter,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -323,10 +366,19 @@ private fun PersistentGifImage(
                 val saveCount = nativeCanvas.save()
                 try {
                     nativeCanvas.scale(scale, scale)
-                    gif.draw(nativeCanvas, left, top)
+                    if (gifPaint != null) {
+                        gif.draw(nativeCanvas, left, top, gifPaint)
+                    } else {
+                        gif.draw(nativeCanvas, left, top)
+                    }
                 } finally {
                     nativeCanvas.restoreToCount(saveCount)
                 }
+            }
+            // Movie's paint is not guaranteed to carry a colour filter on every platform, so
+            // a shallow neutral veil makes the calm treatment reliable for animated banners too.
+            if (cleanUi) {
+                drawRect(Color.Black.copy(alpha = 0.16f))
             }
         }
     }

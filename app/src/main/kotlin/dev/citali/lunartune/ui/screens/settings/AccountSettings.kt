@@ -19,6 +19,8 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.RectangleShape
 import coil3.request.ImageRequest
 import dev.citali.lunartune.constants.AccountBannerSourceKey
@@ -41,6 +43,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -99,6 +102,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
+import dev.citali.lunartune.ui.theme.LocalCleanUi
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -728,6 +732,15 @@ private fun AccountSummaryCard(
     onOpenAccountSwitcher: () -> Unit,
 ) {
     val context = LocalContext.current
+    val cleanUi = LocalCleanUi.current
+    val cleanBannerFilter =
+        remember(cleanUi) {
+            if (cleanUi) {
+                ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.42f) })
+            } else {
+                null
+            }
+        }
     val coroutineScope = rememberCoroutineScope()
     val (bannerSource, onBannerSourceChange) =
         rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
@@ -794,15 +807,28 @@ private fun AccountSummaryCard(
     ) {
         Column {
             if (hasBanner) {
-                AsyncImage(
-                    model = bannerModel,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .height(BannerHeight),
-                )
+                Box {
+                    AsyncImage(
+                        model = bannerModel,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        colorFilter = cleanBannerFilter,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .height(BannerHeight),
+                    )
+                    // Quiet the artwork down to the card's own surface instead of letting a
+                    // custom channel banner sit at full strength above the account details.
+                    if (cleanUi) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .matchParentSize()
+                                    .background(containerColor.copy(alpha = 0.24f)),
+                        )
+                    }
+                }
             }
 
             Column(
@@ -821,7 +847,8 @@ private fun AccountSummaryCard(
                             .then(if (hasBanner) Modifier.overlapUp(ProfileAvatarSize / 2) else Modifier),
                     verticalAlignment = Alignment.Bottom,
                 ) {
-                    val avatarShape = MaterialShapes.Cookie9Sided.toShape()
+                    val avatarShape =
+                        if (cleanUi) CircleShape else MaterialShapes.Cookie9Sided.toShape()
                     Box(contentAlignment = Alignment.BottomEnd) {
                         Surface(
                             modifier = Modifier.size(ProfileAvatarSize),

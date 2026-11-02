@@ -76,6 +76,7 @@ import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.PreferenceEntry
+import dev.citali.lunartune.constants.CleanUiKey
 import dev.citali.lunartune.constants.FastPlaybackStartKey
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
@@ -108,6 +109,12 @@ fun DebugSettings(navController: NavController) {
     val (fastPlaybackStart, onFastPlaybackStartChange) =
         rememberPreference(
             key = FastPlaybackStartKey,
+            defaultValue = false,
+        )
+
+    val (cleanUi, onCleanUiChange) =
+        rememberPreference(
+            key = CleanUiKey,
             defaultValue = false,
         )
 
@@ -148,6 +155,16 @@ fun DebugSettings(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             PreferenceGroup(title = stringResource(R.string.experimental_features)) {
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.clean_ui)) },
+                        description = stringResource(R.string.clean_ui_desc),
+                        icon = { Icon(painterResource(R.drawable.auto_awesome), null) },
+                        checked = cleanUi,
+                        onCheckedChange = onCleanUiChange,
+                    )
+                }
+
                 item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.show_discord_debug_ui)) },
