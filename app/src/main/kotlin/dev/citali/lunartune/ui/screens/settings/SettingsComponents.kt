@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
+import dev.citali.lunartune.ui.theme.LocalCleanUi
 
 @Composable
 fun SettingsProfileHeader(
@@ -346,13 +347,24 @@ fun SettingsGroupCard(
     group: SettingsGroup,
     modifier: Modifier = Modifier,
 ) {
+    val cleanUi = LocalCleanUi.current
     Column(modifier = modifier) {
         Text(
-            text = group.title.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+            text = if (cleanUi) group.title else group.title.uppercase(),
+            style =
+                if (cleanUi) {
+                    MaterialTheme.typography.titleSmall
+                } else {
+                    MaterialTheme.typography.labelSmall
+                },
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing = MaterialTheme.typography.labelSmall.letterSpacing * 1.2f,
+            letterSpacing =
+                if (cleanUi) {
+                    MaterialTheme.typography.titleSmall.letterSpacing
+                } else {
+                    MaterialTheme.typography.labelSmall.letterSpacing * 1.2f
+                },
             modifier =
                 Modifier.padding(
                     horizontal = SettingsDimensions.SectionHeaderHorizontalPadding,
@@ -386,6 +398,10 @@ fun SettingsRow(
     showDivider: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // One calm, repeated icon plate instead of a different expressive polygon for every row.
+    val cleanUi = LocalCleanUi.current
+    val iconShape =
+        if (cleanUi) RoundedCornerShape(12.dp) else settingsIconShape(item.key)
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
             item.accentColor
@@ -430,7 +446,7 @@ fun SettingsRow(
                 modifier =
                     Modifier
                         .size(SettingsDimensions.RowIconSize)
-                        .clip(settingsIconShape(item.key))
+                        .clip(iconShape)
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {

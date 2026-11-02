@@ -88,6 +88,7 @@ import dev.citali.lunartune.ui.component.ExpressivePullToRefreshBox
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MenuState
 import dev.citali.lunartune.ui.component.ScreenImageHeader
+import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.HomeViewModel
@@ -96,6 +97,7 @@ import moe.rukamori.archivetune.innertube.pages.HomePage
 
 private val HomeFeedMaxWidth = 1_200.dp
 private val HomeSectionSpacing = 18.dp
+private val CleanHomeSectionSpacing = 24.dp
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -307,8 +309,13 @@ private fun HomeContent(
     onAction: (HomeAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tonalStart = MaterialTheme.colorScheme.primaryContainer
-    val tonalMiddle = MaterialTheme.colorScheme.secondaryContainer
+    val cleanUi = LocalCleanUi.current
+    // Keep the backdrop the user asked for, but let it read as a quiet neutral wash in the calm
+    // look instead of a second and third accent colour competing with the artwork below it.
+    val tonalStart =
+        if (cleanUi) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.primaryContainer
+    val tonalMiddle =
+        if (cleanUi) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.secondaryContainer
     val (sharedHeaderImageUri) = rememberPreference(SharedScreenHeaderImageUriKey, "")
     val (homeHeaderImageUri) = rememberPreference(HomeHeaderImageUriKey, "")
     val effectiveHeaderImageUri = homeHeaderImageUri.ifBlank { sharedHeaderImageUri }
@@ -774,7 +781,9 @@ private fun androidx.compose.foundation.lazy.LazyListScope.sectionSpacer(key: St
         key = "home_section_spacer_$key",
         contentType = "section_spacer",
     ) {
-        Spacer(Modifier.height(HomeSectionSpacing))
+        // A little more air between shelves keeps one section from running into the next.
+        val spacing = if (LocalCleanUi.current) CleanHomeSectionSpacing else HomeSectionSpacing
+        Spacer(Modifier.height(spacing))
     }
 }
 

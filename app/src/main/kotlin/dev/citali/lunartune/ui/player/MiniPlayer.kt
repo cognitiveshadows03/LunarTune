@@ -55,7 +55,6 @@ import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
 import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.NavigationBarMaxWidth
 import dev.citali.lunartune.constants.SwipeSensitivityKey
-import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -93,7 +92,6 @@ private fun NewMiniPlayer(
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val context = LocalContext.current
-    val cleanUi = LocalCleanUi.current
     val layoutDirection = LocalLayoutDirection.current
     val coroutineScope = rememberCoroutineScope()
     val swipeSensitivity by rememberPreference(SwipeSensitivityKey, 0.73f)
@@ -114,10 +112,7 @@ private fun NewMiniPlayer(
             }
         }
     val fallbackColor = MaterialTheme.colorScheme.surface.toArgb()
-    // In the calm look the row is a single flat surface. Skipping the artwork styles also skips
-    // the palette extraction they need, so no per-song colour is sampled while the mode is on.
-    val shouldUseArtworkBackground =
-        !cleanUi && miniPlayerBackgroundStyle != MiniPlayerBackgroundStyle.THEME
+    val shouldUseArtworkBackground = miniPlayerBackgroundStyle != MiniPlayerBackgroundStyle.THEME
 
     LaunchedEffect(
         mediaMetadata?.id,
