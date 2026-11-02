@@ -43,7 +43,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -824,7 +823,8 @@ private fun AccountSummaryCard(
                         Box(
                             modifier =
                                 Modifier
-                                    .matchParentSize()
+                                    .fillMaxWidth()
+                                    .height(BannerHeight)
                                     .background(containerColor.copy(alpha = 0.24f)),
                         )
                     }
