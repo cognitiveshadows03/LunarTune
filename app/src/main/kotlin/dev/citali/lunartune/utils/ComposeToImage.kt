@@ -728,10 +728,16 @@ object ComposeToImage {
         canvas.drawText(appName, textX, textY, appNamePaint)
     }
 
+    /** Story/portrait card geometry: 9:16 and nothing else. */
+    private const val PlayerCardWidth = 1080
+    private const val PlayerCardHeight = 1920
+
     /**
-     * A portrait player card: the hardcoded Immersive player drawn over a blurred
-     * copy of the artwork, the same backdrop the lyric export card uses. Portrait
-     * only on purpose - there is no landscape variant for this export.
+     * A portrait player card in the story format: the artwork fills the whole
+     * 9:16 canvas, lightly blurred and dimmed, and a compact centred card sits
+     * on top of it with the square cover, the song, the playback position and
+     * the app mark. One fixed portrait layout - no landscape variant, no
+     * caller-supplied size.
      */
     @RequiresApi(Build.VERSION_CODES.M)
     suspend fun createPlayerCardImage(
@@ -741,20 +747,18 @@ object ComposeToImage {
         artistName: String,
         positionMs: Long,
         durationMs: Long,
-        width: Int = 1080,
-        height: Int = 1350,
     ): Bitmap =
         withContext(Dispatchers.Default) {
-            val w = width.coerceAtLeast(1)
-            val h = height.coerceAtLeast(1)
-            val base = minOf(w, h).toFloat()
+            val w = PlayerCardWidth
+            val h = PlayerCardHeight
             val bitmap = createBitmap(w, h)
             val canvas = Canvas(bitmap)
             val bg = 0xFF14100F.toInt()
             val accent = 0xFFC9B6FF.toInt()
             val white = android.graphics.Color.WHITE
-            val secondary = android.graphics.Color.argb(185, 255, 255, 255)
+            val secondary = android.graphics.Color.argb(190, 255, 255, 255)
 
+            // Load the artwork once; it is used both full-bleed and in the card.
             var cover: Bitmap? = null
             if (!coverArtUrl.isNullOrBlank()) {
                 try {
@@ -771,13 +775,32 @@ object ComposeToImage {
                 }
             }
 
-            val fitted = cover?.let { fitBitmap(it, w, h, bg) }
-            if (fitted != null) {
-                canvas.drawBitmap(blurBitmap(fitted, 46f), 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
-            } else {
-                canvas.drawColor(bg)
+            // Full-bleed backdrop: crop the cover to 9:16 so there are no bars,
+            // then soften and dim it so the card in front stays readable.
+            val backdrop = createBitmap(w, h)
+            val backdropCanvas = Canvas(backdrop)
+            backdropCanvas.drawColor(bg)
+            if (cover != null) {
+                val scale = maxOf(w.toFloat() / cover.width, h.toFloat() / cover.height)
+                val scaledW = (cover.width * scale).roundToInt().coerceAtLeast(1)
+                val scaledH = (cover.height * scale).roundToInt().coerceAtLeast(1)
+                val scaled =
+                    ensureSoftwareBitmap(Bitmap.createScaledBitmap(cover, scaledW, scaledH, true))
+                val srcLeft = ((scaledW - w) / 2).coerceAtLeast(0)
+                val srcTop = ((scaledH - h) / 2).coerceAtLeast(0)
+                backdropCanvas.drawBitmap(
+                    scaled,
+                    Rect(srcLeft, srcTop, srcLeft + w, srcTop + h),
+                    RectF(0f, 0f, w.toFloat(), h.toFloat()),
+                    Paint(Paint.FILTER_BITMAP_FLAG),
+                )
             }
-
+            canvas.drawBitmap(
+                blurBitmap(backdrop, 20f),
+                0f,
+                0f,
+                Paint(Paint.FILTER_BITMAP_FLAG),
+            )
             val scrim =
                 Paint().apply {
                     shader =
@@ -786,58 +809,125 @@ object ComposeToImage {
                             0f,
                             0f,
                             h.toFloat(),
-                            android.graphics.Color.argb(70, 201, 182, 255),
-                            android.graphics.Color.argb(238, 20, 16, 15),
+                            android.graphics.Color.argb(105, 10, 8, 10),
+                            android.graphics.Color.argb(220, 10, 8, 10),
                             Shader.TileMode.CLAMP,
                         )
                 }
             canvas.drawRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), scrim)
 
-            // The player surface: a frosted panel over the same blurred artwork.
-            val margin = base * 0.065f
-            val panelRect = RectF(margin, h * 0.11f, w - margin, h * 0.89f)
-            val radius = base * 0.055f
-            val panelPath =
-                Path().apply { addRoundRect(panelRect, radius, radius, Path.Direction.CW) }
-            if (fitted != null) {
-                canvas.withClip(panelPath) {
-                    drawBitmap(blurBitmap(fitted, 64f), 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG))
+            // Compact centred card. Everything below is measured first, so the
+            // card is exactly as tall as its content: no text hanging over the
+            // bottom edge and no controls falling off the canvas.
+            val cardWidth = w * 0.66f
+            val cardLeft = (w - cardWidth) / 2f
+            val cardRight = cardLeft + cardWidth
+            val inset = cardWidth * 0.055f
+            val artSize = cardWidth - inset * 2f
+            val gap = cardWidth * 0.045f
+            val textWidth = artSize.toInt()
+
+            val titlePaint =
+                TextPaint().apply {
+                    color = white
+                    textSize = cardWidth * 0.058f
+                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+                    isAntiAlias = true
                 }
-            }
+            val artistPaint =
+                TextPaint().apply {
+                    color = secondary
+                    textSize = cardWidth * 0.036f
+                    typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                    isAntiAlias = true
+                }
+            val timePaint =
+                TextPaint().apply {
+                    color = secondary
+                    textSize = cardWidth * 0.030f
+                    isAntiAlias = true
+                }
+
+            fun measure(
+                text: String,
+                paint: TextPaint,
+                maxLines: Int,
+            ): StaticLayout =
+                StaticLayout.Builder
+                    .obtain(text, 0, text.length, paint, textWidth)
+                    .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+                    .setMaxLines(maxLines)
+                    .setEllipsize(TextUtils.TruncateAt.END)
+                    .build()
+
+            val titleLayout = measure(songTitle, titlePaint, 2)
+            val artistLayout = measure(artistName, artistPaint, 1)
+            val trackH = cardWidth * 0.012f
+            val timesGap = cardWidth * 0.025f
+            val brandH = minOf(w, h).toFloat() * 0.055f
+            val cardHeight =
+                inset * 2f + artSize + gap + titleLayout.height.toFloat() + gap * 0.35f +
+                    artistLayout.height.toFloat() + gap * 0.9f + trackH + timesGap +
+                    timePaint.textSize + gap * 0.9f + brandH
+            val cardTop = (h - cardHeight) / 2f
+            val cardBottom = cardTop + cardHeight
+            val corner = cardWidth * 0.055f
+            val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
+
+            // Soft drop shadow, then the card surface and its hairline edge.
             canvas.drawRoundRect(
-                panelRect,
-                radius,
-                radius,
+                RectF(cardLeft, cardTop + 12f, cardRight, cardBottom + 12f),
+                corner,
+                corner,
                 Paint().apply {
-                    color = android.graphics.Color.argb(205, 20, 16, 15)
+                    color = android.graphics.Color.argb(110, 0, 0, 0)
                     isAntiAlias = true
                 },
             )
             canvas.drawRoundRect(
-                panelRect,
-                radius,
-                radius,
+                cardRect,
+                corner,
+                corner,
+                Paint().apply {
+                    color = android.graphics.Color.argb(232, 24, 20, 22)
+                    isAntiAlias = true
+                },
+            )
+            canvas.drawRoundRect(
+                cardRect,
+                corner,
+                corner,
                 Paint().apply {
                     style = Paint.Style.STROKE
-                    strokeWidth = base * 0.0025f
-                    color = android.graphics.Color.argb(38, 255, 255, 255)
+                    strokeWidth = 2f
+                    color = android.graphics.Color.argb(34, 255, 255, 255)
                     isAntiAlias = true
                 },
             )
 
-            val padding = base * 0.065f
-            val left = panelRect.left + padding
-            val right = panelRect.right - padding
-            val artSize = right - left
-            val artTop = panelRect.top + padding
-            val artRect = RectF(left, artTop, right, artTop + artSize)
-            val artRadius = base * 0.035f
+            val artLeft = cardLeft + inset
+            val artTop = cardTop + inset
+            val artRect = RectF(artLeft, artTop, artLeft + artSize, artTop + artSize)
+            val artRadius = cardWidth * 0.035f
             val artPath =
                 Path().apply { addRoundRect(artRect, artRadius, artRadius, Path.Direction.CW) }
             if (cover != null) {
-                val square = fitBitmap(cover, artSize.toInt(), artSize.toInt(), bg)
+                // Crop to the square, so a non-square cover never gets letterbox bars.
+                val artPx = artSize.toInt()
+                val scale = maxOf(artSize / cover.width, artSize / cover.height)
+                val scaledW = (cover.width * scale).roundToInt().coerceAtLeast(artPx)
+                val scaledH = (cover.height * scale).roundToInt().coerceAtLeast(artPx)
+                val scaled =
+                    ensureSoftwareBitmap(Bitmap.createScaledBitmap(cover, scaledW, scaledH, true))
+                val srcLeft = ((scaledW - artPx) / 2).coerceAtLeast(0)
+                val srcTop = ((scaledH - artPx) / 2).coerceAtLeast(0)
                 canvas.withClip(artPath) {
-                    drawBitmap(square, null, artRect, Paint(Paint.FILTER_BITMAP_FLAG))
+                    drawBitmap(
+                        scaled,
+                        Rect(srcLeft, srcTop, srcLeft + artPx, srcTop + artPx),
+                        artRect,
+                        Paint(Paint.FILTER_BITMAP_FLAG),
+                    )
                 }
             } else {
                 canvas.drawRoundRect(
@@ -850,47 +940,26 @@ object ComposeToImage {
                     },
                 )
             }
-
-            var y = artRect.bottom + base * 0.055f
-            val titlePaint =
-                TextPaint().apply {
-                    color = white
-                    textSize = base * 0.05f
-                    typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
-                    isAntiAlias = true
-                }
-            val artistPaint =
-                TextPaint().apply {
-                    color = secondary
-                    textSize = base * 0.03f
-                    typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-                    isAntiAlias = true
-                }
-
-            fun drawEllipsized(
-                text: String,
-                paint: TextPaint,
-                maxLines: Int,
-            ) {
-                if (text.isBlank()) return
-                val layout =
-                    StaticLayout.Builder
-                        .obtain(text, 0, text.length, paint, (right - left).toInt())
-                        .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                        .setMaxLines(maxLines)
-                        .setEllipsize(TextUtils.TruncateAt.END)
-                        .build()
-                canvas.withTranslation(left, y) { layout.draw(this) }
-                y += layout.height.toFloat()
-            }
-            drawEllipsized(songTitle, titlePaint, 2)
-            y += base * 0.012f
-            drawEllipsized(artistName, artistPaint, 1)
-
-            y += base * 0.045f
-            val trackH = base * 0.009f
             canvas.drawRoundRect(
-                RectF(left, y, right, y + trackH),
+                artRect,
+                artRadius,
+                artRadius,
+                Paint().apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = 2f
+                    color = android.graphics.Color.argb(45, 255, 255, 255)
+                    isAntiAlias = true
+                },
+            )
+
+            var y = artRect.bottom + gap
+            canvas.withTranslation(artLeft, y) { titleLayout.draw(this) }
+            y += titleLayout.height.toFloat() + gap * 0.35f
+            canvas.withTranslation(artLeft, y) { artistLayout.draw(this) }
+            y += artistLayout.height.toFloat() + gap * 0.9f
+
+            canvas.drawRoundRect(
+                RectF(artLeft, y, artLeft + artSize, y + trackH),
                 trackH / 2f,
                 trackH / 2f,
                 Paint().apply {
@@ -905,7 +974,7 @@ object ComposeToImage {
                     0f
                 }
             canvas.drawRoundRect(
-                RectF(left, y, left + (right - left) * fraction, y + trackH),
+                RectF(artLeft, y, artLeft + artSize * fraction, y + trackH),
                 trackH / 2f,
                 trackH / 2f,
                 Paint().apply {
@@ -913,96 +982,27 @@ object ComposeToImage {
                     isAntiAlias = true
                 },
             )
-            y += trackH + base * 0.02f
-            val timePaint =
-                TextPaint().apply {
-                    color = secondary
-                    textSize = base * 0.024f
-                    isAntiAlias = true
-                }
+            y += trackH + timesGap
             val elapsed = formatCardTime(positionMs)
             val total = formatCardTime(durationMs)
-            canvas.drawText(elapsed, left, y + timePaint.textSize, timePaint)
-            canvas.drawText(total, right - timePaint.measureText(total), y + timePaint.textSize, timePaint)
-
-            // Transport controls: the same three actions the immersive player has.
-            y += timePaint.textSize + base * 0.055f
-            val controlsY = y + base * 0.045f
-            val centerX = w / 2f
-            val playR = base * 0.062f
-            val sideR = base * 0.05f
-            val tri = base * 0.016f
-            val buttonPaint =
-                Paint().apply {
-                    color = android.graphics.Color.argb(40, 255, 255, 255)
-                    isAntiAlias = true
-                }
-            val iconPaint =
-                Paint().apply {
-                    color = white
-                    isAntiAlias = true
-                }
-            canvas.drawCircle(centerX - base * 0.20f, controlsY, sideR, buttonPaint)
-            canvas.drawCircle(centerX + base * 0.20f, controlsY, sideR, buttonPaint)
-            canvas.drawCircle(
-                centerX,
-                controlsY,
-                playR,
-                Paint().apply {
-                    color = android.graphics.Color.argb(235, 255, 255, 255)
-                    isAntiAlias = true
-                },
+            canvas.drawText(elapsed, artLeft, y + timePaint.textSize, timePaint)
+            canvas.drawText(
+                total,
+                artLeft + artSize - timePaint.measureText(total),
+                y + timePaint.textSize,
+                timePaint,
             )
 
-            fun triangle(
-                cx: Float,
-                cy: Float,
-                flip: Boolean,
-            ) {
-                val d = if (flip) -tri else tri
-                val path =
-                    Path().apply {
-                        moveTo(cx + d, cy - tri)
-                        lineTo(cx + d, cy + tri)
-                        lineTo(cx - d * 0.75f, cy)
-                        close()
-                    }
-                canvas.drawPath(path, iconPaint)
-            }
-            triangle(centerX - base * 0.20f, controlsY, true)
-            triangle(centerX + base * 0.20f, controlsY, false)
-            val playIcon =
-                Paint().apply {
-                    color = android.graphics.Color.argb(235, 20, 16, 15)
-                    isAntiAlias = true
-                }
-            val playPath =
-                Path().apply {
-                    moveTo(centerX - tri * 0.6f, controlsY - tri)
-                    lineTo(centerX - tri * 0.6f, controlsY + tri)
-                    lineTo(centerX + tri * 1.05f, controlsY)
-                    close()
-                }
-            canvas.drawPath(playPath, playIcon)
-
-            val brandPaint =
-                TextPaint().apply {
-                    color = secondary
-                    textSize = base * 0.026f
-                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                    isAntiAlias = true
-                }
-            canvas.drawText(context.getString(R.string.app_name), margin, base * 0.075f, brandPaint)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                AppLogo(
-                    context = context,
-                    canvas = canvas,
-                    canvasWidth = w,
-                    canvasHeight = h,
-                    padding = margin,
-                    textColor = secondary,
-                )
-            }
+            // The app mark sits inside the card, like the logo on a song card.
+            AppLogo(
+                context = context,
+                canvas = canvas,
+                canvasWidth = w,
+                canvasHeight = h,
+                padding = artLeft,
+                bottomPadding = cardBottom - inset,
+                textColor = secondary,
+            )
 
             bitmap
         }

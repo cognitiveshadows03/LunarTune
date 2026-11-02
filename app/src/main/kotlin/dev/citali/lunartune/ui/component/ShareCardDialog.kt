@@ -346,10 +346,10 @@ fun ShareCardDialog(
 }
 
 /**
- * One-tap export of the player card. Portrait only, blurred artwork backdrop,
- * the hardcoded immersive player drawn into it - the same look the card dialog
- * uses, but without any options to pick first. The bitmap is built and handed
- * straight to the share sheet.
+ * One-tap export of the player card. A fixed 9:16 story: blurred artwork
+ * backdrop, a compact centred card with the hardcoded immersive player - the
+ * same look the card dialog uses, but without any options to pick first. The
+ * bitmap is built and handed straight to the share sheet.
  */
 fun sharePlayerCard(
     context: Context,
