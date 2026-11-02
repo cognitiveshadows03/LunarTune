@@ -1361,6 +1361,11 @@ class MainActivity : FragmentActivity() {
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
                         )
+                    // The row's slot is a layout fact: as soon as a route gains or loses
+                    // the navigation bar, a resting collapsed row has to be on the new
+                    // anchor, not on the one the previous page left behind. Leaving it
+                    // to a settle is what put an empty band under the row on a page
+                    // without the bar and hid the row behind the bar on the way back.
                     // One line per geometry change, in the app's own log viewer: when the
                     // row and the bar disagree, these are the numbers that say which of
                     // them moved.
@@ -1371,6 +1376,7 @@ class MainActivity : FragmentActivity() {
                         isAtPrimaryRoot,
                         active,
                     ) {
+                        playerBottomSheetState.realignCollapsedRow()
                         android.util.Log.d(
                             "LunarLayout",
                             "root=$isAtPrimaryRoot searchActive=$active barShown=$shouldShowNavigationBar " +

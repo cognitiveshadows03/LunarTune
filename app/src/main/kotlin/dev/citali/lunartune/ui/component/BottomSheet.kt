@@ -102,16 +102,19 @@ fun BottomSheet(
                     // The minimise keeps its rebound: the spring dips a few dp past the
                     // collapsed anchor and comes back, and that dip is the bounce.
                     //
-                    // At rest the value must equal the collapsed anchor, so anything
-                    // below it at rest means the anchor moved (a page gained or lost its
-                    // navigation bar) and the sheet has not caught up yet. Drawing that
-                    // would put the row down inside the bar - so at rest, and only at
-                    // rest, it is floored at the anchor. The rebound is untouched.
+                    // At rest the collapsed row is a layout fact, not an animation. A
+                    // page that gains or loses the navigation bar changes the anchor in
+                    // one frame, and the row has to sit on that new anchor in the very
+                    // same frame. A value still holding the previous page's anchor drew
+                    // the row a whole bar too high on a page without one (an empty band
+                    // under it) and a whole bar too low on a page with one (the row
+                    // behind the bar). Only a running settle or a finger on the sheet
+                    // may move the row away from its anchor; the bounce is untouched.
                     val restedValue =
-                        if (state.isSettling) {
-                            state.value
-                        } else {
-                            state.value.coerceAtLeast(
+                        when {
+                            state.isSettling || state.isDragging -> state.value
+                            state.targetAnchor == COLLAPSED_ANCHOR -> state.collapsedBound
+                            else -> state.value.coerceAtLeast(
                                 minOf(state.collapsedBound, state.expandedBound),
                             )
                         }
@@ -268,6 +271,14 @@ class BottomSheetState(
     val isSettling: Boolean
         get() = settleJob?.isActive == true
 
+    /**
+     * True while a pointer drag owns the sheet. Geometry changes must not snap the
+     * row out from under a finger; they are parked until the fling settles. A
+     * snapshot state, because the draw-phase guard above reads it.
+     */
+    var isDragging by mutableStateOf(false)
+        private set
+
     /** The settle in flight, so a geometry change can retarget it instead of killing it. */
     private var settleJob: Job? = null
     private var settleAnchor: Int? = null
@@ -336,6 +347,9 @@ class BottomSheetState(
         anchor: Int,
         initialVelocityPx: Float = 0f,
     ) {
+        // Every settle starts where a drag ended (or where a quiet reanchor asked
+        // the sheet to move), so the finger no longer owns the value.
+        isDragging = false
         // A new settle is a good moment to adopt geometry that was parked: the
         // animation starts from the current value either way.
         applyPendingGeometry()
@@ -375,7 +389,13 @@ class BottomSheetState(
                     // be taken up, or the sheet keeps the old geometry for good.
                     if (pendingGeometry != null && settleJob?.isActive != true) {
                         applyPendingGeometry()
-                        reanchorQuietly()
+                        // The settle just landed on the old geometry. A collapsed row
+                        // belongs on the new anchor in this frame, not on another soft
+                        // spring: that spring is exactly how the row spent a second
+                        // sitting in the navigation bar (or above an empty band).
+                        reanchorQuietly(
+                            snap = targetAnchor == COLLAPSED_ANCHOR && !isDragging,
+                        )
                     }
                 }
             }
@@ -404,6 +424,28 @@ class BottomSheetState(
         ) {
             return
         }
+        // A route change gains or loses the navigation bar in one frame. The bar's
+        // footprint is part of the collapsed anchor, so the row's slot moves with it,
+        // and the row has to be on the new slot in that same frame - whatever the
+        // animatable value still happens to hold from the previous page.
+        //
+        // `wasAtCollapsed` (value ~= the OLD anchor) used to gate this. Once the value
+        // had drifted off the anchor - a parked change easing in on a soft spring, then
+        // another route change before it landed - the gate stayed shut and the sheet
+        // kept the stale geometry for good. The row then sat a whole navigation bar
+        // too high on a page without the bar (an empty white band where it belonged)
+        // and a whole bar too low on a page with one (behind the bar).
+        //
+        // Target anchor, not value, says where a resting sheet belongs: no settle in
+        // flight, no finger on the sheet, collapsed. Land it there synchronously.
+        // A running motion or a drag parks the change as before; the settle's own
+        // finally block snaps the row when it lands.
+        if (targetAnchor == COLLAPSED_ANCHOR && !isSettling && !isDragging) {
+            pendingGeometry = Triple(dismissed, collapsed, expanded)
+            applyPendingGeometry()
+            reanchorQuietly(snap = true)
+            return
+        }
         // `settleJob.isActive`, not "an anchor was set": a job that has finished or
         // been cancelled leaves a stale anchor behind, and treating that as "in flight"
         // parked the change with nobody left to apply it. That is precisely how the row
@@ -422,8 +464,21 @@ class BottomSheetState(
         if (atRest) reanchorQuietly(snap = wasAtCollapsed)
     }
 
+    /**
+     * The bottom geometry changed - a route gained or lost the navigation bar, or
+     * the window insets moved. Whoever owns that geometry calls this so a resting
+     * collapsed row is on its new anchor in the same frame: the row is a layout
+     * fact, not a spring. A running motion or a finger on the sheet keeps its own
+     * clock; the settle's finally block lands it there when it finishes.
+     */
+    fun realignCollapsedRow() {
+        if (isDragging || isSettling || targetAnchor != COLLAPSED_ANCHOR) return
+        reanchorQuietly(snap = true)
+    }
+
     /** A pointer drag owns the sheet, so no settle may be resumed under it. */
     fun onDragStart() {
+        isDragging = true
         ++settleGeneration
         settleAnchor = null
         settleSpec = null
@@ -511,6 +566,7 @@ class BottomSheetState(
     }
 
     fun snapTo(value: Dp) {
+        isDragging = false
         settleJob?.cancel()
         applyPendingGeometry()
         updateAnchor(
@@ -521,7 +577,7 @@ class BottomSheetState(
                 else -> COLLAPSED_ANCHOR
             },
         )
-        settleJob?.cancel()
+        settleJob = null
         settleAnchor = null
         settleSpec = null
         coroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
