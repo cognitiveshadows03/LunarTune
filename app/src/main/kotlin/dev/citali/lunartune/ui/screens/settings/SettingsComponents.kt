@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.isSpecified
@@ -566,7 +567,10 @@ fun SettingsSegmentedItem(
     iconImageModel: Any? = null,
     titleOverride: String? = null,
     subtitleOverride: String? = null,
+    /** Draw on a shared group container instead of as its own floating card. */
+    flat: Boolean = false,
 ) {
+    val cleanUi = LocalCleanUi.current
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
             item.accentColor
@@ -580,7 +584,10 @@ fun SettingsSegmentedItem(
         } else {
             MaterialTheme.colorScheme.surface
         }
-    val shape = remember(index, count) { segmentedSettingsItemShape(index, count) }
+    val shape =
+        remember(index, count, flat) {
+            if (flat) RectangleShape else segmentedSettingsItemShape(index, count)
+        }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -606,7 +613,8 @@ fun SettingsSegmentedItem(
         shape = shape,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                containerColor =
+                    if (flat) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -637,7 +645,9 @@ fun SettingsSegmentedItem(
                 modifier =
                     Modifier
                         .size(52.dp)
-                        .clip(settingsIconShape(item.key))
+                        .clip(
+                            if (cleanUi) RoundedCornerShape(12.dp) else settingsIconShape(item.key)
+                        )
                         .background(effectiveAccent),
                 contentAlignment = Alignment.Center,
             ) {
@@ -852,6 +862,7 @@ fun SettingsSearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val cleanUi = LocalCleanUi.current
     val effectiveAccent =
         if (result.parentAccentColor.isSpecified) {
             result.parentAccentColor
@@ -883,7 +894,13 @@ fun SettingsSearchResultItem(
                 modifier =
                     Modifier
                         .size(40.dp)
-                        .clip(settingsIconShape(result.parentKey))
+                        .clip(
+                            if (cleanUi) {
+                                RoundedCornerShape(12.dp)
+                            } else {
+                                settingsIconShape(result.parentKey)
+                            }
+                        )
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {

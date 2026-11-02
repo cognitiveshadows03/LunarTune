@@ -109,6 +109,7 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val playerConnection = LocalPlayerConnection.current ?: return
+    val cleanUi = LocalCleanUi.current
     val menuState = LocalMenuState.current
     val haptic = LocalHapticFeedback.current
 
@@ -170,7 +171,7 @@ fun HomeScreen(
         }
     }
 
-    if (selectedChip != null && isActiveTab) {
+    if (selectedChip != null && isActiveTab && !cleanUi) {
         BackHandler {
             viewModel.onAction(HomeAction.SelectChip(selectedChip))
         }
@@ -412,7 +413,9 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    if (uiState.showCategoryChips) {
+                    // The calm feed drops the category strip entirely; a category left over from
+                    // the other look must not keep the personalized feed replaced.
+                    if (uiState.showCategoryChips && !cleanUi) {
                         item(
                             key = "home_category_chips",
                             contentType = "category_chips",
@@ -425,7 +428,7 @@ private fun HomeContent(
                         }
                     }
 
-                    val chipSelected = uiState.selectedChip != null
+                    val chipSelected = uiState.selectedChip != null && !cleanUi
                     if (chipSelected) {
                         // A category replaces the personalised feed: only its own
                         // shelves are shown, right under the chip row.

@@ -148,18 +148,14 @@ fun HomeCategoryChips(
     onChipSelected: (HomePage.Chip) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val cleanUi = LocalCleanUi.current
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = if (cleanUi) 56.dp else 68.dp)
+                .heightIn(min = 68.dp)
                 .horizontalScroll(rememberScrollState())
-                .padding(
-                    horizontal = if (cleanUi) 20.dp else 16.dp,
-                    vertical = if (cleanUi) 8.dp else 10.dp,
-                ),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
     ) {
         chips.forEach { chip ->
             val selected = chip == selectedChip
@@ -174,7 +170,7 @@ fun HomeCategoryChips(
                     )
                 },
                 leadingIcon =
-                    if (selected && !cleanUi) {
+                    if (selected) {
                         {
                             Icon(
                                 painter = painterResource(R.drawable.done),
@@ -187,24 +183,13 @@ fun HomeCategoryChips(
                     },
                 shapes = FilterChipDefaults.shapes(),
                 colors =
-                    if (cleanUi) {
-                        // One accent only; the filled chip is the selection indicator.
-                        FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary,
-                            selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimary,
-                        )
-                    } else {
-                        FilterChipDefaults.filterChipColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.94f),
-                            selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        )
-                    },
+                    FilterChipDefaults.filterChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
+                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.94f),
+                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
                 border = null,
             )
         }

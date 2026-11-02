@@ -12,15 +12,22 @@ package dev.citali.lunartune.ui.screens.settings
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -29,20 +36,23 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -78,6 +88,7 @@ import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ScreenImageHeader
+import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.Updater
@@ -195,6 +206,19 @@ fun SettingsScreen(
             Updater.isUpdateAvailable(latestVersionName, BuildConfig.VERSION_NAME)
     var isUpdateDismissed by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var searchActive by remember { mutableStateOf(false) }
+    val cleanUi = LocalCleanUi.current
+
+    val accountChrome =
+        SettingsAccountChrome(
+            bannerModel = accountRowBannerModel,
+            identityEnabled = accountRowIdentityEnabled,
+            isLoggedIn = isAccountLoggedIn,
+            imageUrl = accountImageUrl,
+            rowTitle = accountRowTitle,
+            channelHandle = accountChannelHandle,
+        )
+
     val settingsGroups = buildSettingsGroups(navController, isAndroid12OrLater, hasUpdate, context)
     val filteredChildResults = remember(searchQuery, settingsGroups) {
         if (searchQuery.isBlank()) emptyList()
@@ -429,6 +453,37 @@ fun SettingsScreen(
             searchQuery.isBlank() &&
             (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > collapseThresholdPx)
 
+    BackHandler(enabled = searchActive) {
+        searchActive = false
+        searchQuery = ""
+    }
+
+    AnimatedContent(
+        targetState = searchActive,
+        transitionSpec = {
+            // A quiet crossfade with a barely-there scale reads as the search
+            // page settling into place rather than an abrupt swap.
+            (fadeIn(tween(240)) +
+                scaleIn(animationSpec = tween(280), initialScale = 0.985f)) togetherWith
+                (fadeOut(tween(170)) +
+                    scaleOut(animationSpec = tween(220), targetScale = 0.985f))
+        },
+        label = "settingsPageTransition",
+    ) { searching ->
+        if (searching) {
+            SettingsSearchPage(
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                onClose = {
+                    searchActive = false
+                    searchQuery = ""
+                },
+                results = filteredChildResults,
+                onResultClick = { result ->
+                    result.parentRoute?.let(navController::navigate) ?: result.onClick()
+                },
+            )
+        } else {
     Scaffold(
         modifier =
             Modifier
@@ -546,37 +601,37 @@ fun SettingsScreen(
                 }
             }
 
+            // A launcher, not an editor: tapping it moves to the search page.
             item(key = "search_bar", contentType = "search_bar") {
-                TextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = {
-                        Text(
-                            text = stringResource(R.string.search_settings),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    },
-                    leadingIcon = {
+                Surface(
+                    onClick = { searchActive = true },
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    modifier =
+                        Modifier
+                            .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
+                            .fillMaxWidth(),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                    ) {
                         Icon(
                             painter = painterResource(R.drawable.search),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(28.dp),
-                    colors =
-                        TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                    modifier =
-                        Modifier
-                            .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
-                            .fillMaxWidth(),
-                )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = stringResource(R.string.search_settings),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             item(key = "search_spacing", contentType = "spacing") {
@@ -611,66 +666,115 @@ fun SettingsScreen(
                         ),
                     )
                 }
-            } else {
-            visibleGroups.forEachIndexed { groupIndex, group ->
-                if (groupIndex > 0) {
+            } else if (cleanUi) {
+                // One real container per logical group: a labelled card holding flat rows with
+                // hairline dividers, instead of separate floating cards that only look grouped.
+                visibleGroups.forEachIndexed { groupIndex, group ->
                     item(
-                        key = "settings_group_spacing_$groupIndex",
-                        contentType = "settings_group_spacing",
+                        key = "settings_clean_group_$groupIndex",
+                        contentType = "settings_clean_group",
                     ) {
-                        Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(
+                                        horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
+                                    )
+                                    .padding(
+                                        top =
+                                            if (groupIndex > 0) {
+                                                SettingsDimensions.SectionSpacing
+                                            } else {
+                                                0.dp
+                                            },
+                                    ),
+                        ) {
+                            if (groupIndex > 0) {
+                                Text(
+                                    text = group.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier =
+                                        Modifier.padding(
+                                            horizontal = 4.dp,
+                                            vertical = SettingsDimensions.SectionHeaderBottomPadding,
+                                        ),
+                                )
+                            }
+                            Card(
+                                shape = RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
+                                colors =
+                                    CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column {
+                                    group.items.forEachIndexed { index, settingsItem ->
+                                        SettingsEntryRow(
+                                            settingsItem = settingsItem,
+                                            index = index,
+                                            count = group.items.size,
+                                            account = accountChrome,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            flat = true,
+                                        )
+                                        if (index < group.items.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 74.dp),
+                                                thickness = 0.5.dp,
+                                                color =
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(
+                                                        alpha = 0.55f,
+                                                    ),
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+            } else {
+                visibleGroups.forEachIndexed { groupIndex, group ->
+                    if (groupIndex > 0) {
+                        item(
+                            key = "settings_group_spacing_$groupIndex",
+                            contentType = "settings_group_spacing",
+                        ) {
+                            Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
+                        }
+                    }
 
-                itemsIndexed(
-                    items = group.items,
-                    key = { _, item -> item.key },
-                    contentType = { _, _ -> "settings_segment" },
-                ) { index, settingsItem ->
-                    val isAccountRow = settingsItem.key == "account"
-                    SettingsSegmentedItem(
-                        item = settingsItem,
-                        index = index,
-                        count = group.items.size,
-                        backgroundModel =
-                            accountRowBannerModel.takeIf {
-                                accountRowIdentityEnabled && isAccountRow && isAccountLoggedIn
-                            },
-                        iconImageModel =
-                            accountImageUrl.takeIf {
-                                accountRowIdentityEnabled &&
-                                    isAccountRow &&
-                                    isAccountLoggedIn &&
-                                    !it.isNullOrBlank()
-                            },
-                        titleOverride =
-                            accountRowTitle.takeIf {
-                                accountRowIdentityEnabled &&
-                                    isAccountRow &&
-                                    isAccountLoggedIn &&
-                                    it.isNotBlank()
-                            },
-                        subtitleOverride =
-                            accountChannelHandle.takeIf {
-                                accountRowIdentityEnabled &&
-                                    isAccountRow &&
-                                    isAccountLoggedIn &&
-                                    it.isNotBlank()
-                            },
-                        modifier =
-                            Modifier
-                                .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
-                                .padding(
-                                    bottom =
-                                        if (index < group.items.lastIndex) {
-                                            SettingsDimensions.SegmentedItemGap
-                                        } else {
-                                            0.dp
-                                        },
-                                ),
-                    )
+                    itemsIndexed(
+                        items = group.items,
+                        key = { _, item -> item.key },
+                        contentType = { _, _ -> "settings_segment" },
+                    ) { index, settingsItem ->
+                        SettingsEntryRow(
+                            settingsItem = settingsItem,
+                            index = index,
+                            count = group.items.size,
+                            account = accountChrome,
+                            modifier =
+                                Modifier
+                                    .padding(
+                                        horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
+                                    ).padding(
+                                        bottom =
+                                            if (index < group.items.lastIndex) {
+                                                SettingsDimensions.SegmentedItemGap
+                                            } else {
+                                                0.dp
+                                            },
+                                    ),
+                            flat = false,
+                        )
+                    }
                 }
-            }
             }
         }
 
@@ -706,4 +810,41 @@ fun SettingsScreen(
         }
         }
     }
+        }
+    }
+}
+
+/** The account identity shown on the first settings row, shared by both group layouts. */
+private data class SettingsAccountChrome(
+    val bannerModel: Any?,
+    val identityEnabled: Boolean,
+    val isLoggedIn: Boolean,
+    val imageUrl: String?,
+    val rowTitle: String,
+    val channelHandle: String,
+)
+
+@Composable
+private fun SettingsEntryRow(
+    settingsItem: SettingsItem,
+    index: Int,
+    count: Int,
+    account: SettingsAccountChrome,
+    modifier: Modifier = Modifier,
+    flat: Boolean = false,
+) {
+    val isAccountRow = settingsItem.key == "account"
+    val showIdentity = account.identityEnabled && isAccountRow && account.isLoggedIn
+    SettingsSegmentedItem(
+        item = settingsItem,
+        index = index,
+        count = count,
+        backgroundModel = account.bannerModel.takeIf { showIdentity },
+        iconImageModel =
+            account.imageUrl.takeIf { showIdentity && !it.isNullOrBlank() },
+        titleOverride = account.rowTitle.takeIf { showIdentity && it.isNotBlank() },
+        subtitleOverride = account.channelHandle.takeIf { showIdentity && it.isNotBlank() },
+        modifier = modifier,
+        flat = flat,
+    )
 }

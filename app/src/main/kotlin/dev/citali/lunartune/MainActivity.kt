@@ -85,6 +85,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
@@ -139,9 +140,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
@@ -3566,9 +3565,6 @@ private fun TranslucentTopAppBarIconButton(
 /** Corner radius of the floating top-bar sheet. */
 private val MenuSheetCorner = 26.dp
 
-/** Corner radius of one action bar inside the floating sheet. */
-private val MenuBarCorner = 20.dp
-
 /** Width of the sheet's content, before the ring of room for its shadow. */
 private val MenuSheetContentWidth = 288.dp
 
@@ -3586,15 +3582,13 @@ private val MenuSheetShadowRoom = 8.dp
 private val MenuSheetShadowSpread = 8.dp
 
 /**
- * Replaces the top-bar action cluster with a single trigger that opens an
- * Android 16-style floating menu: a transparent, blurred sheet (Haze live blur
- * of the screen behind it) whose actions are separate rounded bars, each
- * floating on its own with gaps and a soft shade — the way notifications
- * stack in Android 16's shade. Everything the sheet needs for depth is painted
+ * Replaces the top-bar action cluster with a single trigger that opens one
+ * floating frosted panel. The rows sit directly on that single surface - no
+ * per-item bars, no nested rounded shapes - with hairline separators only
+ * between logical groups. Everything the sheet needs for depth is painted
  * inside its own popup, because a popup clips at its bounds: an elevation
  * shadow there gets cut into a hard dark edge, and a hairline border reads as
- * a second line along the rim. On devices where the blur has no pixels to
- * show, the bars still float over the dimmed fallback tint.
+ * a second line along the rim.
  */
 @Composable
 private fun FrostedTopBarMenu(
@@ -3605,7 +3599,6 @@ private fun FrostedTopBarMenu(
     onNavigate: (String) -> Unit,
 ) {
     val sheetShape = RoundedCornerShape(MenuSheetCorner)
-    val barShape = RoundedCornerShape(MenuBarCorner)
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val sheetShadow = MaterialTheme.colorScheme.scrim
 
@@ -3648,22 +3641,22 @@ private fun FrostedTopBarMenu(
                                 // Light enough that the blur from the screen behind
                                 // actually reads through the panel: the frost lives in the
                                 // gap between the rows, and an opaque fill hid all of it.
-                                scrim = barColor.copy(alpha = 0.42f),
+                                scrim = barColor.copy(alpha = 0.50f),
                                 fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
                             ),
                         performanceMode = HazePerformanceMode.Performance,
-                    ).background(barColor.copy(alpha = 0.30f))
+                    ).background(barColor.copy(alpha = 0.34f))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
             shape = sheetShape,
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
+            // One surface, rows directly on it. The separators mark logical groups:
+            // your activity, discovery, social, and the app itself.
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.history,
                 label = stringResource(R.string.history),
-                barShape = barShape,
-                barColor = barColor,
             ) {
                 onExpandedChange(false)
                 onNavigate("history")
@@ -3671,17 +3664,14 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.stats,
                 label = stringResource(R.string.stats),
-                barShape = barShape,
-                barColor = barColor,
             ) {
                 onExpandedChange(false)
                 onNavigate("stats")
             }
+            FrostedTopBarMenuDivider()
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.trending_up,
                 label = stringResource(R.string.charts),
-                barShape = barShape,
-                barColor = barColor,
             ) {
                 onExpandedChange(false)
                 onNavigate("charts_screen")
@@ -3689,21 +3679,19 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.new_release,
                 label = stringResource(R.string.new_release_albums_short),
-                barShape = barShape,
-                barColor = barColor,
             ) {
                 onExpandedChange(false)
                 onNavigate("new_release")
             }
+            FrostedTopBarMenuDivider()
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.multi_user,
                 label = stringResource(R.string.music_together_short),
-                barShape = barShape,
-                barColor = barColor,
             ) {
                 onExpandedChange(false)
                 onNavigate("settings/music_together")
             }
+            FrostedTopBarMenuDivider()
             val settingsTrailing: (@Composable () -> Unit)? =
                 if (updateAvailable) {
                     @Composable { Badge() }
@@ -3713,8 +3701,6 @@ private fun FrostedTopBarMenu(
             FrostedTopBarMenuRow(
                 iconRes = R.drawable.settings,
                 label = stringResource(R.string.settings),
-                barShape = barShape,
-                barColor = barColor,
                 trailing = settingsTrailing,
             ) {
                 onExpandedChange(false)
@@ -3747,28 +3733,22 @@ private fun DrawScope.drawFloatingSheetShadow(
     }
 }
 
-/** One floating action bar of [FrostedTopBarMenu]: rounded, self-shadowed, on the blurred sheet. */
+/** One row of [FrostedTopBarMenu], drawn straight onto the shared frosted surface. */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
     label: String,
-    barShape: Shape,
-    barColor: Color,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    // A hair lighter than the panel in dark, a hair darker in light: enough to
-    // separate the rows from the sheet without another stack of shadows.
-    val rowColor = lerp(barColor, MaterialTheme.colorScheme.onSurface, 0.05f)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 2.dp)
-                .clip(barShape)
-                .background(rowColor)
+                // A small clip keeps the ripple tidy; there is no fill behind the row.
+                .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
@@ -3787,6 +3767,16 @@ private fun FrostedTopBarMenuRow(
         )
         trailing?.invoke()
     }
+}
+
+/** Hairline between logical groups, intentionally much quieter than a filled bar. */
+@Composable
+private fun FrostedTopBarMenuDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+    )
 }
 
 @Composable
