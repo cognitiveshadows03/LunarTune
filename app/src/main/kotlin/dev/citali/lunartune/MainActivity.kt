@@ -119,6 +119,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.State
 import androidx.compose.runtime.Stable
@@ -156,6 +157,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -997,20 +999,35 @@ class MainActivity : FragmentActivity() {
                 ) {
                     val focusManager = LocalFocusManager.current
                     val density = LocalDensity.current
+                    val configuration = LocalConfiguration.current
                     val windowsInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
-                    // The bottom edge must not be derived from system bars: hiding the
-                    // status bar with the fullscreen window flag changes what the
-                    // platform reports for system bars, and the step landed on the
-                    // floating bar (too little padding from the bottom edge) and on
-                    // the row's anchor (a nudge just after a minimise). The navigation
-                    // bar inset describes the bottom edge on its own and stays put.
-                    val bottomInset =
+                    // Take the bottom edge from both inset sources: some devices report
+                    // a navigation-bar inset of zero in fullscreen, which would drop
+                    // the floating bar almost onto the bottom edge. The larger of the
+                    // two is the real bottom edge in either case.
+                    val rawBottomInset =
                         with(density) {
-                            WindowInsets.navigationBarsIgnoringVisibility
-                                .union(WindowInsets.displayCutout)
-                                .getBottom(density)
-                                .toDp()
+                            maxOf(
+                                windowsInsets.getBottom(density),
+                                WindowInsets.navigationBarsIgnoringVisibility
+                                    .union(WindowInsets.displayCutout)
+                                    .getBottom(density),
+                            ).toDp()
                         }
+                    // Hiding the status bar with the fullscreen flag can make the
+                    // platform briefly report a smaller bottom inset. That single
+                    // step moves the floating bar, the row and every page's bottom
+                    // padding together - the bar reads as sitting too close to the
+                    // edge, then hops back up a moment later. Keep the largest value
+                    // seen for this configuration so transient drops are ignored.
+                    val bottomInsetLatch =
+                        remember(
+                            configuration.orientation,
+                            configuration.screenWidthDp,
+                            configuration.screenHeightDp,
+                        ) { mutableStateOf(rawBottomInset) }
+                    val bottomInset = maxOf(bottomInsetLatch.value, rawBottomInset)
+                    SideEffect { bottomInsetLatch.value = bottomInset }
 
                     val isTvDevice = remember { applicationContext.isTvDevice() }
                     val useRail =
@@ -1548,6 +1565,7 @@ class MainActivity : FragmentActivity() {
                                         top = AppBarHeight,
                                         insetBottom = currentBottomInset,
                                         sheet = playerBottomSheetState,
+                                        miniPlayerFootprint = MiniPlayerHeight + MiniPlayerBottomSpacing,
                                     ),
                                 )
                         }
@@ -3323,6 +3341,7 @@ private class PlayerAwareBottomInsets(
     private val top: Dp,
     private val insetBottom: State<Dp>,
     private val sheet: BottomSheetState,
+    private val miniPlayerFootprint: Dp,
 ) : WindowInsets {
     override fun getLeft(density: Density, layoutDirection: LayoutDirection): Int = 0
 
@@ -3332,7 +3351,17 @@ private class PlayerAwareBottomInsets(
 
     override fun getBottom(density: Density): Int =
         with(density) {
-            (if (sheet.isDismissed) insetBottom.value else sheet.collapsedBound).roundToPx()
+            // The floating bar keeps its slot even when the row is gone. Dismissing
+            // playback only reclaims the row's own height; reserving just the raw
+            // system inset let the last row of a page (Your Artists, Recently
+            // Played Artists) scroll up behind the bar.
+            val bottom =
+                if (sheet.isDismissed) {
+                    (sheet.collapsedBound - miniPlayerFootprint).coerceAtLeast(insetBottom.value)
+                } else {
+                    sheet.collapsedBound
+                }
+            bottom.roundToPx()
         }
 }
 val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No DownloadUtil provided") }
