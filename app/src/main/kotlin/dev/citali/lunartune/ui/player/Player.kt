@@ -175,6 +175,7 @@ import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.canvas.models.CanvasArtwork
 import dev.citali.lunartune.constants.LunarTuneCanvasKey
+import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.BackdropBlurAmountKey
 import dev.citali.lunartune.constants.BackdropEnabledKey
 import dev.citali.lunartune.constants.BlurRadiusKey
@@ -1249,6 +1250,10 @@ fun BottomSheetPlayer(
         },
         backHandlerEnabled = !aodModeEnabled,
         collapsedOffsetPx = { navbarHiddenOffset?.invoke() ?: 0f },
+        // Only the row itself is clickable. The rest of the collapsed slot is the
+        // navigation bar's footprint, and a tap there must reach the page or the
+        // bar behind it instead of opening the player.
+        collapsedContentHeight = MiniPlayerHeight,
         collapsedContent = {
             MiniPlayer(
                 position = miniPositionState.longValue,
@@ -2913,6 +2918,22 @@ private fun V7PlayerBackdrop(
                     .fillMaxWidth()
                     .height(sharpStageHeight)
                     .background(sharpStageBottomScrim),
+        )
+
+        // The sharp stage ends on a hard clip boundary. While the sheet is being
+        // translated (minimising the immersive player), a fractional-pixel seam
+        // there shows up as a fine bright hairline across the whole width. Cap the
+        // boundary with the exact colour the scrim lands on, so a translating
+        // layer has nothing lighter to bleed through. Two dp is imperceptible at
+        // rest and wide enough to cover a sub-pixel edge at any density.
+        Box(
+            modifier =
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .offset(y = sharpStageTopOffset + sharpStageHeight - 1.dp)
+                    .fillMaxWidth()
+                    .height(2.dp)
+                    .background(backdropPalette.bottom),
         )
     }
 }

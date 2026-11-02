@@ -94,6 +94,14 @@ fun BottomSheet(
     /** Extra downward drift (px) for the collapsed row while the navigation
      * bar is hidden; scaled down as the sheet expands so the player is untouched. */
     collapsedOffsetPx: () -> Float = { 0f },
+    /**
+     * Height of the part of the collapsed slot that is actually the row. The
+     * rest of the slot is the navigation bar's footprint and must stay see-
+     * through: making the whole slot clickable meant a tap in that empty band
+     * opened the player instead of reaching the page or the bar underneath.
+     * Defaults to the full slot for sheets that have no such empty band.
+     */
+    collapsedContentHeight: Dp? = null,
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
@@ -185,7 +193,7 @@ fun BottomSheet(
                                 Modifier
                             },
                         ).fillMaxWidth()
-                        .height(state.collapsedBound),
+                        .height(collapsedContentHeight ?: state.collapsedBound),
                 content = collapsedContent,
             )
         }

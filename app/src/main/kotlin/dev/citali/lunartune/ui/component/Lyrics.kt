@@ -2629,6 +2629,36 @@ fun Lyrics(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
+                                    .clickable {
+                                        sharePlayerCard(
+                                            context = context,
+                                            scope = scope,
+                                            mediaMetadata = mediaMetadata,
+                                            artworkUrl = mediaMetadata?.thumbnailUrl,
+                                            position = playerConnection.player.currentPosition,
+                                            duration = playerConnection.player.duration.coerceAtLeast(0L),
+                                        )
+                                        showShareDialog = false
+                                    }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = painterResource(id = R.drawable.share),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = stringResource(R.string.share_player_card),
+                                fontSize = 16.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
+
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
                                     .padding(top = 8.dp, bottom = 4.dp),
                             horizontalArrangement = Arrangement.End,
                         ) {

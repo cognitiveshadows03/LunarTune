@@ -67,6 +67,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -313,6 +314,7 @@ fun LyricsEnhanced(
     val playerConnection = LocalPlayerConnection.current ?: return
     val player = playerConnection.player
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     val animationsDisabled = LocalAnimationsDisabled.current
 
@@ -826,6 +828,36 @@ fun LyricsEnhanced(
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    sharePlayerCard(
+                                        context = context,
+                                        scope = scope,
+                                        mediaMetadata = mediaMetadata,
+                                        artworkUrl = mediaMetadata?.thumbnailUrl,
+                                        position = playerConnection.player.currentPosition,
+                                        duration = playerConnection.player.duration.coerceAtLeast(0L),
+                                    )
+                                    showShareDialog = false
+                                }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.share),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.share_player_card),
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+
                     Row(
                         modifier =
                             Modifier

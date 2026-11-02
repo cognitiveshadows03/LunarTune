@@ -76,6 +76,7 @@ import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.player.BlurredArtwork
 import dev.citali.lunartune.ui.utils.highRes
 import dev.citali.lunartune.utils.ComposeToImage
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -341,6 +342,51 @@ fun ShareCardDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * One-tap export of the player card. Portrait only, blurred artwork backdrop,
+ * the hardcoded immersive player drawn into it - the same look the card dialog
+ * uses, but without any options to pick first. The bitmap is built and handed
+ * straight to the share sheet.
+ */
+fun sharePlayerCard(
+    context: Context,
+    scope: CoroutineScope,
+    mediaMetadata: MediaMetadata?,
+    artworkUrl: String?,
+    position: Long,
+    duration: Long,
+) {
+    val metadata = mediaMetadata ?: return
+    scope.launch {
+        val bitmap =
+            runCatching {
+                ComposeToImage.createPlayerCardImage(
+                    context = context,
+                    coverArtUrl = artworkUrl,
+                    songTitle = metadata.title,
+                    artistName = metadata.artists.joinToString { it.name },
+                    positionMs = position,
+                    durationMs = duration,
+                )
+            }.getOrNull()
+        val uri =
+            bitmap?.let {
+                withContext(Dispatchers.IO) { writeShareCardToCache(context, it) }
+            }
+        if (uri == null) {
+            Toast.makeText(context, R.string.error_unknown, Toast.LENGTH_SHORT).show()
+            return@launch
+        }
+        val intent =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "image/png"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_card)))
     }
 }
 
