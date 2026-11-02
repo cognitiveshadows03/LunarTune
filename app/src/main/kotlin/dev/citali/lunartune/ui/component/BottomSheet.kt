@@ -12,6 +12,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -60,10 +62,14 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
+import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.sign
 import dev.citali.lunartune.LocalAnimationsDisabled
@@ -200,7 +206,7 @@ class BottomSheetState(
 ) : DraggableState by draggableState {
     /**
      * Not a constructor constant: the collapsed anchor moves whenever the window
-     * insets move (see [onBoundsChanged]), and the sheet has to follow it instead
+     * insets move (see [reanchorTo]), and the sheet has to follow it instead
      * of being rebuilt.
      */
     var collapsedBound by mutableStateOf(collapsedBound)
@@ -357,7 +363,7 @@ class BottomSheetState(
     }
 
     /**
-     * Every settle goes through here so [onBoundsChanged] knows what is in flight and
+     * Every settle goes through here so [onWindowBoundsChanged] knows what is in flight and
      * on which spec to continue it.
      */
     private fun settleTo(
@@ -413,67 +419,67 @@ class BottomSheetState(
                         // second in the navigation bar (or above an empty band).
                         reanchorQuietly()
                     }
+                    // The collapsed anchor can keep travelling after a settle aimed
+                    // at its earlier value (a minimise during a route change). Put
+                    // the value back on the anchor the sheet is resting on now.
+                    if (!isDragging && !isSettling &&
+                        abs((value - collapsedBound).value) >= HalfDp.value
+                    ) {
+                        reanchorQuietly()
+                    }
                 }
             }
     }
 
     /**
-     * The window insets moved under the sheet.
-     *
-     * Hiding the status bar in the player takes the bottom inset away, and bringing
-     * it back gives it again, so the collapsed anchor shifts by that inset exactly
-     * while a minimise is running. Rebuilding the state for that (as `remember(...)`
-     * used to) handed the sheet a fresh spring with no floor and no anchor, which is
-     * the overshoot that only appeared after the bars had been hidden. Here the same
-     * instance keeps its settle, its anchor and its spec and simply follows the new
-     * geometry.
+     * The window itself changed size (status bar hidden in the player, insets
+     * moving). The collapsed anchor has its own clock - [reanchorTo] - so this only
+     * moves the outer bounds and leaves that anchor alone.
      */
-    fun onBoundsChanged(
+    fun onWindowBoundsChanged(
         dismissed: Dp,
-        collapsed: Dp,
         expanded: Dp,
     ) {
         if (pendingGeometry == null &&
             dismissedBound == dismissed &&
-            collapsedBound == collapsed &&
             expandedBound == expanded
         ) {
             return
         }
-        // Geometry is a layout fact. At rest the sheet belongs on its current anchor
-        // - collapsed, expanded or dismissed - in this very frame, whatever the raw
-        // value happens to hold from a previous page, a cancelled settle or stale
-        // bookkeeping. A route change gains or loses a whole navigation bar in one
-        // frame; the row must not spend a spring (or forever) at the old anchor.
-        //
-        // The old `wasAtCollapsed` gate compared the value with the OLD anchor. Once
-        // a parked change eased in on a soft spring, that gate stayed shut and the
-        // sheet kept the stale geometry for good: the row sat a whole bar too high on
-        // a page without one (an empty band where it belonged) and a whole bar too
-        // low on a page with one (behind the bar). Target anchor, not value, says
-        // where a resting sheet belongs.
-        if (!isDragging && !isSettling) {
-            pendingGeometry = Triple(dismissed, collapsed, expanded)
-            applyPendingGeometry()
-            reanchorQuietly()
-            return
-        }
-        // A running settle or a finger on the sheet owns the value. Park the change:
-        // `settleTo` adopts it at the start of the next motion, and the settle's
-        // finally block lands the sheet on the new anchor when it finishes.
-        pendingGeometry = Triple(dismissed, collapsed, expanded)
+        pendingGeometry = Triple(dismissed, collapsedBound, expanded)
+        if (isDragging || isSettling) return
+        applyPendingGeometry()
+        reanchorQuietly()
     }
 
     /**
-     * The bottom geometry changed - a route gained or lost the navigation bar, or
-     * the window insets moved. Whoever owns that geometry calls this so a resting
-     * sheet is on its anchor in the same frame: the row is a layout fact, not a
-     * spring. A running motion or a finger on the sheet keeps its own clock; the
-     * settle's finally block lands it there when it finishes.
+     * Follow a collapsed anchor that is itself animating. The navigation bar's
+     * footprint arrives over a spring, and the row travels on that same spring:
+     * at every frame the row sits exactly where the arriving bar leaves room for
+     * it. Jumping straight to the final anchor is what opened a blank band under
+     * the row on the way back from a page with no bar, and what dropped the row
+     * behind the bar on the way in.
+     *
+     * A resting sheet snaps to each frame's anchor (there is no second spring to
+     * fall behind); a settle or a drag keeps its value and only adopts the bound.
+     * [NonCancellable] keeps the bound and the value consistent even if the
+     * collection is torn down mid-frame.
      */
-    fun realignCollapsedRow() {
-        if (isDragging || isSettling) return
-        reanchorQuietly()
+    internal suspend fun reanchorTo(newCollapsedBound: Dp) {
+        val previous = collapsedBound
+        if (newCollapsedBound == previous) return
+        val current = value
+        val restingAtCollapsed =
+            !isSettling && !isDragging &&
+                abs((current - previous).value) < HalfDp.value
+        withContext(NonCancellable) {
+            if (restingAtCollapsed &&
+                abs((newCollapsedBound - current).value) >= HalfDp.value
+            ) {
+                animatable.snapTo(newCollapsedBound)
+            }
+            collapsedBound = newCollapsedBound
+        }
     }
 
     /** The sheet left composition, so no gesture can still own its value. */
@@ -751,10 +757,31 @@ fun rememberBottomSheetState(
             )
         }
 
-    // Geometry changes are handed to the state instead of rebuilding it (see
-    // BottomSheetState.onBoundsChanged): a settle keeps running through them.
-    LaunchedEffect(state, dismissedBound, expandedBound, collapsedBound) {
-        state.onBoundsChanged(dismissedBound, collapsedBound, expandedBound)
+    // Window bounds are layout facts: apply them as they arrive, without
+    // rebuilding the state (a settle keeps running through them).
+    LaunchedEffect(state, dismissedBound, expandedBound) {
+        state.onWindowBoundsChanged(dismissedBound, expandedBound)
+    }
+
+    // Ported from the base implementation: the collapsed anchor travels on the
+    // navigation spring, the very same spec the navigation bar's height uses.
+    // The row and the bar are therefore moved by one clock. Without this the
+    // row's anchor was a plain value that flipped in a single frame while the
+    // bar eased in - the row jumped into a slot the bar had not reached yet,
+    // leaving an empty band under it on a page without a bar and dropping it
+    // behind the bar on the way back.
+    //
+    // One coroutine follows every frame; a settle per frame would be two clocks
+    // again. The insets read state.collapsedBound during layout, so every page's
+    // bottom padding rides the same spring without recomposing the tree.
+    val animatedCollapsedBoundState =
+        animateDpAsState(
+            targetValue = collapsedBound,
+            animationSpec = if (animationsDisabled) snap() else NavigationBarAnimationSpec,
+            label = "SheetCollapsedBound",
+        )
+    LaunchedEffect(state) {
+        snapshotFlow { animatedCollapsedBoundState.value }.collect { state.reanchorTo(it) }
     }
 
     return state

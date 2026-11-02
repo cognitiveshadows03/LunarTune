@@ -120,6 +120,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -164,7 +166,9 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -1197,7 +1201,13 @@ class MainActivity : FragmentActivity() {
 
                     // A freshly opened/re-entered tab always starts with the bar
                     // home; the spring back becomes part of the route transition.
+                    // Cancel any scroll-hide fling still in flight: its settle could
+                    // otherwise outlive the route and park the bar part way down,
+                    // leaving it sitting much too close to the bottom edge.
                     LaunchedEffect(currentRoute) {
+                        navHideDragJob?.cancel()
+                        navHideDragJob = null
+                        navHideFlingWindow = false
                         navHideAnim.animateTo(0f)
                     }
 
@@ -1290,13 +1300,6 @@ class MainActivity : FragmentActivity() {
                             }
                         }
 
-                    fun getBottomNavPadding(): Dp =
-                        if (shouldShowNavigationBar && !useRail) {
-                            navVisibleHeight
-                        } else {
-                            0.dp
-                        }
-
                     // The bar animates its own height on the navigation spring, and the
                     // hide progress is read off that animation: the bar and the mini
                     // player that drifts with it move on the same bounce.
@@ -1337,13 +1340,12 @@ class MainActivity : FragmentActivity() {
                     // frame, while the bar eased in on its spring. For the length of that
                     // spring the row sat where the bar was about to be, and the two were
                     // drawn on top of each other - the row inside the capsule.
-                    // Not animated, on purpose. The bar eases into place, but the space it
-                    // ends up holding is a layout fact from the first frame of the route
-                    // change: the row, the sheet's own anchor and every page's bottom
-                    // padding have to agree on it immediately. Handing them a value that
-                    // lags by a spring is what put the row inside the bar on one page and
-                    // left an empty band under the content on another, for as long as the
-                    // spring ran.
+                    // The bar's footprint at rest. This is a target, not the value the
+                    // row is drawn at: rememberBottomSheetState animates the collapsed
+                    // anchor toward it on the very same spring the bar's own height
+                    // uses, and the insets read that animated anchor during layout.
+                    // Making the row jump here while the bar eased in was what opened a
+                    // blank band under it on the way back from a page with no bar.
                     val bottomBarReservedHeight =
                         if (shouldShowNavigationBar && !useRail) {
                             floatingBarsBottomPadding + navVisibleHeight
@@ -1361,14 +1363,11 @@ class MainActivity : FragmentActivity() {
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
                         )
-                    // The row's slot is a layout fact: as soon as a route gains or loses
-                    // the navigation bar, a resting collapsed row has to be on the new
-                    // anchor, not on the one the previous page left behind. Leaving it
-                    // to a settle is what put an empty band under the row on a page
-                    // without the bar and hid the row behind the bar on the way back.
-                    // One line per geometry change, in the app's own log viewer: when the
-                    // row and the bar disagree, these are the numbers that say which of
-                    // them moved.
+                    // One line per geometry change, in the app's own log viewer: when
+                    // the row and the bar disagree, these are the numbers that say
+                    // which of them moved. The row's anchor now glides on the bar's
+                    // spring, so `current` is the value mid-travel and `rowAnchor`
+                    // is where it is headed.
                     LaunchedEffect(
                         bottomInset,
                         bottomBarReservedHeight,
@@ -1376,12 +1375,12 @@ class MainActivity : FragmentActivity() {
                         isAtPrimaryRoot,
                         active,
                     ) {
-                        playerBottomSheetState.realignCollapsedRow()
                         android.util.Log.d(
                             "LunarLayout",
                             "root=$isAtPrimaryRoot searchActive=$active barShown=$shouldShowNavigationBar " +
                                 "inset=$bottomInset reserved=$bottomBarReservedHeight " +
                                 "rowAnchor=${bottomInset + bottomBarReservedHeight + MiniPlayerBottomSpacing + MiniPlayerHeight} " +
+                                "current=${playerBottomSheetState.collapsedBound} " +
                                 "anchor=${playerBottomSheetState.targetAnchor} " +
                                 "value=${playerBottomSheetState.value} " +
                                 "drawn=${playerBottomSheetState.effectiveValue} " +
@@ -1532,23 +1531,14 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
+                    // The bottom padding is the sheet's own anchor, read during layout.
+                    // The anchor glides on the navigation spring (see
+                    // rememberBottomSheetState), so the content, the row and the bar
+                    // all move together: the list does not clear a band in one frame
+                    // while the row and bar are still travelling into it.
+                    val currentBottomInset = rememberUpdatedState(bottomInset)
                     val playerAwareWindowInsets =
-                        remember(
-                            windowsInsets,
-                            useRail,
-                            bottomInset,
-                            shouldShowNavigationBar,
-                            playerBottomSheetState.isDismissed,
-                            navVisibleHeight,
-                            floatingBarsBottomPadding,
-                        ) {
-                            var bottom = bottomInset
-                            if (shouldShowNavigationBar && !useRail) {
-                                bottom += getBottomNavPadding() + floatingBarsBottomPadding
-                            }
-                            if (!playerBottomSheetState.isDismissed) {
-                                bottom += MiniPlayerHeight + MiniPlayerBottomSpacing
-                            }
+                        remember(windowsInsets, useRail, playerBottomSheetState) {
                             windowsInsets
                                 .only(
                                     (
@@ -1558,7 +1548,13 @@ class MainActivity : FragmentActivity() {
                                             WindowInsetsSides.Horizontal
                                         }
                                     ) + WindowInsetsSides.Top,
-                                ).add(WindowInsets(top = AppBarHeight, bottom = bottom))
+                                ).add(
+                                    PlayerAwareBottomInsets(
+                                        top = AppBarHeight,
+                                        insetBottom = currentBottomInset,
+                                        sheet = playerBottomSheetState,
+                                    ),
+                                )
                         }
 
                     val homeScrollBehavior =
@@ -3325,6 +3321,30 @@ val LocalPlayerConnection =
     staticCompositionLocalOf<PlayerConnection?> { error("No PlayerConnection provided") }
 val LocalPlayerAwareWindowInsets =
     compositionLocalOf<WindowInsets> { error("No WindowInsets provided") }
+
+/**
+ * Bottom insets read straight from the player sheet's collapsed anchor, during
+ * layout rather than composition. The anchor glides on the navigation spring, so
+ * every page's bottom padding travels with the row and the bar instead of
+ * clearing a band in a single frame while the two are still on their way.
+ */
+@Stable
+private class PlayerAwareBottomInsets(
+    private val top: Dp,
+    private val insetBottom: State<Dp>,
+    private val sheet: BottomSheetState,
+) : WindowInsets {
+    override fun getLeft(density: Density, layoutDirection: LayoutDirection): Int = 0
+
+    override fun getRight(density: Density, layoutDirection: LayoutDirection): Int = 0
+
+    override fun getTop(density: Density): Int = with(density) { top.roundToPx() }
+
+    override fun getBottom(density: Density): Int =
+        with(density) {
+            (if (sheet.isDismissed) insetBottom.value else sheet.collapsedBound).roundToPx()
+        }
+}
 val LocalDownloadUtil = staticCompositionLocalOf<DownloadUtil> { error("No DownloadUtil provided") }
 val LocalSyncUtils = staticCompositionLocalOf<SyncUtils> { error("No SyncUtils provided") }
 
