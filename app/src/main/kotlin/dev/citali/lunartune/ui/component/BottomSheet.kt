@@ -12,7 +12,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.VectorConverter
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -62,7 +62,6 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
-import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -763,25 +762,17 @@ fun rememberBottomSheetState(
         state.onWindowBoundsChanged(dismissedBound, expandedBound)
     }
 
-    // Ported from the base implementation: the collapsed anchor travels on the
-    // navigation spring, the very same spec the navigation bar's height uses.
-    // The row and the bar are therefore moved by one clock. Without this the
-    // row's anchor was a plain value that flipped in a single frame while the
-    // bar eased in - the row jumped into a slot the bar had not reached yet,
-    // leaving an empty band under it on a page without a bar and dropping it
-    // behind the bar on the way back.
-    //
-    // One coroutine follows every frame; a settle per frame would be two clocks
-    // again. The insets read state.collapsedBound during layout, so every page's
-    // bottom padding rides the same spring without recomposing the tree.
-    val animatedCollapsedBoundState =
-        animateDpAsState(
-            targetValue = collapsedBound,
-            animationSpec = if (animationsDisabled) snap() else NavigationBarAnimationSpec,
-            label = "SheetCollapsedBound",
-        )
+    // Follow the collapsed anchor in one coroutine, snapping to each value it
+    // is given. What animates is decided by the caller: the navigation bar's
+    // share of the anchor is driven by the bar's own spring, while window
+    // insets and status-bar changes are layout facts and land immediately.
+    // Springing those here made the row keep drifting after a minimise had
+    // already settled - the small "adjustment" at the end of the motion.
+    // The insets read state.collapsedBound during layout, so every page's
+    // bottom padding follows the same value without recomposing the tree.
+    val currentCollapsedBound = rememberUpdatedState(collapsedBound)
     LaunchedEffect(state) {
-        snapshotFlow { animatedCollapsedBoundState.value }.collect { state.reanchorTo(it) }
+        snapshotFlow { currentCollapsedBound.value }.collect { state.reanchorTo(it) }
     }
 
     return state

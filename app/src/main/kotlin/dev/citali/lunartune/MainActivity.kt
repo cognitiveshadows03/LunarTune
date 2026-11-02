@@ -32,7 +32,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -67,6 +66,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
@@ -998,7 +998,19 @@ class MainActivity : FragmentActivity() {
                     val focusManager = LocalFocusManager.current
                     val density = LocalDensity.current
                     val windowsInsets = WindowInsets.systemBarsIgnoringVisibility.union(WindowInsets.displayCutout)
-                    val bottomInset = with(density) { windowsInsets.getBottom(density).toDp() }
+                    // The bottom edge must not be derived from system bars: hiding the
+                    // status bar with the fullscreen window flag changes what the
+                    // platform reports for system bars, and the step landed on the
+                    // floating bar (too little padding from the bottom edge) and on
+                    // the row's anchor (a nudge just after a minimise). The navigation
+                    // bar inset describes the bottom edge on its own and stays put.
+                    val bottomInset =
+                        with(density) {
+                            WindowInsets.navigationBarsIgnoringVisibility
+                                .union(WindowInsets.displayCutout)
+                                .getBottom(density)
+                                .toDp()
+                        }
 
                     val isTvDevice = remember { applicationContext.isTvDevice() }
                     val useRail =
@@ -1300,9 +1312,10 @@ class MainActivity : FragmentActivity() {
                             }
                         }
 
-                    // The bar animates its own height on the navigation spring, and the
-                    // hide progress is read off that animation: the bar and the mini
-                    // player that drifts with it move on the same bounce.
+                    // One animation owns the whole bottom stack. The bar's height is
+                    // the only clock; the row's reserved height, the bar's hide
+                    // fraction and every page's bottom padding are read off it, so
+                    // nothing can arrive late or on a different spring.
                     val bottomNavigationBarHeight by animateDpAsState(
                         targetValue =
                             if (shouldShowNavigationBar && !useRail) {
@@ -1313,45 +1326,26 @@ class MainActivity : FragmentActivity() {
                         animationSpec = if (disableAnimations) snap() else NavigationBarAnimationSpec,
                         label = "",
                     )
+                    val navPresenceFraction =
+                        if (navVisibleHeight > 0.dp) {
+                            (bottomNavigationBarHeight / navVisibleHeight).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
 
-                    // Deferred 0..1 hide state for the active search bar / rail, read inside the
-                    // bar's draw lambda and combined with the route hide fraction.
-                    val activeSearchBarHideState =
-                        animateFloatAsState(
-                            targetValue = if (active || useRail) 1f else 0f,
-                            animationSpec =
-                                if (disableAnimations) {
-                                    snap()
-                                } else {
-                                    tween(
-                                        durationMillis = LunarMotion.DepthZoomPopExitMs,
-                                        easing = LunarMotion.SpatialEnterEasing,
-                                    )
-                                },
-                            label = "activeSearchBarHide",
-                        )
-
-                    // One owner for how much of the bottom of the window the bar holds,
-                    // on the same navigation spring the bar's own travel is read from.
-                    //
-                    // The row's collapsed anchor is built from this and nothing else, so
-                    // the row and the bar are moved by one animation instead of two: the
-                    // anchor used to be a plain `if` on the route, which changes in one
-                    // frame, while the bar eased in on its spring. For the length of that
-                    // spring the row sat where the bar was about to be, and the two were
-                    // drawn on top of each other - the row inside the capsule.
-                    // The bar's footprint at rest. This is a target, not the value the
-                    // row is drawn at: rememberBottomSheetState animates the collapsed
-                    // anchor toward it on the very same spring the bar's own height
-                    // uses, and the insets read that animated anchor during layout.
-                    // Making the row jump here while the bar eased in was what opened a
-                    // blank band under it on the way back from a page with no bar.
-                    val bottomBarReservedHeight =
+                    // Only the bar's share travels on that spring. Window insets and
+                    // the status bar are layout facts: spring-animating them made the
+                    // row drift for another few hundred ms after a minimise, which
+                    // read as the row "adjusting itself" after it had settled.
+                    val bottomBarReservedTarget =
                         if (shouldShowNavigationBar && !useRail) {
                             floatingBarsBottomPadding + navVisibleHeight
                         } else {
                             0.dp
                         }
+                    val bottomBarReservedHeight =
+                        bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) +
+                            floatingBarsBottomPadding * navPresenceFraction
 
                     val playerBottomSheetState =
                         rememberBottomSheetState(
@@ -1370,7 +1364,7 @@ class MainActivity : FragmentActivity() {
                     // is where it is headed.
                     LaunchedEffect(
                         bottomInset,
-                        bottomBarReservedHeight,
+                        bottomBarReservedTarget,
                         shouldShowNavigationBar,
                         isAtPrimaryRoot,
                         active,
@@ -1378,8 +1372,9 @@ class MainActivity : FragmentActivity() {
                         android.util.Log.d(
                             "LunarLayout",
                             "root=$isAtPrimaryRoot searchActive=$active barShown=$shouldShowNavigationBar " +
-                                "inset=$bottomInset reserved=$bottomBarReservedHeight " +
-                                "rowAnchor=${bottomInset + bottomBarReservedHeight + MiniPlayerBottomSpacing + MiniPlayerHeight} " +
+                                "inset=$bottomInset reserved=$bottomBarReservedTarget " +
+                                "presence=$navPresenceFraction " +
+                                "rowAnchor=${bottomInset + bottomBarReservedTarget + MiniPlayerBottomSpacing + MiniPlayerHeight} " +
                                 "current=${playerBottomSheetState.collapsedBound} " +
                                 "anchor=${playerBottomSheetState.targetAnchor} " +
                                 "value=${playerBottomSheetState.value} " +
@@ -2294,10 +2289,7 @@ class MainActivity : FragmentActivity() {
                                         // the navigation spring; the hide progress is read back
                                         // off that animation, so the bar and the mini player
                                         // that leans on it share one bounce.
-                                        val routeHideFraction =
-                                            1f -
-                                                bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) /
-                                                    navVisibleHeight
+                                        val routeHideFraction = 1f - navPresenceFraction
 
                                         // captured here: the drift lambda below runs
                                         // outside composition, where LocalDensity is
@@ -2328,14 +2320,13 @@ class MainActivity : FragmentActivity() {
                                                         // arriving beside it, and the two drew on top of
                                                         // each other. Only cases where the bar leaves but
                                                         // the row's anchor stays put belong here: the
-                                                        // scroll hide and the active search bar. The
-                                                        // sheet's own progress does not belong here
+                                                        // scroll hide. An active search bar is a route
+                                                        // change too - the presence fraction already
+                                                        // owns it - so adding its own tween as well
+                                                        // pushed the row down twice on two clocks.
+                                                        // The sheet's own progress does not belong here
                                                         // either: the slot travels on that by itself.
-                                                        val hide =
-                                                            maxOf(
-                                                                activeSearchBarHideState.value,
-                                                                navHideAnim.value,
-                                                            ).coerceIn(0f, 1f)
+                                                        val hide = navHideAnim.value.coerceIn(0f, 1f)
                                                         (floatingBarsBottomPadding + navVisibleHeight).toPx() * hide
                                                     }
                                                 } else {
@@ -2374,13 +2365,12 @@ class MainActivity : FragmentActivity() {
                                                         // The hide motion: translate out and fade a
                                                         // little ahead of arrival so no edge of
                                                         // plate, shadow or frost lingers.
-                                                        val routeHide =
-                                                            maxOf(
-                                                                routeHideFraction,
-                                                                activeSearchBarHideState.value,
-                                                            )
+                                                        // Route changes and the active search bar both
+                                                        // move the presence fraction; a separate tween
+                                                        // for the latter held the bar on a second clock,
+                                                        // so it sat low for a beat and then hopped up.
                                                         val hide =
-                                                            maxOf(routeHide, navHideAnim.value)
+                                                            maxOf(routeHideFraction, navHideAnim.value)
                                                                 .coerceIn(0f, 1f)
                                                         // The whole hide motion: translate out and
                                                         // fade a little ahead of arrival so no
