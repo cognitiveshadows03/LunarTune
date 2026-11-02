@@ -1382,6 +1382,9 @@ class MainActivity : FragmentActivity() {
                             "root=$isAtPrimaryRoot searchActive=$active barShown=$shouldShowNavigationBar " +
                                 "inset=$bottomInset reserved=$bottomBarReservedHeight " +
                                 "rowAnchor=${bottomInset + bottomBarReservedHeight + MiniPlayerBottomSpacing + MiniPlayerHeight} " +
+                                "anchor=${playerBottomSheetState.targetAnchor} " +
+                                "value=${playerBottomSheetState.value} " +
+                                "drawn=${playerBottomSheetState.effectiveValue} " +
                                 "dismissed=${playerBottomSheetState.isDismissed}",
                         )
                     }

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -91,6 +92,13 @@ fun BottomSheet(
     collapsedContent: @Composable BoxScope.() -> Unit,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    // A gesture interrupted by the sheet leaving composition never reaches
+    // performFling; without this the drag flag would stay set and a stale raw
+    // value would keep being drawn after the sheet comes back.
+    DisposableEffect(state) {
+        onDispose { state.onGestureScopeLeft() }
+    }
+
     Box(
         modifier =
             modifier
@@ -99,27 +107,17 @@ fun BottomSheet(
                 // the whole player (and the mini player inside it) on every frame of the
                 // spring — the open/collapse stutter. A translation here is a redraw.
                 .graphicsLayer {
-                    // The minimise keeps its rebound: the spring dips a few dp past the
-                    // collapsed anchor and comes back, and that dip is the bounce.
-                    //
-                    // At rest the collapsed row is a layout fact, not an animation. A
-                    // page that gains or loses the navigation bar changes the anchor in
-                    // one frame, and the row has to sit on that new anchor in the very
-                    // same frame. A value still holding the previous page's anchor drew
-                    // the row a whole bar too high on a page without one (an empty band
-                    // under it) and a whole bar too low on a page with one (the row
-                    // behind the bar). Only a running settle or a finger on the sheet
-                    // may move the row away from its anchor; the bounce is untouched.
-                    val restedValue =
-                        when {
-                            state.isSettling || state.isDragging -> state.value
-                            state.targetAnchor == COLLAPSED_ANCHOR -> state.collapsedBound
-                            else -> state.value.coerceAtLeast(
-                                minOf(state.collapsedBound, state.expandedBound),
-                            )
-                        }
+                    // Draw from the value the sheet is actually resting on, not from the
+                    // raw animatable value. The minimise keeps its rebound (a settle reads
+                    // the raw value), and a drag reads it too, but at rest the anchor is
+                    // the only legitimate position. A route change gains or loses the
+                    // navigation bar in one frame; the row has to follow in that frame,
+                    // whatever a stale value, a cancelled settle or stale bookkeeping
+                    // still says. Drawing the raw value is what left the row a whole bar
+                    // too high on a page without one - an empty band under it - and a
+                    // whole bar too low on a page with one, behind the bar.
                     translationY =
-                        (state.expandedBound - restedValue).toPx().coerceAtLeast(0f)
+                        (state.expandedBound - state.effectiveValue).toPx().coerceAtLeast(0f)
                 }.then(
                     if (collapsedGesturesEnabled || state.isAwayFromCollapsedAnchor) {
                         Modifier.bottomSheetDraggable(state, onDismiss)
@@ -219,8 +217,35 @@ class BottomSheetState(
     var targetAnchor by mutableIntStateOf(initialAnchor)
         private set
 
+    /**
+     * The value the sheet is drawn and measured against.
+     *
+     * At rest the sheet belongs on an anchor, no matter what the raw animatable
+     * value happens to hold: a route change moves the collapsed anchor by a whole
+     * navigation bar in one frame, and the row has to be there in that frame - not
+     * at the anchor a previous page, a cancelled settle or stale bookkeeping left
+     * behind. Only a running settle (the rebound) or a finger on the sheet may sit
+     * away from an anchor; those two read the raw value.
+     *
+     * Every visual decision goes through this - the translation, progress (and so
+     * the scrim and the row's alpha), the collapsed/expanded checks - so a stale
+     * raw value can no longer wash the page out, compose the full player behind a
+     * collapsed row, or leave an empty band where the row belongs.
+     */
+    val effectiveValue: Dp
+        get() =
+            if (isSettling || isDragging) {
+                value
+            } else {
+                when {
+                    value >= expandedBound - HalfDp -> expandedBound
+                    value <= dismissedBound + HalfDp -> dismissedBound
+                    else -> collapsedBound
+                }
+            }
+
     val isDismissed by derivedStateOf {
-        value == animatable.lowerBound!!
+        effectiveValue == animatable.lowerBound!!
     }
 
     /**
@@ -232,7 +257,7 @@ class BottomSheetState(
      * no such gesture.
      */
     val isCollapsed by derivedStateOf {
-        abs((value - collapsedBound).value) < HalfDp.value
+        abs((effectiveValue - collapsedBound).value) < HalfDp.value
     }
 
     /**
@@ -241,18 +266,18 @@ class BottomSheetState(
      * sheet back down.
      */
     val isAwayFromCollapsedAnchor: Boolean by derivedStateOf {
-        value > collapsedBound + HalfDp
+        effectiveValue > collapsedBound + HalfDp
     }
 
     val isExpanded by derivedStateOf {
-        value >= animatable.upperBound!! - HalfDp
+        effectiveValue >= animatable.upperBound!! - HalfDp
     }
 
     val isExpandedOrExpanding: Boolean
         get() = targetAnchor == EXPANDED_ANCHOR
 
     val progress by derivedStateOf {
-        1f - (animatable.upperBound!! - animatable.value) / (animatable.upperBound!! - collapsedBound)
+        1f - (animatable.upperBound!! - effectiveValue) / (animatable.upperBound!! - collapsedBound)
     }
 
     private fun updateAnchor(anchor: Int) {
@@ -306,17 +331,14 @@ class BottomSheetState(
     }
 
     /**
-     * Move to wherever the sheet is anchored now, without a bounce: this is paper
-     * moving under something already at rest, not a new motion.
-     *
-     * [snap] is for the collapsed anchor, which is the only one a second surface is
-     * drawn against: the collapsed row has to be on the new anchor in the same frame
-     * the new anchor exists, or the row spends the length of a soft spring sitting
-     * where the navigation bar now is. An anchor that arrives with the bar and a row
-     * that eases to it are two clocks, and two clocks on one slot is exactly how the
-     * row and the bar end up drawn on top of each other.
+     * Move to wherever the sheet is anchored now, in this frame. This is paper
+     * moving under something already at rest, not a new motion: the collapsed row
+     * is drawn against a second surface (the navigation bar) whose footprint
+     * arrives in one frame. An anchor that arrives with the bar and a row that
+     * eases to it on a spring are two clocks on one slot - exactly how the row
+     * ended up inside the bar, or left an empty band where it belonged.
      */
-    private fun reanchorQuietly(snap: Boolean = false) {
+    private fun reanchorQuietly() {
         val target =
             when (targetAnchor) {
                 EXPANDED_ANCHOR -> expandedBound
@@ -324,10 +346,6 @@ class BottomSheetState(
                 else -> collapsedBound
             }
         if (abs((target - value).value) < HalfDp.value) return
-        if (!snap) {
-            settleTo(BottomSheetSoftAnimationSpec, targetAnchor)
-            return
-        }
         settleJob?.cancel()
         ++settleGeneration
         settleAnchor = null
@@ -389,13 +407,11 @@ class BottomSheetState(
                     // be taken up, or the sheet keeps the old geometry for good.
                     if (pendingGeometry != null && settleJob?.isActive != true) {
                         applyPendingGeometry()
-                        // The settle just landed on the old geometry. A collapsed row
-                        // belongs on the new anchor in this frame, not on another soft
-                        // spring: that spring is exactly how the row spent a second
-                        // sitting in the navigation bar (or above an empty band).
-                        reanchorQuietly(
-                            snap = targetAnchor == COLLAPSED_ANCHOR && !isDragging,
-                        )
+                        // The settle just landed on the old geometry. Land on the new
+                        // anchor in this frame rather than easing there on another
+                        // soft spring: that spring is exactly how the row spent a
+                        // second in the navigation bar (or above an empty band).
+                        reanchorQuietly()
                     }
                 }
             }
@@ -424,56 +440,45 @@ class BottomSheetState(
         ) {
             return
         }
-        // A route change gains or loses the navigation bar in one frame. The bar's
-        // footprint is part of the collapsed anchor, so the row's slot moves with it,
-        // and the row has to be on the new slot in that same frame - whatever the
-        // animatable value still happens to hold from the previous page.
+        // Geometry is a layout fact. At rest the sheet belongs on its current anchor
+        // - collapsed, expanded or dismissed - in this very frame, whatever the raw
+        // value happens to hold from a previous page, a cancelled settle or stale
+        // bookkeeping. A route change gains or loses a whole navigation bar in one
+        // frame; the row must not spend a spring (or forever) at the old anchor.
         //
-        // `wasAtCollapsed` (value ~= the OLD anchor) used to gate this. Once the value
-        // had drifted off the anchor - a parked change easing in on a soft spring, then
-        // another route change before it landed - the gate stayed shut and the sheet
-        // kept the stale geometry for good. The row then sat a whole navigation bar
-        // too high on a page without the bar (an empty white band where it belonged)
-        // and a whole bar too low on a page with one (behind the bar).
-        //
-        // Target anchor, not value, says where a resting sheet belongs: no settle in
-        // flight, no finger on the sheet, collapsed. Land it there synchronously.
-        // A running motion or a drag parks the change as before; the settle's own
-        // finally block snaps the row when it lands.
-        if (targetAnchor == COLLAPSED_ANCHOR && !isSettling && !isDragging) {
+        // The old `wasAtCollapsed` gate compared the value with the OLD anchor. Once
+        // a parked change eased in on a soft spring, that gate stayed shut and the
+        // sheet kept the stale geometry for good: the row sat a whole bar too high on
+        // a page without one (an empty band where it belonged) and a whole bar too
+        // low on a page with one (behind the bar). Target anchor, not value, says
+        // where a resting sheet belongs.
+        if (!isDragging && !isSettling) {
             pendingGeometry = Triple(dismissed, collapsed, expanded)
             applyPendingGeometry()
-            reanchorQuietly(snap = true)
+            reanchorQuietly()
             return
         }
-        // `settleJob.isActive`, not "an anchor was set": a job that has finished or
-        // been cancelled leaves a stale anchor behind, and treating that as "in flight"
-        // parked the change with nobody left to apply it. That is precisely how the row
-        // could end up still anchored to the geometry of a page without a navigation
-        // bar while being drawn on a page that has one - the row sitting in the bar.
-        if (settleJob?.isActive == true) {
-            pendingGeometry = Triple(dismissed, collapsed, expanded)
-            return
-        }
-        // Asked before the geometry is taken up, so it answers about the anchors the
-        // value was actually aimed at.
-        val wasAtCollapsed = isCollapsed
-        val atRest = isExpanded || wasAtCollapsed || isDismissed
+        // A running settle or a finger on the sheet owns the value. Park the change:
+        // `settleTo` adopts it at the start of the next motion, and the settle's
+        // finally block lands the sheet on the new anchor when it finishes.
         pendingGeometry = Triple(dismissed, collapsed, expanded)
-        applyPendingGeometry()
-        if (atRest) reanchorQuietly(snap = wasAtCollapsed)
     }
 
     /**
      * The bottom geometry changed - a route gained or lost the navigation bar, or
      * the window insets moved. Whoever owns that geometry calls this so a resting
-     * collapsed row is on its new anchor in the same frame: the row is a layout
-     * fact, not a spring. A running motion or a finger on the sheet keeps its own
-     * clock; the settle's finally block lands it there when it finishes.
+     * sheet is on its anchor in the same frame: the row is a layout fact, not a
+     * spring. A running motion or a finger on the sheet keeps its own clock; the
+     * settle's finally block lands it there when it finishes.
      */
     fun realignCollapsedRow() {
-        if (isDragging || isSettling || targetAnchor != COLLAPSED_ANCHOR) return
-        reanchorQuietly(snap = true)
+        if (isDragging || isSettling) return
+        reanchorQuietly()
+    }
+
+    /** The sheet left composition, so no gesture can still own its value. */
+    fun onGestureScopeLeft() {
+        isDragging = false
     }
 
     /** A pointer drag owns the sheet, so no settle may be resumed under it. */
@@ -589,6 +594,8 @@ class BottomSheetState(
         velocity: Float,
         onDismiss: (() -> Unit)?,
     ) {
+        // The finger is gone even in the branches that dismiss without a settle.
+        isDragging = false
         if (velocity > 250) {
             expand(velocity)
         } else if (velocity < -250) {
@@ -767,36 +774,43 @@ fun Modifier.bottomSheetDraggable(
         val dragSlop = viewConfiguration.touchSlop * SheetDragSlopMultiplier
 
         awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            val pointerId = down.id
-            var totalDy = 0f
-            var dragStarted = false
+            try {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                val pointerId = down.id
+                var totalDy = 0f
+                var dragStarted = false
 
-            while (!dragStarted) {
-                val event = awaitPointerEvent()
-                val change = event.changes.firstOrNull { it.id == pointerId } ?: return@awaitEachGesture
-                if (!change.pressed) return@awaitEachGesture // a tap: the child handles it
-                if (change.isConsumed) return@awaitEachGesture // a child (e.g. a list) took it
-                totalDy += change.positionChange().y
-                if (abs(totalDy) > dragSlop) {
-                    dragStarted = true
-                    state.onDragStart()
-                    velocityTracker.resetTracking()
-                    velocityTracker.addPointerInputChange(change)
-                    change.consume()
-                    state.dispatchRawDelta(totalDy - sign(totalDy) * dragSlop)
+                while (!dragStarted) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == pointerId } ?: return@awaitEachGesture
+                    if (!change.pressed) return@awaitEachGesture // a tap: the child handles it
+                    if (change.isConsumed) return@awaitEachGesture // a child (e.g. a list) took it
+                    totalDy += change.positionChange().y
+                    if (abs(totalDy) > dragSlop) {
+                        dragStarted = true
+                        state.onDragStart()
+                        velocityTracker.resetTracking()
+                        velocityTracker.addPointerInputChange(change)
+                        change.consume()
+                        state.dispatchRawDelta(totalDy - sign(totalDy) * dragSlop)
+                    }
                 }
+
+                val completed =
+                    verticalDrag(pointerId) { change ->
+                        velocityTracker.addPointerInputChange(change)
+                        state.dispatchRawDelta(change.positionChange().y)
+                        change.consume()
+                    }
+                val velocity = -velocityTracker.calculateVelocity().y
+                velocityTracker.resetTracking()
+                state.performFling(if (completed) velocity else 0f, onDismiss)
+            } finally {
+                // A gesture cancelled by the pointer system (or by this modifier
+                // leaving the tree) never reaches performFling. Release the value
+                // so a stale drag flag cannot keep the sheet off its anchor.
+                state.onGestureScopeLeft()
             }
-
-            val completed =
-                verticalDrag(pointerId) { change ->
-                    velocityTracker.addPointerInputChange(change)
-                    state.dispatchRawDelta(change.positionChange().y)
-                    change.consume()
-                }
-            val velocity = -velocityTracker.calculateVelocity().y
-            velocityTracker.resetTracking()
-            state.performFling(if (completed) velocity else 0f, onDismiss)
         }
     }
 
