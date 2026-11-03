@@ -147,9 +147,17 @@ fun BottomSheet(
                 // drawBehind, not background(): reading progress during composition
                 // recomposed this node and its content on every drag frame.
                 .drawBehind {
+                    // While the player opens, the only visible part of the sheet is
+                    // the bottom strip that used to hold the row. Painting the sheet
+                    // colour there before any player content exists showed up as an
+                    // empty band with the page washed out behind it. Keep that strip
+                    // fully transparent until the expanded content starts fading in
+                    // (the same 0.25 threshold the content uses below), then bring the
+                    // backdrop in on the same clock.
+                    val reveal = ((state.progress - 0.25f) * 4).coerceIn(0f, 1f)
                     drawRect(
                         backgroundColor.copy(
-                            alpha = backgroundColor.alpha * state.progress.coerceIn(0f, 1f),
+                            alpha = backgroundColor.alpha * reveal,
                         ),
                     )
                 },
