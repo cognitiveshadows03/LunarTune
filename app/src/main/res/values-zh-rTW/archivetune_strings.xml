@@ -238,8 +238,6 @@
     <string name="hide_player_thumbnail_desc">在播放器中以應用程式圖示取代專輯封面</string>
     <string name="crop_thumbnail_to_square">將縮圖裁切為 1:1</string>
     <string name="crop_thumbnail_to_square_desc">將 YouTube 縮圖顯示為正方形，而非 16:9 比例</string>
-    <string name="show_home_category_chips">顯示首頁分類標籤</string>
-    <string name="show_home_category_chips_desc">在首頁上顯示類別篩選標籤</string>
     <string name="show_tags_in_library">在媒體庫中顯示標籤</string>
     <string name="show_tags_in_library_desc">在媒體庫中顯示標籤篩選器</string>
     <string name="already_in_playlist">已在播放清單中：</string>
