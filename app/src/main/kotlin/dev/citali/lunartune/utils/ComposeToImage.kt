@@ -686,6 +686,7 @@ object ComposeToImage {
         padding: Float,
         bottomPadding: Float = canvasHeight - padding,
         textColor: Int,
+        logoColor: Int? = null,
     ) {
         val baseSize = minOf(canvasWidth, canvasHeight).toFloat()
         val logoSize = (baseSize * 0.055f).toInt().coerceAtLeast(1)
@@ -706,7 +707,12 @@ object ComposeToImage {
 
         val logoLeft = padding
         val logoTop = bottomPadding - logoSize
-        val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+        val bitmapPaint =
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
+                if (logoColor != null) {
+                    colorFilter = PorterDuffColorFilter(logoColor, PorterDuff.Mode.SRC_IN)
+                }
+            }
 
         brand?.let { source ->
             val clip =
@@ -801,6 +807,30 @@ object ComposeToImage {
                 0f,
                 Paint(Paint.FILTER_BITMAP_FLAG),
             )
+
+            // The glass follows the artwork: dark covers get a dark translucent
+            // card, bright covers a light one. Sample the cover once, cheaply,
+            // so the words and app mark can keep their contrast on either.
+            val lightArt = (cover?.averageLuminance() ?: 0f) > 0.55f
+            val cardFill =
+                if (lightArt) {
+                    android.graphics.Color.argb(150, 246, 246, 250)
+                } else {
+                    android.graphics.Color.argb(120, 20, 18, 24)
+                }
+            val cardRim =
+                if (lightArt) {
+                    android.graphics.Color.argb(70, 40, 38, 44)
+                } else {
+                    android.graphics.Color.argb(78, 255, 255, 255)
+                }
+            val onCard = if (lightArt) 0xFF17161B.toInt() else white
+            val secondaryOnCard =
+                if (lightArt) {
+                    android.graphics.Color.argb(200, 23, 22, 27)
+                } else {
+                    secondary
+                }
             val scrim =
                 Paint().apply {
                     shader =
@@ -836,14 +866,14 @@ object ComposeToImage {
 
             val titlePaint =
                 TextPaint().apply {
-                    color = white
+                    color = onCard
                     textSize = cardWidth * 0.060f
                     typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                     isAntiAlias = true
                 }
             val artistPaint =
                 TextPaint().apply {
-                    color = secondary
+                    color = secondaryOnCard
                     textSize = cardWidth * 0.038f
                     typeface = Typeface.create("sans-serif", Typeface.NORMAL)
                     isAntiAlias = true
@@ -872,7 +902,7 @@ object ComposeToImage {
                 corner,
                 corner,
                 Paint().apply {
-                    color = android.graphics.Color.argb(44, 240, 240, 248)
+                    color = cardFill
                     isAntiAlias = true
                 },
             )
@@ -883,7 +913,7 @@ object ComposeToImage {
                 Paint().apply {
                     style = Paint.Style.STROKE
                     strokeWidth = 2f
-                    color = android.graphics.Color.argb(78, 255, 255, 255)
+                    color = cardRim
                     isAntiAlias = true
                 },
             )
@@ -948,11 +978,30 @@ object ComposeToImage {
                 canvasHeight = h,
                 padding = artLeft,
                 bottomPadding = cardBottom - inset,
-                textColor = secondary,
+                textColor = secondaryOnCard,
+                logoColor = onCard,
             )
 
             bitmap
         }
+
+    /** Average perceived brightness of a bitmap in 0..1, sampled small and fast. */
+    private fun Bitmap.averageLuminance(): Float {
+        val safe = ensureSoftwareBitmap(this)
+        val sample = Bitmap.createScaledBitmap(safe, 24, 24, true)
+        var sum = 0.0
+        for (y in 0 until sample.height) {
+            for (x in 0 until sample.width) {
+                val pixel = sample.getPixel(x, y)
+                sum +=
+                    0.2126 * android.graphics.Color.red(pixel) +
+                        0.7152 * android.graphics.Color.green(pixel) +
+                        0.0722 * android.graphics.Color.blue(pixel)
+            }
+        }
+        val total = (sample.width * sample.height * 255).toDouble().coerceAtLeast(1.0)
+        return (sum / total).toFloat().coerceIn(0f, 1f)
+    }
 
     fun saveBitmapAsFile(
         context: Context,
