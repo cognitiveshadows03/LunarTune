@@ -16,7 +16,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.snap
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialExpressiveTheme
@@ -26,7 +25,6 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
@@ -49,8 +47,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import dev.citali.lunartune.constants.AppFontPreference
-import dev.citali.lunartune.constants.CleanUiKey
-import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -59,136 +55,6 @@ import kotlin.math.min
 val DefaultThemeColor = Color(0xFFED5564)
 val LocalLunarTuneFontPreference = staticCompositionLocalOf { AppFontPreference.DEFAULT }
 val LocalLunarTuneFontFamily = staticCompositionLocalOf { AppFontFamily }
-
-/**
- * True when the calmer Experimental Settings look is on. Components that paint their own
- * decoration rather than inheriting [MaterialExpressiveTheme] read this to stay consistent with
- * the neutral surfaces - custom header art and the mini player in particular.
- */
-val LocalCleanUi = staticCompositionLocalOf { false }
-
-/** Tighter, more consistent radii: less of the very round "expressive" silhouette. */
-private val CleanShapes =
-    Shapes(
-        extraSmall = RoundedCornerShape(6.dp),
-        small = RoundedCornerShape(10.dp),
-        medium = RoundedCornerShape(14.dp),
-        large = RoundedCornerShape(18.dp),
-        extraLarge = RoundedCornerShape(22.dp),
-    )
-
-/**
- * Replaces only the neutral roles. The user's accent (primary/secondary/tertiary, containers and
- * error) is kept exactly as chosen, so turning the mode on changes the *amount* of colour in the
- * interface, not the identity of the theme. Everything the app draws through MaterialTheme -
- * cards, sheets, lists, dialogs, chips - picks this up without a per-screen change.
- */
-private fun ColorScheme.cleanUiColors(
-    darkTheme: Boolean,
-    pureBlack: Boolean,
-): ColorScheme {
-    val deepest = if (pureBlack) Color.Black else Color(0xFF0C0C0E)
-    val neutral =
-        if (darkTheme) {
-            NeutralRoles(
-                background = deepest,
-                onBackground = Color(0xFFF2F2F5),
-                surface = if (pureBlack) Color(0xFF0A0A0A) else Color(0xFF121214),
-                onSurface = Color(0xFFF2F2F5),
-                surfaceVariant = Color(0xFF202024),
-                onSurfaceVariant = Color(0xFFAEAEB4),
-                surfaceContainerLowest = deepest,
-                surfaceContainerLow = if (pureBlack) Color(0xFF0C0C0C) else Color(0xFF161619),
-                surfaceContainer = if (pureBlack) Color(0xFF121212) else Color(0xFF1C1C20),
-                surfaceContainerHigh = if (pureBlack) Color(0xFF191919) else Color(0xFF252529),
-                surfaceContainerHighest = if (pureBlack) Color(0xFF202020) else Color(0xFF2E2E33),
-                surfaceBright = Color(0xFF2E2E33),
-                surfaceDim = deepest,
-                outline = Color(0xFF48484E),
-                outlineVariant = Color(0xFF2E2E33),
-            )
-        } else {
-            NeutralRoles(
-                background = Color(0xFFF7F7F8),
-                onBackground = Color(0xFF1C1C1E),
-                surface = Color(0xFFFFFFFF),
-                onSurface = Color(0xFF1C1C1E),
-                surfaceVariant = Color(0xFFEDEDF0),
-                onSurfaceVariant = Color(0xFF6E6E73),
-                surfaceContainerLowest = Color(0xFFFFFFFF),
-                surfaceContainerLow = Color(0xFFF7F7F8),
-                surfaceContainer = Color(0xFFF1F1F3),
-                surfaceContainerHigh = Color(0xFFECECEF),
-                surfaceContainerHighest = Color(0xFFE4E4E8),
-                surfaceBright = Color(0xFFFFFFFF),
-                surfaceDim = Color(0xFFDEDEE2),
-                outline = Color(0xFFC7C7CC),
-                outlineVariant = Color(0xFFE4E4E8),
-            )
-        }
-
-    // Built through the constructor rather than copy(): recent Material 3 alphas added fixed
-    // accent roles and changed the copy overloads. Every accent below is passed straight through
-    // from the caller's scheme, so only the neutral backdrop is replaced.
-    return ColorScheme(
-        primary = primary,
-        onPrimary = onPrimary,
-        primaryContainer = primaryContainer,
-        onPrimaryContainer = onPrimaryContainer,
-        inversePrimary = inversePrimary,
-        secondary = secondary,
-        onSecondary = onSecondary,
-        secondaryContainer = secondaryContainer,
-        onSecondaryContainer = onSecondaryContainer,
-        tertiary = tertiary,
-        onTertiary = onTertiary,
-        tertiaryContainer = tertiaryContainer,
-        onTertiaryContainer = onTertiaryContainer,
-        background = neutral.background,
-        onBackground = neutral.onBackground,
-        surface = neutral.surface,
-        onSurface = neutral.onSurface,
-        surfaceVariant = neutral.surfaceVariant,
-        onSurfaceVariant = neutral.onSurfaceVariant,
-        // Elevation tinting uses surfaceTint; a neutral one keeps raised surfaces grey instead
-        // of washing them with the accent.
-        surfaceTint = neutral.surface,
-        inverseSurface = neutral.onSurface,
-        inverseOnSurface = neutral.background,
-        error = error,
-        onError = onError,
-        errorContainer = errorContainer,
-        onErrorContainer = onErrorContainer,
-        outline = neutral.outline,
-        outlineVariant = neutral.outlineVariant,
-        scrim = Color(0xFF000000),
-        surfaceBright = neutral.surfaceBright,
-        surfaceDim = neutral.surfaceDim,
-        surfaceContainer = neutral.surfaceContainer,
-        surfaceContainerHigh = neutral.surfaceContainerHigh,
-        surfaceContainerHighest = neutral.surfaceContainerHighest,
-        surfaceContainerLow = neutral.surfaceContainerLow,
-        surfaceContainerLowest = neutral.surfaceContainerLowest,
-    )
-}
-
-private data class NeutralRoles(
-    val background: Color,
-    val onBackground: Color,
-    val surface: Color,
-    val onSurface: Color,
-    val surfaceVariant: Color,
-    val onSurfaceVariant: Color,
-    val surfaceContainerLowest: Color,
-    val surfaceContainerLow: Color,
-    val surfaceContainer: Color,
-    val surfaceContainerHigh: Color,
-    val surfaceContainerHighest: Color,
-    val surfaceBright: Color,
-    val surfaceDim: Color,
-    val outline: Color,
-    val outlineVariant: Color,
-)
 
 @Composable
 fun rememberLunarTuneLyricsFontFamily(): FontFamily {
@@ -219,7 +85,6 @@ fun LunarTuneTheme(
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
-    val cleanUi by rememberPreference(CleanUiKey, defaultValue = false)
     val useSystemDynamicColor =
         (seedPalette == null && themeColor == DefaultThemeColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
 
@@ -330,9 +195,8 @@ fun LunarTuneTheme(
         }
 
     val colorScheme =
-        remember(appColorScheme, pureBlack, darkTheme, cleanUi) {
-            val base = if (darkTheme && pureBlack) appColorScheme.pureBlack(true) else appColorScheme
-            if (cleanUi) base.cleanUiColors(darkTheme, pureBlack) else base
+        remember(appColorScheme, pureBlack, darkTheme) {
+            if (darkTheme && pureBlack) appColorScheme.pureBlack(true) else appColorScheme
         }
 
     val animatedColorScheme =
@@ -366,18 +230,15 @@ fun LunarTuneTheme(
             )
         }
 
-    val shapes = if (cleanUi) CleanShapes else expressiveShapes
-
     CompositionLocalProvider(
         LocalLunarTuneFontPreference provides fontPreference,
         LocalLunarTuneFontFamily provides resolvedFontFamily,
-        LocalCleanUi provides cleanUi,
     ) {
         MaterialExpressiveTheme(
             colorScheme = animatedColorScheme,
             motionScheme = motionScheme,
             typography = typography,
-            shapes = shapes,
+            shapes = expressiveShapes,
             content = content,
         )
     }

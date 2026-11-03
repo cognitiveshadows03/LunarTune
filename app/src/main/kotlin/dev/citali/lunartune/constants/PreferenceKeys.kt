@@ -408,13 +408,6 @@ val SharedScreenHeaderImageUriKey = stringPreferencesKey("sharedScreenHeaderImag
 val HomeHeaderImageUriKey = stringPreferencesKey("homeHeaderImageUri")
 val SettingsHeaderImageUriKey = stringPreferencesKey("settingsHeaderImageUri")
 val HeaderImageDimKey = floatPreferencesKey("headerImageDim")
-
-/**
- * The calm, low-chroma look from Experimental Settings. The theme reads it so the neutral
- * surfaces and softer shapes apply app-wide, and the few components that draw their own
- * decoration (header art, the mini player) read it too so a custom image cannot break the look.
- */
-val CleanUiKey = booleanPreferencesKey("cleanUiEnabled")
 val ShowTagsInLibraryKey = booleanPreferencesKey("showTagsInLibrary")
 val ShowLibraryCardLikedKey = booleanPreferencesKey("showLibraryCardLiked")
 val ShowLibraryCardOfflineKey = booleanPreferencesKey("showLibraryCardOffline")

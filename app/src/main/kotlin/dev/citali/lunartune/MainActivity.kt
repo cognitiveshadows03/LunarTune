@@ -45,6 +45,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -130,6 +131,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -1359,9 +1361,18 @@ class MainActivity : FragmentActivity() {
                         } else {
                             0.dp
                         }
+                    // Ported from the base app: a page without the floating bar has no
+                    // bar slot to reserve. Keying the anchor off the discrete flag (not
+                    // just the animated height) guarantees the row and every page's
+                    // bottom padding drop together there, so no empty band is left
+                    // where the hidden bar used to sit.
                     val bottomBarReservedHeight =
-                        bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) +
-                            floatingBarsBottomPadding * navPresenceFraction
+                        if (shouldShowNavigationBar && !useRail) {
+                            bottomNavigationBarHeight.coerceAtMost(navVisibleHeight) +
+                                floatingBarsBottomPadding * navPresenceFraction
+                        } else {
+                            0.dp
+                        }
 
                     val playerBottomSheetState =
                         rememberBottomSheetState(
@@ -1548,6 +1559,7 @@ class MainActivity : FragmentActivity() {
                     // all move together: the list does not clear a band in one frame
                     // while the row and bar are still travelling into it.
                     val currentBottomInset = rememberUpdatedState(bottomInset)
+                    val currentNavBarShown = rememberUpdatedState(shouldShowNavigationBar && !useRail)
                     val playerAwareWindowInsets =
                         remember(windowsInsets, useRail, playerBottomSheetState) {
                             windowsInsets
@@ -1563,6 +1575,7 @@ class MainActivity : FragmentActivity() {
                                     PlayerAwareBottomInsets(
                                         top = AppBarHeight,
                                         insetBottom = currentBottomInset,
+                                        navBarShown = currentNavBarShown,
                                         sheet = playerBottomSheetState,
                                         miniPlayerFootprint = MiniPlayerHeight + MiniPlayerBottomSpacing,
                                     ),
@@ -3339,6 +3352,7 @@ val LocalPlayerAwareWindowInsets =
 private class PlayerAwareBottomInsets(
     private val top: Dp,
     private val insetBottom: State<Dp>,
+    private val navBarShown: State<Boolean>,
     private val sheet: BottomSheetState,
     private val miniPlayerFootprint: Dp,
 ) : WindowInsets {
@@ -3350,15 +3364,24 @@ private class PlayerAwareBottomInsets(
 
     override fun getBottom(density: Density): Int =
         with(density) {
-            // The floating bar keeps its slot even when the row is gone. Dismissing
-            // playback only reclaims the row's own height; reserving just the raw
-            // system inset let the last row of a page (Your Artists, Recently
-            // Played Artists) scroll up behind the bar.
+            // Ported from the base app's playerAwareWindowInsets: pages without the
+            // floating bar reserve only the raw system inset plus the row's own
+            // height, and reclaim that height entirely when playback is dismissed.
+            // Pages WITH the bar keep the animated sheet anchor so the list, the
+            // row and the bar still travel on one clock.
             val bottom =
-                if (sheet.isDismissed) {
-                    (sheet.collapsedBound - miniPlayerFootprint).coerceAtLeast(insetBottom.value)
+                if (navBarShown.value) {
+                    // Dismissing playback only reclaims the row's own height; the
+                    // floating bar keeps its slot so the last row of a page cannot
+                    // scroll up behind it.
+                    if (sheet.isDismissed) {
+                        (sheet.collapsedBound - miniPlayerFootprint).coerceAtLeast(insetBottom.value)
+                    } else {
+                        sheet.collapsedBound
+                    }
                 } else {
-                    sheet.collapsedBound
+                    insetBottom.value +
+                        (if (sheet.isDismissed) 0.dp else miniPlayerFootprint)
                 }
             bottom.roundToPx()
         }
@@ -3563,23 +3586,23 @@ private fun TranslucentTopAppBarIconButton(
 }
 
 /** Corner radius of the floating top-bar sheet. */
-private val MenuSheetCorner = 26.dp
+private val MenuSheetCorner = 22.dp
 
 /** Width of the sheet's content, before the ring of room for its shadow. */
-private val MenuSheetContentWidth = 288.dp
+private val MenuSheetContentWidth = 232.dp
 
 /**
  * Upper bound for the sheet. The width used to be fixed, which ellipsised the
  * longer labels ("New release albu…") as soon as the user picked a wider font;
  * the sheet now grows to fit its longest row and stops here.
  */
-private val MenuSheetMaxWidth = 348.dp
+private val MenuSheetMaxWidth = 280.dp
 
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
-private val MenuSheetShadowRoom = 8.dp
+private val MenuSheetShadowRoom = 6.dp
 
 /** How far the sheet's painted shadow reaches into that ring. */
-private val MenuSheetShadowSpread = 8.dp
+private val MenuSheetShadowSpread = 6.dp
 
 /**
  * Replaces the top-bar action cluster with a single trigger that opens one
@@ -3645,8 +3668,24 @@ private fun FrostedTopBarMenu(
                                 fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
                             ),
                         performanceMode = HazePerformanceMode.Performance,
-                    ).background(barColor.copy(alpha = 0.34f))
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
+                    // A single palette tint over the frost, dimmed just enough for the
+                    // white labels to stay readable on bright artwork behind the sheet.
+                    .background(barColor.copy(alpha = 0.30f))
+                    .background(
+                        Brush.verticalGradient(
+                            0f to MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
+                            1f to MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.12f),
+                        ),
+                    ).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.10f))
+                    // The same primary-tinted hairline the frosted navigation bar uses.
+                    .border(
+                        BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+                        ),
+                        sheetShape,
+                    ).padding(horizontal = 6.dp, vertical = 6.dp),
             shape = sheetShape,
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
@@ -3746,20 +3785,21 @@ private fun FrostedTopBarMenuRow(
             Modifier
                 .fillMaxWidth()
                 // A small clip keeps the ripple tidy; there is no fill behind the row.
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(10.dp))
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 13.dp),
+                .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -3773,7 +3813,7 @@ private fun FrostedTopBarMenuRow(
 @Composable
 private fun FrostedTopBarMenuDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
     )

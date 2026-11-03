@@ -94,7 +94,6 @@ import kotlinx.coroutines.launch
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.HISTORY_DURATION_DEFAULT
 import dev.citali.lunartune.constants.HISTORY_DURATION_RANGE
-import dev.citali.lunartune.ui.theme.LocalCleanUi
 import kotlin.math.roundToInt
 
 val LocalPreferenceInGroup = compositionLocalOf { false }
@@ -110,17 +109,8 @@ private val PreferenceEntryMinHeight = 88.dp
 private val PreferenceEntryHorizontalPadding = 22.dp
 private val PreferenceEntryVerticalPadding = 18.dp
 
-/** One plain icon plate and one row silhouette for the calm look, instead of expressive blobs. */
-private val CleanPreferenceIconShape = RoundedCornerShape(12.dp)
-private val CleanPreferenceRowShape = RoundedCornerShape(16.dp)
-private val CleanPreferenceGroupPadding = 16.dp
-private val CleanPreferenceRowPadding = 16.dp
-
 @Composable
-private fun rememberPreferenceIconShape(): Shape {
-    val cleanUi = LocalCleanUi.current
-    return if (cleanUi) CleanPreferenceIconShape else MaterialShapes.Ghostish.toShape()
-}
+private fun rememberPreferenceIconShape(): Shape = MaterialShapes.Ghostish.toShape()
 
 private fun segmentedPreferenceItemShape(
     index: Int,
@@ -157,12 +147,8 @@ private fun segmentedPreferenceItemShape(
     }
 }
 
-private fun preferenceItemShapeForPosition(
-    position: PreferenceGroupPosition?,
-    cleanUi: Boolean,
-): Shape {
-    if (cleanUi) return CleanPreferenceRowShape
-    return when (position) {
+private fun preferenceItemShapeForPosition(position: PreferenceGroupPosition?): Shape =
+    when (position) {
         null,
         PreferenceGroupPosition.Single,
         -> segmentedPreferenceItemShape(index = 0, count = 1)
@@ -173,7 +159,6 @@ private fun preferenceItemShapeForPosition(
 
         PreferenceGroupPosition.Last -> segmentedPreferenceItemShape(index = 1, count = 2)
     }
-}
 
 @Composable
 fun PreferenceEntry(
@@ -189,11 +174,10 @@ fun PreferenceEntry(
 ) {
     val inGroup = LocalPreferenceInGroup.current
     val groupPosition = LocalPreferenceGroupPosition.current
-    val cleanUi = LocalCleanUi.current
     val preferenceIconShape = rememberPreferenceIconShape()
     val preferenceItemShape =
-        remember(groupPosition, cleanUi) {
-            preferenceItemShapeForPosition(groupPosition, cleanUi)
+        remember(groupPosition) {
+            preferenceItemShapeForPosition(groupPosition)
         }
     val resolvedShape = shape ?: preferenceItemShape
     val interactionSource = remember { MutableInteractionSource() }
@@ -219,7 +203,7 @@ fun PreferenceEntry(
                         onClick = onClick ?: {},
                     ).alpha(if (isEnabled) 1f else 0.5f)
                     .padding(
-                        horizontal = if (cleanUi) CleanPreferenceRowPadding else PreferenceEntryHorizontalPadding,
+                        horizontal = PreferenceEntryHorizontalPadding,
                         vertical = PreferenceEntryVerticalPadding,
                     ),
         ) {
@@ -1112,9 +1096,6 @@ fun PreferenceGroup(
 ) {
     val scope = PreferenceGroupScope().apply(content)
     val itemCount = scope.items.size
-    val cleanUi = LocalCleanUi.current
-    val groupPadding =
-        if (cleanUi) CleanPreferenceGroupPadding else PreferenceGroupHorizontalPadding
 
     if (itemCount == 0) return
 
@@ -1122,7 +1103,7 @@ fun PreferenceGroup(
         if (title != null) {
             PreferenceGroupTitle(
                 title = title,
-                modifier = Modifier.padding(horizontal = groupPadding),
+                modifier = Modifier.padding(horizontal = PreferenceGroupHorizontalPadding),
             )
         }
 
@@ -1130,8 +1111,8 @@ fun PreferenceGroup(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = groupPadding),
-            verticalArrangement = Arrangement.spacedBy(if (cleanUi) 6.dp else 2.dp),
+                    .padding(horizontal = PreferenceGroupHorizontalPadding),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             scope.items.forEachIndexed { index, itemContent ->
                 val position =

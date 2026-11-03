@@ -27,6 +27,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -40,7 +41,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -88,7 +88,6 @@ import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ScreenImageHeader
-import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.Updater
@@ -207,7 +206,6 @@ fun SettingsScreen(
     var isUpdateDismissed by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
-    val cleanUi = LocalCleanUi.current
 
     val accountChrome =
         SettingsAccountChrome(
@@ -526,15 +524,23 @@ fun SettingsScreen(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    // Ported from the base app: horizontal insets pad the viewport,
+                    // but the player's slot lives in contentPadding so the list fills
+                    // the whole screen and scrolls its last rows out from under the
+                    // row. Padding the viewport instead cut the list short and left
+                    // a hard empty band below the mini player.
                     .windowInsetsPadding(
                         LocalPlayerAwareWindowInsets.current.only(
-                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                            WindowInsetsSides.Horizontal,
                         ),
                     ),
             contentPadding =
                 PaddingValues(
                     top = innerPadding.calculateTopPadding(),
-                    bottom = SettingsDimensions.ScreenBottomPadding,
+                    bottom =
+                        LocalPlayerAwareWindowInsets.current
+                            .asPaddingValues()
+                            .calculateBottomPadding(),
                 ),
         ) {
             if (effectiveHeaderImageUri.isNotBlank() && searchQuery.isBlank()) {
@@ -638,141 +644,74 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
             }
 
-            if (searchQuery.isNotBlank() && filteredChildResults.isNotEmpty()) {
-                itemsIndexed(
-                    items = filteredChildResults,
-                    key = { index, result -> result.parentKey + ":" + result.title + ":" + index },
-                    contentType = { _, _ -> "search_result" },
-                ) { _, result ->
-                    SettingsSearchResultItem(
-                        result = result,
-                        onClick = {
-                            result.parentRoute?.let(navController::navigate) ?: result.onClick()
-                        },
-                        modifier = Modifier.padding(
-                            horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                            vertical = 4.dp,
-                        ),
-                    )
-                }
-            } else if (searchQuery.isNotBlank()) {
-                item(key = "no_results") {
-                    Text(
-                        text = stringResource(R.string.no_results_found),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(
-                            horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                            vertical = 16.dp,
-                        ),
-                    )
-                }
-            } else if (cleanUi) {
-                // One real container per logical group: a labelled card holding flat rows with
-                // hairline dividers, instead of separate floating cards that only look grouped.
-                visibleGroups.forEachIndexed { groupIndex, group ->
-                    item(
-                        key = "settings_clean_group_$groupIndex",
-                        contentType = "settings_clean_group",
-                    ) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(
-                                        horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                                    )
-                                    .padding(
-                                        top =
-                                            if (groupIndex > 0) {
-                                                SettingsDimensions.SectionSpacing
-                                            } else {
-                                                0.dp
-                                            },
-                                    ),
-                        ) {
-                            if (groupIndex > 0) {
-                                Text(
-                                    text = group.title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier =
-                                        Modifier.padding(
-                                            horizontal = 4.dp,
-                                            vertical = SettingsDimensions.SectionHeaderBottomPadding,
-                                        ),
+            // One real container per logical group: a labelled card holding flat rows with
+            // hairline dividers, instead of separate floating cards that only look grouped.
+            visibleGroups.forEachIndexed { groupIndex, group ->
+                item(
+                    key = "settings_group_$groupIndex",
+                    contentType = "settings_group",
+                ) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
                                 )
-                            }
-                            Card(
-                                shape = RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
-                                colors =
-                                    CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                .padding(
+                                    top =
+                                        if (groupIndex > 0) {
+                                            SettingsDimensions.SectionSpacing
+                                        } else {
+                                            0.dp
+                                        },
+                                ),
+                    ) {
+                        if (groupIndex > 0) {
+                            Text(
+                                text = group.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier =
+                                    Modifier.padding(
+                                        horizontal = 4.dp,
+                                        vertical = SettingsDimensions.SectionHeaderBottomPadding,
                                     ),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Column {
-                                    group.items.forEachIndexed { index, settingsItem ->
-                                        SettingsEntryRow(
-                                            settingsItem = settingsItem,
-                                            index = index,
-                                            count = group.items.size,
-                                            account = accountChrome,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            flat = true,
+                            )
+                        }
+                        Card(
+                            shape = RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
+                            colors =
+                                CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column {
+                                group.items.forEachIndexed { index, settingsItem ->
+                                    SettingsEntryRow(
+                                        settingsItem = settingsItem,
+                                        index = index,
+                                        count = group.items.size,
+                                        account = accountChrome,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        flat = true,
+                                    )
+                                    if (index < group.items.lastIndex) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 74.dp),
+                                            thickness = 0.5.dp,
+                                            color =
+                                                MaterialTheme.colorScheme.outlineVariant.copy(
+                                                    alpha = 0.55f,
+                                                ),
                                         )
-                                        if (index < group.items.lastIndex) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(start = 74.dp),
-                                                thickness = 0.5.dp,
-                                                color =
-                                                    MaterialTheme.colorScheme.outlineVariant.copy(
-                                                        alpha = 0.55f,
-                                                    ),
-                                            )
-                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-            } else {
-                visibleGroups.forEachIndexed { groupIndex, group ->
-                    if (groupIndex > 0) {
-                        item(
-                            key = "settings_group_spacing_$groupIndex",
-                            contentType = "settings_group_spacing",
-                        ) {
-                            Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
-                        }
-                    }
-
-                    itemsIndexed(
-                        items = group.items,
-                        key = { _, item -> item.key },
-                        contentType = { _, _ -> "settings_segment" },
-                    ) { index, settingsItem ->
-                        SettingsEntryRow(
-                            settingsItem = settingsItem,
-                            index = index,
-                            count = group.items.size,
-                            account = accountChrome,
-                            modifier =
-                                Modifier
-                                    .padding(
-                                        horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                                    ).padding(
-                                        bottom =
-                                            if (index < group.items.lastIndex) {
-                                                SettingsDimensions.SegmentedItemGap
-                                            } else {
-                                                0.dp
-                                            },
-                                    ),
-                            flat = false,
-                        )
                     }
                 }
             }

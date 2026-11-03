@@ -91,7 +91,6 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
-import dev.citali.lunartune.ui.theme.LocalCleanUi
 import dev.citali.lunartune.ui.utils.displayArtworkUrl
 import kotlinx.coroutines.CoroutineScope
 import dev.citali.lunartune.R
@@ -206,7 +205,6 @@ fun HomeSectionHeader(
     thumbnail: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    val cleanUi = LocalCleanUi.current
     val shadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
     // scrim is black in both themes; derive the shadow polarity from the text
     // itself so light mode gets a light shadow behind dark glyphs.
@@ -218,50 +216,40 @@ fun HomeSectionHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = if (cleanUi) 56.dp else 64.dp)
+                .heightIn(min = 64.dp)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(
-                    horizontal = if (cleanUi) 20.dp else 16.dp,
-                    vertical = if (cleanUi) 10.dp else 8.dp,
-                ),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         thumbnail?.invoke()
         Column(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.weight(1f),
         ) {
-            // The calm look keeps one line of heading text: no overline stacked on top of it.
-            if (!cleanUi) {
-                label?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+            label?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Text(
                 text = title,
                 style =
-                    if (cleanUi) {
-                        MaterialTheme.typography.titleLarge
-                    } else {
-                        MaterialTheme.typography.titleLargeEmphasized.copy(
-                            // Legibility over artwork with no backdrop blob: a
-                            // shadow that hugs the glyphs and fades with the art.
-                            shadow =
-                                if (dimAlpha > 0.02f) {
-                                    Shadow(
-                                        color = shadowColor.copy(alpha = 0.72f * dimAlpha),
-                                        blurRadius = shadowBlurPx,
-                                    )
-                                } else {
-                                    null
-                                },
-                        )
-                    },
+                    MaterialTheme.typography.titleLargeEmphasized.copy(
+                        // Legibility over artwork with no backdrop blob: a
+                        // shadow that hugs the glyphs and fades with the art.
+                        shadow =
+                            if (dimAlpha > 0.02f) {
+                                Shadow(
+                                    color = shadowColor.copy(alpha = 0.72f * dimAlpha),
+                                    blurRadius = shadowBlurPx,
+                                )
+                            } else {
+                                null
+                            },
+                    ),
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,

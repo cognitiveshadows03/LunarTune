@@ -65,7 +65,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
-import dev.citali.lunartune.ui.theme.LocalCleanUi
 
 @Composable
 fun SettingsProfileHeader(
@@ -348,24 +347,13 @@ fun SettingsGroupCard(
     group: SettingsGroup,
     modifier: Modifier = Modifier,
 ) {
-    val cleanUi = LocalCleanUi.current
     Column(modifier = modifier) {
         Text(
-            text = if (cleanUi) group.title else group.title.uppercase(),
-            style =
-                if (cleanUi) {
-                    MaterialTheme.typography.titleSmall
-                } else {
-                    MaterialTheme.typography.labelSmall
-                },
+            text = group.title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            letterSpacing =
-                if (cleanUi) {
-                    MaterialTheme.typography.titleSmall.letterSpacing
-                } else {
-                    MaterialTheme.typography.labelSmall.letterSpacing * 1.2f
-                },
+            letterSpacing = MaterialTheme.typography.labelSmall.letterSpacing * 1.2f,
             modifier =
                 Modifier.padding(
                     horizontal = SettingsDimensions.SectionHeaderHorizontalPadding,
@@ -399,10 +387,6 @@ fun SettingsRow(
     showDivider: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // One calm, repeated icon plate instead of a different expressive polygon for every row.
-    val cleanUi = LocalCleanUi.current
-    val iconShape =
-        if (cleanUi) RoundedCornerShape(12.dp) else settingsIconShape(item.key)
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
             item.accentColor
@@ -447,7 +431,7 @@ fun SettingsRow(
                 modifier =
                     Modifier
                         .size(SettingsDimensions.RowIconSize)
-                        .clip(iconShape)
+                        .clip(settingsIconShape(item.key))
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
@@ -570,7 +554,6 @@ fun SettingsSegmentedItem(
     /** Draw on a shared group container instead of as its own floating card. */
     flat: Boolean = false,
 ) {
-    val cleanUi = LocalCleanUi.current
     val effectiveAccent =
         if (item.accentColor.isSpecified) {
             item.accentColor
@@ -645,9 +628,7 @@ fun SettingsSegmentedItem(
                 modifier =
                     Modifier
                         .size(52.dp)
-                        .clip(
-                            if (cleanUi) RoundedCornerShape(12.dp) else settingsIconShape(item.key)
-                        )
+                        .clip(settingsIconShape(item.key))
                         .background(effectiveAccent),
                 contentAlignment = Alignment.Center,
             ) {
@@ -862,7 +843,6 @@ fun SettingsSearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val cleanUi = LocalCleanUi.current
     val effectiveAccent =
         if (result.parentAccentColor.isSpecified) {
             result.parentAccentColor
@@ -894,13 +874,7 @@ fun SettingsSearchResultItem(
                 modifier =
                     Modifier
                         .size(40.dp)
-                        .clip(
-                            if (cleanUi) {
-                                RoundedCornerShape(12.dp)
-                            } else {
-                                settingsIconShape(result.parentKey)
-                            }
-                        )
+                        .clip(settingsIconShape(result.parentKey))
                         .background(effectiveAccent.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center,
             ) {
