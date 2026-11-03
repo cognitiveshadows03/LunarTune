@@ -3608,20 +3608,20 @@ private fun TranslucentTopAppBarIconButton(
 private val MenuSheetCorner = 24.dp
 
 /** Width of the sheet's content, before the ring of room for its shadow. */
-private val MenuSheetContentWidth = 248.dp
+private val MenuSheetContentWidth = 232.dp
 
 /**
  * Upper bound for the sheet. The width used to be fixed, which ellipsised the
  * longer labels ("New release albu…") as soon as the user picked a wider font;
  * the sheet now grows to fit its longest row and stops here.
  */
-private val MenuSheetMaxWidth = 300.dp
+private val MenuSheetMaxWidth = 272.dp
 
 /** Corner radius of one grouped pill inside the sheet. */
 private val MenuGroupCorner = 18.dp
 
 /** Gap between the grouped pills, like the spacing between notification cards. */
-private val MenuGroupGap = 7.dp
+private val MenuGroupGap = 9.dp
 
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
 private val MenuSheetShadowRoom = 6.dp
@@ -3777,7 +3777,7 @@ private fun FrostedTopBarMenu(
                                         MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
                                     ),
                                     sheetShape,
-                                ).padding(horizontal = 10.dp, vertical = 9.dp),
+                                ).padding(horizontal = 10.dp, vertical = 11.dp),
                     ) {
                         Column {
                             FrostedTopBarMenuAccount(
@@ -3924,7 +3924,7 @@ private fun FrostedTopBarMenuGroup(
                 .fillMaxWidth()
                 .clip(groupShape)
                 .background(pillColor)
-                .padding(vertical = 3.dp),
+                .padding(vertical = 4.dp),
         content = content,
     )
 }
@@ -3969,7 +3969,7 @@ private fun FrostedTopBarMenuAccount(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 13.dp),
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -4026,7 +4026,7 @@ private fun FrostedTopBarMenuRow(
                 // The group pill clips the ripple, so no second rounded shape
                 // is needed here: a tap fills the whole width of its card.
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -4052,7 +4052,7 @@ private fun FrostedTopBarMenuRow(
 @Composable
 private fun FrostedTopBarMenuDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 1.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
     )
