@@ -42,11 +42,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.MaterialTheme
@@ -644,8 +641,8 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
             }
 
-            // One real container per logical group: a labelled card holding flat rows with
-            // hairline dividers, instead of separate floating cards that only look grouped.
+            // Back to one floating card per entry (the earlier settings look),
+            // but the logical group labels stay above each cluster.
             visibleGroups.forEachIndexed { groupIndex, group ->
                 item(
                     key = "settings_group_$groupIndex",
@@ -657,8 +654,7 @@ fun SettingsScreen(
                                 .fillMaxWidth()
                                 .padding(
                                     horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                                )
-                                .padding(
+                                ).padding(
                                     top =
                                         if (groupIndex > 0) {
                                             SettingsDimensions.SectionSpacing
@@ -680,37 +676,25 @@ fun SettingsScreen(
                                     ),
                             )
                         }
-                        Card(
-                            shape = RoundedCornerShape(SettingsDimensions.GroupCardCornerRadius),
-                            colors =
-                                CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Column {
-                                group.items.forEachIndexed { index, settingsItem ->
-                                    SettingsEntryRow(
-                                        settingsItem = settingsItem,
-                                        index = index,
-                                        count = group.items.size,
-                                        account = accountChrome,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        flat = true,
-                                    )
-                                    if (index < group.items.lastIndex) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(start = 74.dp),
-                                            thickness = 0.5.dp,
-                                            color =
-                                                MaterialTheme.colorScheme.outlineVariant.copy(
-                                                    alpha = 0.55f,
-                                                ),
-                                        )
-                                    }
-                                }
-                            }
+                        group.items.forEachIndexed { index, settingsItem ->
+                            SettingsEntryRow(
+                                settingsItem = settingsItem,
+                                index = index,
+                                count = group.items.size,
+                                account = accountChrome,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            bottom =
+                                                if (index < group.items.lastIndex) {
+                                                    SettingsDimensions.SegmentedItemGap
+                                                } else {
+                                                    0.dp
+                                                },
+                                        ),
+                                flat = false,
+                            )
                         }
                     }
                 }

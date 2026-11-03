@@ -31,6 +31,7 @@ import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -141,6 +142,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
@@ -162,6 +164,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -173,12 +176,17 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastFirstOrNull
 import androidx.compose.ui.util.fastForEach
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.ui.zIndex
 import androidx.core.content.IntentCompat
 import androidx.core.net.toUri
@@ -200,6 +208,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass
 import coil3.imageLoader
+import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
@@ -213,6 +222,11 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.aod.ACTION_AOD_MODE
 import dev.citali.lunartune.constants.AodModeEnabledKey
+import dev.citali.lunartune.constants.AccountBannerSourceKey
+import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
+import dev.citali.lunartune.constants.AccountChannelHandleKey
+import dev.citali.lunartune.constants.AccountNameKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.AppFontPreference
 import dev.citali.lunartune.constants.AppLanguageKey
@@ -320,6 +334,7 @@ import dev.citali.lunartune.ui.screens.search.OnlineSearchScreen
 import dev.citali.lunartune.ui.screens.search.decodeOnlineSearchQuery
 import dev.citali.lunartune.ui.screens.search.onlineSearchResultRoute
 import dev.citali.lunartune.ui.screens.settings.ApplyForcedRefreshRate
+import dev.citali.lunartune.ui.screens.settings.AccountBanner
 import dev.citali.lunartune.ui.screens.settings.DarkMode
 import dev.citali.lunartune.ui.screens.settings.NavigationTab
 import dev.citali.lunartune.ui.theme.ColorSaver
@@ -1047,6 +1062,8 @@ class MainActivity : FragmentActivity() {
                     val networkBannerViewModel: NetworkBannerViewModel = hiltViewModel()
                     val allLocalItems by homeViewModel.allLocalItems.collectAsState()
                     val allYtItems by homeViewModel.allYtItems.collectAsState()
+                    val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
+                    val accountName by homeViewModel.accountName.collectAsState()
                     val networkBannerState by networkBannerViewModel.bannerState.collectAsStateWithLifecycle()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val onlineSearchEncodedQuery =
@@ -2092,6 +2109,8 @@ class MainActivity : FragmentActivity() {
                                                         expanded = topBarMenuExpanded,
                                                         onExpandedChange = { topBarMenuExpanded = it },
                                                         updateAvailable = updateAvailable,
+                                                        accountImageUrl = accountImageUrl,
+                                                        accountName = accountName,
                                                         onNavigate = { route -> navController.navigate(route) },
                                                     )
                                                 },
@@ -3611,15 +3630,12 @@ private val MenuSheetShadowRoom = 6.dp
 private val MenuSheetShadowSpread = 6.dp
 
 /**
- * Replaces the top-bar action cluster with a single trigger that opens one
- * floating frosted panel. Its actions are grouped into rounded pills the way
- * the system notification shade stacks one card per app: rows in the same
- * group share a pill and are separated by hairlines, while the groups
- * themselves are separated by gaps. The tinted frost, dim and primary rim stay
- * on the sheet behind them. Everything the sheet needs for depth is painted
- * inside its own popup, because a popup clips at its bounds: an elevation
- * shadow there gets cut into a hard dark edge, and a hairline border reads as
- * a second line along the rim.
+ * Replaces the top-bar action cluster with the account avatar. It opens one
+ * floating frosted panel whose actions are grouped into opaque rounded pills -
+ * like the cards in the system notification shade - led by an account pill
+ * wearing the saved account banner. The tinted frost, dim and primary rim stay
+ * on the sheet behind them. The popup is ours rather than the platform menu so
+ * the entrance can follow the expressive motion scheme instead of a bounce.
  */
 @Composable
 private fun FrostedTopBarMenu(
@@ -3627,11 +3643,45 @@ private fun FrostedTopBarMenu(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     updateAvailable: Boolean,
+    accountImageUrl: String?,
+    accountName: String,
     onNavigate: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val sheetShape = RoundedCornerShape(MenuSheetCorner)
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val sheetShadow = MaterialTheme.colorScheme.scrim
+    val motionScheme = MaterialTheme.motionScheme
+    val pillColor = lerp(barColor, MaterialTheme.colorScheme.onSurface, 0.05f)
+
+    val (accountBannerSource) = rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
+    val (accountBannerUpdatedAt) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
+    val (accountYouTubeBannerUrl) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val (accountNamePreference) = rememberPreference(AccountNameKey, "")
+    val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
+    val bannerModel: Any? =
+        remember(accountBannerSource, accountBannerUpdatedAt, accountYouTubeBannerUrl) {
+            when (accountBannerSource) {
+                AccountBanner.SOURCE_CUSTOM ->
+                    AccountBanner.customFile(context).takeIf { it.exists() }?.let { file ->
+                        ImageRequest
+                            .Builder(context)
+                            .data(file)
+                            .memoryCacheKey("menu_account_banner_$accountBannerUpdatedAt")
+                            .diskCacheKey("menu_account_banner_$accountBannerUpdatedAt")
+                            .build()
+                    }
+                AccountBanner.SOURCE_YOUTUBE -> accountYouTubeBannerUrl.takeIf { it.isNotBlank() }
+                else -> null
+            }
+        }
+    val accountTitle =
+        accountName.ifBlank { accountNamePreference }.ifBlank { stringResource(R.string.account) }
+    val accountSubtitle =
+        accountChannelHandle.ifBlank { stringResource(R.string.settings_account_subtitle) }
+
+    val expandedStates = remember { MutableTransitionState(false) }
+    expandedStates.targetState = expanded
 
     Box {
         TranslucentTopAppBarIconButton(onClick = { onExpandedChange(!expanded) }) {
@@ -3640,129 +3690,197 @@ private fun FrostedTopBarMenu(
                     Badge()
                 }
             }) {
-                Icon(
-                    painter = painterResource(R.drawable.grid_view),
-                    contentDescription = stringResource(R.string.more_options),
-                )
+                if (accountImageUrl.isNullOrBlank()) {
+                    Icon(
+                        painter = painterResource(R.drawable.grid_view),
+                        contentDescription = stringResource(R.string.more_options),
+                    )
+                } else {
+                    AsyncImage(
+                        model = accountImageUrl,
+                        contentDescription = stringResource(R.string.more_options),
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape),
+                    )
+                }
             }
         }
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { onExpandedChange(false) },
-            modifier =
-                Modifier
-                    .widthIn(min = MenuSheetContentWidth, max = MenuSheetMaxWidth)
-                    // A popup clips at its own bounds, so a platform elevation
-                    // shadow gets sliced into a hard dark line along the edge.
-                    // The sheet keeps a ring of room for a shadow it paints
-                    // itself, entirely inside the popup, so nothing is cut off.
-                    .padding(MenuSheetShadowRoom)
-                    .drawBehind {
-                        drawFloatingSheetShadow(
-                            cornerRadiusPx = MenuSheetCorner.toPx(),
-                            spreadPx = MenuSheetShadowSpread.toPx(),
-                            shade = sheetShadow,
-                        )
-                    }.clip(sheetShape)
-                    .hazeBlur(
-                        input = HazeInput.Sources(hazeState),
-                        style =
-                            frostedTopMenuStyle(
-                                // Light enough that the blur from the screen behind
-                                // actually reads through the panel: the frost lives in the
-                                // gaps between the pills, and an opaque fill hid all of it.
-                                scrim = barColor.copy(alpha = 0.50f),
-                                fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
+        if (expandedStates.currentState || expandedStates.targetState) {
+            Popup(
+                popupPositionProvider = remember { TopEndMenuPositionProvider() },
+                onDismissRequest = { onExpandedChange(false) },
+                properties = PopupProperties(focusable = true),
+            ) {
+                AnimatedVisibility(
+                    visibleState = expandedStates,
+                    enter =
+                        fadeIn(animationSpec = motionScheme.fastEffectsSpec()) +
+                            scaleIn(
+                                initialScale = 0.85f,
+                                transformOrigin = TransformOrigin(1f, 0f),
+                                animationSpec = motionScheme.defaultSpatialSpec(),
                             ),
-                        performanceMode = HazePerformanceMode.Performance,
-                    )
-                    // A single palette tint over the frost, dimmed just enough for the
-                    // white labels to stay readable on bright artwork behind the sheet.
-                    .background(barColor.copy(alpha = 0.30f))
-                    .background(
-                        Brush.verticalGradient(
-                            0f to MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
-                            1f to MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.12f),
-                        ),
-                    ).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.10f))
-                    // The same primary-tinted hairline the frosted navigation bar uses.
-                    .border(
-                        BorderStroke(
-                            1.dp,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
-                        ),
-                        sheetShape,
-                    ).padding(horizontal = 10.dp, vertical = 9.dp),
-            shape = sheetShape,
-            containerColor = Color.Transparent,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
-            // One rounded pill per logical group, like the notification cards
-            // in the system shade. Hairlines separate the rows inside a group;
-            // gaps separate the groups themselves.
-            FrostedTopBarMenuGroup {
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.history,
-                    label = stringResource(R.string.history),
+                    exit =
+                        fadeOut(animationSpec = motionScheme.fastEffectsSpec()) +
+                            scaleOut(
+                                targetScale = 0.85f,
+                                transformOrigin = TransformOrigin(1f, 0f),
+                                animationSpec = motionScheme.fastSpatialSpec(),
+                            ),
+                    label = "topBarMenuVisibility",
                 ) {
-                    onExpandedChange(false)
-                    onNavigate("history")
-                }
-                FrostedTopBarMenuDivider()
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.stats,
-                    label = stringResource(R.string.stats),
-                ) {
-                    onExpandedChange(false)
-                    onNavigate("stats")
-                }
-                FrostedTopBarMenuDivider()
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.trending_up,
-                    label = stringResource(R.string.charts),
-                ) {
-                    onExpandedChange(false)
-                    onNavigate("charts_screen")
-                }
-                FrostedTopBarMenuDivider()
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.new_release,
-                    label = stringResource(R.string.new_release_albums_short),
-                ) {
-                    onExpandedChange(false)
-                    onNavigate("new_release")
-                }
-            }
-            Spacer(Modifier.height(MenuGroupGap))
-            FrostedTopBarMenuGroup {
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.multi_user,
-                    label = stringResource(R.string.music_together_short),
-                ) {
-                    onExpandedChange(false)
-                    onNavigate("settings/music_together")
-                }
-            }
-            Spacer(Modifier.height(MenuGroupGap))
-            FrostedTopBarMenuGroup {
-                val settingsTrailing: (@Composable () -> Unit)? =
-                    if (updateAvailable) {
-                        @Composable { Badge() }
-                    } else {
-                        null
+                    Box(
+                        modifier =
+                            Modifier
+                                .widthIn(min = MenuSheetContentWidth, max = MenuSheetMaxWidth)
+                                // A popup clips at its own bounds, so a platform elevation
+                                // shadow gets sliced into a hard dark line along the edge.
+                                // The sheet keeps a ring of room for a shadow it paints
+                                // itself, entirely inside the popup, so nothing is cut off.
+                                .padding(MenuSheetShadowRoom)
+                                .drawBehind {
+                                    drawFloatingSheetShadow(
+                                        cornerRadiusPx = MenuSheetCorner.toPx(),
+                                        spreadPx = MenuSheetShadowSpread.toPx(),
+                                        shade = sheetShadow,
+                                    )
+                                }.clip(sheetShape)
+                                .hazeBlur(
+                                    input = HazeInput.Sources(hazeState),
+                                    style =
+                                        frostedTopMenuStyle(
+                                            // Light enough that the blur from the screen behind
+                                            // actually reads through the panel: the frost lives in the
+                                            // gaps between the pills, and an opaque fill hid all of it.
+                                            scrim = barColor.copy(alpha = 0.50f),
+                                            fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
+                                        ),
+                                    performanceMode = HazePerformanceMode.Performance,
+                                )
+                                // A single palette tint over the frost, dimmed just enough for the
+                                // white labels to stay readable on bright artwork behind the sheet.
+                                .background(barColor.copy(alpha = 0.30f))
+                                .background(
+                                    Brush.verticalGradient(
+                                        0f to MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.20f),
+                                        1f to MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.12f),
+                                    ),
+                                ).background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.10f))
+                                // The same primary-tinted hairline the frosted navigation bar uses.
+                                .border(
+                                    BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
+                                    ),
+                                    sheetShape,
+                                ).padding(horizontal = 10.dp, vertical = 9.dp),
+                    ) {
+                        Column {
+                            FrostedTopBarMenuAccount(
+                                bannerModel = bannerModel,
+                                avatarModel = accountImageUrl,
+                                title = accountTitle,
+                                subtitle = accountSubtitle,
+                                pillColor = pillColor,
+                            ) {
+                                onExpandedChange(false)
+                                onNavigate("settings/account")
+                            }
+
+                            Spacer(Modifier.height(MenuGroupGap))
+
+                            FrostedTopBarMenuGroup(pillColor = pillColor) {
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.history,
+                                    label = stringResource(R.string.history),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("history")
+                                }
+                                FrostedTopBarMenuDivider()
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.stats,
+                                    label = stringResource(R.string.stats),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("stats")
+                                }
+                                FrostedTopBarMenuDivider()
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.trending_up,
+                                    label = stringResource(R.string.charts),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("charts_screen")
+                                }
+                                FrostedTopBarMenuDivider()
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.new_release,
+                                    label = stringResource(R.string.new_release_albums_short),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("new_release")
+                                }
+                            }
+                            Spacer(Modifier.height(MenuGroupGap))
+                            FrostedTopBarMenuGroup(pillColor = pillColor) {
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.multi_user,
+                                    label = stringResource(R.string.music_together_short),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("settings/music_together")
+                                }
+                            }
+                            Spacer(Modifier.height(MenuGroupGap))
+                            FrostedTopBarMenuGroup(pillColor = pillColor) {
+                                val settingsTrailing: (@Composable () -> Unit)? =
+                                    if (updateAvailable) {
+                                        @Composable { Badge() }
+                                    } else {
+                                        null
+                                    }
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.settings,
+                                    label = stringResource(R.string.settings),
+                                    trailing = settingsTrailing,
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("settings")
+                                }
+                            }
+                        }
                     }
-                FrostedTopBarMenuRow(
-                    iconRes = R.drawable.settings,
-                    label = stringResource(R.string.settings),
-                    trailing = settingsTrailing,
-                ) {
-                    onExpandedChange(false)
-                    onNavigate("settings")
                 }
             }
         }
+    }
+}
+
+/** Anchors the sheet under the trigger, with its right edge on the trigger's right. */
+private class TopEndMenuPositionProvider : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): IntOffset {
+        val x =
+            if (layoutDirection == LayoutDirection.Ltr) {
+                anchorBounds.right - popupContentSize.width
+            } else {
+                anchorBounds.left
+            }
+        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        val maxY = (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+        return IntOffset(
+            x.coerceIn(0, maxX),
+            anchorBounds.bottom.coerceIn(0, maxY),
+        )
     }
 }
 
@@ -3790,12 +3908,13 @@ private fun DrawScope.drawFloatingSheetShadow(
 }
 
 /**
- * One pill holding a logical group of actions. The fill is a translucent lift
- * so the tinted frost still reads through it; the parent sheet keeps the rim,
- * the pill only needs a quiet hairline of its own.
+ * One pill holding a logical group of actions, back on the opaque bar fill the
+ * menu used before: solid enough to sit clear of the frosted sheet, with the
+ * rows sharing this one surface and hairlines between them.
  */
 @Composable
 private fun FrostedTopBarMenuGroup(
+    pillColor: Color,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val groupShape = RoundedCornerShape(MenuGroupCorner)
@@ -3804,20 +3923,92 @@ private fun FrostedTopBarMenuGroup(
             Modifier
                 .fillMaxWidth()
                 .clip(groupShape)
-                .background(
-                    Brush.verticalGradient(
-                        0f to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
-                        1f to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-                    ),
-                ).border(
-                    BorderStroke(
-                        0.5.dp,
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
-                    ),
-                    groupShape,
-                ).padding(vertical = 3.dp),
+                .background(pillColor)
+                .padding(vertical = 3.dp),
         content = content,
     )
+}
+
+/**
+ * First pill: the saved account banner behind the profile picture and the
+ * account name. Falls back to the opaque bar fill when no banner is saved.
+ */
+@Composable
+private fun FrostedTopBarMenuAccount(
+    bannerModel: Any?,
+    avatarModel: Any?,
+    title: String,
+    subtitle: String,
+    pillColor: Color,
+    onClick: () -> Unit,
+) {
+    val groupShape = RoundedCornerShape(MenuGroupCorner)
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(groupShape)
+                .background(pillColor)
+                .clickable(onClick = onClick),
+    ) {
+        if (bannerModel != null) {
+            AsyncImage(
+                model = bannerModel,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+            Box(
+                modifier =
+                    Modifier
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.45f)),
+            )
+        }
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 13.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (avatarModel != null) {
+                AsyncImage(
+                    model = avatarModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .size(38.dp)
+                            .clip(CircleShape),
+                )
+            } else {
+                Icon(
+                    painter = painterResource(R.drawable.account),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
 
 /** One row of [FrostedTopBarMenu], drawn onto its group's pill. */
