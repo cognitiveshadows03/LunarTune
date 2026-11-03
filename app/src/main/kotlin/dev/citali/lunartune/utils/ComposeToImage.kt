@@ -734,10 +734,11 @@ object ComposeToImage {
 
     /**
      * A portrait player card in the story format: the artwork fills the whole
-     * 9:16 canvas, lightly blurred and dimmed, and a compact centred card sits
-     * on top of it with the square cover, the song, the playback position and
-     * the app mark. One fixed portrait layout - no landscape variant, no
-     * caller-supplied size.
+     * 9:16 canvas, lightly blurred and dimmed, and a translucent centred card
+     * sits on top of it with the square cover, the song and the app mark. No
+     * progress indicator or drop shadow. One fixed portrait layout - no
+     * landscape variant, no caller-supplied size. The position/duration
+     * arguments stay in the signature for existing callers but are not drawn.
      */
     @RequiresApi(Build.VERSION_CODES.M)
     suspend fun createPlayerCardImage(
@@ -754,7 +755,6 @@ object ComposeToImage {
             val bitmap = createBitmap(w, h)
             val canvas = Canvas(bitmap)
             val bg = 0xFF14100F.toInt()
-            val accent = 0xFFC9B6FF.toInt()
             val white = android.graphics.Color.WHITE
             val secondary = android.graphics.Color.argb(190, 255, 255, 255)
 
@@ -816,35 +816,36 @@ object ComposeToImage {
                 }
             canvas.drawRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), scrim)
 
-            // Compact centred card. Everything below is measured first, so the
-            // card is exactly as tall as its content: no text hanging over the
-            // bottom edge and no controls falling off the canvas.
-            val cardWidth = w * 0.66f
+            // Centred glass card, a little wider and noticeably taller so the
+            // proportions read like the reference song card. The full-bleed
+            // blurred artwork above is deliberately untouched.
+            val cardWidth = w * 0.72f
+            val cardHeight = h * 0.64f
             val cardLeft = (w - cardWidth) / 2f
             val cardRight = cardLeft + cardWidth
+            val cardTop = (h - cardHeight) / 2f
+            val cardBottom = cardTop + cardHeight
             val inset = cardWidth * 0.055f
+            val artLeft = cardLeft + inset
             val artSize = cardWidth - inset * 2f
-            val gap = cardWidth * 0.045f
+            val artTop = cardTop + inset
+            val gap = cardWidth * 0.05f
             val textWidth = artSize.toInt()
+            val corner = cardWidth * 0.055f
+            val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
 
             val titlePaint =
                 TextPaint().apply {
                     color = white
-                    textSize = cardWidth * 0.058f
+                    textSize = cardWidth * 0.060f
                     typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                     isAntiAlias = true
                 }
             val artistPaint =
                 TextPaint().apply {
                     color = secondary
-                    textSize = cardWidth * 0.036f
+                    textSize = cardWidth * 0.038f
                     typeface = Typeface.create("sans-serif", Typeface.NORMAL)
-                    isAntiAlias = true
-                }
-            val timePaint =
-                TextPaint().apply {
-                    color = secondary
-                    textSize = cardWidth * 0.030f
                     isAntiAlias = true
                 }
 
@@ -862,34 +863,16 @@ object ComposeToImage {
 
             val titleLayout = measure(songTitle, titlePaint, 2)
             val artistLayout = measure(artistName, artistPaint, 1)
-            val trackH = cardWidth * 0.012f
-            val timesGap = cardWidth * 0.025f
-            val brandH = minOf(w, h).toFloat() * 0.055f
-            val cardHeight =
-                inset * 2f + artSize + gap + titleLayout.height.toFloat() + gap * 0.35f +
-                    artistLayout.height.toFloat() + gap * 0.9f + trackH + timesGap +
-                    timePaint.textSize + gap * 0.9f + brandH
-            val cardTop = (h - cardHeight) / 2f
-            val cardBottom = cardTop + cardHeight
-            val corner = cardWidth * 0.055f
-            val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
 
-            // Soft drop shadow, then the card surface and its hairline edge.
-            canvas.drawRoundRect(
-                RectF(cardLeft, cardTop + 12f, cardRight, cardBottom + 12f),
-                corner,
-                corner,
-                Paint().apply {
-                    color = android.graphics.Color.argb(110, 0, 0, 0)
-                    isAntiAlias = true
-                },
-            )
+            // Translucent glass instead of an opaque slab: no drop shadow, just
+            // a quiet hairline rim. The blurred cover now shows through the
+            // empty lower part of the card.
             canvas.drawRoundRect(
                 cardRect,
                 corner,
                 corner,
                 Paint().apply {
-                    color = android.graphics.Color.argb(232, 24, 20, 22)
+                    color = android.graphics.Color.argb(44, 240, 240, 248)
                     isAntiAlias = true
                 },
             )
@@ -900,13 +883,11 @@ object ComposeToImage {
                 Paint().apply {
                     style = Paint.Style.STROKE
                     strokeWidth = 2f
-                    color = android.graphics.Color.argb(34, 255, 255, 255)
+                    color = android.graphics.Color.argb(78, 255, 255, 255)
                     isAntiAlias = true
                 },
             )
 
-            val artLeft = cardLeft + inset
-            val artTop = cardTop + inset
             val artRect = RectF(artLeft, artTop, artLeft + artSize, artTop + artSize)
             val artRadius = cardWidth * 0.035f
             val artPath =
@@ -954,46 +935,12 @@ object ComposeToImage {
 
             var y = artRect.bottom + gap
             canvas.withTranslation(artLeft, y) { titleLayout.draw(this) }
-            y += titleLayout.height.toFloat() + gap * 0.35f
+            y += titleLayout.height.toFloat() + gap * 0.4f
             canvas.withTranslation(artLeft, y) { artistLayout.draw(this) }
-            y += artistLayout.height.toFloat() + gap * 0.9f
 
-            canvas.drawRoundRect(
-                RectF(artLeft, y, artLeft + artSize, y + trackH),
-                trackH / 2f,
-                trackH / 2f,
-                Paint().apply {
-                    color = android.graphics.Color.argb(60, 255, 255, 255)
-                    isAntiAlias = true
-                },
-            )
-            val fraction =
-                if (durationMs > 0L) {
-                    (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-            canvas.drawRoundRect(
-                RectF(artLeft, y, artLeft + artSize * fraction, y + trackH),
-                trackH / 2f,
-                trackH / 2f,
-                Paint().apply {
-                    color = accent
-                    isAntiAlias = true
-                },
-            )
-            y += trackH + timesGap
-            val elapsed = formatCardTime(positionMs)
-            val total = formatCardTime(durationMs)
-            canvas.drawText(elapsed, artLeft, y + timePaint.textSize, timePaint)
-            canvas.drawText(
-                total,
-                artLeft + artSize - timePaint.measureText(total),
-                y + timePaint.textSize,
-                timePaint,
-            )
-
-            // The app mark sits inside the card, like the logo on a song card.
+            // No progress bar or elapsed/duration labels: the words sit just
+            // under the cover and the app mark stays pinned to the bottom,
+            // leaving the translucent space between them.
             AppLogo(
                 context = context,
                 canvas = canvas,
@@ -1006,12 +953,6 @@ object ComposeToImage {
 
             bitmap
         }
-
-    private fun formatCardTime(millis: Long): String {
-        if (millis <= 0L) return "0:00"
-        val totalSeconds = millis / 1000
-        return "${totalSeconds / 60}:${(totalSeconds % 60).toString().padStart(2, '0')}"
-    }
 
     fun saveBitmapAsFile(
         context: Context,

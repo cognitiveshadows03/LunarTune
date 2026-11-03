@@ -347,9 +347,10 @@ fun ShareCardDialog(
 
 /**
  * One-tap export of the player card. A fixed 9:16 story: blurred artwork
- * backdrop, a compact centred card with the hardcoded immersive player - the
- * same look the card dialog uses, but without any options to pick first. The
- * bitmap is built and handed straight to the share sheet.
+ * backdrop and a translucent centred card with the hardcoded immersive player -
+ * the same look the card dialog uses, but without any options to pick first.
+ * The bitmap is saved to the shared Pictures/LunarTune folder (where the lyrics
+ * card is saved too) and that saved image is handed to the share sheet.
  */
 fun sharePlayerCard(
     context: Context,
@@ -372,9 +373,20 @@ fun sharePlayerCard(
                     durationMs = duration,
                 )
             }.getOrNull()
+        // Save the generated card straight into Pictures/LunarTune - the same
+        // place the lyrics card goes - and share that saved image. No second
+        // tap on a Save button, and no copy left only in the app's cache.
         val uri =
             bitmap?.let {
-                withContext(Dispatchers.IO) { writeShareCardToCache(context, it) }
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        ComposeToImage.saveBitmapAsFile(
+                            context = context,
+                            bitmap = it,
+                            fileName = shareCardFileName(),
+                        )
+                    }.getOrNull() ?: writeShareCardToCache(context, it)
+                }
             }
         if (uri == null) {
             Toast.makeText(context, R.string.error_unknown, Toast.LENGTH_SHORT).show()
