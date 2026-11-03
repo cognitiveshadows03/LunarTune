@@ -412,11 +412,16 @@ fun Queue(
     val openQueue =
         remember(playerBottomSheetState, state) {
             {
-                scrollToCurrentRequested = true
-                if (!playerBottomSheetState.isExpandedOrExpanding) {
-                    playerBottomSheetState.expandSoft()
+                // A closing swipe leaves the collapsed row under the finger and
+                // Compose replays that pointer to the row that just appeared.
+                // Ignore those taps so the queue stays dismissed.
+                if (!state.isInGestureCooldown) {
+                    scrollToCurrentRequested = true
+                    if (!playerBottomSheetState.isExpandedOrExpanding) {
+                        playerBottomSheetState.expandSoft()
+                    }
+                    state.expandSoft()
                 }
-                state.expandSoft()
             }
         }
 
@@ -433,7 +438,11 @@ fun Queue(
         // A tap on the row opens the queue on the same motion as the swipe does: on a
         // tap there is no gesture behind the sheet, and a plain settle from there is
         // what left the tap doing nothing.
-        collapsedClick = { state.openByGesture() },
+        collapsedClick = {
+            if (!state.isInGestureCooldown) {
+                state.openByGesture()
+            }
+        },
         collapsedContent = {
             when (playerDesignStyle) {
                 PlayerDesignStyle.V2 -> {

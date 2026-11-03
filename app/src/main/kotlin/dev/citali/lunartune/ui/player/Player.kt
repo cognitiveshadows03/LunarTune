@@ -1098,15 +1098,19 @@ fun BottomSheetPlayer(
     val openQueue =
         remember(state, queueSheetState) {
             {
-                isLyricsScreenVisible = false
-                if (!state.isExpandedOrExpanding) {
-                    state.expandSoft()
+                // Ignore the tap that the closing swipe replays to the row which
+                // just entered the composition, or the queue pops straight back.
+                if (!queueSheetState.isInGestureCooldown) {
+                    isLyricsScreenVisible = false
+                    if (!state.isExpandedOrExpanding) {
+                        state.expandSoft()
+                    }
+                    // Opened the way the swipe opens it, not by a plain settle: the
+                    // tap arrives with no gesture behind it, and asking for the
+                    // anchor from there is what used to do nothing on the styles
+                    // whose row is only reachable by touch.
+                    queueSheetState.openByGesture()
                 }
-                // Opened the way the swipe opens it, not by a plain settle: the tap
-                // arrives with no gesture behind it, and asking for the anchor from
-                // there is what used to do nothing on the styles whose row is only
-                // reachable by touch.
-                queueSheetState.openByGesture()
             }
         }
 

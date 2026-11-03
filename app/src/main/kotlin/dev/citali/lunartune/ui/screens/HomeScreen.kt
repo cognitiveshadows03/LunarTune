@@ -7,7 +7,6 @@
 
 package dev.citali.lunartune.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.LinearEasing
@@ -139,7 +138,6 @@ fun HomeScreen(
 
     val successState = screenState as? HomeScreenState.Success
     val uiState = successState?.uiState
-    val selectedChip = uiState?.selectedChip
 
     LaunchedEffect(uiState?.homePage?.continuation) {
         val continuation = uiState?.homePage?.continuation ?: return@LaunchedEffect
@@ -157,26 +155,6 @@ fun HomeScreen(
     LaunchedEffect(uiState?.forgottenFavorites) {
         if (uiState != null) {
             forgottenFavoritesGridState.scrollToItem(0)
-        }
-    }
-
-    // A category is its own feed, so start it from the top instead of leaving the
-    // scroll position of the personalised home.
-    LaunchedEffect(selectedChip) {
-        if (selectedChip != null) {
-            lazyListState.scrollToItem(0)
-        }
-    }
-
-    if (selectedChip != null && isActiveTab) {
-        BackHandler {
-            viewModel.onAction(HomeAction.SelectChip(selectedChip))
-        }
-    }
-
-    LaunchedEffect(uiState?.showCategoryChips, selectedChip) {
-        if (uiState?.showCategoryChips == false && selectedChip != null) {
-            viewModel.onAction(HomeAction.SelectChip(selectedChip))
         }
     }
 
@@ -405,284 +383,226 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    if (uiState.showCategoryChips) {
+                    if (remoteQuickPicks?.items?.isNotEmpty() == true) {
                         item(
-                            key = "home_category_chips",
-                            contentType = "category_chips",
+                            key = "home_remote_quick_picks_header",
+                            contentType = "section_header",
                         ) {
-                            HomeCategoryChips(
-                                chips = uiState.homePage?.chips.orEmpty(),
-                                selectedChip = uiState.selectedChip,
-                                onChipSelected = { onAction(HomeAction.SelectChip(it)) },
+                            HomeSectionHeader(
+                                title = stringResource(R.string.quick_picks),
+                                dimAlpha = headerDimAlpha,
+                            )
+                        }
+                        item(
+                            key = "home_remote_quick_picks",
+                            contentType = "quick_picks",
+                        ) {
+                            RemoteQuickPicksSection(
+                                section = remoteQuickPicks,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                displayMode = uiState.quickPicksDisplayMode,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                            )
+                        }
+                    } else if (
+                        uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
+                            uiState.quickPicks.isNotEmpty()
+                    ) {
+                        item(
+                            key = "home_quick_picks_header",
+                            contentType = "section_header",
+                        ) {
+                            HomeSectionHeader(
+                                title = stringResource(R.string.quick_picks),
+                                dimAlpha = headerDimAlpha,
+                            )
+                        }
+                        item(
+                            key = "home_quick_picks",
+                            contentType = "quick_picks",
+                        ) {
+                            QuickPicksSection(
+                                quickPicks = uiState.quickPicks,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                displayMode = uiState.quickPicksDisplayMode,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
                             )
                         }
                     }
 
-                    val chipSelected = uiState.selectedChip != null
-                    if (chipSelected) {
-                        // A category replaces the personalised feed: only its own
-                        // shelves are shown, right under the chip row.
-                        if (uiState.isChipLoading) {
-                            item(
-                                key = "home_chip_loading",
-                                contentType = "loading",
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 64.dp),
-                                ) {
-                                    LoadingIndicator()
-                                }
-                            }
-                        } else {
-                            val chipSections = uiState.homePage?.sections.orEmpty()
-                            if (chipSections.isEmpty()) {
-                                item(
-                                    key = "home_chip_empty",
-                                    contentType = "chip_empty",
-                                ) {
-                                    HomeChipEmptyState(
-                                        onRetry = { onAction(HomeAction.RetryChip) },
-                                    )
-                                }
-                            } else {
-                                homePageSections(
-                                    sections = chipSections,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                    scope = scope,
-                                )
-                            }
-                        }
-                    } else {
-                        if (remoteQuickPicks?.items?.isNotEmpty() == true) {
-                            item(
-                                key = "home_remote_quick_picks_header",
-                                contentType = "section_header",
-                            ) {
-                                HomeSectionHeader(
-                                    title = stringResource(R.string.quick_picks),
-                                    dimAlpha = headerDimAlpha,
-                                )
-                            }
-                            item(
-                                key = "home_remote_quick_picks",
-                                contentType = "quick_picks",
-                            ) {
-                                RemoteQuickPicksSection(
-                                    section = remoteQuickPicks,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    displayMode = uiState.quickPicksDisplayMode,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
-                            }
-                        } else if (
-                            uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
-                                uiState.quickPicks.isNotEmpty()
-                        ) {
-                            item(
-                                key = "home_quick_picks_header",
-                                contentType = "section_header",
-                            ) {
-                                HomeSectionHeader(
-                                    title = stringResource(R.string.quick_picks),
-                                    dimAlpha = headerDimAlpha,
-                                )
-                            }
-                            item(
-                                key = "home_quick_picks",
-                                contentType = "quick_picks",
-                            ) {
-                                QuickPicksSection(
-                                    quickPicks = uiState.quickPicks,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    displayMode = uiState.quickPicksDisplayMode,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
-                            }
-                        }
-
-                        if (uiState.speedDialItems.isNotEmpty()) {
-                            sectionSpacer("speed_dial")
-                            item(
-                                key = "home_speed_dial_header",
-                                contentType = "section_header",
-                            ) {
-                                HomeSectionHeader(
-                                    title = stringResource(R.string.speed_dial),
-                                )
-                            }
-                            item(
-                                key = "home_speed_dial",
-                                contentType = "speed_dial",
-                            ) {
-                                SpeedDialSection(
-                                    speedDialItems = uiState.speedDialItems,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                    scope = scope,
-                                )
-                            }
-                        }
-
-                        if (uiState.keepListening.isNotEmpty()) {
-                            sectionSpacer("keep_listening")
-                            item(
-                                key = "home_keep_listening_header",
-                                contentType = "section_header",
-                            ) {
-                                HomeSectionHeader(
-                                    title = stringResource(R.string.keep_listening),
-                                )
-                            }
-                            item(
-                                key = "home_keep_listening",
-                                contentType = "media_shelf",
-                            ) {
-                                KeepListeningSection(
-                                    keepListening = uiState.keepListening,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                    scope = scope,
-                                )
-                            }
-                        }
-
-                        if (uiState.accountPlaylists.isNotEmpty()) {
-                            sectionSpacer("account_playlists")
-                            item(
-                                key = "home_account_playlists",
-                                contentType = "media_shelf",
-                            ) {
-                                Column {
-                                    AccountPlaylistsTitle(
-                                        accountName = uiState.accountName,
-                                        accountImageUrl = uiState.accountImageUrl,
-                                        onClick = { navController.navigate("account") },
-                                    )
-                                    AccountPlaylistsSection(
-                                        accountPlaylists = uiState.accountPlaylists,
-                                        mediaMetadata = mediaMetadata,
-                                        isPlaying = isPlaying,
-                                        navController = navController,
-                                        playerConnection = playerConnection,
-                                        menuState = menuState,
-                                        haptic = haptic,
-                                        scope = scope,
-                                    )
-                                }
-                            }
-                        }
-
-                        if (uiState.forgottenFavorites.isNotEmpty()) {
-                            sectionSpacer("forgotten_favorites")
-                            item(
-                                key = "home_forgotten_favorites_header",
-                                contentType = "section_header",
-                            ) {
-                                HomeSectionHeader(
-                                    title = stringResource(R.string.forgotten_favorites),
-                                )
-                            }
-                            item(
-                                key = "home_forgotten_favorites",
-                                contentType = "song_shelf",
-                            ) {
-                                ForgottenFavoritesSection(
-                                    forgottenFavorites = uiState.forgottenFavorites,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    horizontalLazyGridItemWidth = forgottenItemWidth,
-                                    lazyGridState = forgottenFavoritesGridState,
-                                    snapLayoutInfoProvider = forgottenSnapLayoutInfoProvider,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
-                            }
-                        }
-
-                        uiState.similarRecommendations.forEach { recommendation ->
-                            sectionSpacer("similar_${recommendation.title.id}")
-                            item(
-                                key = "home_similar_header_${recommendation.title.id}",
-                                contentType = "section_header",
-                            ) {
-                                SimilarRecommendationsTitle(
-                                    recommendation = recommendation,
-                                    navController = navController,
-                                )
-                            }
-                            item(
-                                key = "home_similar_${recommendation.title.id}",
-                                contentType = "media_shelf",
-                            ) {
-                                SimilarRecommendationsSection(
-                                    recommendation = recommendation,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                    scope = scope,
-                                )
-                            }
-                        }
-
-                        homePageSections(
-                            sections = uiState.homePage?.sections.orEmpty(),
-                            mediaMetadata = mediaMetadata,
-                            isPlaying = isPlaying,
-                            navController = navController,
-                            playerConnection = playerConnection,
-                            menuState = menuState,
-                            haptic = haptic,
-                            scope = scope,
-                        )
-
-                    }
-                    if (uiState.isLoadingMore) {
+                    if (uiState.speedDialItems.isNotEmpty()) {
+                        sectionSpacer("speed_dial")
                         item(
-                            key = "home_loading_more",
-                            contentType = "loading",
+                            key = "home_speed_dial_header",
+                            contentType = "section_header",
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(32.dp),
+                            HomeSectionHeader(
+                                title = stringResource(R.string.speed_dial),
+                            )
+                        }
+                        item(
+                            key = "home_speed_dial",
+                            contentType = "speed_dial",
+                        ) {
+                            SpeedDialSection(
+                                speedDialItems = uiState.speedDialItems,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                                scope = scope,
+                            )
+                        }
+                    }
 
-                            ) {
-                                LoadingIndicator()
+                    if (uiState.keepListening.isNotEmpty()) {
+                        sectionSpacer("keep_listening")
+                        item(
+                            key = "home_keep_listening_header",
+                            contentType = "section_header",
+                        ) {
+                            HomeSectionHeader(
+                                title = stringResource(R.string.keep_listening),
+                            )
+                        }
+                        item(
+                            key = "home_keep_listening",
+                            contentType = "media_shelf",
+                        ) {
+                            KeepListeningSection(
+                                keepListening = uiState.keepListening,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                                scope = scope,
+                            )
+                        }
+                    }
+
+                    if (uiState.accountPlaylists.isNotEmpty()) {
+                        sectionSpacer("account_playlists")
+                        item(
+                            key = "home_account_playlists",
+                            contentType = "media_shelf",
+                        ) {
+                            Column {
+                                AccountPlaylistsTitle(
+                                    accountName = uiState.accountName,
+                                    accountImageUrl = uiState.accountImageUrl,
+                                    onClick = { navController.navigate("account") },
+                                )
+                                AccountPlaylistsSection(
+                                    accountPlaylists = uiState.accountPlaylists,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                    scope = scope,
+                                )
                             }
                         }
                     }
+
+                    if (uiState.forgottenFavorites.isNotEmpty()) {
+                        sectionSpacer("forgotten_favorites")
+                        item(
+                            key = "home_forgotten_favorites_header",
+                            contentType = "section_header",
+                        ) {
+                            HomeSectionHeader(
+                                title = stringResource(R.string.forgotten_favorites),
+                            )
+                        }
+                        item(
+                            key = "home_forgotten_favorites",
+                            contentType = "song_shelf",
+                        ) {
+                            ForgottenFavoritesSection(
+                                forgottenFavorites = uiState.forgottenFavorites,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                horizontalLazyGridItemWidth = forgottenItemWidth,
+                                lazyGridState = forgottenFavoritesGridState,
+                                snapLayoutInfoProvider = forgottenSnapLayoutInfoProvider,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                            )
+                        }
+                    }
+
+                    uiState.similarRecommendations.forEach { recommendation ->
+                        sectionSpacer("similar_${recommendation.title.id}")
+                        item(
+                            key = "home_similar_header_${recommendation.title.id}",
+                            contentType = "section_header",
+                        ) {
+                            SimilarRecommendationsTitle(
+                                recommendation = recommendation,
+                                navController = navController,
+                            )
+                        }
+                        item(
+                            key = "home_similar_${recommendation.title.id}",
+                            contentType = "media_shelf",
+                        ) {
+                            SimilarRecommendationsSection(
+                                recommendation = recommendation,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                                scope = scope,
+                            )
+                        }
+                    }
+
+                    homePageSections(
+                        sections = uiState.homePage?.sections.orEmpty(),
+                        mediaMetadata = mediaMetadata,
+                        isPlaying = isPlaying,
+                        navController = navController,
+                        playerConnection = playerConnection,
+                        menuState = menuState,
+                        haptic = haptic,
+                        scope = scope,
+                    )
+
+                if (uiState.isLoadingMore) {
+                    item(
+                        key = "home_loading_more",
+                        contentType = "loading",
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+
+                        ) {
+                            LoadingIndicator()
+                        }
+                    }
+                }
                 }
             }
         }

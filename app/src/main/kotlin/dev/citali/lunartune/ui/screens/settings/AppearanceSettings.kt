@@ -115,7 +115,6 @@ import dev.citali.lunartune.constants.PureBlackKey
 import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.QuickPicksDisplayModeKey
 import dev.citali.lunartune.constants.RandomThemeOnStartupKey
-import dev.citali.lunartune.constants.ShowHomeCategoryChipsKey
 import dev.citali.lunartune.constants.HeaderImageDimKey
 import dev.citali.lunartune.constants.HomeHeaderImageUriKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
@@ -309,11 +308,6 @@ fun AppearanceSettings(navController: NavController) {
         rememberPreference(ShowLibraryCardMyTopKey, defaultValue = true)
     val (showLibraryCardWatermarks, onShowLibraryCardWatermarksChange) =
         rememberPreference(ShowLibraryCardWatermarksKey, defaultValue = true)
-    val (showHomeCategoryChips, onShowHomeCategoryChipsChange) =
-        rememberPreference(
-            ShowHomeCategoryChipsKey,
-            defaultValue = true,
-        )
     val (libraryChipOrderPreference, onLibraryChipOrderChange) =
         rememberPreference(
             LibraryChipOrderKey,
@@ -1267,16 +1261,6 @@ fun AppearanceSettings(navController: NavController) {
                         description = stringResource(R.string.manage_playlist_tags_desc),
                         icon = { Icon(painterResource(R.drawable.style), null) },
                         onClick = { showTagsManagementDialog = true },
-                    )
-                }
-
-                item {
-                    SwitchPreference(
-                        title = { Text(stringResource(R.string.show_home_category_chips)) },
-                        description = stringResource(R.string.show_home_category_chips_desc),
-                        icon = { Icon(painterResource(R.drawable.home_outlined), null) },
-                        checked = showHomeCategoryChips,
-                        onCheckedChange = onShowHomeCategoryChipsChange,
                     )
                 }
 

@@ -60,7 +60,6 @@ import dev.citali.lunartune.constants.ProxyEnabledKey
 import dev.citali.lunartune.constants.PureBlackKey
 import dev.citali.lunartune.constants.RandomThemeOnStartupKey
 import dev.citali.lunartune.constants.SeekExtraSeconds
-import dev.citali.lunartune.constants.ShowHomeCategoryChipsKey
 import dev.citali.lunartune.constants.ShowLyricsKey
 import dev.citali.lunartune.constants.ShowLyricsPlayerControlsKey
 import dev.citali.lunartune.constants.ShowPlayerVolumeBarKey
@@ -171,7 +170,6 @@ fun buildSettingsGroups(
                 SettingsChild("Default open tab", "default_open_tab", listOf("default tab", "home tab", "start page", "open tab")),
                 SettingsChild("Grid layout", "grid_layout", listOf("grid", "layout", "list view", "artist grid")),
                 SettingsChild("Page banners", "screen_header_images", listOf("home banner", "settings banner", "page banner", "custom image", "crdroid", "derpfest")),
-                SettingsChild("Show home category chips", "show_home_category_chips", listOf("home chips", "category chips", "home category", "chips")) { SearchResultSwitch(ShowHomeCategoryChipsKey, false) },
                 SettingsChild("Language", "app_language", listOf("language", "app language", "locale")),
             ),
         )

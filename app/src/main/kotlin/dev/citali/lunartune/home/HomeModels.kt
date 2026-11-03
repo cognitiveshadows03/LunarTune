@@ -44,26 +44,17 @@ data class HomeUiState(
     val accountPlaylists: ImmutableList<PlaylistItem>,
     val homePage: HomePage?,
     val remoteQuickPicks: HomePage.Section?,
-    val selectedChip: HomePage.Chip?,
     val accountName: String,
     val accountImageUrl: String?,
     val quickPicksMode: QuickPicks,
     val quickPicksDisplayMode: QuickPicksDisplayMode,
-    val showCategoryChips: Boolean,
     val showTonalBackdrop: Boolean,
     val isRefreshing: Boolean,
     val isLoadingMore: Boolean,
-    val isChipLoading: Boolean,
 )
 
 sealed interface HomeAction {
     data object Refresh : HomeAction
-
-    data class SelectChip(
-        val chip: HomePage.Chip?,
-    ) : HomeAction
-
-    data object RetryChip : HomeAction
 
     data class LoadMore(
         val continuation: String?,

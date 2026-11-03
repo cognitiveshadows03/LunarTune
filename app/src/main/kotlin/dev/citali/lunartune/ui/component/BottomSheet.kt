@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.ui.component
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationSpec
@@ -195,7 +196,11 @@ fun BottomSheet(
                                 Modifier.clickable(
                                     interactionSource = remember { MutableInteractionSource() },
                                     indication = null,
-                                    onClick = collapsedClick ?: state::expandSoft,
+                                    onClick = {
+                                        if (!state.isInGestureCooldown) {
+                                            (collapsedClick ?: state::expandSoft).invoke()
+                                        }
+                                    },
                                 )
                             } else {
                                 Modifier
@@ -499,8 +504,32 @@ class BottomSheetState(
 
     /** The sheet left composition, so no gesture can still own its value. */
     fun onGestureScopeLeft() {
+        // Only a real drag that got cancelled needs a cooldown; a sheet simply
+        // leaving composition must not start one and swallow the next tap.
+        if (isDragging) {
+            lastGestureEndRealtime = SystemClock.elapsedRealtime()
+        }
         isDragging = false
     }
+
+    /**
+     * Wall-clock stamp of the last gesture release, kept outside snapshot state
+     * on purpose: it is only read while a pointer event is being dispatched, so
+     * nothing has to recompose when the cooldown expires.
+     */
+    private var lastGestureEndRealtime = 0L
+
+    /**
+     * The collapsed row joins the composition halfway through a swipe-down.
+     * Compose replays the in-flight pointer to that new node, and its release can
+     * be read as a tap by the row or one of its buttons - which reopened the
+     * queue a fraction of a second after the swipe had just closed it. Ignore
+     * those pointer events until the drag's motion has actually finished.
+     */
+    val isInGestureCooldown: Boolean
+        get() =
+            isDragging ||
+                SystemClock.elapsedRealtime() - lastGestureEndRealtime < CollapsedTapCooldownMs
 
     /** A pointer drag owns the sheet, so no settle may be resumed under it. */
     fun onDragStart() {
@@ -617,6 +646,7 @@ class BottomSheetState(
     ) {
         // The finger is gone even in the branches that dismiss without a settle.
         isDragging = false
+        lastGestureEndRealtime = SystemClock.elapsedRealtime()
         if (velocity > 250) {
             expand(velocity)
         } else if (velocity < -250) {
@@ -855,3 +885,6 @@ private val HalfDp = 0.5.dp
 
 /** A gentle swipe-up, reused when a tap asks for the same thing. */
 private const val OpenByGestureVelocityPx = 600f
+
+/** Long enough to cover the spring that carries a swipe-down to its anchor. */
+private const val CollapsedTapCooldownMs = 350L
