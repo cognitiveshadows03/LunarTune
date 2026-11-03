@@ -640,6 +640,17 @@ class BottomSheetState(
         }
     }
 
+    /**
+     * A downward drag on a nested list has exactly one outcome. Using
+     * [performFling] here let a quiet release in the upper half of the sheet
+     * expand it again, and skipped the gesture cooldown when no fling arrived.
+     */
+    fun collapseByGesture(velocityPx: Float) {
+        isDragging = false
+        lastGestureEndRealtime = SystemClock.elapsedRealtime()
+        collapse(velocityPx)
+    }
+
     fun performFling(
         velocity: Float,
         onDismiss: (() -> Unit)?,
@@ -692,6 +703,23 @@ class BottomSheetState(
     val preUpPostDownNestedScrollConnection: NestedScrollConnection by lazy {
             object : NestedScrollConnection {
                 var isTopReached = false
+                var ownsDrag = false
+                var dragDy = 0f
+
+                /** The finger owns the sheet while the list hands us its scroll. */
+                private fun beginDrag() {
+                    if (!ownsDrag) {
+                        ownsDrag = true
+                        onDragStart()
+                    }
+                }
+
+                private fun endDrag() {
+                    if (ownsDrag) {
+                        ownsDrag = false
+                        onGestureScopeLeft()
+                    }
+                }
 
                 override fun onPreScroll(
                     available: Offset,
@@ -702,6 +730,8 @@ class BottomSheetState(
                     }
 
                     return if (isTopReached && available.y < 0 && source == NestedScrollSource.UserInput) {
+                        beginDrag()
+                        dragDy += available.y
                         dispatchRawDelta(available.y)
                         available
                     } else {
@@ -719,6 +749,8 @@ class BottomSheetState(
                     }
 
                     return if (isTopReached && source == NestedScrollSource.UserInput) {
+                        beginDrag()
+                        dragDy += available.y
                         dispatchRawDelta(available.y)
                         available
                     } else {
@@ -726,21 +758,32 @@ class BottomSheetState(
                     }
                 }
 
-                override suspend fun onPreFling(available: Velocity): Velocity =
-                    if (isTopReached) {
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    val consumed = isTopReached
+                    if (consumed) {
                         val velocity = -available.y
-                        performFling(velocity, null)
-
-                        available
-                    } else {
-                        Velocity.Zero
+                        if (dragDy > 0f) {
+                            // A downward drag always closes the sheet. Going through
+                            // performFling let a quiet release in the upper half snap
+                            // it straight back open a moment after it had collapsed.
+                            collapseByGesture(velocity.coerceAtMost(-300f))
+                        } else {
+                            performFling(velocity, null)
+                        }
                     }
+                    endDrag()
+                    isTopReached = false
+                    dragDy = 0f
+                    return if (consumed) available else Velocity.Zero
+                }
 
                 override suspend fun onPostFling(
                     consumed: Velocity,
                     available: Velocity,
                 ): Velocity {
+                    endDrag()
                     isTopReached = false
+                    dragDy = 0f
                     return Velocity.Zero
                 }
             }
@@ -838,6 +881,11 @@ fun Modifier.bottomSheetDraggable(
         val dragSlop = viewConfiguration.touchSlop * SheetDragSlopMultiplier
 
         awaitEachGesture {
+            // The queue header installs a second copy of this detector on the
+            // same sheet. Only the copy that actually took the drag may release
+            // the value; the loser bails out on a consumed change and must not
+            // clear isDragging underneath the winner mid-gesture.
+            var ownsDrag = false
             try {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 val pointerId = down.id
@@ -852,6 +900,7 @@ fun Modifier.bottomSheetDraggable(
                     totalDy += change.positionChange().y
                     if (abs(totalDy) > dragSlop) {
                         dragStarted = true
+                        ownsDrag = true
                         state.onDragStart()
                         velocityTracker.resetTracking()
                         velocityTracker.addPointerInputChange(change)
@@ -872,8 +921,11 @@ fun Modifier.bottomSheetDraggable(
             } finally {
                 // A gesture cancelled by the pointer system (or by this modifier
                 // leaving the tree) never reaches performFling. Release the value
-                // so a stale drag flag cannot keep the sheet off its anchor.
-                state.onGestureScopeLeft()
+                // so a stale drag flag cannot keep the sheet off its anchor - but
+                // only if this scope was the one holding it.
+                if (ownsDrag) {
+                    state.onGestureScopeLeft()
+                }
             }
         }
     }
