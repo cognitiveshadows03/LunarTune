@@ -3586,17 +3586,23 @@ private fun TranslucentTopAppBarIconButton(
 }
 
 /** Corner radius of the floating top-bar sheet. */
-private val MenuSheetCorner = 22.dp
+private val MenuSheetCorner = 24.dp
 
 /** Width of the sheet's content, before the ring of room for its shadow. */
-private val MenuSheetContentWidth = 232.dp
+private val MenuSheetContentWidth = 248.dp
 
 /**
  * Upper bound for the sheet. The width used to be fixed, which ellipsised the
  * longer labels ("New release albu…") as soon as the user picked a wider font;
  * the sheet now grows to fit its longest row and stops here.
  */
-private val MenuSheetMaxWidth = 280.dp
+private val MenuSheetMaxWidth = 300.dp
+
+/** Corner radius of one grouped pill inside the sheet. */
+private val MenuGroupCorner = 18.dp
+
+/** Gap between the grouped pills, like the spacing between notification cards. */
+private val MenuGroupGap = 7.dp
 
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
 private val MenuSheetShadowRoom = 6.dp
@@ -3606,9 +3612,11 @@ private val MenuSheetShadowSpread = 6.dp
 
 /**
  * Replaces the top-bar action cluster with a single trigger that opens one
- * floating frosted panel. The rows sit directly on that single surface - no
- * per-item bars, no nested rounded shapes - with hairline separators only
- * between logical groups. Everything the sheet needs for depth is painted
+ * floating frosted panel. Its actions are grouped into rounded pills the way
+ * the system notification shade stacks one card per app: rows in the same
+ * group share a pill and are separated by hairlines, while the groups
+ * themselves are separated by gaps. The tinted frost, dim and primary rim stay
+ * on the sheet behind them. Everything the sheet needs for depth is painted
  * inside its own popup, because a popup clips at its bounds: an elevation
  * shadow there gets cut into a hard dark edge, and a hairline border reads as
  * a second line along the rim.
@@ -3663,7 +3671,7 @@ private fun FrostedTopBarMenu(
                             frostedTopMenuStyle(
                                 // Light enough that the blur from the screen behind
                                 // actually reads through the panel: the frost lives in the
-                                // gap between the rows, and an opaque fill hid all of it.
+                                // gaps between the pills, and an opaque fill hid all of it.
                                 scrim = barColor.copy(alpha = 0.50f),
                                 fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
                             ),
@@ -3685,65 +3693,74 @@ private fun FrostedTopBarMenu(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
                         ),
                         sheetShape,
-                    ).padding(horizontal = 6.dp, vertical = 6.dp),
+                    ).padding(horizontal = 10.dp, vertical = 9.dp),
             shape = sheetShape,
             containerColor = Color.Transparent,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
         ) {
-            // One surface, rows directly on it. The separators mark logical groups:
-            // your activity, discovery, social, and the app itself.
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.history,
-                label = stringResource(R.string.history),
-            ) {
-                onExpandedChange(false)
-                onNavigate("history")
-            }
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.stats,
-                label = stringResource(R.string.stats),
-            ) {
-                onExpandedChange(false)
-                onNavigate("stats")
-            }
-            FrostedTopBarMenuDivider()
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.trending_up,
-                label = stringResource(R.string.charts),
-            ) {
-                onExpandedChange(false)
-                onNavigate("charts_screen")
-            }
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.new_release,
-                label = stringResource(R.string.new_release_albums_short),
-            ) {
-                onExpandedChange(false)
-                onNavigate("new_release")
-            }
-            FrostedTopBarMenuDivider()
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.multi_user,
-                label = stringResource(R.string.music_together_short),
-            ) {
-                onExpandedChange(false)
-                onNavigate("settings/music_together")
-            }
-            FrostedTopBarMenuDivider()
-            val settingsTrailing: (@Composable () -> Unit)? =
-                if (updateAvailable) {
-                    @Composable { Badge() }
-                } else {
-                    null
+            // One rounded pill per logical group, like the notification cards
+            // in the system shade. Hairlines separate the rows inside a group;
+            // gaps separate the groups themselves.
+            FrostedTopBarMenuGroup {
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.history,
+                    label = stringResource(R.string.history),
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("history")
                 }
-            FrostedTopBarMenuRow(
-                iconRes = R.drawable.settings,
-                label = stringResource(R.string.settings),
-                trailing = settingsTrailing,
-            ) {
-                onExpandedChange(false)
-                onNavigate("settings")
+                FrostedTopBarMenuDivider()
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.stats,
+                    label = stringResource(R.string.stats),
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("stats")
+                }
+                FrostedTopBarMenuDivider()
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.trending_up,
+                    label = stringResource(R.string.charts),
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("charts_screen")
+                }
+                FrostedTopBarMenuDivider()
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.new_release,
+                    label = stringResource(R.string.new_release_albums_short),
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("new_release")
+                }
+            }
+            Spacer(Modifier.height(MenuGroupGap))
+            FrostedTopBarMenuGroup {
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.multi_user,
+                    label = stringResource(R.string.music_together_short),
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("settings/music_together")
+                }
+            }
+            Spacer(Modifier.height(MenuGroupGap))
+            FrostedTopBarMenuGroup {
+                val settingsTrailing: (@Composable () -> Unit)? =
+                    if (updateAvailable) {
+                        @Composable { Badge() }
+                    } else {
+                        null
+                    }
+                FrostedTopBarMenuRow(
+                    iconRes = R.drawable.settings,
+                    label = stringResource(R.string.settings),
+                    trailing = settingsTrailing,
+                ) {
+                    onExpandedChange(false)
+                    onNavigate("settings")
+                }
             }
         }
     }
@@ -3772,7 +3789,38 @@ private fun DrawScope.drawFloatingSheetShadow(
     }
 }
 
-/** One row of [FrostedTopBarMenu], drawn straight onto the shared frosted surface. */
+/**
+ * One pill holding a logical group of actions. The fill is a translucent lift
+ * so the tinted frost still reads through it; the parent sheet keeps the rim,
+ * the pill only needs a quiet hairline of its own.
+ */
+@Composable
+private fun FrostedTopBarMenuGroup(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val groupShape = RoundedCornerShape(MenuGroupCorner)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(groupShape)
+                .background(
+                    Brush.verticalGradient(
+                        0f to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f),
+                        1f to MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                    ),
+                ).border(
+                    BorderStroke(
+                        0.5.dp,
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
+                    ),
+                    groupShape,
+                ).padding(vertical = 3.dp),
+        content = content,
+    )
+}
+
+/** One row of [FrostedTopBarMenu], drawn onto its group's pill. */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
@@ -3784,10 +3832,10 @@ private fun FrostedTopBarMenuRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // A small clip keeps the ripple tidy; there is no fill behind the row.
-                .clip(RoundedCornerShape(10.dp))
+                // The group pill clips the ripple, so no second rounded shape
+                // is needed here: a tap fills the whole width of its card.
                 .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -3809,13 +3857,13 @@ private fun FrostedTopBarMenuRow(
     }
 }
 
-/** Hairline between logical groups, intentionally much quieter than a filled bar. */
+/** Hairline between the rows of one pill; the gaps separate the pills. */
 @Composable
 private fun FrostedTopBarMenuDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 2.dp),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 1.dp),
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
     )
 }
 
