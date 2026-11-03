@@ -133,7 +133,14 @@ fun BottomSheet(
                     translationY =
                         (state.expandedBound - state.effectiveValue).toPx().coerceAtLeast(0f)
                 }.then(
-                    if (collapsedGesturesEnabled || state.isAwayFromCollapsedAnchor) {
+                    // Styles that forbid collapsed gestures (the inline-queue
+                    // player) must not get a drag detector just because the
+                    // resting value drifted a fraction of a dp above the anchor
+                    // while the navigation bar moved - that re-armed a swipe up
+                    // which opened a sheet those styles never use. Only arm it
+                    // for a sheet that is actually open, so it can still be
+                    // swiped back down.
+                    if (collapsedGesturesEnabled || state.isExpandedOrExpanding) {
                         Modifier.bottomSheetDraggable(state, onDismiss)
                     } else {
                         Modifier

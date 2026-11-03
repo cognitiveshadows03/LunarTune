@@ -1095,21 +1095,30 @@ fun BottomSheetPlayer(
         }
     }
 
+    // The inline-queue style owns the queue in portrait: no stock queue sheet,
+    // whether the request came from a button, a swipe or the lyrics page.
+    val useInlineQueue =
+        playerDesignStyle == PlayerDesignStyle.V10 &&
+            LocalConfiguration.current.orientation != Configuration.ORIENTATION_LANDSCAPE
     val openQueue =
-        remember(state, queueSheetState) {
+        remember(state, queueSheetState, useInlineQueue) {
             {
                 // Ignore the tap that the closing swipe replays to the row which
                 // just entered the composition, or the queue pops straight back.
                 if (!queueSheetState.isInGestureCooldown) {
                     isLyricsScreenVisible = false
-                    if (!state.isExpandedOrExpanding) {
-                        state.expandSoft()
+                    if (useInlineQueue) {
+                        isAppleQueueOpen = true
+                    } else {
+                        if (!state.isExpandedOrExpanding) {
+                            state.expandSoft()
+                        }
+                        // Opened the way the swipe opens it, not by a plain settle: the
+                        // tap arrives with no gesture behind it, and asking for the
+                        // anchor from there is what used to do nothing on the styles
+                        // whose row is only reachable by touch.
+                        queueSheetState.openByGesture()
                     }
-                    // Opened the way the swipe opens it, not by a plain settle: the
-                    // tap arrives with no gesture behind it, and asking for the
-                    // anchor from there is what used to do nothing on the styles
-                    // whose row is only reachable by touch.
-                    queueSheetState.openByGesture()
                 }
             }
         }
