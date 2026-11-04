@@ -39,13 +39,16 @@ class ScrobbleBackupStore(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
     private val mutex = Mutex()
 
-    suspend fun <T> edit(block: (MutableList<PendingScrobble>) -> T): T =
+    suspend fun <T> edit(block: suspend (MutableList<PendingScrobble>) -> T): T =
         withContext(Dispatchers.IO) {
-            mutex.withLock {
+            mutex.lock()
+            try {
                 val items = read().toMutableList()
                 val result = block(items)
                 write(items)
                 result
+            } finally {
+                mutex.unlock()
             }
         }
 
