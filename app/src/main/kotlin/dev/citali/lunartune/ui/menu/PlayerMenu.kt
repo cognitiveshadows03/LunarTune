@@ -105,6 +105,7 @@ import dev.citali.lunartune.ui.component.ListDialog
 import dev.citali.lunartune.ui.component.MenuSurfaceSection
 import dev.citali.lunartune.ui.component.NewAction
 import dev.citali.lunartune.ui.component.NewActionGrid
+import dev.citali.lunartune.ui.component.sharePlayerCard
 import dev.citali.lunartune.ui.player.rememberDeviceMusicVolumeController
 import dev.citali.lunartune.utils.ExternalDownloaderLaunchResult
 import dev.citali.lunartune.utils.SpeedDialPin
@@ -331,6 +332,81 @@ fun PlayerMenu(
 
     var showEqualizerDialog by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    // "Share" in the grid opens this small menu: copy the song's link, or
+    // export the player card. Song-card sharing used to live in the lyrics
+    // share dialog; it belongs with the song actions instead.
+    var showShareMenu by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    if (showShareMenu) {
+        ListDialog(onDismiss = { showShareMenu = false }) {
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.copy_link))
+                    },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.link),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val clipboard =
+                                    context.getSystemService(
+                                        android.content.Context.CLIPBOARD_SERVICE,
+                                    ) as android.content.ClipboardManager
+                                val clip =
+                                    android.content.ClipData.newPlainText(
+                                        context.getString(R.string.copy_link),
+                                        "https://music.youtube.com/watch?v=${mediaMetadata.id}",
+                                    )
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, R.string.link_copied, Toast.LENGTH_SHORT).show()
+                                showShareMenu = false
+                                onDismiss()
+                            },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = {
+                        Text(stringResource(R.string.share_song_card))
+                    },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.share),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                sharePlayerCard(
+                                    context = context,
+                                    scope = coroutineScope,
+                                    mediaMetadata = mediaMetadata,
+                                    artworkUrl = mediaMetadata.thumbnailUrl,
+                                    position = playerConnection.player.currentPosition,
+                                    duration = playerConnection.player.duration.coerceAtLeast(0L),
+                                )
+                                showShareMenu = false
+                                onDismiss()
+                            },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                )
+            }
+        }
     }
 
     if (showEqualizerDialog) {
@@ -590,32 +666,14 @@ fun PlayerMenu(
                                     NewAction(
                                         icon = {
                                             Icon(
-                                                painter = painterResource(R.drawable.link),
+                                                painter = painterResource(R.drawable.share),
                                                 contentDescription = null,
                                                 modifier = Modifier.size(28.dp),
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         },
-                                        text = stringResource(R.string.copy_link),
-                                        onClick = {
-                                            val clipboard =
-                                                context.getSystemService(
-                                                    android.content.Context.CLIPBOARD_SERVICE,
-                                                ) as android.content.ClipboardManager
-                                            val clip =
-                                                android.content.ClipData.newPlainText(
-                                                    context.getString(R.string.copy_link),
-                                                    "https://music.youtube.com/watch?v=${mediaMetadata.id}",
-                                                )
-                                            clipboard.setPrimaryClip(clip)
-                                            android.widget.Toast
-                                                .makeText(
-                                                    context,
-                                                    R.string.link_copied,
-                                                    android.widget.Toast.LENGTH_SHORT,
-                                                ).show()
-                                            onDismiss()
-                                        },
+                                        text = stringResource(R.string.share),
+                                        onClick = { showShareMenu = true },
                                     )
                                 },
                             )

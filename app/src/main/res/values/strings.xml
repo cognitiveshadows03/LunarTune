@@ -185,7 +185,7 @@
     <string name="refetch_canvas">Refetch canvas</string>
     <string name="canvas_refetch_failed">Couldn\'t refresh animated canvas</string>
     <string name="share_card">Share card</string>
-    <string name="share_player_card">Share player card</string>
+    <string name="share_song_card">Share song card</string>
     <string name="song_card">Song card</string>
     <string name="lyrics_card">Lyrics card</string>
     <string name="card_theme">Card theme</string>
