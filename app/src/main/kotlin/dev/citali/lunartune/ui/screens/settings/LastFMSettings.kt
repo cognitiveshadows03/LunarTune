@@ -41,8 +41,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.painterResource
@@ -57,12 +59,15 @@ import androidx.navigation.NavController
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.LastFmProvider
+import dev.citali.lunartune.constants.LastFMScrobbleBackupKey
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.InfoLabel
 import dev.citali.lunartune.ui.component.PreferenceEntry
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
 import dev.citali.lunartune.ui.utils.backToMain
+import dev.citali.lunartune.utils.ScrobbleBackupStore
+import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.LastFmLoginDialogUiModel
 import dev.citali.lunartune.viewmodels.LastFmServiceEditorUiModel
 import dev.citali.lunartune.viewmodels.LastFmSettingsScreenState
@@ -70,6 +75,8 @@ import dev.citali.lunartune.viewmodels.LastFmSettingsUiModel
 import dev.citali.lunartune.viewmodels.LastFmSettingsViewModel
 import dev.citali.lunartune.viewmodels.LastFmTimingEditorUiModel
 import dev.citali.lunartune.viewmodels.LastFmTimingSetting
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -260,6 +267,15 @@ private fun LastFmSettingsSuccess(
     onOpenTimingEditor: (LastFmTimingSetting) -> Unit,
 ) {
     val providerName = stringResource(model.provider.titleResId())
+    val context = LocalContext.current
+    val (backupEnabled, onBackupEnabledChange) = rememberPreference(LastFMScrobbleBackupKey, false)
+    val pendingCount by produceState(initialValue = 0, context) {
+        val store = ScrobbleBackupStore(context)
+        while (isActive) {
+            value = store.pendingCount()
+            delay(5000L)
+        }
+    }
     val endpointDescription =
         if (model.endpointValid) {
             model.resolvedEndpoint
@@ -339,6 +355,26 @@ private fun LastFmSettingsSuccess(
                 onCheckedChange = onNowPlayingChange,
                 isEnabled = model.canEnableScrobbling && model.scrobblingEnabled,
             )
+        }
+
+        item {
+            SwitchPreference(
+                title = { Text(stringResource(R.string.lastfm_scrobble_backup)) },
+                description = stringResource(R.string.lastfm_scrobble_backup_desc),
+                checked = backupEnabled,
+                onCheckedChange = onBackupEnabledChange,
+                isEnabled = model.canEnableScrobbling && model.scrobblingEnabled,
+            )
+        }
+
+        if (pendingCount > 0) {
+            item {
+                PreferenceEntry(
+                    title = { Text(stringResource(R.string.lastfm_pending_scrobbles, pendingCount)) },
+                    description = stringResource(R.string.lastfm_scrobble_backup_desc),
+                    isEnabled = false,
+                )
+            }
         }
     }
 

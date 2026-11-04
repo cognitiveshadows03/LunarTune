@@ -193,6 +193,9 @@
     <string name="card_dark">Dark</string>
     <string name="card_saved">Card saved to your gallery</string>
     <string name="share">Share</string>
+    <string name="lastfm_scrobble_backup">Offline scrobble backup</string>
+    <string name="lastfm_scrobble_backup_desc">Save scrobbles while you are offline and send them to Last.fm automatically when you are back online.</string>
+    <string name="lastfm_pending_scrobbles">%1$d scrobbles waiting to sync</string>
     <string name="delete">Delete</string>
     <string name="hide_playlist">Hide playlist</string>
     <string name="unhide_playlist">Unhide playlist</string>

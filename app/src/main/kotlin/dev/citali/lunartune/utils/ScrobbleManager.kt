@@ -7,6 +7,11 @@
 
 package dev.citali.lunartune.utils
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -17,12 +22,23 @@ import dev.citali.lunartune.models.MediaMetadata
 import timber.log.Timber
 import kotlin.math.min
 
+/**
+ * Drives Last.fm scrobbling. When the backup switch is on, every scrobble is
+ * written to a durable queue first and sent as soon as a validated network is
+ * available, so plays made offline are scrobbled when connectivity returns.
+ */
 class ScrobbleManager(
+    private val context: Context,
     private val scope: CoroutineScope,
     var minSongDuration: Int = 30,
     var scrobbleDelayPercent: Float = 0.5f,
     var scrobbleDelaySeconds: Int = 180,
 ) {
+    private val backupStore = ScrobbleBackupStore(context)
+    private val networkLock = Any()
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var backupEnabled = false
+
     private var scrobbleJob: Job? = null
     private var scrobbleRemainingMillis: Long = 0L
     private var scrobbleTimerStartedAt: Long = 0L
@@ -32,10 +48,69 @@ class ScrobbleManager(
 
     fun destroy() {
         scrobbleJob?.cancel()
+        unregisterNetworkCallback()
         scrobbleRemainingMillis = 0L
         scrobbleTimerStartedAt = 0L
         songStartedAt = 0L
         songStarted = false
+    }
+
+    /**
+     * Enables the offline queue and starts watching connectivity. Turning it off
+     * stops queueing new plays but leaves the existing queue to drain on the
+     * next flush, so nothing is silently discarded.
+     */
+    fun setBackupEnabled(enabled: Boolean) {
+        synchronized(networkLock) {
+            backupEnabled = enabled
+            if (enabled) {
+                registerNetworkCallback()
+                scope.launch { flushPending() }
+            } else {
+                unregisterNetworkCallback()
+                // Drain anything already queued so turning the switch off never
+                // silently discards offline plays.
+                scope.launch { flushPending() }
+            }
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        if (networkCallback != null) return
+        val connectivityManager =
+            context.getSystemService(ConnectivityManager::class.java) ?: return
+        val callback =
+            object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) {
+                    scope.launch { flushPending() }
+                }
+
+                override fun onCapabilitiesChanged(
+                    network: Network,
+                    networkCapabilities: NetworkCapabilities,
+                ) {
+                    if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                        scope.launch { flushPending() }
+                    }
+                }
+            }
+        val request =
+            NetworkRequest
+                .Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+        runCatching { connectivityManager.registerNetworkCallback(request, callback) }
+            .onSuccess { networkCallback = callback }
+    }
+
+    private fun unregisterNetworkCallback() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        runCatching {
+            context
+                .getSystemService(ConnectivityManager::class.java)
+                ?.unregisterNetworkCallback(callback)
+        }
     }
 
     fun onSongStart(
@@ -118,25 +193,62 @@ class ScrobbleManager(
     }
 
     private fun scrobbleSong(metadata: MediaMetadata) {
+        val item =
+            PendingScrobble(
+                artist = metadata.artists.joinToString(", ") { artist -> artist.name },
+                track = metadata.title,
+                timestamp = songStartedAt,
+                album = metadata.album?.title,
+                duration = metadata.duration.takeIf { it > 0 },
+            )
         scope.launch {
-            LastFM
-                .scrobble(
-                    artist = metadata.artists.joinToString(", ") { artist -> artist.name },
-                    track = metadata.title,
-                    duration = metadata.duration,
-                    timestamp = songStartedAt,
-                    album = metadata.album?.title,
-                ).onSuccess {
-                    Timber
-                        .tag(
-                            "ScrobbleManager",
-                        ).d("Scrobbled: ${metadata.title} by ${metadata.artists.joinToString(", ") { artist -> artist.name }}")
-                }.onFailure { throwable ->
-                    if (throwable is CancellationException) throw throwable
-                    Timber.tag("ScrobbleManager").e(throwable, "Failed to scrobble: ${metadata.title}")
+            if (backupEnabled) {
+                backupStore.edit { pending ->
+                    pending.add(item)
+                    while (pending.size > MAX_PENDING_SCROBBLES) pending.removeAt(0)
                 }
+                flushPending()
+            } else {
+                sendScrobble(item)
+            }
         }
     }
+
+    /** Sends every queued scrobble that is still valid, keeping the ones that failed. */
+    suspend fun flushPending() {
+        if (!isInternetAvailable(context)) return
+        backupStore.edit { pending ->
+            if (pending.isEmpty()) return@edit
+            val earliest = System.currentTimeMillis() / 1000 - MAX_SCROBBLE_AGE_SECONDS
+            val keep = mutableListOf<PendingScrobble>()
+            for (item in pending) {
+                when {
+                    // The service rejects timestamps older than two weeks.
+                    item.timestamp < earliest -> Unit
+                    !sendScrobble(item) -> keep.add(item)
+                }
+            }
+            while (keep.size > MAX_PENDING_SCROBBLES) keep.removeAt(0)
+            pending.clear()
+            pending.addAll(keep)
+            Unit
+        }
+    }
+
+    private suspend fun sendScrobble(item: PendingScrobble): Boolean =
+        LastFM
+            .scrobble(
+                artist = item.artist,
+                track = item.track,
+                timestamp = item.timestamp,
+                album = item.album,
+                duration = item.duration,
+            ).onSuccess {
+                Timber.tag("ScrobbleManager").d("Scrobbled: ${item.track} by ${item.artist}")
+            }.onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                Timber.tag("ScrobbleManager").e(throwable, "Failed to scrobble: ${item.track}")
+            }.isSuccess
 
     private fun updateNowPlaying(metadata: MediaMetadata) {
         scope.launch {
@@ -170,5 +282,10 @@ class ScrobbleManager(
         } else {
             onSongPause()
         }
+    }
+
+    private companion object {
+        const val MAX_PENDING_SCROBBLES = 300
+        const val MAX_SCROBBLE_AGE_SECONDS = 14L * 24L * 60L * 60L
     }
 }

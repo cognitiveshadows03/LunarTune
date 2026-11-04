@@ -67,6 +67,27 @@ private const val SYNC_PREPARE_MAX_LINES = 200
 private const val MAX_SCENE_CACHE_ENTRIES = 10
 private const val CAPTION_REFLOW_DURATION_MS = 340L
 
+/**
+ * The lyrics library throws IllegalArgumentException on a non-finite width.
+ * While the queue advances to the next song the lyrics pane can be measured
+ * with a transient NaN/Infinity/0 width; clamp it to a sane finite width so
+ * preparation never takes the player down.
+ */
+internal fun safeLyricsWidthPx(rawWidthPx: Float): Float =
+    (if (rawWidthPx.isFinite() && rawWidthPx > 1f) rawWidthPx else DEFAULT_LYRICS_WIDTH_PX)
+        .coerceIn(2f, MAX_LYRICS_WIDTH_PX)
+
+/** Last-resort guard: a bad geometry must never crash playback, it just skips this frame. */
+internal fun <T> guardLyricsPreparation(block: () -> T): T? =
+    try {
+        block()
+    } catch (e: IllegalArgumentException) {
+        null
+    }
+
+private const val DEFAULT_LYRICS_WIDTH_PX = 320f
+private const val MAX_LYRICS_WIDTH_PX = 4096f
+
 private data class LunarSceneCacheKey(
     val lyrics: SyncedLyrics,
     val widthPx: Int,
@@ -170,8 +191,9 @@ internal suspend fun prewarmLunarKaraokeScene(
     measurer: TextMeasurer,
     currentPositionMs: Int,
 ) {
-    if (lyrics.lines.isEmpty() || contentWidthPx <= 1f) return
-    val widthPxInt = contentWidthPx.roundToInt().coerceAtLeast(1)
+    if (lyrics.lines.isEmpty()) return
+    val safeWidth = safeLyricsWidthPx(contentWidthPx)
+    val widthPxInt = safeWidth.roundToInt().coerceAtLeast(1)
     val cacheKey =
         LunarSceneCacheKey(
             lyrics = lyrics,
@@ -188,24 +210,26 @@ internal suspend fun prewarmLunarKaraokeScene(
     val scene =
         withContext(Dispatchers.Default) {
             LunarKaraokeSceneCache.get(cacheKey)
-                ?: buildCachedLunarScene(
-                    lyrics = lyrics,
-                    prepared =
-                        prepareLyrics(
-                            lyrics = lyrics,
-                            profiles = LunarLyricsProfiles,
-                            measurer = measurer,
-                            normalStyle = normalStyle,
-                            accompanimentStyle = accompanimentStyle,
-                            phoneticStyle = phoneticStyle,
-                            width = widthPxInt.toFloat(),
-                            density = density.density,
-                            showPhonetic = true,
-                            fontScale = density.fontScale,
-                            translationStyle = translationStyle,
-                        ),
-                ).also { LunarKaraokeSceneCache.put(cacheKey, it) }
-        }
+                ?: guardLyricsPreparation {
+                    buildCachedLunarScene(
+                        lyrics = lyrics,
+                        prepared =
+                            prepareLyrics(
+                                lyrics = lyrics,
+                                profiles = LunarLyricsProfiles,
+                                measurer = measurer,
+                                normalStyle = normalStyle,
+                                accompanimentStyle = accompanimentStyle,
+                                phoneticStyle = phoneticStyle,
+                                width = safeWidth,
+                                density = density.density,
+                                showPhonetic = true,
+                                fontScale = density.fontScale,
+                                translationStyle = translationStyle,
+                            ),
+                    )
+                }?.also { LunarKaraokeSceneCache.put(cacheKey, it) }
+        } ?: return
 
     val resources = scene.resourcesFor(textColor, density, layoutDirection)
     val focusIndex = computeLunarFocusState(scene.items, currentPositionMs).scrollTargetItemIndex
@@ -542,7 +566,7 @@ fun LunarKaraokeLyricsView(
                 is LyricsFade.ToAnchor -> (anchorOffset - bottomFade.inset).coerceAtLeast(0.dp)
             }
 
-        val contentWidthPx = with(density) { (maxWidth - 32.dp).toPx() }.coerceAtLeast(1f)
+        val contentWidthPx = safeLyricsWidthPx(with(density) { (maxWidth - 32.dp).toPx() })
         val cacheKey =
             remember(
                 lyrics,
@@ -575,23 +599,23 @@ fun LunarKaraokeLyricsView(
             remember(cacheKey) {
                 LunarKaraokeSceneCache.get(cacheKey)
                     ?: if (lyrics.lines.size <= SYNC_PREPARE_MAX_LINES) {
-                        val prepared =
-                            prepareLyrics(
-                                lyrics = lyrics,
-                                profiles = LunarLyricsProfiles,
-                                measurer = measurer,
-                                normalStyle = normalLineTextStyle,
-                                accompanimentStyle = accompanimentLineTextStyle,
-                                phoneticStyle = phoneticTextStyle,
-                                width = cacheKey.widthPx.toFloat(),
-                                density = density.density,
-                                showPhonetic = true,
-                                fontScale = density.fontScale,
-                                translationStyle = translationTextStyle,
-                            )
-                        buildCachedLunarScene(lyrics, prepared).also { built ->
-                            LunarKaraokeSceneCache.put(cacheKey, built)
-                        }
+                        guardLyricsPreparation {
+                            val prepared =
+                                prepareLyrics(
+                                    lyrics = lyrics,
+                                    profiles = LunarLyricsProfiles,
+                                    measurer = measurer,
+                                    normalStyle = normalLineTextStyle,
+                                    accompanimentStyle = accompanimentLineTextStyle,
+                                    phoneticStyle = phoneticTextStyle,
+                                    width = safeLyricsWidthPx(cacheKey.widthPx.toFloat()),
+                                    density = density.density,
+                                    showPhonetic = true,
+                                    fontScale = density.fontScale,
+                                    translationStyle = translationTextStyle,
+                                )
+                            buildCachedLunarScene(lyrics, prepared)
+                        }?.also { built -> LunarKaraokeSceneCache.put(cacheKey, built) }
                     } else {
                         null
                     }
@@ -603,23 +627,25 @@ fun LunarKaraokeLyricsView(
                 val built =
                     withContext(Dispatchers.Default) {
                         LunarKaraokeSceneCache.get(cacheKey)
-                            ?: buildCachedLunarScene(
-                                lyrics = lyrics,
-                                prepared =
-                                    prepareLyrics(
-                                        lyrics = lyrics,
-                                        profiles = LunarLyricsProfiles,
-                                        measurer = measurer,
-                                        normalStyle = normalLineTextStyle,
-                                        accompanimentStyle = accompanimentLineTextStyle,
-                                        phoneticStyle = phoneticTextStyle,
-                                        width = cacheKey.widthPx.toFloat(),
-                                        density = density.density,
-                                        showPhonetic = true,
-                                        fontScale = density.fontScale,
-                                        translationStyle = translationTextStyle,
-                                    ),
-                            ).also { LunarKaraokeSceneCache.put(cacheKey, it) }
+                            ?: guardLyricsPreparation {
+                                buildCachedLunarScene(
+                                    lyrics = lyrics,
+                                    prepared =
+                                        prepareLyrics(
+                                            lyrics = lyrics,
+                                            profiles = LunarLyricsProfiles,
+                                            measurer = measurer,
+                                            normalStyle = normalLineTextStyle,
+                                            accompanimentStyle = accompanimentLineTextStyle,
+                                            phoneticStyle = phoneticTextStyle,
+                                            width = safeLyricsWidthPx(cacheKey.widthPx.toFloat()),
+                                            density = density.density,
+                                            showPhonetic = true,
+                                            fontScale = density.fontScale,
+                                            translationStyle = translationTextStyle,
+                                        ),
+                                )
+                            }?.also { LunarKaraokeSceneCache.put(cacheKey, it) }
                     }
                 asyncScene = built
             }
