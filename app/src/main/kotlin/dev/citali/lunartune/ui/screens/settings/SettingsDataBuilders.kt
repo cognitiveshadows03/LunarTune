@@ -36,6 +36,7 @@ import dev.citali.lunartune.constants.DisableScreenshotKey
 import dev.citali.lunartune.constants.DynamicThemeKey
 import dev.citali.lunartune.constants.EnableDiscordRPCKey
 import dev.citali.lunartune.constants.EnableLastFMScrobblingKey
+import dev.citali.lunartune.constants.LastFMScrobbleBackupKey
 import dev.citali.lunartune.constants.EnableTranslatorKey
 import dev.citali.lunartune.constants.ExternalDownloaderEnabledKey
 import dev.citali.lunartune.constants.ForceHighRefreshRateKey
@@ -307,6 +308,7 @@ fun buildSettingsGroups(
                 SettingsChild("Last.fm scrobbling", "lastfm_scrobbling", listOf("lastfm", "last.fm", "libre.fm", "scrobble", "scrobbling", "listens")) { SearchResultSwitch(EnableLastFMScrobblingKey, false) },
                 SettingsChild("Last.fm account", "lastfm_account", listOf("lastfm account", "lastfm login", "lastfm session", "lastfm username")),
                 SettingsChild("Last.fm options", "lastfm_options", listOf("lastfm options", "lastfm settings", "scrobble toggle", "now playing")),
+                SettingsChild("Offline scrobble backup", "lastfm_offline_backup", listOf("offline scrobble", "scrobble backup", "pending scrobbles", "offline plays")) { SearchResultSwitch(LastFMScrobbleBackupKey, false) },
                 SettingsChild("Last.fm scrobbling configuration", "lastfm_scrobbling_config", listOf("scrobble config", "scrobble configuration", "scrobble threshold", "scrobble percentage")),
                 SettingsChild("Discord rich presence", "discord_presence", listOf("discord", "rich presence", "rpc", "status", "now playing")) { SearchResultSwitch(EnableDiscordRPCKey, false) },
                 SettingsChild("Discord account", "discord_account", listOf("discord account", "discord login", "discord token", "discord authorization")),

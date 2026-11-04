@@ -3399,8 +3399,14 @@ private class PlayerAwareBottomInsets(
                         sheet.collapsedBound
                     }
                 } else {
-                    insetBottom.value +
-                        (if (sheet.isDismissed) 0.dp else miniPlayerFootprint)
+                    if (sheet.isDismissed) {
+                        insetBottom.value
+                    } else {
+                        // While the bar slot collapses, follow the sheet's spring
+                        // so the page clears exactly the band the row still
+                        // occupies. At rest this is the raw inset plus the row.
+                        maxOf(insetBottom.value + miniPlayerFootprint, sheet.collapsedBound)
+                    }
                 }
             bottom.roundToPx()
         }

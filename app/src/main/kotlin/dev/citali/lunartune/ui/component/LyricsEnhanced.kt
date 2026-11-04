@@ -120,6 +120,7 @@ import dev.citali.lunartune.ui.component.karaoke.LunarKaraokeLyricsView
 import dev.citali.lunartune.ui.component.karaoke.LunarLyricsListState
 import dev.citali.lunartune.ui.component.karaoke.prewarmLunarKaraokeScene
 import dev.citali.lunartune.ui.component.karaoke.rememberLunarLyricsListState
+import dev.citali.lunartune.ui.component.karaoke.safeLyricsWidthPx
 import dev.citali.lunartune.ui.component.shimmer.ShimmerHost
 import dev.citali.lunartune.ui.component.shimmer.TextPlaceholder
 import dev.citali.lunartune.ui.theme.rememberLunarTuneLyricsFontFamily
@@ -275,12 +276,15 @@ internal fun PrewarmLyricsSceneEffect(
         val uniqueWidths =
             buildList<Dp> {
                 for (w in containerWidthsDp) {
-                    if (w > 0.dp && none { kotlin.math.abs((it - w).value) < 0.5f }) add(w)
+                    // A transient Infinity/NaN width would make the lyrics library throw
+                    // while the pane is being laid out during a song change.
+                    if (w.value.isFinite() && w > 0.dp &&
+                        none { kotlin.math.abs((it - w).value) < 0.5f }) add(w)
                 }
             }
         val posMs = latestPositionProvider.value().coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
         for (containerWidth in uniqueWidths) {
-            val contentWidthPx = with(density) { (containerWidth - 32.dp).toPx() }.coerceAtLeast(1f)
+            val contentWidthPx = safeLyricsWidthPx(with(density) { (containerWidth - 32.dp).toPx() })
             prewarmLunarKaraokeScene(
                 lyrics = bundle.syncedLyrics,
                 contentWidthPx = contentWidthPx,

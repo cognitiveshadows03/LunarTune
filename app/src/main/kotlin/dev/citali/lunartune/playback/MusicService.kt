@@ -182,6 +182,7 @@ import dev.citali.lunartune.constants.HideVideoKey
 import dev.citali.lunartune.constants.HistoryDuration
 import dev.citali.lunartune.constants.LastFMSessionKey
 import dev.citali.lunartune.constants.LastFMUseNowPlaying
+import dev.citali.lunartune.constants.LastFMScrobbleBackupKey
 import dev.citali.lunartune.constants.ListenBrainzEnabledKey
 import dev.citali.lunartune.constants.ListenBrainzTokenKey
 import dev.citali.lunartune.constants.MaxSongCacheSizeKey
@@ -1705,12 +1706,14 @@ class MusicService :
 
                     scrobbleManager =
                         dev.citali.lunartune.utils.ScrobbleManager(
+                            this@MusicService,
                             ioScope,
                             minSongDuration = minSongDuration,
                             scrobbleDelayPercent = delayPercent,
                             scrobbleDelaySeconds = delaySeconds,
                         )
                     scrobbleManager?.useNowPlaying = dataStore.get(LastFMUseNowPlaying, false)
+                    scrobbleManager?.setBackupEnabled(dataStore.get(LastFMScrobbleBackupKey, false))
                 } else if (!shouldEnable && scrobbleManager != null) {
                     scrobbleManager?.destroy()
                     scrobbleManager = null
@@ -1722,6 +1725,13 @@ class MusicService :
             .distinctUntilChanged()
             .collectLatest(scope) {
                 scrobbleManager?.useNowPlaying = it
+            }
+
+        dataStore.data
+            .map { it[LastFMScrobbleBackupKey] ?: false }
+            .distinctUntilChanged()
+            .collect(scope) { enabled ->
+                scrobbleManager?.setBackupEnabled(enabled)
             }
 
         dataStore.data

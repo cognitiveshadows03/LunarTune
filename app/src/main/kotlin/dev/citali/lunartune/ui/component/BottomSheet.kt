@@ -41,7 +41,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -63,6 +62,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BottomSheetSoftAnimationSpec
+import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -858,17 +858,26 @@ fun rememberBottomSheetState(
         state.onWindowBoundsChanged(dismissedBound, expandedBound)
     }
 
-    // Follow the collapsed anchor in one coroutine, snapping to each value it
-    // is given. What animates is decided by the caller: the navigation bar's
-    // share of the anchor is driven by the bar's own spring, while window
-    // insets and status-bar changes are layout facts and land immediately.
-    // Springing those here made the row keep drifting after a minimise had
-    // already settled - the small "adjustment" at the end of the motion.
-    // The insets read state.collapsedBound during layout, so every page's
-    // bottom padding follows the same value without recomposing the tree.
-    val currentCollapsedBound = rememberUpdatedState(collapsedBound)
+    // Ported from the base app: the collapsed anchor travels on the navigation
+    // spring when the floating bar appears or disappears (opening a playlist or
+    // artist page), so the mini player glides into its new slot instead of
+    // jumping there in a single frame. Only that large change is animated;
+    // window insets and status-bar changes are layout facts and still land
+    // immediately, so a minimise never keeps drifting after it has settled.
+    val animatedCollapsedBound =
+        remember { Animatable(collapsedBound, Dp.VectorConverter) }
+    LaunchedEffect(collapsedBound, animationsDisabled) {
+        val target = collapsedBound.coerceIn(dismissedBound, expandedBound)
+        val delta = abs((target - animatedCollapsedBound.value).value)
+        if (!animationsDisabled && delta >= SheetAnchorAnimationThreshold.value) {
+            animatedCollapsedBound.animateTo(target, NavigationBarAnimationSpec)
+        } else {
+            animatedCollapsedBound.snapTo(target)
+        }
+    }
+    val animatedCollapsedState = animatedCollapsedBound.asState()
     LaunchedEffect(state) {
-        snapshotFlow { currentCollapsedBound.value }.collect { state.reanchorTo(it) }
+        snapshotFlow { animatedCollapsedState.value }.collect { state.reanchorTo(it) }
     }
 
     return state
@@ -938,6 +947,9 @@ fun Modifier.bottomSheetDraggable(
     }
 
 private const val SheetDragSlopMultiplier = 2.5f
+
+/** Only a page-level bar change (not a small inset nudge) glides on the spring. */
+private val SheetAnchorAnimationThreshold = 24.dp
 
 /** Tolerance for "has arrived": a spring lands on its anchor, floating point does not. */
 private val HalfDp = 0.5.dp
