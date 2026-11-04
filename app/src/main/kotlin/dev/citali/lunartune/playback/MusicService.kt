@@ -390,11 +390,6 @@ class MusicService :
         PlayerStreamClientKey,
         PlayerStreamClient.WEB_REMIX,
     )
-    private val monochromeEnabled by preference(
-        this,
-        dev.citali.lunartune.constants.MonochromeEnabledKey,
-        false,
-    )
     @Volatile private var preloadNextSongEnabled = false
     // Developer-options opt-in. Read once in onCreate because it changes how the
     // ExoPlayer instance is built; toggling it takes effect on the next app start.
@@ -403,11 +398,6 @@ class MusicService :
     private val nextStreamPreloadLock = Any()
     private var nextStreamPreloadTargetIds: List<String> = emptyList()
     private var nextStreamPreloadJob: Job? = null
-    private val monochromeInstance by preference(
-        this,
-        dev.citali.lunartune.constants.MonochromeInstanceKey,
-        dev.citali.lunartune.monochrome.MonochromeAudioProvider.DEFAULT_INSTANCE,
-    )
     private val playbackUrlCache = ConcurrentHashMap<String, AuthScopedCacheValue>()
     private var nextMediaItemPrefetchJob: Job? = null
     private val prefetchingMediaIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -7757,7 +7747,7 @@ class MusicService :
      * background. It fetches playback metadata only, not audio bytes.
      */
     private fun updateNextStreamPreload() {
-        if (!preloadNextSongEnabled || isLowDataModeActive() || monochromeEnabled ||
+        if (!preloadNextSongEnabled || isLowDataModeActive() ||
             player.playbackState != Player.STATE_READY
         ) {
             cancelNextStreamPreload()
@@ -8514,21 +8504,11 @@ class MusicService :
 
     private fun createDataSourceFactory(): DataSource.Factory {
         val rawCachedFactory = createCacheDataSource()
-        val monochromeAwareCachedFactory =
-            ResolvingDataSource.Factory(rawCachedFactory) { dataSpec ->
-                resolveOuterMonochromeDataSpec(dataSpec)
-            }
         val directFactory = createResolvedUpstreamDataSourceFactory()
 
         return DataSource.Factory {
-            val selectedCachedFactory =
-                if (monochromeEnabled && !isLowDataModeActive()) {
-                    monochromeAwareCachedFactory
-                } else {
-                    rawCachedFactory
-                }
             SchemeRoutingDataSource(
-                cachedFactory = selectedCachedFactory,
+                cachedFactory = rawCachedFactory,
                 directFactory = directFactory,
             )
         }
@@ -8551,45 +8531,6 @@ class MusicService :
         return ResolvingDataSource.Factory(chunkedYoutubeMediaFactory) { dataSpec ->
             resolvePlaybackDataSpec(dataSpec = dataSpec)
         }
-    }
-
-    private fun resolveOuterMonochromeDataSpec(dataSpec: DataSpec): DataSpec {
-        if (dataSpec.uri.shouldBypassYouTubeResolver()) return dataSpec
-        if (!monochromeEnabled || isLowDataModeActive()) return dataSpec
-        val mediaId = dataSpec.key ?: return dataSpec
-        val storedFormat =
-            runBlocking(Dispatchers.IO) {
-                database.format(mediaId).first()
-            }
-        if (storedFormat != null) {
-            audioNormalizationFactorCache[mediaId] =
-                calculateAudioNormalizationFactor(storedFormat, normalizeAudio = true)
-        }
-        val knownContentLength =
-            contentLengthCache[mediaId] ?: storedFormat?.contentLength?.takeIf { it > 0L } ?: runCatching {
-                downloadCache
-                    .getContentMetadata(mediaId)
-                    .get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
-            }.getOrNull()?.takeIf { it > 0L } ?: runCatching {
-                playerCache
-                    .getContentMetadata(mediaId)
-                    .get(ContentMetadata.KEY_CONTENT_LENGTH, -1L)
-            }.getOrNull()?.takeIf { it > 0L }
-
-        resolveCachedDataSpec(
-            dataSpec = dataSpec,
-            mediaId = mediaId,
-            knownContentLength = knownContentLength,
-        )?.let { cachedDataSpec ->
-            scope.launch(Dispatchers.IO) { recoverSong(mediaId) }
-            return cachedDataSpec
-        }
-
-        return resolveLosslessDataSpec(
-            dataSpec = dataSpec,
-            mediaId = mediaId,
-            previousFormat = storedFormat,
-        ) ?: dataSpec
     }
 
     private fun resolveMediaItemForCast(mediaItem: MediaItem): MediaItem {
@@ -8644,17 +8585,6 @@ class MusicService :
         knownContentLength?.takeIf { it > 0L }?.let { contentLengthCache[mediaId] = it }
 
         val lowDataModeActive = isLowDataModeActive()
-
-        // Lossless fallback when directFactory / Cast bypasses outer Monochrome resolver.
-        if (!lowDataModeActive && monochromeEnabled) {
-            resolveLosslessDataSpec(
-                dataSpec = dataSpec,
-                mediaId = mediaId,
-                previousFormat = storedFormat,
-            )?.let { losslessDataSpec ->
-                return losslessDataSpec
-            }
-        }
 
         val authFingerprint = YTPlayerUtils.currentStreamCacheFingerprint()
         playbackUrlCache[mediaId]
@@ -8886,83 +8816,6 @@ class MusicService :
         }
     }
 
-
-    /**
-     * Attempts to resolve a lossless FLAC stream via the Monochrome source
-     * for the given song. Returns null when the source is unavailable for
-     * this item so regular YouTube Music resolution can proceed.
-     *
-     * The returned DataSpec uses the [MonochromeStreamResolver.CACHE_KEY_PREFIX]
-     * cache key so lossless bytes never mix with YouTube Music spans in the
-     * Media3 caches.
-     */
-    private fun resolveLosslessDataSpec(
-        dataSpec: DataSpec,
-        mediaId: String,
-        previousFormat: FormatEntity?,
-    ): DataSpec? {
-        if (mediaId.startsWith(MonochromeStreamResolver.CACHE_KEY_PREFIX)) return dataSpec
-        if (dataSpec.uri.shouldBypassYouTubeResolver()) return null
-        val song =
-            runBlocking(Dispatchers.IO) {
-                database.getSongByIdBlocking(mediaId)
-            } ?: return null
-        if (song.song.isLocal || song.song.isMusicVideo) return null
-        val instanceUrl =
-            monochromeInstance.ifBlank {
-                dev.citali.lunartune.monochrome.MonochromeAudioProvider.DEFAULT_INSTANCE
-            }
-        val resolved =
-            runBlocking(Dispatchers.IO) {
-                // Search can require a retry when the public instance is behind Cloudflare.
-                // Three seconds routinely expired before a valid match could be returned.
-                withTimeoutOrNull(10_000L) {
-                    MonochromeStreamResolver.resolve(
-                        songId = mediaId,
-                        title = song.song.title,
-                        artists = song.artists.map { it.name },
-                        durationSec = song.song.duration.takeIf { it > 0 },
-                        instanceUrl = instanceUrl,
-                    )
-                }
-            } ?: return null
-
-        // The stream resolver changes the bytes consumed by Media3, but the player badges and
-        // information sheet observe the persisted FormatEntity. Replace the stale YouTube
-        // Opus/AAC details so the UI reports the stream that is actually being decoded.
-        database.query {
-            upsert(
-                FormatEntity(
-                    id = mediaId,
-                    itag = 0,
-                    mimeType = resolved.mimeType.substringBefore(";"),
-                    codecs = "flac",
-                    bitrate = resolved.bitrate ?: 0,
-                    sampleRate = resolved.sampleRate,
-                    contentLength = resolved.contentLength ?: 0L,
-                    loudnessDb = previousFormat?.loudnessDb,
-                    perceptualLoudnessDb = previousFormat?.perceptualLoudnessDb,
-                    playbackUrl = null,
-                ),
-            )
-        }
-        resolved.contentLength?.takeIf { it > 0L }?.let { contentLengthCache[mediaId] = it }
-        Timber.tag("Monochrome").d(
-            "Using lossless stream for %s: %s, bitrate=%s, sampleRate=%s, bitDepth=%s, bytes=%s",
-            mediaId,
-            resolved.mimeType,
-            resolved.bitrate,
-            resolved.sampleRate,
-            resolved.bitDepth,
-            resolved.contentLength,
-        )
-
-        return dataSpec
-            .buildUpon()
-            .setUri(resolved.url.toUri())
-            .setKey(MonochromeStreamResolver.cacheKeyFor(mediaId))
-            .build()
-    }
 
     private fun FormatEntity?.hasDisplayablePlaybackDetails(): Boolean {
         val format = this ?: return false

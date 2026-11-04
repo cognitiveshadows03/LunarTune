@@ -436,21 +436,6 @@ class AboutViewModel
                                     ),
                                 ),
                         ),
-                        TeamMember(
-                            avatarUrl = "https://avatars.githubusercontent.com/monochrome-music?v=4",
-                            name = "Monochrome",
-                            positionResId = R.string.about_position_monochrome,
-                            profileUrl = "https://github.com/monochrome-music/monochrome",
-                            links =
-                                AboutLinkCollection.of(
-                                    AboutLinkUiModel(
-                                        id = "github",
-                                        iconResId = R.drawable.github,
-                                        labelResId = R.string.about_content_desc_github,
-                                        url = "https://github.com/monochrome-music/monochrome",
-                                    ),
-                                ),
-                        ),
                     ),
                 contributorsState = contributorsState,
                 contributorsReadMoreUrl = ContributorsReadMoreUrl,
