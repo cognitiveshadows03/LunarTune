@@ -687,9 +687,10 @@ object ComposeToImage {
         bottomPadding: Float = canvasHeight - padding,
         textColor: Int,
         logoColor: Int? = null,
+        scale: Float = 1f,
     ) {
         val baseSize = minOf(canvasWidth, canvasHeight).toFloat()
-        val logoSize = (baseSize * 0.055f).toInt().coerceAtLeast(1)
+        val logoSize = (baseSize * 0.055f * scale).toInt().coerceAtLeast(1)
 
         val brand =
             context.getDrawable(R.drawable.lunartune_brand_round)?.toBitmap(logoSize, logoSize)
@@ -699,7 +700,7 @@ object ComposeToImage {
         val appNamePaint =
             TextPaint().apply {
                 color = textColor
-                textSize = baseSize * 0.028f
+                textSize = baseSize * 0.028f * scale
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
                 isAntiAlias = true
                 letterSpacing = 0.02f
@@ -846,11 +847,12 @@ object ComposeToImage {
                 }
             canvas.drawRect(RectF(0f, 0f, w.toFloat(), h.toFloat()), scrim)
 
-            // Centred glass card, a little wider and noticeably taller so the
-            // proportions read like the reference song card. The full-bleed
-            // blurred artwork above is deliberately untouched.
+            // Centred glass card. The words and app mark are a little larger and
+            // the card a little shorter than before, so the translucent stretch
+            // between them is not mostly empty. The full-bleed blurred artwork
+            // above is deliberately untouched.
             val cardWidth = w * 0.72f
-            val cardHeight = h * 0.64f
+            val cardHeight = h * 0.60f
             val cardLeft = (w - cardWidth) / 2f
             val cardRight = cardLeft + cardWidth
             val cardTop = (h - cardHeight) / 2f
@@ -859,7 +861,7 @@ object ComposeToImage {
             val artLeft = cardLeft + inset
             val artSize = cardWidth - inset * 2f
             val artTop = cardTop + inset
-            val gap = cardWidth * 0.05f
+            val gap = cardWidth * 0.055f
             val textWidth = artSize.toInt()
             val corner = cardWidth * 0.055f
             val cardRect = RectF(cardLeft, cardTop, cardRight, cardBottom)
@@ -867,14 +869,14 @@ object ComposeToImage {
             val titlePaint =
                 TextPaint().apply {
                     color = onCard
-                    textSize = cardWidth * 0.060f
+                    textSize = cardWidth * 0.072f
                     typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
                     isAntiAlias = true
                 }
             val artistPaint =
                 TextPaint().apply {
                     color = secondaryOnCard
-                    textSize = cardWidth * 0.038f
+                    textSize = cardWidth * 0.046f
                     typeface = Typeface.create("sans-serif", Typeface.NORMAL)
                     isAntiAlias = true
                 }
@@ -969,8 +971,7 @@ object ComposeToImage {
             canvas.withTranslation(artLeft, y) { artistLayout.draw(this) }
 
             // No progress bar or elapsed/duration labels: the words sit just
-            // under the cover and the app mark stays pinned to the bottom,
-            // leaving the translucent space between them.
+            // under the cover and the app mark stays pinned to the bottom.
             AppLogo(
                 context = context,
                 canvas = canvas,
@@ -980,6 +981,7 @@ object ComposeToImage {
                 bottomPadding = cardBottom - inset,
                 textColor = secondaryOnCard,
                 logoColor = onCard,
+                scale = 1.18f,
             )
 
             bitmap
