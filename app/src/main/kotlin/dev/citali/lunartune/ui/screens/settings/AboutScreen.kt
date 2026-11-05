@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -29,12 +30,14 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
@@ -44,42 +47,51 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
-import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
-import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.viewmodels.AboutContributorUiCollection
 import dev.citali.lunartune.viewmodels.AboutContributorsUiState
@@ -102,7 +114,6 @@ fun AboutScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
-    val scrollBehavior = appBarScrollBehavior()
 
     LaunchedEffect(viewModel, uriHandler) {
         viewModel.effects.collect { effect ->
@@ -114,7 +125,6 @@ fun AboutScreen(
 
     AboutScreenContent(
         state = state,
-        scrollBehavior = scrollBehavior,
         onNavigateUp = navController::navigateUp,
         onNavigateHome = navController::backToMain,
         onOpenUri = viewModel::openUri,
@@ -125,11 +135,9 @@ fun AboutScreen(
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AboutScreenContent(
     state: AboutScreenState,
-    scrollBehavior: TopAppBarScrollBehavior,
     onNavigateUp: () -> Unit,
     onNavigateHome: () -> Unit,
     onOpenUri: (String) -> Unit,
@@ -139,98 +147,169 @@ private fun AboutScreenContent(
     onRetryDependencyLicenses: () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
+    // iOS-style rubber band: the whole screen follows the finger past the
+    // scroll edges and springs back when released.
+    val overscroll = remember { Animatable(0f) }
+    val overscrollConnection =
+        remember(listState, scope) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                        scope.launch {
+                            overscroll.snapTo(
+                                (overscroll.value + available.y * 0.45f).coerceIn(-180f, 180f),
+                            )
+                        }
+                    }
+                    return Offset.Zero
+                }
+
+                override suspend fun onPostFling(
+                    consumed: Velocity,
+                    available: Velocity,
+                ): Velocity {
+                    overscroll.animateTo(
+                        0f,
+                        spring(
+                            dampingRatio = Spring.DampingRatioLowBouncy,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    )
+                    return Velocity.Zero
+                }
+            }
+        }
+
+    BoxWithConstraints(
         modifier =
             Modifier
                 .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.about),
-                        fontWeight = FontWeight.Bold,
+                .background(Color.Black)
+                .nestedScroll(overscrollConnection),
+    ) {
+        val headerTop = maxHeight * 0.16f
+        val sheetTop = maxHeight * 0.62f
+        val overscrollPx by overscroll.asState()
+
+        // Fixed identity behind the scrolling sheet, drawn in dark wine tones.
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = headerTop)
+                    .graphicsLayer { translationY = overscrollPx * 0.5f },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(150.dp),
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.about_splash),
+                    contentDescription = stringResource(R.string.app_name),
+                    modifier = Modifier.padding(30.dp),
+                )
+            }
+            Spacer(Modifier.height(30.dp))
+            Text(
+                text = stringResource(R.string.app_name),
+                fontSize = 44.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text =
+                    (state as? AboutScreenState.Success)?.model?.versionName
+                        ?.let { version -> "v$version" }
+                        ?: stringResource(R.string.app_name),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.55f),
+            )
+        }
+
+        // The card sheet scrolls over the identity and rubber-bands with it.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { translationY = overscrollPx },
+        ) {
+            when (state) {
+                AboutScreenState.Loading -> {
+                    AboutLoadingContent(modifier = Modifier.fillMaxSize())
+                }
+
+                AboutScreenState.Empty -> {
+                    AboutMessageContent(
+                        message = stringResource(R.string.no_results_found),
+                        modifier = Modifier.fillMaxSize(),
                     )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateUp,
-                        onLongClick = onNavigateHome,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = stringResource(R.string.back_button_desc),
-                        )
-                    }
-                },
-                colors =
-                    TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    ),
-                scrollBehavior = scrollBehavior,
+                }
+
+                is AboutScreenState.Error -> {
+                    AboutMessageContent(
+                        message = stringResource(state.messageResId),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
+                is AboutScreenState.Success -> {
+                    AboutSuccessContent(
+                        model = state.model,
+                        onOpenUri = onOpenUri,
+                        onRetryContributors = onRetryContributors,
+                        onOpenDependencyLicenses = onOpenDependencyLicenses,
+                        sheetTop = sheetTop,
+                        modifier = Modifier.fillMaxSize(),
+                        listState = listState,
+                    )
+                }
+            }
+        }
+
+        // Simple top row, like the reference About screen.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .graphicsLayer { translationY = overscrollPx * 0.35f },
+        ) {
+            IconButton(
+                onClick = onNavigateUp,
+                onLongClick = onNavigateHome,
+                modifier =
+                    Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f)),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.arrow_back),
+                    contentDescription = stringResource(R.string.back_button_desc),
+                    tint = Color.White,
+                )
+            }
+            Text(
+                text = stringResource(R.string.about),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White.copy(alpha = 0.65f),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.weight(1f),
             )
-        },
-    ) { innerPadding ->
-        val playerAwareInsets =
-            LocalPlayerAwareWindowInsets.current.only(
-                WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-            )
-
-        when (state) {
-            AboutScreenState.Loading -> {
-                AboutLoadingContent(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .windowInsetsPadding(playerAwareInsets),
-                )
-            }
-
-            AboutScreenState.Empty -> {
-                AboutMessageContent(
-                    message = stringResource(R.string.no_results_found),
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .windowInsetsPadding(playerAwareInsets),
-                )
-            }
-
-            is AboutScreenState.Error -> {
-                AboutMessageContent(
-                    message = stringResource(state.messageResId),
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                            .windowInsetsPadding(playerAwareInsets),
-                )
-            }
-
-            is AboutScreenState.Success -> {
-                AboutSuccessContent(
-                    model = state.model,
-                    onOpenUri = onOpenUri,
-                    onRetryContributors = onRetryContributors,
-                    onOpenDependencyLicenses = onOpenDependencyLicenses,
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .windowInsetsPadding(playerAwareInsets),
-                    contentPadding =
-                        PaddingValues(
-                            top = innerPadding.calculateTopPadding() + AboutSpacing.xs,
-                            bottom = SettingsDimensions.ScreenBottomPadding,
-                        ),
-                    listState = listState,
-                )
-            }
+            Spacer(Modifier.size(48.dp))
         }
     }
 
@@ -524,42 +603,36 @@ private fun AboutSuccessContent(
     onOpenUri: (String) -> Unit,
     onRetryContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
+    sheetTop: Dp,
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues,
     listState: LazyListState,
 ) {
-    val leadDevelopers = remember(model.leadDeveloper) { TeamMemberCollection.of(model.leadDeveloper) }
-
     LazyColumn(
         state = listState,
         modifier = modifier,
-        contentPadding = contentPadding,
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
+        contentPadding =
+            PaddingValues(
+                top = sheetTop,
+                bottom = SettingsDimensions.ScreenBottomPadding + 40.dp,
+                start = 16.dp,
+                end = 16.dp,
+            ),
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.md),
     ) {
-        item(key = "identity", contentType = "about_identity") {
-            AboutContentContainer {
-                AboutIdentityCard(
-                    model = model,
-                    onOpenUri = onOpenUri,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        item(key = "project_information", contentType = "about_actions") {
-            AboutContentContainer {
-                AboutProjectInformationSection(
-                    onOpenDependencyLicenses = onOpenDependencyLicenses,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+        item(key = "about_links", contentType = "about_links") {
+            AboutLinksCard(
+                model = model,
+                onOpenUri = onOpenUri,
+                onOpenDependencyLicenses = onOpenDependencyLicenses,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         item(key = "lead_developer", contentType = "about_team_section") {
             AboutContentContainer {
                 TeamMemberSection(
                     title = stringResource(R.string.about_lead_developer),
-                    members = leadDevelopers,
+                    members = TeamMemberCollection.of(model.leadDeveloper),
                     onOpenUri = onOpenUri,
                     prominentFirstItem = true,
                     modifier = Modifier.fillMaxWidth(),
@@ -578,11 +651,11 @@ private fun AboutSuccessContent(
             }
         }
 
-        item(key = "respecters", contentType = "about_team_section") {
+        item(key = "contributors", contentType = "about_team_section") {
             AboutContentContainer {
                 TeamMemberSection(
-                    title = stringResource(R.string.about_respecter),
-                    members = model.respecters,
+                    title = stringResource(R.string.about_contributors),
+                    members = model.credits,
                     onOpenUri = onOpenUri,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -594,6 +667,112 @@ private fun AboutSuccessContent(
                 LegalNoticeCard(modifier = Modifier.fillMaxWidth())
             }
         }
+    }
+}
+
+@Composable
+private fun AboutLinksCard(
+    model: AboutUiModel,
+    onOpenUri: (String) -> Unit,
+    onOpenDependencyLicenses: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val wineTint = MaterialTheme.colorScheme.primary
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = Color(0xFF241A1C),
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+        ) {
+            val links = model.primaryLinks
+            repeat(links.size) { index ->
+                val link = links[index]
+                AboutLinkRow(
+                    iconResId = link.iconResId,
+                    label = stringResource(link.labelResId),
+                    tint = wineTint,
+                    onClick = { onOpenUri(link.url) },
+                )
+                if (index < links.size - 1) {
+                    HorizontalDivider(
+                        color = Color.White.copy(alpha = 0.08f),
+                        modifier = Modifier.padding(start = 62.dp),
+                    )
+                }
+            }
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 62.dp))
+            AboutLinkRow(
+                iconResId = R.drawable.language,
+                label = stringResource(R.string.about_contributor_translation),
+                tint = wineTint,
+                onClick = { onOpenUri(model.contributorsReadMoreUrl) },
+            )
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 62.dp))
+            AboutLinkRow(
+                iconResId = R.drawable.info,
+                label = stringResource(R.string.about_license),
+                tint = wineTint,
+                onClick = onOpenDependencyLicenses,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutLinkRow(
+    iconResId: Int,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(tint),
+        ) {
+            Icon(
+                painter = painterResource(iconResId),
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            painter = painterResource(R.drawable.arrow_forward),
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.75f),
+        )
     }
 }
 
