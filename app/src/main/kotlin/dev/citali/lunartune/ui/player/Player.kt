@@ -108,6 +108,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -220,6 +221,7 @@ import dev.citali.lunartune.ui.screens.LOGIN_ROUTE
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.screens.settings.DarkMode
 import dev.citali.lunartune.ui.utils.highRes
+import dev.citali.lunartune.ui.theme.PlayerBackgroundColorUtils
 import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import dev.citali.lunartune.ui.utils.ShowMediaInfo
 import dev.citali.lunartune.ui.utils.YtimgResizePolicy
@@ -2096,16 +2098,34 @@ fun BottomSheetPlayer(
                 }
             }
 
+        // Follow the artwork: the queue sheet takes a comfortable dark tone
+        // derived from the same palette the player uses, instead of a flat
+        // surface container. Black theme and missing artwork keep the old look.
+        val queueBackgroundColor =
+            remember(gradientColors, useBlackBackground, queueSurfaceColor) {
+                val seed = gradientColors.firstOrNull()
+                when {
+                    useBlackBackground -> Color.Black
+                    seed == null -> queueSurfaceColor
+                    else -> {
+                        val comfortable =
+                            PlayerBackgroundColorUtils.ensureComfortableColor(
+                                seed,
+                                minBrightness = 0.16f,
+                                maxBrightness = 0.40f,
+                                minSaturation = 0.28f,
+                            )
+                        val deep = PlayerBackgroundColorUtils.darkenColor(comfortable, 0.74f)
+                        lerp(deep, queueSurfaceColor, 0.28f)
+                    }
+                }
+            }
+
         Queue(
             state = queueSheetState,
             playerBottomSheetState = state,
             navController = navController,
-            backgroundColor =
-                if (useBlackBackground) {
-                    Color.Black
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainer
-                },
+            backgroundColor = queueBackgroundColor,
             onBackgroundColor = queueOnBackgroundColor,
             TextBackgroundColor = TextBackgroundColor,
             textButtonColor = textButtonColor,

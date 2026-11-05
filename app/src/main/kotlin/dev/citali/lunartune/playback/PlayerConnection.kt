@@ -46,6 +46,7 @@ import dev.citali.lunartune.extensions.currentMetadata
 import dev.citali.lunartune.extensions.getCurrentQueueIndex
 import dev.citali.lunartune.extensions.getQueueWindows
 import dev.citali.lunartune.models.MediaMetadata
+import dev.citali.lunartune.models.QueueFilter
 import dev.citali.lunartune.playback.MusicService.MusicBinder
 import dev.citali.lunartune.playback.queues.Queue
 import dev.citali.lunartune.ui.player.refetchCanvasArtworkForPlayback
@@ -74,6 +75,10 @@ class PlayerConnection(
     val service = binder.service
     val player = service.player
     val localPlayer = service.localPlayer
+
+    /** Which auto-play filter the queue chips have selected. */
+    val currentQueueFilter: StateFlow<QueueFilter> = service.currentQueueFilter
+    fun setQueueFilter(filter: QueueFilter) = service.setQueueFilter(filter)
 
     private val _rawPlaybackState = MutableStateFlow(player.playbackState)
     private val _rawIsPlaying = MutableStateFlow(player.isPlaying)

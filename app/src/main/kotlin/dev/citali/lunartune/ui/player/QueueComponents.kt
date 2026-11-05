@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,12 +32,15 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,6 +89,7 @@ import dev.citali.lunartune.db.entities.formattedSampleRate
 import dev.citali.lunartune.models.ActiveOutputDevice
 import dev.citali.lunartune.models.BluetoothAudioDeviceCategory
 import dev.citali.lunartune.models.MediaMetadata
+import dev.citali.lunartune.models.QueueFilter
 import dev.citali.lunartune.models.PlayerOutputDevice
 import dev.citali.lunartune.ui.component.ActionPromptDialog
 import dev.citali.lunartune.ui.component.BottomSheetState
@@ -110,6 +115,8 @@ fun CurrentSongHeader(
     queueDuration: Int,
     infiniteQueueEnabled: Boolean,
     infiniteQueueLoading: Boolean,
+    selectedFilter: QueueFilter,
+    onFilterSelected: (QueueFilter) -> Unit,
     backgroundColor: Color,
     onBackgroundColor: Color,
     onToggleLike: () -> Unit,
@@ -407,6 +414,35 @@ fun CurrentSongHeader(
             style = MaterialTheme.typography.bodySmall,
             color = onBackgroundColor.copy(alpha = 0.5f),
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Auto-play filter chips: choosing one rebuilds only the upcoming
+        // radio songs, never the track that is currently playing.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+        ) {
+            QueueFilter.entries.forEach { filter ->
+                FilterChip(
+                    selected = filter == selectedFilter,
+                    onClick = { onFilterSelected(filter) },
+                    label = { Text(stringResource(filter.titleRes)) },
+                    shape = CircleShape,
+                    colors =
+                        FilterChipDefaults.filterChipColors(
+                            containerColor = backgroundColor.copy(alpha = 0.55f),
+                            labelColor = onBackgroundColor.copy(alpha = 0.72f),
+                            selectedContainerColor = onBackgroundColor.copy(alpha = 0.92f),
+                            selectedLabelColor = backgroundColor,
+                        ),
+                    border = null,
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
