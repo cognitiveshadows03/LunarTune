@@ -168,13 +168,21 @@ fun LibraryPlaylistsScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
     var pendingPlaylistOrderUpdate by remember { mutableStateOf(false) }
+    // The list has two items before the playlists (the controls row and the tag
+    // filter). The reorderable callback reports raw LazyColumn indices, so those
+    // have to be taken off before indexing the playlist list. Without this the
+    // move lands outside the list and the dragged card just floats back to its
+    // own slot instead of swapping places.
+    val playlistHeaderItems = 2
     val reorderableState =
         rememberReorderableLazyListState(
             lazyListState = lazyListState,
             scrollThresholdPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
         ) { from, to ->
-            if (from.index in mutablePlaylists.indices && to.index in mutablePlaylists.indices) {
-                mutablePlaylists.move(from.index, to.index)
+            val fromIndex = from.index - playlistHeaderItems
+            val toIndex = to.index - playlistHeaderItems
+            if (fromIndex in mutablePlaylists.indices && toIndex in mutablePlaylists.indices) {
+                mutablePlaylists.move(fromIndex, toIndex)
                 pendingPlaylistOrderUpdate = true
             }
         }
