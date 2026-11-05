@@ -394,7 +394,6 @@ fun PlayerMenu(
                             .clickable {
                                 sharePlayerCard(
                                     context = context,
-                                    scope = coroutineScope,
                                     mediaMetadata = mediaMetadata,
                                     artworkUrl = mediaMetadata.thumbnailUrl,
                                     position = playerConnection.player.currentPosition,
