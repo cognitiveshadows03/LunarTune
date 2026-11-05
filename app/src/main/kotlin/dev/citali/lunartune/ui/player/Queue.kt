@@ -188,6 +188,7 @@ fun Queue(
     val queueRowHeight = ListItemHeight
     var infiniteQueueEnabled by rememberPreference(AutoLoadMoreKey, defaultValue = true)
     val infiniteQueueLoading by playerConnection.service.infiniteQueueLoading.collectAsState()
+    val currentQueueFilter by playerConnection.currentQueueFilter.collectAsState()
     val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
     val togetherForcesLock =
         togetherSessionState is dev.citali.lunartune.together.TogetherSessionState.Joined &&
@@ -838,6 +839,8 @@ fun Queue(
                     queueDuration = queueLength,
                     infiniteQueueEnabled = infiniteQueueEnabled,
                     infiniteQueueLoading = infiniteQueueLoading,
+                    selectedFilter = currentQueueFilter,
+                    onFilterSelected = playerConnection::setQueueFilter,
                     backgroundColor = backgroundColor,
                     onBackgroundColor = onBackgroundColor,
                     onToggleLike = {

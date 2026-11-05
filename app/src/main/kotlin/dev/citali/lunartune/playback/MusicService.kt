@@ -150,6 +150,8 @@ import dev.citali.lunartune.constants.AudioQuality
 import dev.citali.lunartune.constants.AudioQualityKey
 import dev.citali.lunartune.constants.AutoDownloadOnLikeKey
 import dev.citali.lunartune.constants.AutoLoadMoreKey
+import dev.citali.lunartune.models.QueueFilter
+import dev.citali.lunartune.playback.queues.QueueFilterProvider
 import dev.citali.lunartune.constants.AutoSkipNextOnErrorKey
 import dev.citali.lunartune.constants.AutoStartOnBluetoothKey
 import dev.citali.lunartune.constants.CrossfadeCurve
@@ -264,6 +266,7 @@ import dev.citali.lunartune.utils.NetworkConnectivityObserver
 import dev.citali.lunartune.utils.StreamClientUtils
 import dev.citali.lunartune.utils.SyncUtils
 import dev.citali.lunartune.utils.YTPlayerUtils
+import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.dataStore
 import dev.citali.lunartune.utils.preference
 import dev.citali.lunartune.utils.enumPreference
@@ -563,6 +566,7 @@ class MusicService :
     val currentMediaMetadata = MutableStateFlow<dev.citali.lunartune.models.MediaMetadata?>(null)
     val queueRestoreCompleted = MutableStateFlow(false)
     val infiniteQueueLoading = MutableStateFlow(false)
+    val currentQueueFilter = MutableStateFlow(QueueFilter.ALL)
     private val playerInitialized = MutableStateFlow(false)
     private val currentSong =
         currentMediaMetadata
@@ -1746,6 +1750,16 @@ class MusicService :
                     playerInitialized.first { it }
                     val persistedQueue = readPersistentObject<PersistQueue>(PERSISTENT_QUEUE_FILE)
                     val persistedPlayerState = readPersistentObject<PersistPlayerState>(PERSISTENT_PLAYER_STATE_FILE)
+
+                    // Warm the persisted target's stream URL in parallel with the
+                    // queue restore, so a widget/auto-resume does not have to wait
+                    // on a full InnerTube round trip before the first audio byte.
+                    val restoreTargetId =
+                        persistedQueue?.items?.getOrNull(persistedQueue.mediaItemIndex)?.id
+                            ?: persistedQueue?.items?.firstOrNull()?.id
+                    if (!restoreTargetId.isNullOrBlank()) {
+                        prefetchMediaItemStream(restoreTargetId)
+                    }
 
                     if (persistedQueue != null || persistedPlayerState != null) {
                         isRestoringPersistentState = true
@@ -5041,6 +5055,28 @@ class MusicService :
         currentQueue = EmptyQueue
     }
 
+    /** Change the auto-play filter chips. Only upcoming auto-added songs are replaced. */
+    fun setQueueFilter(filter: QueueFilter) {
+        currentQueueFilter.value = filter
+        val currentMeta = player.currentMetadata ?: return
+        if (isCurrentPlaybackItemLocal(currentMeta)) return
+
+        cancelInfiniteQueueBootstrap()
+        val currentIndex = player.currentMediaItemIndex
+        val idsToRemove = synchronized(autoAddedMediaIds) { autoAddedMediaIds.toSet() }
+        for (i in player.mediaItemCount - 1 downTo 0) {
+            if (i <= currentIndex) continue
+            if (player.getMediaItemAt(i).mediaId in idsToRemove) {
+                player.removeMediaItem(i)
+            }
+        }
+        autoAddedMediaIds.clear()
+        PreferenceStore.launchEdit(dataStore) {
+            this[AutoLoadMoreKey] = true
+        }
+        onInfiniteQueueEnabled()
+    }
+
     fun onInfiniteQueueEnabled() {
         val currentMeta = player.currentMetadata ?: return
         if (isCurrentPlaybackItemLocal(currentMeta)) return
@@ -5055,28 +5091,37 @@ class MusicService :
                 try {
                     val hideExplicit = dataStore.get(HideExplicitKey, false)
                     val hideVideo = dataStore.get(HideVideoKey, false)
-                    val radioQueue = YouTubeQueue(WatchEndpoint(videoId = seedMediaId), followAutomixPreview = true)
-                    val status =
+                    val filter = currentQueueFilter.value
+                    val (candidates, activeQueue) =
                         withContext(Dispatchers.IO) {
-                            radioQueue
-                                .getInitialStatus()
-                                .filterPlaybackContent(hideExplicit, hideVideo)
+                            QueueFilterProvider.fetchFilteredQueue(
+                                seedSong = currentMeta,
+                                filter = filter,
+                                database = database,
+                                hideExplicit = hideExplicit,
+                                hideVideo = hideVideo,
+                            )
+                        }
+                    val initialItems =
+                        withContext(Dispatchers.IO) {
+                            candidates.filterPlaybackContent(hideExplicit, hideVideo)
                         }
                     val knownIds =
                         (0 until player.mediaItemCount)
                             .mapTo(mutableSetOf()) { player.getMediaItemAt(it).mediaId }
-                    val newItems = status.items.filter { knownIds.add(it.mediaId) }.toMutableList()
+                    val newItems = initialItems.filter { knownIds.add(it.mediaId) }.toMutableList()
                     var loadedPageCount = 1
 
                     while (
+                        filter == QueueFilter.ALL &&
                         newItems.isEmpty() &&
-                        radioQueue.hasNextPage() &&
+                        activeQueue.hasNextPage() &&
                         loadedPageCount < INFINITE_QUEUE_MAX_BOOTSTRAP_PAGES
                     ) {
                         loadedPageCount++
                         val page =
                             withContext(Dispatchers.IO) {
-                                radioQueue
+                                activeQueue
                                     .nextPage()
                                     .filterPlaybackContent(hideExplicit, hideVideo)
                             }
@@ -5090,7 +5135,7 @@ class MusicService :
                         newItems.forEach { autoAddedMediaIds.add(it.mediaId) }
                     }
 
-                    currentQueue = radioQueue
+                    currentQueue = activeQueue
 
                     if (player.playbackState == Player.STATE_ENDED ||
                         player.mediaItemCount == player.currentMediaItemIndex + 1
