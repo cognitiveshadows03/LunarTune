@@ -812,7 +812,10 @@ object ComposeToImage {
             // The glass follows the artwork: dark covers get a dark translucent
             // card, bright covers a light one. Sample the cover once, cheaply,
             // so the words and app mark can keep their contrast on either.
-            val lightArt = (cover?.averageLuminance() ?: 0f) > 0.55f
+            // A device-specific bitmap quirk here must not abort the whole
+            // export: fall back to the dark glass when sampling fails.
+            val lightArt =
+                runCatching { (cover?.averageLuminance() ?: 0f) > 0.55f }.getOrDefault(false)
             val cardFill =
                 if (lightArt) {
                     android.graphics.Color.argb(150, 246, 246, 250)

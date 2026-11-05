@@ -114,7 +114,6 @@ import dev.citali.lunartune.ui.component.MenuSurfaceSection
 import dev.citali.lunartune.ui.component.NewAction
 import dev.citali.lunartune.ui.component.NewActionGrid
 import dev.citali.lunartune.ui.component.NewMenuItem
-import dev.citali.lunartune.ui.component.ShareCardDialog
 import dev.citali.lunartune.ui.component.TextFieldDialog
 import dev.citali.lunartune.utils.TranslatorLang
 import dev.citali.lunartune.utils.TranslatorLanguages
@@ -155,7 +154,6 @@ fun LyricsMenu(
     }
 
     var showTranslateDialog by rememberSaveable { mutableStateOf(false) }
-    var showShareCardDialog by rememberSaveable { mutableStateOf(false) }
     var showLyricsSyncOffsetDialog by rememberSaveable { mutableStateOf(false) }
     val isRefetching by viewModel.isRefetching.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
@@ -319,24 +317,6 @@ fun LyricsMenu(
                 showSearchResultDialog = false
                 viewModel.resetSearchState()
             },
-        )
-    }
-
-    if (showShareCardDialog) {
-        val shareMetadata = mediaMetadataProvider()
-        val sharePosition =
-            dev.citali.lunartune.LocalPlayerConnection.current
-                ?.player
-                ?.currentPosition
-                ?.coerceAtLeast(0L) ?: 0L
-        ShareCardDialog(
-            mediaMetadata = shareMetadata,
-            artworkUrl = shareMetadata.thumbnailUrl,
-            lyrics = currentLyrics,
-            currentLyricLine = currentLyricsLine(currentLyrics, sharePosition),
-            position = sharePosition,
-            duration = shareMetadata.duration.toLong(),
-            onDismiss = { showShareCardDialog = false },
         )
     }
 
@@ -793,19 +773,6 @@ fun LyricsMenu(
                                 },
                                 text = stringResource(R.string.search),
                                 onClick = { showSearchDialog = true },
-                            ),
-                            NewAction(
-                                icon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.share),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(28.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                },
-                                text = stringResource(R.string.share_card),
-                                onClick = { showShareCardDialog = true },
-                                enabled = isTranslateEnabled,
                             ),
                         ),
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
@@ -1730,26 +1697,3 @@ private fun LyricsSearchInputActions(
     }
 }
 
-/**
- * The lyric line that is playing at [positionMs], from the same timed text the lyrics
- * page reads. Returns null when the lyrics carry no timestamps or nothing matches,
- * which the share card treats as "start from the top".
- */
-private fun currentLyricsLine(
-    lyrics: String,
-    positionMs: Long,
-): String? {
-    if (lyrics.isBlank()) return null
-    val timestamp = Regex("""^\[(\d{1,2}):(\d{1,2})(?:[.:](\d{1,3}))?]""")
-    var last: String? = null
-    lyrics.lineSequence().forEach { line ->
-        val match = timestamp.find(line) ?: return@forEach
-        val minutes = match.groupValues[1].toLongOrNull() ?: return@forEach
-        val seconds = match.groupValues[2].toLongOrNull() ?: return@forEach
-        val time = (minutes * 60 + seconds) * 1000
-        if (time > positionMs) return last
-        val text = line.substring(match.range.last + 1).trim()
-        if (text.isNotBlank()) last = text
-    }
-    return last
-}
