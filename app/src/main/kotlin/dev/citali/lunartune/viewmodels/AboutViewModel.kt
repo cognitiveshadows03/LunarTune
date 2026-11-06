@@ -55,7 +55,6 @@ data class AboutUiModel(
     val buildVariant: String,
     val primaryLinks: AboutLinkCollection,
     val leadDeveloper: TeamMember,
-    val credits: TeamMemberCollection,
     val collaborators: TeamMemberCollection,
     val respecters: TeamMemberCollection,
     val contributorsState: AboutContributorsUiState,
@@ -222,6 +221,7 @@ class AboutViewModel
 
         init {
             updateState()
+            loadContributors()
         }
 
         fun retryContributors() {
@@ -333,10 +333,28 @@ class AboutViewModel
                             url = "https://github.com/cognitiveshadows03/LunarTune",
                         ),
                         AboutLinkUiModel(
+                            id = "website",
+                            iconResId = R.drawable.website,
+                            labelResId = R.string.about_content_desc_website,
+                            url = "https://lunartune-03.vercel.app/",
+                        ),
+                        AboutLinkUiModel(
                             id = "telegram",
                             iconResId = R.drawable.telegram,
                             labelResId = R.string.about_content_desc_telegram,
                             url = "https://t.me/LunarTuneGC",
+                        ),
+                        AboutLinkUiModel(
+                            id = "discord",
+                            iconResId = R.drawable.discord,
+                            labelResId = R.string.discord,
+                            url = "https://discord.gg/XF2fpb9rTq",
+                        ),
+                        AboutLinkUiModel(
+                            id = "privacy_policy",
+                            iconResId = R.drawable.lock,
+                            labelResId = R.string.privacy,
+                            url = "https://github.com/cognitiveshadows03/LunarTune/blob/main/PRIVACY.md",
                         ),
                     ),
                 leadDeveloper =
@@ -355,7 +373,6 @@ class AboutViewModel
                                 ),
                             ),
                     ),
-                credits = TeamMemberCollection.of(),
                 collaborators =
                     TeamMemberCollection.of(
                         TeamMember(

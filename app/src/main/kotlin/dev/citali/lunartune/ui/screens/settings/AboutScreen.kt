@@ -40,8 +40,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -653,12 +651,24 @@ private fun AboutSuccessContent(
             }
         }
 
-        item(key = "contributors", contentType = "about_team_section") {
+        item(key = "respecters", contentType = "about_team_section") {
             AboutContentContainer {
                 TeamMemberSection(
-                    title = stringResource(R.string.about_contributors),
-                    members = model.credits,
+                    title = stringResource(R.string.about_respecter),
+                    members = model.respecters,
                     onOpenUri = onOpenUri,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        item(key = "contributors", contentType = "about_contributors_section") {
+            AboutContentContainer {
+                ContributorsSection(
+                    state = model.contributorsState,
+                    readMoreUrl = model.contributorsReadMoreUrl,
+                    onOpenProfile = onOpenUri,
+                    onRetry = onRetryContributors,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -711,13 +721,6 @@ private fun AboutLinksCard(
                     )
                 }
             }
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 62.dp))
-            AboutLinkRow(
-                iconResId = R.drawable.language,
-                label = stringResource(R.string.about_contributor_translation),
-                tint = wineTint,
-                onClick = { onOpenUri(model.contributorsReadMoreUrl) },
-            )
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 62.dp))
             AboutLinkRow(
                 iconResId = R.drawable.info,
@@ -799,229 +802,6 @@ private fun AboutContentContainer(
             content()
         }
     }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AboutIdentityCard(
-    model: AboutUiModel,
-    onOpenUri: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            if (maxWidth >= AboutDimensions.HorizontalHeroBreakpoint) {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(AboutSpacing.md),
-                    horizontalArrangement = Arrangement.spacedBy(AboutSpacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AboutIdentity(
-                        model = model,
-                        horizontalAlignment = Alignment.Start,
-                        modifier = Modifier.weight(1f),
-                    )
-                    LinkChipRow(
-                        links = model.primaryLinks,
-                        onOpenUri = onOpenUri,
-                        horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, Alignment.End),
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            } else {
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(AboutSpacing.md),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(AboutSpacing.md),
-                ) {
-                    AboutIdentity(
-                        model = model,
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    LinkChipRow(
-                        links = model.primaryLinks,
-                        onOpenUri = onOpenUri,
-                        horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, Alignment.CenterHorizontally),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun AboutIdentity(
-    model: AboutUiModel,
-    horizontalAlignment: Alignment.Horizontal,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = horizontalAlignment,
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
-    ) {
-        SurfaceAppIcon()
-        Text(
-            text = stringResource(model.appNameResId),
-            style = MaterialTheme.typography.headlineSmallEmphasized,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, horizontalAlignment),
-            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
-        ) {
-            AboutMetadataBadge(text = model.versionName)
-            model.buildHash?.let { buildHash ->
-                AboutMetadataBadge(text = buildHash)
-            }
-            AboutMetadataBadge(text = model.buildVariant)
-        }
-    }
-}
-
-@Composable
-private fun SurfaceAppIcon(modifier: Modifier = Modifier) {
-    androidx.compose.material3.Surface(
-        modifier = modifier,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-    ) {
-        Image(
-            painter = painterResource(R.drawable.about_splash),
-            contentDescription = stringResource(R.string.app_name),
-            modifier =
-                Modifier
-                    .padding(AboutSpacing.xs)
-                    .size(88.dp),
-        )
-    }
-}
-
-@Composable
-private fun AboutMetadataBadge(
-    text: String,
-    modifier: Modifier = Modifier,
-) {
-    Badge(
-        modifier = modifier.heightIn(min = 32.dp),
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun LinkChipRow(
-    links: AboutLinkCollection,
-    onOpenUri: (String) -> Unit,
-    horizontalArrangement: Arrangement.Horizontal,
-    modifier: Modifier = Modifier,
-) {
-    FlowRow(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = horizontalArrangement,
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
-    ) {
-        repeat(links.size) { index ->
-            val link = links[index]
-            val onClick = remember(link.url, onOpenUri) { { onOpenUri(link.url) } }
-
-            AssistChip(
-                onClick = onClick,
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(link.iconResId),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                },
-                label = {
-                    Text(
-                        text = stringResource(link.labelResId),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-            )
-        }
-    }
-}
-
-@Composable
-private fun AboutProjectInformationSection(
-    onOpenDependencyLicenses: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    AboutActionListItem(
-        title = stringResource(R.string.about_license),
-        iconResId = R.drawable.info,
-        index = 0,
-        itemCount = 1,
-        onClick = onOpenDependencyLicenses,
-        modifier = modifier,
-    )
-}
-
-@Composable
-private fun AboutActionListItem(
-    title: String,
-    iconResId: Int,
-    index: Int,
-    itemCount: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 64.dp),
-        colors = AboutListItemDefaults.colors(),
-        leadingContent = {
-            AboutLeadingIcon(iconResId = iconResId)
-        },
-        trailingContent = {
-            Icon(
-                painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        },
-        content = {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMediumEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-        },
-    )
 }
 
 @Composable
