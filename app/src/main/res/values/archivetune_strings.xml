@@ -799,6 +799,9 @@
     <string name="about_license_unknown">Unknown license</string>
     <string name="about_legal_notice">Legal Notice</string>
     <string name="about_legal_notice_body">LunarTune does not host any content. All music content is provided by third-party sources through YouTube Music. Please respect copyright laws and support official artists and distributors.</string>
+    <string name="about_gpl_license_title">GPL-3.0 License</string>
+    <string name="about_gpl_license_body">This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License v3.0 as published by the Free Software Foundation.</string>
+    <string name="about_gpl_license_view_full">View full license</string>
     <string name="about_position_lead_dev">Lead developer of LunarTune</string>
     <string name="about_position_original">Base framework</string>
     <string name="about_position_bot_contributor">Contributor</string>

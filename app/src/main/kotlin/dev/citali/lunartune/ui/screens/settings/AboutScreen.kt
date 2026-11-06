@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -39,6 +38,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -55,13 +55,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -88,8 +84,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
@@ -98,9 +92,6 @@ import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.utils.backToMain
-import dev.citali.lunartune.viewmodels.AboutDependencyLicenseUiCollection
-import dev.citali.lunartune.viewmodels.AboutDependencyLicensesUiState
-import dev.citali.lunartune.viewmodels.AboutDialog
 import dev.citali.lunartune.viewmodels.AboutLinkCollection
 import dev.citali.lunartune.viewmodels.AboutScreenEffect
 import dev.citali.lunartune.viewmodels.AboutScreenState
@@ -131,9 +122,6 @@ fun AboutScreen(
         onNavigateUp = navController::navigateUp,
         onNavigateHome = navController::backToMain,
         onOpenUri = viewModel::openUri,
-        onOpenDependencyLicenses = viewModel::openDependencyLicenses,
-        onDismissDialog = viewModel::dismissDialog,
-        onRetryDependencyLicenses = viewModel::retryDependencyLicenses,
     )
 }
 
@@ -143,9 +131,6 @@ private fun AboutScreenContent(
     onNavigateUp: () -> Unit,
     onNavigateHome: () -> Unit,
     onOpenUri: (String) -> Unit,
-    onOpenDependencyLicenses: () -> Unit,
-    onDismissDialog: () -> Unit,
-    onRetryDependencyLicenses: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -198,7 +183,7 @@ private fun AboutScreenContent(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(AboutColors.background)
                 .nestedScroll(overscrollConnection),
     ) {
         // Single scrolling surface. The identity hero lives inside the
@@ -232,7 +217,6 @@ private fun AboutScreenContent(
                     AboutSuccessContent(
                         model = state.model,
                         onOpenUri = onOpenUri,
-                        onOpenDependencyLicenses = onOpenDependencyLicenses,
                         topInset = topInset,
                         modifier = Modifier.fillMaxSize(),
                         listState = listState,
@@ -258,32 +242,24 @@ private fun AboutScreenContent(
                     Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.12f)),
+                        .background(AboutColors.TopBarScrim),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.arrow_back),
                     contentDescription = stringResource(R.string.back_button_desc),
-                    tint = Color.White,
+                    tint = AboutColors.TextPrimary,
                 )
             }
             Text(
                 text = stringResource(R.string.about),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.65f),
+                color = AboutColors.TextSecondary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.size(48.dp))
         }
-    }
-
-    if (state is AboutScreenState.Success) {
-        AboutFullScreenDialogs(
-            model = state.model,
-            onDismiss = onDismissDialog,
-            onRetryDependencyLicenses = onRetryDependencyLicenses,
-        )
     }
 }
 
@@ -315,258 +291,9 @@ private fun AboutMessageContent(
 }
 
 @Composable
-private fun AboutFullScreenDialogs(
-    model: AboutUiModel,
-    onDismiss: () -> Unit,
-    onRetryDependencyLicenses: () -> Unit,
-) {
-    when (model.activeDialog) {
-        AboutDialog.NONE -> {
-            Unit
-        }
-
-        AboutDialog.DEPENDENCY_LICENSES -> {
-            AboutFullScreenDialog(
-                title = stringResource(R.string.about_license),
-                onDismiss = onDismiss,
-            ) { modifier ->
-                DependencyLicensesDialogContent(
-                    state = model.dependencyLicensesState,
-                    onRetry = onRetryDependencyLicenses,
-                    modifier = modifier,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun AboutFullScreenDialog(
-    title: String,
-    onDismiss: () -> Unit,
-    content: @Composable (Modifier) -> Unit,
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties =
-            DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-    ) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = title,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    navigationIcon = {
-                        androidx.compose.material3.IconButton(onClick = onDismiss) {
-                            Icon(
-                                painter = painterResource(R.drawable.close),
-                                contentDescription = stringResource(R.string.close_dialog),
-                            )
-                        }
-                    },
-                    colors =
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        ),
-                )
-            },
-        ) { innerPadding ->
-            content(
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(
-                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-                        ),
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun DependencyLicensesDialogContent(
-    state: AboutDependencyLicensesUiState,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    when (state) {
-        AboutDependencyLicensesUiState.Loading -> {
-            DialogStatusContent(
-                message = stringResource(R.string.loading),
-                showRetry = false,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        AboutDependencyLicensesUiState.Empty -> {
-            DialogStatusContent(
-                message = stringResource(R.string.no_results_found),
-                showRetry = true,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        is AboutDependencyLicensesUiState.Error -> {
-            DialogStatusContent(
-                message = stringResource(state.messageResId),
-                showRetry = true,
-                onRetry = onRetry,
-                modifier = modifier,
-            )
-        }
-
-        is AboutDependencyLicensesUiState.Success -> {
-            DependencyLicenseList(
-                licenses = state.licenses,
-                modifier = modifier,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DialogStatusContent(
-    message: String,
-    showRetry: Boolean,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.padding(AboutSpacing.md),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        if (!showRetry) {
-            LoadingIndicator(modifier = Modifier.size(40.dp))
-        }
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = AboutSpacing.sm),
-        )
-        if (showRetry) {
-            TextButton(
-                onClick = onRetry,
-                modifier = Modifier.padding(top = AboutSpacing.sm),
-            ) {
-                Text(text = stringResource(R.string.retry))
-            }
-        }
-    }
-}
-
-@Composable
-private fun DependencyLicenseList(
-    licenses: AboutDependencyLicenseUiCollection,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        LazyColumn(
-            modifier =
-                Modifier
-                    .fillMaxHeight()
-                    .widthIn(max = AboutDimensions.DialogContentMaxWidth)
-                    .fillMaxWidth(),
-            contentPadding = AboutDimensions.DialogListPadding,
-            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-        ) {
-            items(
-                count = licenses.size,
-                key = { index -> "${licenses[index].name}:${licenses[index].version.orEmpty()}:$index" },
-                contentType = { "dependency_license" },
-            ) { index ->
-                val dependency = licenses[index]
-                DependencyLicenseListItem(
-                    name = dependency.name,
-                    version = dependency.version,
-                    licenses = dependency.licenses,
-                    index = index,
-                    itemCount = licenses.size,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DependencyLicenseListItem(
-    name: String,
-    version: String?,
-    licenses: String?,
-    index: Int,
-    itemCount: Int,
-    modifier: Modifier = Modifier,
-) {
-    SegmentedListItem(
-        onClick = NoOpAction,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 76.dp),
-        colors = AboutListItemDefaults.colors(),
-        leadingContent = {
-            AboutLeadingIcon(iconResId = R.drawable.info)
-        },
-        overlineContent =
-            version?.let { versionName ->
-                {
-                    Text(
-                        text = versionName,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            },
-        supportingContent = {
-            Text(
-                text = licenses ?: stringResource(R.string.about_license_unknown),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        content = {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.titleMediumEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    )
-}
-
-@Composable
 private fun AboutSuccessContent(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
-    onOpenDependencyLicenses: () -> Unit,
     topInset: Dp,
     modifier: Modifier = Modifier,
     listState: LazyListState,
@@ -608,11 +335,16 @@ private fun AboutSuccessContent(
             )
         }
 
+        item(key = "gpl_license", contentType = "about_gpl_license") {
+            GplLicenseCard(
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         item(key = "about_links", contentType = "about_links") {
             AboutLinksCard(
                 model = model,
                 onOpenUri = onOpenUri,
-                onOpenDependencyLicenses = onOpenDependencyLicenses,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -694,16 +426,69 @@ private fun AboutIdentityHero(
             text = appName,
             fontSize = 36.sp,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
+            color = AboutColors.TextPrimary,
             maxLines = 1,
         )
         Spacer(Modifier.height(6.dp))
         Text(
             text = "v$versionName",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.6f),
+            color = AboutColors.TextSecondary,
         )
         Spacer(Modifier.height(AboutSpacing.md))
+    }
+}
+
+@Composable
+private fun GplLicenseCard(modifier: Modifier = Modifier) {
+    val uriHandler = LocalUriHandler.current
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.info),
+                    contentDescription = null,
+                    tint = AboutColors.TextPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.about_gpl_license_title),
+                    style = MaterialTheme.typography.titleMediumEmphasized,
+                    color = AboutColors.TextPrimary,
+                )
+            }
+            Text(
+                text = stringResource(R.string.about_gpl_license_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AboutColors.TextSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text(
+                text = stringResource(R.string.about_gpl_license_view_full),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier =
+                    Modifier
+                        .clickable {
+                            uriHandler.openUri("https://github.com/cognitiveshadows03/LunarTune/blob/main/LICENSE")
+                        }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
@@ -711,7 +496,6 @@ private fun AboutIdentityHero(
 private fun AboutLinksCard(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
-    onOpenDependencyLicenses: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val wineTint = MaterialTheme.colorScheme.primary
@@ -746,13 +530,6 @@ private fun AboutLinksCard(
                     )
                 }
             }
-            HorizontalDivider(color = AboutColors.Divider, modifier = Modifier.padding(start = 62.dp))
-            AboutLinkRow(
-                iconResId = R.drawable.info,
-                label = stringResource(R.string.about_license),
-                tint = wineTint,
-                onClick = onOpenDependencyLicenses,
-            )
         }
     }
 }
@@ -793,7 +570,7 @@ private fun AboutLinkRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = Color.White,
+            color = AboutColors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -801,7 +578,7 @@ private fun AboutLinkRow(
         Icon(
             painter = painterResource(R.drawable.arrow_forward),
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.75f),
+            tint = AboutColors.TextSecondary,
         )
     }
 }
@@ -1032,15 +809,33 @@ private fun AboutLeadingIcon(
 }
 
 private object AboutColors {
-    // Card / row containers — dark wine tones that sit on Color.Black.
-    val Container = Color(0xFF1F1A1B)
-    val ContainerHigh = Color(0xFF2A2326)
-    val ContainerHighest = Color(0xFF362D30)
+    // Screen background — black in dark mode, surface in light mode.
+    val background: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.Black else MaterialTheme.colorScheme.surface
+
+    // Card / row containers.
+    val Container: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1F1A1B) else MaterialTheme.colorScheme.surfaceContainerLow
+    val ContainerHigh: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF2A2326) else MaterialTheme.colorScheme.surfaceContainerHigh
+    val ContainerHighest: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF362D30) else MaterialTheme.colorScheme.surfaceContainerHighest
+
     // Text
-    val TextPrimary = Color.White
-    val TextSecondary = Color.White.copy(alpha = 0.62f)
-    val TextTertiary = Color.White.copy(alpha = 0.40f)
-    val Divider = Color.White.copy(alpha = 0.08f)
+    val TextPrimary: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
+    val TextSecondary: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.62f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val TextTertiary: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.40f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+
+    // Misc
+    val Divider: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+    val TopBarScrim: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
+    val AccentIconTint: Color
+        @Composable get() = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
 }
 
 private object AboutDimensions {
