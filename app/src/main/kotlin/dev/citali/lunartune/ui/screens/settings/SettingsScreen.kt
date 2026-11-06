@@ -80,7 +80,6 @@ import androidx.navigation.NavController
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
-import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.constants.AccountBannerSourceKey
 import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
 import dev.citali.lunartune.constants.AccountChannelHandleKey
@@ -493,33 +492,6 @@ fun SettingsScreen(
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        floatingActionButton = {
-            // Quick way back to Home from anywhere in Settings.
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .clickable {
-                            navController.navigate(Screens.Home.route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.home_outlined),
-                    contentDescription = stringResource(R.string.home),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        },
         topBar = {
             if (effectiveHeaderImageUri.isBlank() || searchQuery.isNotBlank()) {
                 LargeFlexibleTopAppBar(
