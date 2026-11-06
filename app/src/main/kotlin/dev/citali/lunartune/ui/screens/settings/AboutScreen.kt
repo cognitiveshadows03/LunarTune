@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -35,6 +34,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -186,57 +191,22 @@ private fun AboutScreenContent(
             }
         }
 
-    BoxWithConstraints(
+    val overscrollPx by overscroll.asState()
+    val topInset =
+        WindowInsets.safeDrawing
+            .only(WindowInsetsSides.Top)
+            .asPaddingValues()
+            .calculateTopPadding()
+
+    Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(Color.Black)
                 .nestedScroll(overscrollConnection),
     ) {
-        val headerTop = maxHeight * 0.16f
-        val sheetTop = maxHeight * 0.62f
-        val overscrollPx by overscroll.asState()
-
-        // Fixed identity behind the scrolling sheet, drawn in dark wine tones.
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = headerTop)
-                    .graphicsLayer { translationY = overscrollPx * 0.5f },
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(150.dp),
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.about_splash),
-                    contentDescription = stringResource(R.string.app_name),
-                    modifier = Modifier.padding(30.dp),
-                )
-            }
-            Spacer(Modifier.height(30.dp))
-            Text(
-                text = stringResource(R.string.app_name),
-                fontSize = 44.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 1,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text =
-                    (state as? AboutScreenState.Success)?.model?.versionName
-                        ?.let { version -> "v$version" }
-                        ?: stringResource(R.string.app_name),
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.55f),
-            )
-        }
-
-        // The card sheet scrolls over the identity and rubber-bands with it.
+        // Single scrolling surface. The identity hero lives inside the
+        // LazyColumn as its first item and fades+scales away as you scroll.
         Box(
             modifier =
                 Modifier
@@ -268,7 +238,7 @@ private fun AboutScreenContent(
                         onOpenUri = onOpenUri,
                         onRetryContributors = onRetryContributors,
                         onOpenDependencyLicenses = onOpenDependencyLicenses,
-                        sheetTop = sheetTop,
+                        topInset = topInset,
                         modifier = Modifier.fillMaxSize(),
                         listState = listState,
                     )
@@ -306,7 +276,7 @@ private fun AboutScreenContent(
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White.copy(alpha = 0.65f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.size(48.dp))
@@ -344,7 +314,7 @@ private fun AboutMessageContent(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = AboutColors.TextSecondary,
         )
     }
 }
@@ -603,22 +573,47 @@ private fun AboutSuccessContent(
     onOpenUri: (String) -> Unit,
     onRetryContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
-    sheetTop: Dp,
+    topInset: Dp,
     modifier: Modifier = Modifier,
     listState: LazyListState,
 ) {
+    // Identity hero height in pixels, measured once it is laid out, so we
+    // can derive a 0..1 scroll progress for the parallax fade+scale.
+    var identityHeightPx by remember { mutableIntStateOf(0) }
+    val scrollProgress by remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex == 0 && identityHeightPx > 0) {
+                (listState.firstVisibleItemScrollOffset.toFloat() / identityHeightPx).coerceIn(0f, 1f)
+            } else if (listState.firstVisibleItemIndex > 0) {
+                1f
+            } else {
+                0f
+            }
+        }
+    }
+
     LazyColumn(
         state = listState,
         modifier = modifier,
         contentPadding =
             PaddingValues(
-                top = sheetTop,
+                top = topInset + 56.dp,
                 bottom = SettingsDimensions.ScreenBottomPadding + 40.dp,
                 start = 16.dp,
                 end = 16.dp,
             ),
         verticalArrangement = Arrangement.spacedBy(AboutSpacing.md),
     ) {
+        item(key = "identity", contentType = "about_identity") {
+            AboutIdentityHero(
+                appName = stringResource(model.appNameResId),
+                versionName = model.versionName,
+                scrollProgress = scrollProgress,
+                onHeightMeasured = { px -> identityHeightPx = px },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
         item(key = "about_links", contentType = "about_links") {
             AboutLinksCard(
                 model = model,
@@ -683,6 +678,62 @@ private fun AboutSuccessContent(
 }
 
 @Composable
+private fun AboutIdentityHero(
+    appName: String,
+    versionName: String,
+    scrollProgress: Float,
+    onHeightMeasured: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Parallax: as the list scrolls, the hero fades out, shrinks slightly,
+    // and drifts up — so the identity recedes behind the links card and
+    // disappears by the time the card reaches the top, matching the
+    // reference About screen.
+    val fade = 1f - scrollProgress
+    val scale = 1f - scrollProgress * 0.25f
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .onSizeChanged { size -> onHeightMeasured(size.height) }
+                .graphicsLayer {
+                    alpha = fade
+                    scaleX = scale
+                    scaleY = scale
+                    translationY = -scrollProgress * 80f
+                },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(120.dp),
+        ) {
+            Image(
+                painter = painterResource(R.drawable.about_splash),
+                contentDescription = appName,
+                modifier = Modifier.padding(24.dp),
+            )
+        }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            text = appName,
+            fontSize = 36.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = "v$versionName",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.6f),
+        )
+        Spacer(Modifier.height(AboutSpacing.md))
+    }
+}
+
+@Composable
 private fun AboutLinksCard(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
@@ -716,12 +767,12 @@ private fun AboutLinksCard(
                 )
                 if (index < links.size - 1) {
                     HorizontalDivider(
-                        color = Color.White.copy(alpha = 0.08f),
+                        color = AboutColors.Divider,
                         modifier = Modifier.padding(start = 62.dp),
                     )
                 }
             }
-            HorizontalDivider(color = Color.White.copy(alpha = 0.08f), modifier = Modifier.padding(start = 62.dp))
+            HorizontalDivider(color = AboutColors.Divider, modifier = Modifier.padding(start = 62.dp))
             AboutLinkRow(
                 iconResId = R.drawable.info,
                 label = stringResource(R.string.about_license),
@@ -839,7 +890,7 @@ private fun LegalNoticeCard(modifier: Modifier = Modifier) {
         shape = MaterialTheme.shapes.extraLarge,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = AboutColors.ContainerHigh,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -857,18 +908,18 @@ private fun LegalNoticeCard(modifier: Modifier = Modifier) {
                 Icon(
                     painter = painterResource(R.drawable.info),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tint = AboutColors.TextSecondary,
                 )
                 Text(
                     text = stringResource(R.string.about_legal_notice),
                     style = MaterialTheme.typography.titleLargeEmphasized,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AboutColors.TextPrimary,
                 )
             }
             Text(
                 text = stringResource(R.string.about_legal_notice_body),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AboutColors.TextSecondary,
             )
         }
     }
@@ -882,7 +933,7 @@ private fun AboutSectionHeader(
     Text(
         text = title,
         style = MaterialTheme.typography.titleMediumEmphasized,
-        color = MaterialTheme.colorScheme.onSurface,
+        color = AboutColors.TextPrimary,
         modifier =
             modifier.padding(
                 horizontal = SettingsDimensions.SectionHeaderHorizontalPadding,
@@ -935,14 +986,14 @@ private fun TeamMemberListItem(
                     Modifier
                         .size(avatarSize)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        .background(AboutColors.ContainerHighest),
             )
         },
         supportingContent = {
             Text(
                 text = stringResource(member.positionResId),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AboutColors.TextSecondary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -957,7 +1008,7 @@ private fun TeamMemberListItem(
             Text(
                 text = member.name,
                 style = MaterialTheme.typography.titleMediumEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AboutColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1054,7 +1105,7 @@ private fun ContributorStatusContent(
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
@@ -1071,7 +1122,7 @@ private fun ContributorStatusContent(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = AboutColors.TextSecondary,
             )
             if (showRetry) {
                 TextButton(onClick = onRetry) {
@@ -1142,14 +1193,14 @@ private fun ContributorListItem(
                     Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        .background(AboutColors.ContainerHighest),
             )
         },
         content = {
             Text(
                 text = login,
                 style = MaterialTheme.typography.bodyLargeEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AboutColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1182,14 +1233,14 @@ private fun ContributorReadMoreListItem(
             Icon(
                 painter = painterResource(R.drawable.arrow_forward),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = AboutColors.TextSecondary,
             )
         },
         content = {
             Text(
                 text = stringResource(R.string.more),
                 style = MaterialTheme.typography.bodyLargeEmphasized,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = AboutColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1219,10 +1270,21 @@ private fun AboutLeadingIcon(
     }
 }
 
+private object AboutColors {
+    // Card / row containers — dark wine tones that sit on Color.Black.
+    val Container = Color(0xFF1F1A1B)
+    val ContainerHigh = Color(0xFF2A2326)
+    val ContainerHighest = Color(0xFF362D30)
+    // Text
+    val TextPrimary = Color.White
+    val TextSecondary = Color.White.copy(alpha = 0.62f)
+    val TextTertiary = Color.White.copy(alpha = 0.40f)
+    val Divider = Color.White.copy(alpha = 0.08f)
+}
+
 private object AboutDimensions {
     val ScreenContentMaxWidth = 840.dp
     val DialogContentMaxWidth = 920.dp
-    val HorizontalHeroBreakpoint = 600.dp
     val DialogListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 }
 
@@ -1237,7 +1299,12 @@ private object AboutListItemDefaults {
     @Composable
     fun colors() =
         ListItemDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            containerColor = AboutColors.Container,
+            headlineColor = AboutColors.TextPrimary,
+            overlineColor = AboutColors.TextSecondary,
+            supportingTextColor = AboutColors.TextSecondary,
+            leadingIconColor = AboutColors.TextPrimary,
+            trailingIconColor = AboutColors.TextSecondary,
         )
 }
 
