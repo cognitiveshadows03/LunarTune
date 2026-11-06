@@ -10,11 +10,10 @@
 package dev.citali.lunartune.ui.screens.settings
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -22,29 +21,22 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,46 +44,48 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.launch
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
+import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
+import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.backToMain
+import dev.citali.lunartune.viewmodels.AboutContributorUiCollection
+import dev.citali.lunartune.viewmodels.AboutContributorsUiState
+import dev.citali.lunartune.viewmodels.AboutDependencyLicenseUiCollection
+import dev.citali.lunartune.viewmodels.AboutDependencyLicensesUiState
+import dev.citali.lunartune.viewmodels.AboutDialog
 import dev.citali.lunartune.viewmodels.AboutLinkCollection
 import dev.citali.lunartune.viewmodels.AboutScreenEffect
 import dev.citali.lunartune.viewmodels.AboutScreenState
@@ -108,6 +102,7 @@ fun AboutScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
+    val scrollBehavior = appBarScrollBehavior()
 
     LaunchedEffect(viewModel, uriHandler) {
         viewModel.effects.collect { effect ->
@@ -119,147 +114,132 @@ fun AboutScreen(
 
     AboutScreenContent(
         state = state,
+        scrollBehavior = scrollBehavior,
         onNavigateUp = navController::navigateUp,
         onNavigateHome = navController::backToMain,
         onOpenUri = viewModel::openUri,
+        onRetryContributors = viewModel::retryContributors,
+        onOpenDependencyLicenses = viewModel::openDependencyLicenses,
+        onDismissDialog = viewModel::dismissDialog,
+        onRetryDependencyLicenses = viewModel::retryDependencyLicenses,
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AboutScreenContent(
     state: AboutScreenState,
+    scrollBehavior: TopAppBarScrollBehavior,
     onNavigateUp: () -> Unit,
     onNavigateHome: () -> Unit,
     onOpenUri: (String) -> Unit,
+    onRetryContributors: () -> Unit,
+    onOpenDependencyLicenses: () -> Unit,
+    onDismissDialog: () -> Unit,
+    onRetryDependencyLicenses: () -> Unit,
 ) {
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
 
-    // iOS-style rubber band: the whole screen follows the finger past the
-    // scroll edges and springs back when released.
-    val overscroll = remember { Animatable(0f) }
-    val overscrollConnection =
-        remember(listState, scope) {
-            object : NestedScrollConnection {
-                override fun onPostScroll(
-                    consumed: Offset,
-                    available: Offset,
-                    source: NestedScrollSource,
-                ): Offset {
-                    if (source == NestedScrollSource.UserInput && available.y != 0f) {
-                        scope.launch {
-                            overscroll.snapTo(
-                                (overscroll.value + available.y * 0.45f).coerceIn(-180f, 180f),
-                            )
-                        }
-                    }
-                    return Offset.Zero
-                }
-
-                override suspend fun onPostFling(
-                    consumed: Velocity,
-                    available: Velocity,
-                ): Velocity {
-                    overscroll.animateTo(
-                        0f,
-                        spring(
-                            dampingRatio = Spring.DampingRatioLowBouncy,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    )
-                    return Velocity.Zero
-                }
-            }
-        }
-
-    val overscrollPx by overscroll.asState()
-    val topInset =
-        WindowInsets.safeDrawing
-            .only(WindowInsetsSides.Top)
-            .asPaddingValues()
-            .calculateTopPadding()
-
-    Box(
+    Scaffold(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(AboutColors.background)
-                .nestedScroll(overscrollConnection),
-    ) {
-        // Single scrolling surface. The identity hero lives inside the
-        // LazyColumn as its first item and fades+scales away as you scroll.
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { translationY = overscrollPx },
-        ) {
-            when (state) {
-                AboutScreenState.Loading -> {
-                    AboutLoadingContent(modifier = Modifier.fillMaxSize())
-                }
-
-                AboutScreenState.Empty -> {
-                    AboutMessageContent(
-                        message = stringResource(R.string.no_results_found),
-                        modifier = Modifier.fillMaxSize(),
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.surface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            LargeFlexibleTopAppBar(
+                title = {
+                    Text(
+                        text = stringResource(R.string.about),
+                        fontWeight = FontWeight.Bold,
                     )
-                }
+                },
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateUp,
+                        onLongClick = onNavigateHome,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = stringResource(R.string.back_button_desc),
+                        )
+                    }
+                },
+                colors =
+                    TopAppBarDefaults.largeTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                scrollBehavior = scrollBehavior,
+            )
+        },
+    ) { innerPadding ->
+        val playerAwareInsets =
+            LocalPlayerAwareWindowInsets.current.only(
+                WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+            )
 
-                is AboutScreenState.Error -> {
-                    AboutMessageContent(
-                        message = stringResource(state.messageResId),
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-
-                is AboutScreenState.Success -> {
-                    AboutSuccessContent(
-                        model = state.model,
-                        onOpenUri = onOpenUri,
-                        topInset = topInset,
-                        modifier = Modifier.fillMaxSize(),
-                        listState = listState,
-                    )
-                }
-            }
-        }
-
-        // Simple top row, like the reference About screen.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-                    .graphicsLayer { translationY = overscrollPx * 0.35f },
-        ) {
-            IconButton(
-                onClick = onNavigateUp,
-                onLongClick = onNavigateHome,
-                modifier =
-                    Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(AboutColors.TopBarScrim),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.arrow_back),
-                    contentDescription = stringResource(R.string.back_button_desc),
-                    tint = AboutColors.TextPrimary,
+        when (state) {
+            AboutScreenState.Loading -> {
+                AboutLoadingContent(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .windowInsetsPadding(playerAwareInsets),
                 )
             }
-            Text(
-                text = stringResource(R.string.about),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = AboutColors.TextSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.size(48.dp))
+
+            AboutScreenState.Empty -> {
+                AboutMessageContent(
+                    message = stringResource(R.string.no_results_found),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .windowInsetsPadding(playerAwareInsets),
+                )
+            }
+
+            is AboutScreenState.Error -> {
+                AboutMessageContent(
+                    message = stringResource(state.messageResId),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .windowInsetsPadding(playerAwareInsets),
+                )
+            }
+
+            is AboutScreenState.Success -> {
+                AboutSuccessContent(
+                    model = state.model,
+                    onOpenUri = onOpenUri,
+                    onRetryContributors = onRetryContributors,
+                    onOpenDependencyLicenses = onOpenDependencyLicenses,
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(playerAwareInsets),
+                    contentPadding =
+                        PaddingValues(
+                            top = innerPadding.calculateTopPadding() + AboutSpacing.xs,
+                            bottom = SettingsDimensions.ScreenBottomPadding,
+                        ),
+                    listState = listState,
+                )
+            }
         }
+    }
+
+    if (state is AboutScreenState.Success) {
+        AboutFullScreenDialogs(
+            model = state.model,
+            onDismiss = onDismissDialog,
+            onRetryDependencyLicenses = onRetryDependencyLicenses,
+        )
     }
 }
 
@@ -285,248 +265,417 @@ private fun AboutMessageContent(
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
-            color = AboutColors.TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
+}
+
+@Composable
+private fun AboutFullScreenDialogs(
+    model: AboutUiModel,
+    onDismiss: () -> Unit,
+    onRetryDependencyLicenses: () -> Unit,
+) {
+    when (model.activeDialog) {
+        AboutDialog.NONE -> {
+            Unit
+        }
+
+        AboutDialog.DEPENDENCY_LICENSES -> {
+            AboutFullScreenDialog(
+                title = stringResource(R.string.about_license),
+                onDismiss = onDismiss,
+            ) { modifier ->
+                DependencyLicensesDialogContent(
+                    state = model.dependencyLicensesState,
+                    onRetry = onRetryDependencyLicenses,
+                    modifier = modifier,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AboutFullScreenDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties =
+            DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false,
+            ),
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = title,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    navigationIcon = {
+                        androidx.compose.material3.IconButton(onClick = onDismiss) {
+                            Icon(
+                                painter = painterResource(R.drawable.close),
+                                contentDescription = stringResource(R.string.close_dialog),
+                            )
+                        }
+                    },
+                    colors =
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        ),
+                )
+            },
+        ) { innerPadding ->
+            content(
+                Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(
+                            WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                        ),
+                    ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DependencyLicensesDialogContent(
+    state: AboutDependencyLicensesUiState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    when (state) {
+        AboutDependencyLicensesUiState.Loading -> {
+            DialogStatusContent(
+                message = stringResource(R.string.loading),
+                showRetry = false,
+                onRetry = onRetry,
+                modifier = modifier,
+            )
+        }
+
+        AboutDependencyLicensesUiState.Empty -> {
+            DialogStatusContent(
+                message = stringResource(R.string.no_results_found),
+                showRetry = true,
+                onRetry = onRetry,
+                modifier = modifier,
+            )
+        }
+
+        is AboutDependencyLicensesUiState.Error -> {
+            DialogStatusContent(
+                message = stringResource(state.messageResId),
+                showRetry = true,
+                onRetry = onRetry,
+                modifier = modifier,
+            )
+        }
+
+        is AboutDependencyLicensesUiState.Success -> {
+            DependencyLicenseList(
+                licenses = state.licenses,
+                modifier = modifier,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DialogStatusContent(
+    message: String,
+    showRetry: Boolean,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.padding(AboutSpacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        if (!showRetry) {
+            LoadingIndicator(modifier = Modifier.size(40.dp))
+        }
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = AboutSpacing.sm),
+        )
+        if (showRetry) {
+            TextButton(
+                onClick = onRetry,
+                modifier = Modifier.padding(top = AboutSpacing.sm),
+            ) {
+                Text(text = stringResource(R.string.retry))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DependencyLicenseList(
+    licenses: AboutDependencyLicenseUiCollection,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = AboutDimensions.DialogContentMaxWidth)
+                    .fillMaxWidth(),
+            contentPadding = AboutDimensions.DialogListPadding,
+            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+        ) {
+            items(
+                count = licenses.size,
+                key = { index -> "${licenses[index].name}:${licenses[index].version.orEmpty()}:$index" },
+                contentType = { "dependency_license" },
+            ) { index ->
+                val dependency = licenses[index]
+                DependencyLicenseListItem(
+                    name = dependency.name,
+                    version = dependency.version,
+                    licenses = dependency.licenses,
+                    index = index,
+                    itemCount = licenses.size,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DependencyLicenseListItem(
+    name: String,
+    version: String?,
+    licenses: String?,
+    index: Int,
+    itemCount: Int,
+    modifier: Modifier = Modifier,
+) {
+    SegmentedListItem(
+        onClick = NoOpAction,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 76.dp),
+        colors = AboutListItemDefaults.colors(),
+        leadingContent = {
+            AboutLeadingIcon(iconResId = R.drawable.info)
+        },
+        overlineContent =
+            version?.let { versionName ->
+                {
+                    Text(
+                        text = versionName,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            },
+        supportingContent = {
+            Text(
+                text = licenses ?: stringResource(R.string.about_license_unknown),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        content = {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
 }
 
 @Composable
 private fun AboutSuccessContent(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
-    topInset: Dp,
+    onRetryContributors: () -> Unit,
+    onOpenDependencyLicenses: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues,
     listState: LazyListState,
 ) {
-    // Identity hero height in pixels, measured once it is laid out, so we
-    // can derive a 0..1 scroll progress for the parallax fade+scale.
-    var identityHeightPx by remember { mutableIntStateOf(0) }
-    val scrollProgress by remember {
-        derivedStateOf {
-            if (listState.firstVisibleItemIndex == 0 && identityHeightPx > 0) {
-                (listState.firstVisibleItemScrollOffset.toFloat() / identityHeightPx).coerceIn(0f, 1f)
-            } else if (listState.firstVisibleItemIndex > 0) {
-                1f
-            } else {
-                0f
-            }
-        }
-    }
+    val leadDevelopers = remember(model.leadDeveloper) { TeamMemberCollection.of(model.leadDeveloper) }
 
     LazyColumn(
         state = listState,
         modifier = modifier,
-        contentPadding =
-            PaddingValues(
-                top = topInset + 56.dp,
-                bottom = SettingsDimensions.ScreenBottomPadding + 40.dp,
-                start = 16.dp,
-                end = 16.dp,
-            ),
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.md),
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
     ) {
         item(key = "identity", contentType = "about_identity") {
-            AboutIdentityHero(
-                appName = stringResource(model.appNameResId),
-                versionName = model.versionName,
-                scrollProgress = scrollProgress,
-                onHeightMeasured = { px -> identityHeightPx = px },
-                modifier = Modifier.fillMaxWidth(),
-            )
+            AboutContentContainer {
+                AboutIdentityCard(
+                    model = model,
+                    onOpenUri = onOpenUri,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
-        item(key = "gpl_license", contentType = "about_gpl_license") {
-            GplLicenseCard(
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-
-        item(key = "about_links", contentType = "about_links") {
-            AboutLinksCard(
-                model = model,
-                onOpenUri = onOpenUri,
-                modifier = Modifier.fillMaxWidth(),
-            )
+        item(key = "project_information", contentType = "about_actions") {
+            AboutContentContainer {
+                AboutProjectInformationSection(
+                    onOpenDependencyLicenses = onOpenDependencyLicenses,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         item(key = "lead_developer", contentType = "about_team_section") {
-            TeamMemberSection(
-                title = stringResource(R.string.about_lead_developer),
-                members = TeamMemberCollection.of(model.leadDeveloper),
-                onOpenUri = onOpenUri,
-                prominentFirstItem = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            AboutContentContainer {
+                TeamMemberSection(
+                    title = stringResource(R.string.about_lead_developer),
+                    members = leadDevelopers,
+                    onOpenUri = onOpenUri,
+                    prominentFirstItem = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         item(key = "team", contentType = "about_team_section") {
-            TeamMemberSection(
-                title = stringResource(R.string.about_archive_tune_team),
-                members = model.collaborators,
-                onOpenUri = onOpenUri,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            AboutContentContainer {
+                TeamMemberSection(
+                    title = stringResource(R.string.about_archive_tune_team),
+                    members = model.collaborators,
+                    onOpenUri = onOpenUri,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         item(key = "respecters", contentType = "about_team_section") {
-            TeamMemberSection(
-                title = stringResource(R.string.about_respecter),
-                members = model.respecters,
-                onOpenUri = onOpenUri,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            AboutContentContainer {
+                TeamMemberSection(
+                    title = stringResource(R.string.about_respecter),
+                    members = model.respecters,
+                    onOpenUri = onOpenUri,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
 
         item(key = "legal_notice", contentType = "about_legal_notice") {
-            LegalNoticeCard(modifier = Modifier.fillMaxWidth())
+            AboutContentContainer {
+                LegalNoticeCard(modifier = Modifier.fillMaxWidth())
+            }
         }
     }
 }
 
 @Composable
-private fun AboutIdentityHero(
-    appName: String,
-    versionName: String,
-    scrollProgress: Float,
-    onHeightMeasured: (Int) -> Unit,
+private fun AboutContentContainer(
     modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
 ) {
-    // Parallax: as the list scrolls, the hero fades out, shrinks slightly,
-    // and drifts up — so the identity recedes behind the links card and
-    // disappears by the time the card reaches the top, matching the
-    // reference About screen.
-    val fade = 1f - scrollProgress
-    val scale = 1f - scrollProgress * 0.25f
-    Column(
+    Box(
         modifier =
             modifier
                 .fillMaxWidth()
-                .onSizeChanged { size -> onHeightMeasured(size.height) }
-                .graphicsLayer {
-                    alpha = fade
-                    scaleX = scale
-                    scaleY = scale
-                    translationY = -scrollProgress * 80f
-                },
-        horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding),
+        contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(120.dp),
-        ) {
-            Image(
-                painter = painterResource(R.drawable.about_splash),
-                contentDescription = appName,
-                modifier = Modifier.padding(24.dp),
-            )
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = appName,
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Bold,
-            color = AboutColors.TextPrimary,
-            maxLines = 1,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = "v$versionName",
-            style = MaterialTheme.typography.bodyMedium,
-            color = AboutColors.TextSecondary,
-        )
-        Spacer(Modifier.height(AboutSpacing.md))
-    }
-}
-
-@Composable
-private fun GplLicenseCard(modifier: Modifier = Modifier) {
-    val uriHandler = LocalUriHandler.current
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(
+        Box(
             modifier =
                 Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+                    .widthIn(max = AboutDimensions.ScreenContentMaxWidth)
+                    .fillMaxWidth(),
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.info),
-                    contentDescription = null,
-                    tint = AboutColors.TextPrimary,
-                )
-                Text(
-                    text = stringResource(R.string.about_gpl_license_title),
-                    style = MaterialTheme.typography.titleMediumEmphasized,
-                    color = AboutColors.TextPrimary,
-                )
-            }
-            Text(
-                text = stringResource(R.string.about_gpl_license_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AboutColors.TextSecondary,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Text(
-                text = stringResource(R.string.about_gpl_license_view_full),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier =
-                    Modifier
-                        .clickable {
-                            uriHandler.openUri("https://github.com/cognitiveshadows03/LunarTune/blob/main/LICENSE")
-                        }
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            content()
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AboutLinksCard(
+private fun AboutIdentityCard(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val wineTint = MaterialTheme.colorScheme.primary
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors =
             CardDefaults.cardColors(
-                containerColor = AboutColors.Container,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-        ) {
-            val links = model.primaryLinks
-            repeat(links.size) { index ->
-                val link = links[index]
-                AboutLinkRow(
-                    iconResId = link.iconResId,
-                    label = stringResource(link.labelResId),
-                    tint = wineTint,
-                    onClick = { onOpenUri(link.url) },
-                )
-                if (index < links.size - 1) {
-                    HorizontalDivider(
-                        color = AboutColors.Divider,
-                        modifier = Modifier.padding(start = 62.dp),
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            if (maxWidth >= AboutDimensions.HorizontalHeroBreakpoint) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(AboutSpacing.md),
+                    horizontalArrangement = Arrangement.spacedBy(AboutSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AboutIdentity(
+                        model = model,
+                        horizontalAlignment = Alignment.Start,
+                        modifier = Modifier.weight(1f),
+                    )
+                    LinkChipRow(
+                        links = model.primaryLinks,
+                        onOpenUri = onOpenUri,
+                        horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, Alignment.End),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            } else {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(AboutSpacing.md),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(AboutSpacing.md),
+                ) {
+                    AboutIdentity(
+                        model = model,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    LinkChipRow(
+                        links = model.primaryLinks,
+                        onOpenUri = onOpenUri,
+                        horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, Alignment.CenterHorizontally),
                     )
                 }
             }
@@ -534,53 +683,164 @@ private fun AboutLinksCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AboutLinkRow(
+private fun AboutIdentity(
+    model: AboutUiModel,
+    horizontalAlignment: Alignment.Horizontal,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = horizontalAlignment,
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
+    ) {
+        SurfaceAppIcon()
+        Text(
+            text = stringResource(model.appNameResId),
+            style = MaterialTheme.typography.headlineSmallEmphasized,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, horizontalAlignment),
+            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+        ) {
+            AboutMetadataBadge(text = model.versionName)
+            model.buildHash?.let { buildHash ->
+                AboutMetadataBadge(text = buildHash)
+            }
+            AboutMetadataBadge(text = model.buildVariant)
+        }
+    }
+}
+
+@Composable
+private fun SurfaceAppIcon(modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.about_splash),
+            contentDescription = stringResource(R.string.app_name),
+            modifier =
+                Modifier
+                    .padding(AboutSpacing.xs)
+                    .size(88.dp),
+        )
+    }
+}
+
+@Composable
+private fun AboutMetadataBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Badge(
+        modifier = modifier.heightIn(min = 32.dp),
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LinkChipRow(
+    links: AboutLinkCollection,
+    onOpenUri: (String) -> Unit,
+    horizontalArrangement: Arrangement.Horizontal,
+    modifier: Modifier = Modifier,
+) {
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = horizontalArrangement,
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+    ) {
+        repeat(links.size) { index ->
+            val link = links[index]
+            val onClick = remember(link.url, onOpenUri) { { onOpenUri(link.url) } }
+
+            AssistChip(
+                onClick = onClick,
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(link.iconResId),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                label = {
+                    Text(
+                        text = stringResource(link.labelResId),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutProjectInformationSection(
+    onOpenDependencyLicenses: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    AboutActionListItem(
+        title = stringResource(R.string.about_license),
+        iconResId = R.drawable.info,
+        index = 0,
+        itemCount = 1,
+        onClick = onOpenDependencyLicenses,
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun AboutActionListItem(
+    title: String,
     iconResId: Int,
-    label: String,
-    tint: Color,
+    index: Int,
+    itemCount: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
         modifier =
             modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier =
-                Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(tint),
-        ) {
+                .heightIn(min = 64.dp),
+        colors = AboutListItemDefaults.colors(),
+        leadingContent = {
+            AboutLeadingIcon(iconResId = iconResId)
+        },
+        trailingContent = {
             Icon(
-                painter = painterResource(iconResId),
+                painter = painterResource(R.drawable.arrow_forward),
                 contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        Spacer(Modifier.width(16.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = AboutColors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        Icon(
-            painter = painterResource(R.drawable.arrow_forward),
-            contentDescription = null,
-            tint = AboutColors.TextSecondary,
-        )
-    }
+        },
+        content = {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        },
+    )
 }
 
 @Composable
@@ -591,33 +851,21 @@ private fun TeamMemberSection(
     modifier: Modifier = Modifier,
     prominentFirstItem: Boolean = false,
 ) {
-    // Wrap every section in the same card style as the links card so all
-    // blocks on the About screen share the same width, shape, and colour.
-    Card(
+    Column(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
     ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
-        ) {
-            AboutSectionHeader(title = title)
-            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-                repeat(members.size) { index ->
-                    TeamMemberListItem(
-                        member = members[index],
-                        index = index,
-                        itemCount = members.size,
-                        onOpenUri = onOpenUri,
-                        avatarSize = if (prominentFirstItem && index == 0) 64.dp else 52.dp,
-                        minHeight = if (prominentFirstItem && index == 0) 96.dp else 80.dp,
-                    )
-                }
+        AboutSectionHeader(title = title)
+        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+            repeat(members.size) { index ->
+                TeamMemberListItem(
+                    member = members[index],
+                    index = index,
+                    itemCount = members.size,
+                    onOpenUri = onOpenUri,
+                    avatarSize = if (prominentFirstItem && index == 0) 64.dp else 52.dp,
+                    minHeight = if (prominentFirstItem && index == 0) 96.dp else 80.dp,
+                )
             }
         }
     }
@@ -627,10 +875,10 @@ private fun TeamMemberSection(
 private fun LegalNoticeCard(modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
+        shape = MaterialTheme.shapes.extraLarge,
         colors =
             CardDefaults.cardColors(
-                containerColor = AboutColors.Container,
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -648,18 +896,18 @@ private fun LegalNoticeCard(modifier: Modifier = Modifier) {
                 Icon(
                     painter = painterResource(R.drawable.info),
                     contentDescription = null,
-                    tint = AboutColors.TextSecondary,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = stringResource(R.string.about_legal_notice),
                     style = MaterialTheme.typography.titleLargeEmphasized,
-                    color = AboutColors.TextPrimary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
             }
             Text(
                 text = stringResource(R.string.about_legal_notice_body),
                 style = MaterialTheme.typography.bodyMedium,
-                color = AboutColors.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -673,7 +921,7 @@ private fun AboutSectionHeader(
     Text(
         text = title,
         style = MaterialTheme.typography.titleMediumEmphasized,
-        color = AboutColors.TextPrimary,
+        color = MaterialTheme.colorScheme.onSurface,
         modifier =
             modifier.padding(
                 horizontal = SettingsDimensions.SectionHeaderHorizontalPadding,
@@ -726,14 +974,14 @@ private fun TeamMemberListItem(
                     Modifier
                         .size(avatarSize)
                         .clip(CircleShape)
-                        .background(AboutColors.ContainerHighest),
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
             )
         },
         supportingContent = {
             Text(
                 text = stringResource(member.positionResId),
                 style = MaterialTheme.typography.bodyMedium,
-                color = AboutColors.TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -748,7 +996,7 @@ private fun TeamMemberListItem(
             Text(
                 text = member.name,
                 style = MaterialTheme.typography.titleMediumEmphasized,
-                color = AboutColors.TextPrimary,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -787,6 +1035,208 @@ private fun MemberLinkActions(
 }
 
 @Composable
+private fun ContributorsSection(
+    state: AboutContributorsUiState,
+    readMoreUrl: String,
+    onOpenProfile: (String) -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+    ) {
+        AboutSectionHeader(title = stringResource(R.string.about_contributors))
+        when (state) {
+            AboutContributorsUiState.Loading -> {
+                ContributorStatusContent(
+                    message = stringResource(R.string.loading),
+                    showRetry = false,
+                    onRetry = onRetry,
+                )
+            }
+
+            AboutContributorsUiState.Empty -> {
+                ContributorStatusContent(
+                    message = stringResource(R.string.no_results_found),
+                    showRetry = true,
+                    onRetry = onRetry,
+                )
+            }
+
+            is AboutContributorsUiState.Error -> {
+                ContributorStatusContent(
+                    message = stringResource(state.messageResId),
+                    showRetry = true,
+                    onRetry = onRetry,
+                )
+            }
+
+            is AboutContributorsUiState.Success -> {
+                ContributorList(
+                    contributors = state.contributors,
+                    readMoreUrl = readMoreUrl,
+                    onOpenProfile = onOpenProfile,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContributorStatusContent(
+    message: String,
+    showRetry: Boolean,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(AboutSpacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
+        ) {
+            if (!showRetry) {
+                LoadingIndicator(modifier = Modifier.size(32.dp))
+            }
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (showRetry) {
+                TextButton(onClick = onRetry) {
+                    Text(text = stringResource(R.string.retry))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContributorList(
+    contributors: AboutContributorUiCollection,
+    readMoreUrl: String,
+    onOpenProfile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemCount = contributors.size + 1
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+    ) {
+        repeat(contributors.size) { index ->
+            val contributor = contributors[index]
+            ContributorListItem(
+                login = contributor.login,
+                avatarUrl = contributor.avatarUrl,
+                profileUrl = contributor.profileUrl,
+                index = index,
+                itemCount = itemCount,
+                onOpenProfile = onOpenProfile,
+            )
+        }
+        ContributorReadMoreListItem(
+            readMoreUrl = readMoreUrl,
+            index = itemCount - 1,
+            itemCount = itemCount,
+            onOpenProfile = onOpenProfile,
+        )
+    }
+}
+
+@Composable
+private fun ContributorListItem(
+    login: String,
+    avatarUrl: String,
+    profileUrl: String,
+    index: Int,
+    itemCount: Int,
+    onOpenProfile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val onClick = remember(profileUrl, onOpenProfile) { { onOpenProfile(profileUrl) } }
+
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp),
+        colors = AboutListItemDefaults.colors(),
+        leadingContent = {
+            AsyncImage(
+                model = avatarUrl,
+                contentDescription = login,
+                modifier =
+                    Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+            )
+        },
+        content = {
+            Text(
+                text = login,
+                style = MaterialTheme.typography.bodyLargeEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
+}
+
+@Composable
+private fun ContributorReadMoreListItem(
+    readMoreUrl: String,
+    index: Int,
+    itemCount: Int,
+    onOpenProfile: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val onClick = remember(readMoreUrl, onOpenProfile) { { onOpenProfile(readMoreUrl) } }
+
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp),
+        colors = AboutListItemDefaults.colors(),
+        leadingContent = {
+            AboutLeadingIcon(iconResId = R.drawable.add_circle)
+        },
+        trailingContent = {
+            Icon(
+                painter = painterResource(R.drawable.arrow_forward),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        },
+        content = {
+            Text(
+                text = stringResource(R.string.more),
+                style = MaterialTheme.typography.bodyLargeEmphasized,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+    )
+}
+
+@Composable
 private fun AboutLeadingIcon(
     iconResId: Int,
     modifier: Modifier = Modifier,
@@ -808,38 +1258,10 @@ private fun AboutLeadingIcon(
     }
 }
 
-private object AboutColors {
-    // Screen background — black in dark mode, surface in light mode.
-    val background: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.Black else MaterialTheme.colorScheme.surface
-
-    // Card / row containers.
-    val Container: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF1F1A1B) else MaterialTheme.colorScheme.surfaceContainerLow
-    val ContainerHigh: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF2A2326) else MaterialTheme.colorScheme.surfaceContainerHigh
-    val ContainerHighest: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF362D30) else MaterialTheme.colorScheme.surfaceContainerHighest
-
-    // Text
-    val TextPrimary: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onSurface
-    val TextSecondary: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.62f) else MaterialTheme.colorScheme.onSurfaceVariant
-    val TextTertiary: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.40f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-
-    // Misc
-    val Divider: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-    val TopBarScrim: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f)
-    val AccentIconTint: Color
-        @Composable get() = if (isSystemInDarkTheme()) Color.White else MaterialTheme.colorScheme.onPrimaryContainer
-}
-
 private object AboutDimensions {
+    val ScreenContentMaxWidth = 840.dp
     val DialogContentMaxWidth = 920.dp
+    val HorizontalHeroBreakpoint = 600.dp
     val DialogListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 }
 
@@ -854,12 +1276,7 @@ private object AboutListItemDefaults {
     @Composable
     fun colors() =
         ListItemDefaults.colors(
-            containerColor = AboutColors.Container,
-            headlineColor = AboutColors.TextPrimary,
-            overlineColor = AboutColors.TextSecondary,
-            supportingColor = AboutColors.TextSecondary,
-            leadingIconColor = AboutColors.TextPrimary,
-            trailingIconColor = AboutColors.TextSecondary,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         )
 }
 

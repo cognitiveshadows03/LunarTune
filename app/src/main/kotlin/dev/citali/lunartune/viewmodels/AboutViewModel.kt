@@ -11,14 +11,25 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.R
+import dev.citali.lunartune.about.AboutContributor
+import dev.citali.lunartune.about.AboutContributorCollection
+import dev.citali.lunartune.about.AboutDependencyLicense
+import dev.citali.lunartune.about.AboutDependencyLicenseCollection
+import dev.citali.lunartune.about.FetchAboutContributorsUseCase
+import dev.citali.lunartune.about.FetchAboutDependencyLicensesUseCase
 import dev.citali.lunartune.currentBuildHash
 import javax.inject.Inject
 
@@ -44,8 +55,13 @@ data class AboutUiModel(
     val buildVariant: String,
     val primaryLinks: AboutLinkCollection,
     val leadDeveloper: TeamMember,
+    val credits: TeamMemberCollection,
     val collaborators: TeamMemberCollection,
     val respecters: TeamMemberCollection,
+    val contributorsState: AboutContributorsUiState,
+    val contributorsReadMoreUrl: String,
+    val activeDialog: AboutDialog,
+    val dependencyLicensesState: AboutDependencyLicensesUiState,
 )
 
 @Immutable
@@ -97,6 +113,88 @@ data class AboutLinkCollection private constructor(
     }
 }
 
+sealed interface AboutContributorsUiState {
+    data object Loading : AboutContributorsUiState
+
+    data class Success(
+        val contributors: AboutContributorUiCollection,
+    ) : AboutContributorsUiState
+
+    data object Empty : AboutContributorsUiState
+
+    data class Error(
+        @StringRes val messageResId: Int,
+    ) : AboutContributorsUiState
+}
+
+enum class AboutDialog {
+    NONE,
+    DEPENDENCY_LICENSES,
+}
+
+sealed interface AboutDependencyLicensesUiState {
+    data object Loading : AboutDependencyLicensesUiState
+
+    data class Success(
+        val licenses: AboutDependencyLicenseUiCollection,
+    ) : AboutDependencyLicensesUiState
+
+    data object Empty : AboutDependencyLicensesUiState
+
+    data class Error(
+        @StringRes val messageResId: Int,
+    ) : AboutDependencyLicensesUiState
+}
+
+@Immutable
+data class AboutDependencyLicenseUiModel(
+    val name: String,
+    val version: String?,
+    val licenses: String?,
+)
+
+@Immutable
+data class AboutDependencyLicenseUiCollection private constructor(
+    private val values: List<AboutDependencyLicenseUiModel>,
+) {
+    val size: Int get() = values.size
+    val isEmpty: Boolean get() = values.isEmpty()
+
+    operator fun get(index: Int): AboutDependencyLicenseUiModel = values[index]
+
+    companion object {
+        fun from(values: List<AboutDependencyLicenseUiModel>): AboutDependencyLicenseUiCollection =
+            AboutDependencyLicenseUiCollection(values.toList())
+    }
+}
+
+@Immutable
+data class AboutContributorUiModel(
+    val login: String,
+    val avatarUrl: String,
+    val profileUrl: String,
+)
+
+@Immutable
+data class AboutContributorUiCollection private constructor(
+    private val values: List<AboutContributorUiModel>,
+) {
+    val size: Int get() = values.size
+    val isEmpty: Boolean get() = values.isEmpty()
+
+    operator fun get(index: Int): AboutContributorUiModel = values[index]
+
+    fun forEach(action: (AboutContributorUiModel) -> Unit) {
+        values.forEach(action)
+    }
+
+    companion object {
+        val Empty = AboutContributorUiCollection(emptyList())
+
+        fun from(values: List<AboutContributorUiModel>): AboutContributorUiCollection = AboutContributorUiCollection(values.toList())
+    }
+}
+
 sealed interface AboutScreenEffect {
     data class OpenUri(
         val uri: String,
@@ -106,21 +204,114 @@ sealed interface AboutScreenEffect {
 @HiltViewModel
 class AboutViewModel
     @Inject
-    constructor() : ViewModel() {
+    constructor(
+        private val fetchAboutContributors: FetchAboutContributorsUseCase,
+        private val fetchDependencyLicenses: FetchAboutDependencyLicensesUseCase,
+    ) : ViewModel() {
         private val _state = MutableStateFlow<AboutScreenState>(AboutScreenState.Loading)
         val state: StateFlow<AboutScreenState> = _state.asStateFlow()
 
         private val _effects = MutableSharedFlow<AboutScreenEffect>(extraBufferCapacity = 1)
         val effects = _effects.asSharedFlow()
 
+        private var contributorsJob: Job? = null
+        private var dependencyLicensesJob: Job? = null
+        private var contributorsState: AboutContributorsUiState = AboutContributorsUiState.Loading
+        private var dependencyLicensesState: AboutDependencyLicensesUiState = AboutDependencyLicensesUiState.Loading
+        private var activeDialog = AboutDialog.NONE
 
         init {
             updateState()
         }
 
+        fun retryContributors() {
+            loadContributors(force = true)
+        }
+
+        fun openDependencyLicenses() {
+            activeDialog = AboutDialog.DEPENDENCY_LICENSES
+            updateState()
+            loadDependencyLicenses()
+        }
+
+        fun dismissDialog() {
+            activeDialog = AboutDialog.NONE
+            updateState()
+        }
+
+        fun retryDependencyLicenses() {
+            loadDependencyLicenses(force = true)
+        }
+
         fun openUri(uri: String) {
             if (uri.isBlank()) return
             _effects.tryEmit(AboutScreenEffect.OpenUri(uri))
+        }
+
+        private fun loadContributors(force: Boolean = false) {
+            if (!force && contributorsJob?.isActive == true) return
+            contributorsJob?.cancel()
+            contributorsState = AboutContributorsUiState.Loading
+            updateState()
+            contributorsJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    contributorsState =
+                        try {
+                            fetchAboutContributors()
+                                .fold(
+                                    onSuccess = { contributors ->
+                                        val contributorUiModels =
+                                            contributors
+                                                .take(MaxDisplayedContributors)
+                                                .toUiCollection()
+                                        if (contributorUiModels.isEmpty) {
+                                            AboutContributorsUiState.Empty
+                                        } else {
+                                            AboutContributorsUiState.Success(contributorUiModels)
+                                        }
+                                    },
+                                    onFailure = {
+                                        AboutContributorsUiState.Error(R.string.error_unknown)
+                                    },
+                                )
+                        } catch (throwable: Throwable) {
+                            if (throwable is CancellationException) throw throwable
+                            AboutContributorsUiState.Error(R.string.error_unknown)
+                        }
+                    updateState()
+                }
+        }
+
+        private fun loadDependencyLicenses(force: Boolean = false) {
+            if (!force && dependencyLicensesJob?.isActive == true) return
+            if (!force && dependencyLicensesState is AboutDependencyLicensesUiState.Success) return
+            dependencyLicensesJob?.cancel()
+            dependencyLicensesState = AboutDependencyLicensesUiState.Loading
+            updateState()
+            dependencyLicensesJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    dependencyLicensesState =
+                        try {
+                            fetchDependencyLicenses()
+                                .fold(
+                                    onSuccess = { licenses ->
+                                        val licenseUiModels = licenses.toUiCollection()
+                                        if (licenseUiModels.isEmpty) {
+                                            AboutDependencyLicensesUiState.Empty
+                                        } else {
+                                            AboutDependencyLicensesUiState.Success(licenseUiModels)
+                                        }
+                                    },
+                                    onFailure = {
+                                        AboutDependencyLicensesUiState.Error(R.string.error_unknown)
+                                    },
+                                )
+                        } catch (throwable: Throwable) {
+                            if (throwable is CancellationException) throw throwable
+                            AboutDependencyLicensesUiState.Error(R.string.error_unknown)
+                        }
+                    updateState()
+                }
         }
 
         private fun updateState() {
@@ -142,22 +333,10 @@ class AboutViewModel
                             url = "https://github.com/cognitiveshadows03/LunarTune",
                         ),
                         AboutLinkUiModel(
-                            id = "website",
-                            iconResId = R.drawable.website,
-                            labelResId = R.string.about_content_desc_website,
-                            url = "https://lunartune-03.vercel.app/",
-                        ),
-                        AboutLinkUiModel(
                             id = "telegram",
                             iconResId = R.drawable.telegram,
                             labelResId = R.string.about_content_desc_telegram,
                             url = "https://t.me/LunarTuneGC",
-                        ),
-                        AboutLinkUiModel(
-                            id = "privacy_policy",
-                            iconResId = R.drawable.lock,
-                            labelResId = R.string.privacy,
-                            url = "https://github.com/cognitiveshadows03/LunarTune/blob/main/PRIVACY.md",
                         ),
                     ),
                 leadDeveloper =
@@ -176,6 +355,7 @@ class AboutViewModel
                                 ),
                             ),
                     ),
+                credits = TeamMemberCollection.of(),
                 collaborators =
                     TeamMemberCollection.of(
                         TeamMember(
@@ -257,9 +437,45 @@ class AboutViewModel
                                 ),
                         ),
                     ),
+                contributorsState = contributorsState,
+                contributorsReadMoreUrl = ContributorsReadMoreUrl,
+                activeDialog = activeDialog,
+                dependencyLicensesState = dependencyLicensesState,
+            )
+
+        private fun AboutContributorCollection.toUiCollection(): AboutContributorUiCollection {
+            val contributors = ArrayList<AboutContributorUiModel>(MaxDisplayedContributors)
+            forEach { contributor ->
+                contributors.add(contributor.toUiModel())
+            }
+            return AboutContributorUiCollection.from(contributors)
+        }
+
+        private fun AboutContributor.toUiModel(): AboutContributorUiModel =
+            AboutContributorUiModel(
+                login = login,
+                avatarUrl = avatarUrl,
+                profileUrl = profileUrl,
+            )
+
+        private fun AboutDependencyLicenseCollection.toUiCollection(): AboutDependencyLicenseUiCollection {
+            val licenses = ArrayList<AboutDependencyLicenseUiModel>(size)
+            for (index in 0 until size) {
+                licenses.add(this[index].toUiModel())
+            }
+            return AboutDependencyLicenseUiCollection.from(licenses)
+        }
+
+        private fun AboutDependencyLicense.toUiModel(): AboutDependencyLicenseUiModel =
+            AboutDependencyLicenseUiModel(
+                name = name,
+                version = version,
+                licenses = licenses,
             )
 
         private companion object {
+            const val MaxDisplayedContributors = 20
             const val DebugBuildBadge = "DEBUG"
+            const val ContributorsReadMoreUrl = "https://github.com/cognitiveshadows03/LunarTune/graphs/contributors"
         }
     }
