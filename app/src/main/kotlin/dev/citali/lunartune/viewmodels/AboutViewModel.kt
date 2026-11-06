@@ -24,11 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.R
-import dev.citali.lunartune.about.AboutContributor
-import dev.citali.lunartune.about.AboutContributorCollection
 import dev.citali.lunartune.about.AboutDependencyLicense
 import dev.citali.lunartune.about.AboutDependencyLicenseCollection
-import dev.citali.lunartune.about.FetchAboutContributorsUseCase
 import dev.citali.lunartune.about.FetchAboutDependencyLicensesUseCase
 import dev.citali.lunartune.currentBuildHash
 import javax.inject.Inject
@@ -57,8 +54,6 @@ data class AboutUiModel(
     val leadDeveloper: TeamMember,
     val collaborators: TeamMemberCollection,
     val respecters: TeamMemberCollection,
-    val contributorsState: AboutContributorsUiState,
-    val contributorsReadMoreUrl: String,
     val activeDialog: AboutDialog,
     val dependencyLicensesState: AboutDependencyLicensesUiState,
 )
@@ -112,20 +107,6 @@ data class AboutLinkCollection private constructor(
     }
 }
 
-sealed interface AboutContributorsUiState {
-    data object Loading : AboutContributorsUiState
-
-    data class Success(
-        val contributors: AboutContributorUiCollection,
-    ) : AboutContributorsUiState
-
-    data object Empty : AboutContributorsUiState
-
-    data class Error(
-        @StringRes val messageResId: Int,
-    ) : AboutContributorsUiState
-}
-
 enum class AboutDialog {
     NONE,
     DEPENDENCY_LICENSES,
@@ -167,33 +148,6 @@ data class AboutDependencyLicenseUiCollection private constructor(
     }
 }
 
-@Immutable
-data class AboutContributorUiModel(
-    val login: String,
-    val avatarUrl: String,
-    val profileUrl: String,
-)
-
-@Immutable
-data class AboutContributorUiCollection private constructor(
-    private val values: List<AboutContributorUiModel>,
-) {
-    val size: Int get() = values.size
-    val isEmpty: Boolean get() = values.isEmpty()
-
-    operator fun get(index: Int): AboutContributorUiModel = values[index]
-
-    fun forEach(action: (AboutContributorUiModel) -> Unit) {
-        values.forEach(action)
-    }
-
-    companion object {
-        val Empty = AboutContributorUiCollection(emptyList())
-
-        fun from(values: List<AboutContributorUiModel>): AboutContributorUiCollection = AboutContributorUiCollection(values.toList())
-    }
-}
-
 sealed interface AboutScreenEffect {
     data class OpenUri(
         val uri: String,
@@ -204,7 +158,6 @@ sealed interface AboutScreenEffect {
 class AboutViewModel
     @Inject
     constructor(
-        private val fetchAboutContributors: FetchAboutContributorsUseCase,
         private val fetchDependencyLicenses: FetchAboutDependencyLicensesUseCase,
     ) : ViewModel() {
         private val _state = MutableStateFlow<AboutScreenState>(AboutScreenState.Loading)
@@ -213,19 +166,12 @@ class AboutViewModel
         private val _effects = MutableSharedFlow<AboutScreenEffect>(extraBufferCapacity = 1)
         val effects = _effects.asSharedFlow()
 
-        private var contributorsJob: Job? = null
         private var dependencyLicensesJob: Job? = null
-        private var contributorsState: AboutContributorsUiState = AboutContributorsUiState.Loading
         private var dependencyLicensesState: AboutDependencyLicensesUiState = AboutDependencyLicensesUiState.Loading
         private var activeDialog = AboutDialog.NONE
 
         init {
             updateState()
-            loadContributors()
-        }
-
-        fun retryContributors() {
-            loadContributors(force = true)
         }
 
         fun openDependencyLicenses() {
@@ -248,39 +194,6 @@ class AboutViewModel
             _effects.tryEmit(AboutScreenEffect.OpenUri(uri))
         }
 
-        private fun loadContributors(force: Boolean = false) {
-            if (!force && contributorsJob?.isActive == true) return
-            contributorsJob?.cancel()
-            contributorsState = AboutContributorsUiState.Loading
-            updateState()
-            contributorsJob =
-                viewModelScope.launch(Dispatchers.IO) {
-                    contributorsState =
-                        try {
-                            fetchAboutContributors()
-                                .fold(
-                                    onSuccess = { contributors ->
-                                        val contributorUiModels =
-                                            contributors
-                                                .take(MaxDisplayedContributors)
-                                                .toUiCollection()
-                                        if (contributorUiModels.isEmpty) {
-                                            AboutContributorsUiState.Empty
-                                        } else {
-                                            AboutContributorsUiState.Success(contributorUiModels)
-                                        }
-                                    },
-                                    onFailure = {
-                                        AboutContributorsUiState.Error(R.string.error_unknown)
-                                    },
-                                )
-                        } catch (throwable: Throwable) {
-                            if (throwable is CancellationException) throw throwable
-                            AboutContributorsUiState.Error(R.string.error_unknown)
-                        }
-                    updateState()
-                }
-        }
 
         private fun loadDependencyLicenses(force: Boolean = false) {
             if (!force && dependencyLicensesJob?.isActive == true) return
@@ -343,12 +256,6 @@ class AboutViewModel
                             iconResId = R.drawable.telegram,
                             labelResId = R.string.about_content_desc_telegram,
                             url = "https://t.me/LunarTuneGC",
-                        ),
-                        AboutLinkUiModel(
-                            id = "discord",
-                            iconResId = R.drawable.discord,
-                            labelResId = R.string.discord,
-                            url = "https://discord.gg/XF2fpb9rTq",
                         ),
                         AboutLinkUiModel(
                             id = "privacy_policy",
@@ -454,25 +361,8 @@ class AboutViewModel
                                 ),
                         ),
                     ),
-                contributorsState = contributorsState,
-                contributorsReadMoreUrl = ContributorsReadMoreUrl,
                 activeDialog = activeDialog,
                 dependencyLicensesState = dependencyLicensesState,
-            )
-
-        private fun AboutContributorCollection.toUiCollection(): AboutContributorUiCollection {
-            val contributors = ArrayList<AboutContributorUiModel>(MaxDisplayedContributors)
-            forEach { contributor ->
-                contributors.add(contributor.toUiModel())
-            }
-            return AboutContributorUiCollection.from(contributors)
-        }
-
-        private fun AboutContributor.toUiModel(): AboutContributorUiModel =
-            AboutContributorUiModel(
-                login = login,
-                avatarUrl = avatarUrl,
-                profileUrl = profileUrl,
             )
 
         private fun AboutDependencyLicenseCollection.toUiCollection(): AboutDependencyLicenseUiCollection {
@@ -491,8 +381,6 @@ class AboutViewModel
             )
 
         private companion object {
-            const val MaxDisplayedContributors = 20
             const val DebugBuildBadge = "DEBUG"
-            const val ContributorsReadMoreUrl = "https://github.com/cognitiveshadows03/LunarTune/graphs/contributors"
         }
     }

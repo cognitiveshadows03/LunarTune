@@ -98,8 +98,6 @@ import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.utils.backToMain
-import dev.citali.lunartune.viewmodels.AboutContributorUiCollection
-import dev.citali.lunartune.viewmodels.AboutContributorsUiState
 import dev.citali.lunartune.viewmodels.AboutDependencyLicenseUiCollection
 import dev.citali.lunartune.viewmodels.AboutDependencyLicensesUiState
 import dev.citali.lunartune.viewmodels.AboutDialog
@@ -133,7 +131,6 @@ fun AboutScreen(
         onNavigateUp = navController::navigateUp,
         onNavigateHome = navController::backToMain,
         onOpenUri = viewModel::openUri,
-        onRetryContributors = viewModel::retryContributors,
         onOpenDependencyLicenses = viewModel::openDependencyLicenses,
         onDismissDialog = viewModel::dismissDialog,
         onRetryDependencyLicenses = viewModel::retryDependencyLicenses,
@@ -146,7 +143,6 @@ private fun AboutScreenContent(
     onNavigateUp: () -> Unit,
     onNavigateHome: () -> Unit,
     onOpenUri: (String) -> Unit,
-    onRetryContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
     onDismissDialog: () -> Unit,
     onRetryDependencyLicenses: () -> Unit,
@@ -236,7 +232,6 @@ private fun AboutScreenContent(
                     AboutSuccessContent(
                         model = state.model,
                         onOpenUri = onOpenUri,
-                        onRetryContributors = onRetryContributors,
                         onOpenDependencyLicenses = onOpenDependencyLicenses,
                         topInset = topInset,
                         modifier = Modifier.fillMaxSize(),
@@ -571,7 +566,6 @@ private fun DependencyLicenseListItem(
 private fun AboutSuccessContent(
     model: AboutUiModel,
     onOpenUri: (String) -> Unit,
-    onRetryContributors: () -> Unit,
     onOpenDependencyLicenses: () -> Unit,
     topInset: Dp,
     modifier: Modifier = Modifier,
@@ -624,55 +618,35 @@ private fun AboutSuccessContent(
         }
 
         item(key = "lead_developer", contentType = "about_team_section") {
-            AboutContentContainer {
-                TeamMemberSection(
-                    title = stringResource(R.string.about_lead_developer),
-                    members = TeamMemberCollection.of(model.leadDeveloper),
-                    onOpenUri = onOpenUri,
-                    prominentFirstItem = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            TeamMemberSection(
+                title = stringResource(R.string.about_lead_developer),
+                members = TeamMemberCollection.of(model.leadDeveloper),
+                onOpenUri = onOpenUri,
+                prominentFirstItem = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         item(key = "team", contentType = "about_team_section") {
-            AboutContentContainer {
-                TeamMemberSection(
-                    title = stringResource(R.string.about_archive_tune_team),
-                    members = model.collaborators,
-                    onOpenUri = onOpenUri,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            TeamMemberSection(
+                title = stringResource(R.string.about_archive_tune_team),
+                members = model.collaborators,
+                onOpenUri = onOpenUri,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         item(key = "respecters", contentType = "about_team_section") {
-            AboutContentContainer {
-                TeamMemberSection(
-                    title = stringResource(R.string.about_respecter),
-                    members = model.respecters,
-                    onOpenUri = onOpenUri,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-
-        item(key = "contributors", contentType = "about_contributors_section") {
-            AboutContentContainer {
-                ContributorsSection(
-                    state = model.contributorsState,
-                    readMoreUrl = model.contributorsReadMoreUrl,
-                    onOpenProfile = onOpenUri,
-                    onRetry = onRetryContributors,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+            TeamMemberSection(
+                title = stringResource(R.string.about_respecter),
+                members = model.respecters,
+                onOpenUri = onOpenUri,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
 
         item(key = "legal_notice", contentType = "about_legal_notice") {
-            AboutContentContainer {
-                LegalNoticeCard(modifier = Modifier.fillMaxWidth())
-            }
+            LegalNoticeCard(modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -746,7 +720,7 @@ private fun AboutLinksCard(
         shape = RoundedCornerShape(28.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = Color(0xFF241A1C),
+                containerColor = AboutColors.Container,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -833,29 +807,6 @@ private fun AboutLinkRow(
 }
 
 @Composable
-private fun AboutContentContainer(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .widthIn(max = AboutDimensions.ScreenContentMaxWidth)
-                    .fillMaxWidth(),
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
 private fun TeamMemberSection(
     title: String,
     members: TeamMemberCollection,
@@ -863,21 +814,33 @@ private fun TeamMemberSection(
     modifier: Modifier = Modifier,
     prominentFirstItem: Boolean = false,
 ) {
-    Column(
+    // Wrap every section in the same card style as the links card so all
+    // blocks on the About screen share the same width, shape, and colour.
+    Card(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        AboutSectionHeader(title = title)
-        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
-            repeat(members.size) { index ->
-                TeamMemberListItem(
-                    member = members[index],
-                    index = index,
-                    itemCount = members.size,
-                    onOpenUri = onOpenUri,
-                    avatarSize = if (prominentFirstItem && index == 0) 64.dp else 52.dp,
-                    minHeight = if (prominentFirstItem && index == 0) 96.dp else 80.dp,
-                )
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+        ) {
+            AboutSectionHeader(title = title)
+            Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+                repeat(members.size) { index ->
+                    TeamMemberListItem(
+                        member = members[index],
+                        index = index,
+                        itemCount = members.size,
+                        onOpenUri = onOpenUri,
+                        avatarSize = if (prominentFirstItem && index == 0) 64.dp else 52.dp,
+                        minHeight = if (prominentFirstItem && index == 0) 96.dp else 80.dp,
+                    )
+                }
             }
         }
     }
@@ -887,10 +850,10 @@ private fun TeamMemberSection(
 private fun LegalNoticeCard(modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        shape = MaterialTheme.shapes.extraLarge,
+        shape = RoundedCornerShape(28.dp),
         colors =
             CardDefaults.cardColors(
-                containerColor = AboutColors.ContainerHigh,
+                containerColor = AboutColors.Container,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -1047,208 +1010,6 @@ private fun MemberLinkActions(
 }
 
 @Composable
-private fun ContributorsSection(
-    state: AboutContributorsUiState,
-    readMoreUrl: String,
-    onOpenProfile: (String) -> Unit,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
-    ) {
-        AboutSectionHeader(title = stringResource(R.string.about_contributors))
-        when (state) {
-            AboutContributorsUiState.Loading -> {
-                ContributorStatusContent(
-                    message = stringResource(R.string.loading),
-                    showRetry = false,
-                    onRetry = onRetry,
-                )
-            }
-
-            AboutContributorsUiState.Empty -> {
-                ContributorStatusContent(
-                    message = stringResource(R.string.no_results_found),
-                    showRetry = true,
-                    onRetry = onRetry,
-                )
-            }
-
-            is AboutContributorsUiState.Error -> {
-                ContributorStatusContent(
-                    message = stringResource(state.messageResId),
-                    showRetry = true,
-                    onRetry = onRetry,
-                )
-            }
-
-            is AboutContributorsUiState.Success -> {
-                ContributorList(
-                    contributors = state.contributors,
-                    readMoreUrl = readMoreUrl,
-                    onOpenProfile = onOpenProfile,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContributorStatusContent(
-    message: String,
-    showRetry: Boolean,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = AboutColors.Container),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-    ) {
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(AboutSpacing.md),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(AboutSpacing.sm),
-        ) {
-            if (!showRetry) {
-                LoadingIndicator(modifier = Modifier.size(32.dp))
-            }
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = AboutColors.TextSecondary,
-            )
-            if (showRetry) {
-                TextButton(onClick = onRetry) {
-                    Text(text = stringResource(R.string.retry))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContributorList(
-    contributors: AboutContributorUiCollection,
-    readMoreUrl: String,
-    onOpenProfile: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val itemCount = contributors.size + 1
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-    ) {
-        repeat(contributors.size) { index ->
-            val contributor = contributors[index]
-            ContributorListItem(
-                login = contributor.login,
-                avatarUrl = contributor.avatarUrl,
-                profileUrl = contributor.profileUrl,
-                index = index,
-                itemCount = itemCount,
-                onOpenProfile = onOpenProfile,
-            )
-        }
-        ContributorReadMoreListItem(
-            readMoreUrl = readMoreUrl,
-            index = itemCount - 1,
-            itemCount = itemCount,
-            onOpenProfile = onOpenProfile,
-        )
-    }
-}
-
-@Composable
-private fun ContributorListItem(
-    login: String,
-    avatarUrl: String,
-    profileUrl: String,
-    index: Int,
-    itemCount: Int,
-    onOpenProfile: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val onClick = remember(profileUrl, onOpenProfile) { { onOpenProfile(profileUrl) } }
-
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 72.dp),
-        colors = AboutListItemDefaults.colors(),
-        leadingContent = {
-            AsyncImage(
-                model = avatarUrl,
-                contentDescription = login,
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(AboutColors.ContainerHighest),
-            )
-        },
-        content = {
-            Text(
-                text = login,
-                style = MaterialTheme.typography.bodyLargeEmphasized,
-                color = AboutColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    )
-}
-
-@Composable
-private fun ContributorReadMoreListItem(
-    readMoreUrl: String,
-    index: Int,
-    itemCount: Int,
-    onOpenProfile: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val onClick = remember(readMoreUrl, onOpenProfile) { { onOpenProfile(readMoreUrl) } }
-
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = itemCount),
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .heightIn(min = 72.dp),
-        colors = AboutListItemDefaults.colors(),
-        leadingContent = {
-            AboutLeadingIcon(iconResId = R.drawable.add_circle)
-        },
-        trailingContent = {
-            Icon(
-                painter = painterResource(R.drawable.arrow_forward),
-                contentDescription = null,
-                tint = AboutColors.TextSecondary,
-            )
-        },
-        content = {
-            Text(
-                text = stringResource(R.string.more),
-                style = MaterialTheme.typography.bodyLargeEmphasized,
-                color = AboutColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-    )
-}
-
-@Composable
 private fun AboutLeadingIcon(
     iconResId: Int,
     modifier: Modifier = Modifier,
@@ -1283,7 +1044,6 @@ private object AboutColors {
 }
 
 private object AboutDimensions {
-    val ScreenContentMaxWidth = 840.dp
     val DialogContentMaxWidth = 920.dp
     val DialogListPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
 }

@@ -543,7 +543,7 @@ fun SettingsScreen(
                     bottom =
                         LocalPlayerAwareWindowInsets.current
                             .asPaddingValues()
-                            .calculateBottomPadding(),
+                            .calculateBottomPadding() + 32.dp,
                 ),
         ) {
             if (effectiveHeaderImageUri.isNotBlank() && searchQuery.isBlank()) {
