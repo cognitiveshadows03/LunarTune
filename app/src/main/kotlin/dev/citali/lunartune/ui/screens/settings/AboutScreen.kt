@@ -1302,7 +1302,7 @@ private object AboutListItemDefaults {
             containerColor = AboutColors.Container,
             headlineColor = AboutColors.TextPrimary,
             overlineColor = AboutColors.TextSecondary,
-            supportingTextColor = AboutColors.TextSecondary,
+            supportingColor = AboutColors.TextSecondary,
             leadingIconColor = AboutColors.TextPrimary,
             trailingIconColor = AboutColors.TextSecondary,
         )
