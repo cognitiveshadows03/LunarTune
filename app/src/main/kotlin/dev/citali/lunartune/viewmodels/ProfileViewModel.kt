@@ -25,7 +25,7 @@ class ProfileViewModel
     ) : ViewModel() {
         /** All-time total listening time in milliseconds. */
         val totalListeningTimeMs: StateFlow<Long> =
-            database.dao
+            database
                 .listeningTotals(
                     fromTimestamp = 0L,
                     toTimestamp = System.currentTimeMillis(),
