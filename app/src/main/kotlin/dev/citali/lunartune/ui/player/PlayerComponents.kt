@@ -3132,31 +3132,32 @@ internal fun V9PlayerBackdrop(
                             .graphicsLayer {
                                 // Scaled past the edges so the blur has no soft border to
                                 // show once the layers are mixed.
-                                scaleX = 1.18f
-                                scaleY = 1.18f
+                                scaleX = 1.25f
+                                scaleY = 1.25f
                             },
                 )
             }
         }
 
-        // The dim. Heaviest at the bottom, where the title, the slider and the controls
-        // live, so the backdrop stays a backdrop instead of competing with them.
+        // Lighter dim so the blurred artwork colours show through — like the
+        // reference gradient-blur player. Heaviest at the bottom for control
+        // legibility, transparent enough at the top to keep the art vibrant.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to dimColor.copy(alpha = 0.62f),
-                            0.42f to dimColor.copy(alpha = 0.72f),
-                            1f to dimColor.copy(alpha = 0.88f),
+                            0f to dimColor.copy(alpha = 0.15f),
+                            0.42f to dimColor.copy(alpha = 0.30f),
+                            1f to dimColor.copy(alpha = 0.55f),
                         ),
                     ),
         )
     }
 }
 
-private val V9BackdropBlurRadius = 64.dp
+private val V9BackdropBlurRadius = 48.dp
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable

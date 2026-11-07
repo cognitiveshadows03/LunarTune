@@ -179,6 +179,7 @@ import dev.citali.lunartune.constants.LunarTuneCanvasKey
 import dev.citali.lunartune.constants.MiniPlayerHeight
 import dev.citali.lunartune.constants.BackdropBlurAmountKey
 import dev.citali.lunartune.constants.BackdropEnabledKey
+import dev.citali.lunartune.constants.BottomSheetAnimationSpec
 import dev.citali.lunartune.constants.BlurRadiusKey
 import dev.citali.lunartune.constants.DarkModeKey
 import dev.citali.lunartune.constants.DisableBlurKey
@@ -709,11 +710,14 @@ fun BottomSheetPlayer(
         val hsv = FloatArray(3)
         android.graphics.Color.colorToHSV(dominantColor.toArgb(), hsv)
         if (useDarkTheme) {
-            hsv[1] = hsv[1].coerceIn(0.12f, 0.35f)
-            hsv[2] = 0.08f
+            // Keep the dominant colour visible but dark — not pure black.
+            // Higher saturation and brightness so the gradient-blur backdrop
+            // shows the album art's colour instead of a flat void.
+            hsv[1] = hsv[1].coerceIn(0.30f, 0.60f)
+            hsv[2] = 0.16f
         } else {
-            hsv[1] = hsv[1].coerceIn(0.04f, 0.12f)
-            hsv[2] = 0.96f
+            hsv[1] = hsv[1].coerceIn(0.08f, 0.20f)
+            hsv[2] = 0.95f
         }
         Color(android.graphics.Color.HSVToColor(hsv))
     }
@@ -1105,22 +1109,19 @@ fun BottomSheetPlayer(
     val openQueue =
         remember(state, queueSheetState, useInlineQueue) {
             {
-                // Ignore the tap that the closing swipe replays to the row which
-                // just entered the composition, or the queue pops straight back.
-                if (!queueSheetState.isInGestureCooldown) {
-                    isLyricsScreenVisible = false
-                    if (useInlineQueue) {
-                        isAppleQueueOpen = true
-                    } else {
-                        if (!state.isExpandedOrExpanding) {
-                            state.expandSoft()
-                        }
-                        // Opened the way the swipe opens it, not by a plain settle: the
-                        // tap arrives with no gesture behind it, and asking for the
-                        // anchor from there is what used to do nothing on the styles
-                        // whose row is only reachable by touch.
-                        queueSheetState.openByGesture()
+                isLyricsScreenVisible = false
+                if (useInlineQueue) {
+                    isAppleQueueOpen = true
+                } else {
+                    if (!state.isExpandedOrExpanding) {
+                        state.expandSoft()
                     }
+                    // Direct expand — bypasses the gesture system entirely so
+                    // the queue always opens on tap, even right after a swipe.
+                    queueSheetState.expand(
+                        animationSpec = BottomSheetAnimationSpec,
+                        velocityPx = 0f,
+                    )
                 }
             }
         }

@@ -9176,22 +9176,7 @@ class MusicService :
                     PlaybackAudioProcessorChain(
                         gainAndSyncProcessor = gainAndSyncProcessor,
                         silenceSkippingAudioProcessor =
-                            SilenceSkippingAudioProcessor(
-                                // (minimum silence, retention ratio, cap on kept silence,
-                                //  floor volume, sample level counted as silent)
-                                //
-                                // The old values asked for 1.5 s of unbroken silence
-                                // before anything was trimmed and then kept a third of
-                                // it, so on music - where the gaps are hundreds of ms -
-                                // the feature had almost nothing to act on and read as
-                                // broken. This trims from 300 ms, keeps a sliver so
-                                // endings do not clip, and never leaves more than 400 ms.
-                                SkipSilenceMinimumSilenceUs,
-                                SkipSilenceRetentionRatio,
-                                SkipSilenceMaxKeptUs,
-                                SkipSilenceMinVolumePercent,
-                                SkipSilenceThresholdLevel,
-                            ),
+                            SilenceSkippingAudioProcessor(),
                         sonicAudioProcessor = SonicAudioProcessor(),
                     ),
                 ).build()
