@@ -410,16 +410,18 @@ private fun HomeContent(
                             key = "home_remote_quick_picks",
                             contentType = "quick_picks",
                         ) {
-                            RemoteQuickPicksSection(
-                                section = remoteQuickPicks,
-                                mediaMetadata = mediaMetadata,
-                                isPlaying = isPlaying,
-                                displayMode = uiState.quickPicksDisplayMode,
-                                navController = navController,
-                                playerConnection = playerConnection,
-                                menuState = menuState,
-                                haptic = haptic,
-                            )
+                            HomeSectionContainer {
+                                RemoteQuickPicksSection(
+                                    section = remoteQuickPicks,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    displayMode = uiState.quickPicksDisplayMode,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                )
+                            }
                         }
                     } else if (
                         uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
@@ -438,16 +440,18 @@ private fun HomeContent(
                             key = "home_quick_picks",
                             contentType = "quick_picks",
                         ) {
-                            QuickPicksSection(
-                                quickPicks = uiState.quickPicks,
-                                mediaMetadata = mediaMetadata,
-                                isPlaying = isPlaying,
-                                displayMode = uiState.quickPicksDisplayMode,
-                                navController = navController,
-                                playerConnection = playerConnection,
-                                menuState = menuState,
-                                haptic = haptic,
-                            )
+                            HomeSectionContainer {
+                                QuickPicksSection(
+                                    quickPicks = uiState.quickPicks,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    displayMode = uiState.quickPicksDisplayMode,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                )
+                            }
                         }
                     }
 

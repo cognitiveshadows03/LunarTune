@@ -1506,6 +1506,22 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
+                    // Hide the status bar in new UI mode for an immersive,
+                    // edge-to-edge layout. Content extends behind the cutout
+                    // without the app adding fill padding.
+                    LaunchedEffect(newUiMode) {
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        if (newUiMode && !aodModeEnabled) {
+                            controller.systemBarsBehavior =
+                                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                            controller.hide(WindowInsetsCompat.Type.statusBars())
+                        } else if (!aodModeEnabled) {
+                            controller.show(WindowInsetsCompat.Type.statusBars())
+                            controller.systemBarsBehavior =
+                                WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+                        }
+                    }
+
                     var miniPlayerAnchorPersistenceEnabled by remember(playerConnection) {
                         mutableStateOf(false)
                     }

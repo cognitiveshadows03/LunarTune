@@ -137,6 +137,49 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider as buildSnapLayoutInfoProvider
 
+/**
+ * Strict spacing scale for the home screen. Use only these values for
+ * vertical and horizontal spacing so the layout rhythm stays consistent.
+ */
+object HomeSpacing {
+    val xxs = 4.dp
+    val xs = 8.dp
+    val sm = 12.dp
+    val md = 16.dp
+    val lg = 20.dp
+    val xl = 24.dp
+}
+
+/**
+ * Wraps home section content in a tonal card when new UI mode is on.
+ * Uses surfaceContainerLow for tonal elevation instead of drop shadows.
+ * In standard mode, renders content directly (no card).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun HomeSectionContainer(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val newUiMode = LocalNewUiMode.current
+    if (newUiMode) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Box(modifier = Modifier.padding(HomeSpacing.md)) {
+                content()
+            }
+        }
+    } else {
+        Box(modifier = modifier) {
+            content()
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -157,8 +200,8 @@ fun HomeGreetingHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(horizontal = HomeSpacing.lg, vertical = HomeSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(HomeSpacing.xxs),
     ) {
         Text(
             text = "$greeting \uD83D\uDD25",
@@ -167,7 +210,7 @@ fun HomeGreetingHeader(
         )
         Text(
             text = stringResource(R.string.home_greeting_subtitle),
-            style = MaterialTheme.typography.headlineMediumEmphasized,
+            style = MaterialTheme.typography.titleLargeEmphasized,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
         )
@@ -198,7 +241,10 @@ fun HomeSectionHeader(
                 .fillMaxWidth()
                 .heightIn(min = if (newUiMode) 72.dp else 64.dp)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = if (newUiMode) 20.dp else 16.dp, vertical = if (newUiMode) 12.dp else 8.dp),
+                .padding(
+                    horizontal = if (newUiMode) HomeSpacing.lg else HomeSpacing.md,
+                    vertical = if (newUiMode) HomeSpacing.sm else HomeSpacing.xs,
+                ),
     ) {
         thumbnail?.invoke()
         Column(
