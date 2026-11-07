@@ -203,19 +203,6 @@ fun IntegrationScreen(
                     onLogoutClick = { spotifyAccountViewModel.logout() },
                 )
             }
-
-            PreferenceGroup(title = stringResource(R.string.modules)) {
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.modules)) },
-                        description = stringResource(R.string.modules_description),
-                        icon = { Icon(painterResource(R.drawable.all_inclusive), null) },
-                        onClick = {
-                            navController.navigate("settings/modules")
-                        },
-                    )
-                }
-            }
         }
     }
 
