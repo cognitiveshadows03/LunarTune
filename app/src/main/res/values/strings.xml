@@ -1344,4 +1344,20 @@
     <string name="music_transfer_matching_title">Matching tracks</string>
     <string name="music_transfer_destination_local">Local</string>
     <string name="music_transfer_destination_youtube">YouTube Music</string>
+    <string name="profile_greeting">Welcome back, %1$s!</string>
+    <string name="profile_welcome">Welcome to LunarTune</string>
+    <string name="profile_label">PROFILE</string>
+    <string name="profile_id_card_of">ID CARD OF</string>
+    <string name="profile_card_ribbon">%1$s’s CARD · %2$s</string>
+    <string name="profile_card_ribbon_solo">%1$s’s CARD</string>
+    <string name="profile_listening_since">listening since %1$s</string>
+    <string name="profile_total_listening_time">Total listening time</string>
+    <string name="profile_view_stats">View Stats</string>
+    <string name="profile_version_and_about">Version &amp; about app</string>
+    <string name="profile_about_app">About app</string>
+    <string name="profile_edit_account">Edit account</string>
+    <string name="profile_release_build">Release build</string>
+    <string name="profile_debug_build">Debug build</string>
+    <string name="profile_history_description">Recently played tracks</string>
+    <string name="profile_settings_description">App preferences and more</string>
 </resources>

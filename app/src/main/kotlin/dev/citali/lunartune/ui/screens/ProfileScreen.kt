@@ -9,45 +9,77 @@
 
 package dev.citali.lunartune.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import coil3.compose.AsyncImage
 import dev.citali.lunartune.BuildConfig
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
@@ -56,13 +88,21 @@ import dev.citali.lunartune.constants.AccountEmailKey
 import dev.citali.lunartune.constants.AccountNameKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.ui.component.IconButton
-import dev.citali.lunartune.ui.screens.settings.AccountSummaryCard
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.AccountChannelsState
 import dev.citali.lunartune.viewmodels.HomeViewModel
 import dev.citali.lunartune.viewmodels.ProfileViewModel
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
+
+private val ProfileCardShape = RoundedCornerShape(28.dp)
+private val ProfileCardPadding = 20.dp
+
+/** Width of the vertical "…'s CARD" ribbon on the identity card. */
+private val CardRibbonWidth = 44.dp
 
 @Composable
 fun ProfileScreen(
@@ -74,6 +114,7 @@ fun ProfileScreen(
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
     val accountChannelsState by viewModel.accountChannelsState.collectAsStateWithLifecycle()
     val totalListeningTimeMs by profileViewModel.totalListeningTimeMs.collectAsStateWithLifecycle()
+    val firstListenDate by profileViewModel.firstListenDate.collectAsStateWithLifecycle()
 
     val (accountNamePref) = rememberPreference(AccountNameKey, "")
     val (accountEmail) = rememberPreference(AccountEmailKey, "")
@@ -95,6 +136,8 @@ fun ProfileScreen(
             ?.size
             .let { (it ?: 0) > 1 }
 
+    var accountActionsExpanded by rememberSaveable { mutableStateOf(false) }
+
     // Bottom inset for the mini player — used as content padding so the
     // list scrolls behind the mini player area instead of leaving a
     // blank bar.
@@ -104,116 +147,451 @@ fun ProfileScreen(
             .asPaddingValues()
             .calculateBottomPadding()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (isLoggedIn) {
-                            "Good to see you, $displayName!"
-                        } else {
-                            "Welcome to LunarTune"
-                        },
-                        style = MaterialTheme.typography.titleLargeEmphasized,
+    val screenBackground = MaterialTheme.colorScheme.background
+    val dotColor = MaterialTheme.colorScheme.onSurface
+
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(screenBackground)
+                .dotGrid(color = dotColor.copy(alpha = 0.05f)),
+    ) {
+        Scaffold(containerColor = Color.Transparent) { innerPadding ->
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding),
+                // Bottom padding accounts for the mini player so the last
+                // item can scroll above it — no blank bar, the content
+                // fills the screen behind the mini player.
+                contentPadding =
+                    PaddingValues(
+                        start = 20.dp,
+                        end = 20.dp,
+                        top = 4.dp,
+                        bottom = bottomInset + 32.dp,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                item(key = "profile_header") {
+                    ProfileHeader(
+                        isLoggedIn = isLoggedIn,
+                        displayName = displayName,
+                        onBack = navController::navigateUp,
+                        onBackLongClick = navController::backToMain,
                     )
-                },
-                navigationIcon = {
-                    IconButton(
-                        onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain,
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.arrow_back),
-                            contentDescription = null,
-                        )
-                    }
-                },
-            )
-        },
-    ) { innerPadding ->
-        LazyColumn(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            // Bottom padding accounts for the mini player so the last
-            // item can scroll above it — no blank bar, the content
-            // fills the screen behind the mini player.
-            contentPadding = PaddingValues(
-                horizontal = 16.dp,
-                vertical = 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                }
+
+                // The identity card — banner-free card matching the
+                // reference layout, with the account actions folded
+                // behind the little chevron under it.
+                item(key = "profile_identity_card") {
+                    ProfileIdentityCard(
+                        isLoggedIn = isLoggedIn,
+                        displayName = displayName,
+                        accountHandle = accountChannelHandle,
+                        accountEmail = accountEmail,
+                        accountImageUrl = accountImageUrl,
+                        firstListenDate = firstListenDate,
+                        actionsExpanded = accountActionsExpanded,
+                        onToggleActions = { accountActionsExpanded = !accountActionsExpanded },
+                        onEditAccount = { navController.navigate("settings/account") },
+                        onPrimaryAction = {
+                            if (isLoggedIn) {
+                                navController.navigate("account")
+                            } else {
+                                navController.navigate(buildLoginRoute())
+                            }
+                        },
+                        onSwitchAccount = { navController.navigate("settings/account") },
+                        onSecondaryAction = {
+                            if (isLoggedIn) {
+                                navController.navigate("settings/account")
+                            }
+                        },
+                        accountSwitcherEnabled = isLoggedIn || hasSwitchableChannels,
+                    )
+                }
+
+                // Stats — listening time inline with a "View Stats >" link.
+                item(key = "profile_stats") {
+                    ProfileListeningTimeCard(
+                        totalListeningTimeMs = totalListeningTimeMs,
+                        onViewStats = { navController.navigate("stats") },
+                    )
+                }
+
+                // History shortcut.
+                item(key = "profile_history") {
+                    ProfileActionCard(
+                        title = stringResource(R.string.history),
+                        description = stringResource(R.string.profile_history_description),
+                        iconRes = R.drawable.history,
+                        onClick = { navController.navigate("history") },
+                    )
+                }
+
+                // Version info — opens update page; "About app" opens about.
+                item(key = "profile_version") {
+                    ProfileVersionCard(
+                        version = BuildConfig.VERSION_NAME,
+                        isDebug = BuildConfig.DEBUG,
+                        onClick = { navController.navigate("settings/update") },
+                        onAboutClick = { navController.navigate("settings/about") },
+                    )
+                }
+
+                // Open settings — at the bottom after scrolling.
+                item(key = "profile_open_settings") {
+                    ProfileActionCard(
+                        title = stringResource(R.string.settings),
+                        description = stringResource(R.string.profile_settings_description),
+                        iconRes = R.drawable.settings,
+                        onClick = { navController.navigate("settings") },
+                    )
+                }
+
+                // Spacer so the last item can scroll above the mini player.
+                item(key = "profile_bottom_spacer") {
+                    Box(modifier = Modifier.heightIn(min = bottomInset))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Back affordance plus the greeting headline. The screen drops the top
+ * app bar so the greeting can breathe the way the reference does.
+ */
+@Composable
+private fun ProfileHeader(
+    isLoggedIn: Boolean,
+    displayName: String,
+    onBack: () -> Unit,
+    onBackLongClick: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        IconButton(
+            onClick = onBack,
+            onLongClick = onBackLongClick,
         ) {
-            // The pre-existing account card — banner, avatar, name, login/logout.
-            item(key = "profile_account_card") {
-                AccountSummaryCard(
-                    isLoggedIn = isLoggedIn,
-                    accountName = displayName,
-                    accountEmail = accountEmail,
-                    accountHandle = accountChannelHandle,
-                    accountImageUrl = accountImageUrl,
-                    accountSwitcherEnabled =
-                        isLoggedIn || hasSwitchableChannels,
-                    onPrimaryAction = {
-                        if (isLoggedIn) {
-                            navController.navigate("account")
-                        } else {
-                            navController.navigate(buildLoginRoute())
+            Icon(
+                painter = painterResource(R.drawable.arrow_back),
+                contentDescription = null,
+            )
+        }
+        Text(
+            text =
+                if (isLoggedIn) {
+                    stringResource(R.string.profile_greeting, displayName)
+                } else {
+                    stringResource(R.string.profile_welcome)
+                },
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 6.dp),
+        )
+    }
+}
+
+/**
+ * Identity card: a soft card with a vertical ribbon on its right edge,
+ * the account's avatar, and the account's name. The chevron under the
+ * card folds out the account actions instead of spending card space on
+ * them.
+ */
+@Composable
+private fun ProfileIdentityCard(
+    isLoggedIn: Boolean,
+    displayName: String,
+    accountHandle: String,
+    accountEmail: String,
+    accountImageUrl: String?,
+    firstListenDate: LocalDate?,
+    actionsExpanded: Boolean,
+    onToggleActions: () -> Unit,
+    onEditAccount: () -> Unit,
+    onPrimaryAction: () -> Unit,
+    onSwitchAccount: () -> Unit,
+    onSecondaryAction: () -> Unit,
+    accountSwitcherEnabled: Boolean,
+) {
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    val ribbonColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val dotColor = MaterialTheme.colorScheme.onSurface
+
+    val ribbonText =
+        if (accountHandle.isNotBlank()) {
+            stringResource(R.string.profile_card_ribbon, displayName, accountHandle)
+        } else {
+            stringResource(R.string.profile_card_ribbon_solo, displayName)
+        }
+
+    val firstListenLabel =
+        remember(firstListenDate) {
+            firstListenDate?.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM))
+        }
+
+    val subtitle =
+        when {
+            firstListenLabel != null ->
+                stringResource(R.string.profile_listening_since, firstListenLabel)
+
+            accountEmail.isNotBlank() -> accountEmail
+            !isLoggedIn -> stringResource(R.string.not_logged_in)
+            else -> null
+        }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = ProfileCardShape,
+            colors = CardDefaults.cardColors(containerColor = containerColor),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        ) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .dotGrid(color = dotColor.copy(alpha = 0.04f), step = 18.dp, radius = 1.dp),
+            ) {
+                // IntrinsicSize.Min lets the ribbon stretch to the height
+                // the content settles on, so it always spans the card.
+                Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .padding(ProfileCardPadding),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.profile_label),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                letterSpacing = 2.sp,
+                                color = onSurfaceVariant,
+                            )
+                            if (accountHandle.isNotBlank()) {
+                                Text(
+                                    text = accountHandle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                            Icon(
+                                painter = painterResource(R.drawable.edit),
+                                contentDescription = stringResource(R.string.profile_edit_account),
+                                tint = onSurfaceVariant,
+                                modifier =
+                                    Modifier
+                                        .size(16.dp)
+                                        .clickable(onClick = onEditAccount),
+                            )
                         }
-                    },
-                    onSecondaryAction = {
-                        if (isLoggedIn) {
-                            navController.navigate("settings/account")
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(20.dp),
+                        ) {
+                            Surface(
+                                modifier = Modifier.size(88.dp),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                            ) {
+                                if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = accountImageUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Icon(
+                                            painter =
+                                                painterResource(
+                                                    if (isLoggedIn) R.drawable.account else R.drawable.login,
+                                                ),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(36.dp),
+                                        )
+                                    }
+                                }
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = stringResource(R.string.profile_id_card_of),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    letterSpacing = 1.5.sp,
+                                    color = onSurfaceVariant,
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = displayName,
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    Icon(
+                                        painter = painterResource(R.drawable.edit),
+                                        contentDescription = stringResource(R.string.profile_edit_account),
+                                        tint = onSurfaceVariant,
+                                        modifier =
+                                            Modifier
+                                                .padding(start = 6.dp)
+                                                .size(16.dp)
+                                                .clickable(onClick = onEditAccount),
+                                    )
+                                }
+                                if (subtitle != null) {
+                                    Text(
+                                        text = subtitle,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                         }
-                    },
-                    onOpenAccountSwitcher = {
-                        navController.navigate("settings/account")
-                    },
+                    }
+
+                // The ribbon hugs the card's right edge and runs the full
+                // height of it, carrying the account's name sideways.
+                Box(
+                    modifier =
+                        Modifier
+                            .width(CardRibbonWidth)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
+                            .background(ribbonColor),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = ribbonText,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier =
+                            Modifier
+                                .rotate(90f)
+                                .wrapContentWidth(align = Alignment.CenterHorizontally, unbounded = true),
+                    )
+                }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            val chevronRotation by animateFloatAsState(
+                targetValue = if (actionsExpanded) 180f else 0f,
+                label = "profileActionsChevron",
+            )
+            IconButton(
+                onClick = onToggleActions,
+                onLongClick = {},
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.expand_more),
+                    contentDescription = null,
+                    modifier = Modifier.rotate(chevronRotation),
                 )
             }
+        }
 
-            // Stats — shows actual listening time inline with a "View Stats >" link.
-            item(key = "profile_stats") {
-                ProfileListeningTimeCard(
-                    totalListeningTimeMs = totalListeningTimeMs,
-                    onViewStats = { navController.navigate("stats") },
-                )
-            }
+        AnimatedVisibility(
+            visible = actionsExpanded,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilledTonalButton(onClick = onPrimaryAction) {
+                    Icon(
+                        painter =
+                            painterResource(
+                                if (isLoggedIn) R.drawable.account else R.drawable.login,
+                            ),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text =
+                            if (isLoggedIn) {
+                                stringResource(R.string.account)
+                            } else {
+                                stringResource(R.string.login)
+                            },
+                    )
+                }
 
-            // History shortcut.
-            item(key = "profile_history") {
-                ProfileActionCard(
-                    title = stringResource(R.string.history),
-                    description = "Recently played tracks",
-                    iconRes = R.drawable.history,
-                    onClick = { navController.navigate("history") },
-                )
-            }
+                FilledTonalIconButton(
+                    onClick = onSwitchAccount,
+                    enabled = accountSwitcherEnabled,
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.expand_more),
+                        contentDescription = stringResource(R.string.saved_accounts),
+                    )
+                }
 
-            // Version info — opens update page; "About app" button opens about.
-            item(key = "profile_version") {
-                ProfileVersionCard(
-                    version = BuildConfig.VERSION_NAME,
-                    isDebug = BuildConfig.DEBUG,
-                    onClick = { navController.navigate("settings/update") },
-                    onAboutClick = { navController.navigate("settings/about") },
-                )
-            }
+                Spacer(modifier = Modifier.weight(1f))
 
-            // Open settings — at the bottom after scrolling.
-            item(key = "profile_open_settings") {
-                ProfileActionCard(
-                    title = stringResource(R.string.settings),
-                    description = "App preferences and more",
-                    iconRes = R.drawable.settings,
-                    onClick = { navController.navigate("settings") },
-                )
-            }
-
-            // Spacer so the last item can scroll above the mini player.
-            item(key = "profile_bottom_spacer") {
-                Box(modifier = Modifier.heightIn(min = bottomInset))
+                TextButton(
+                    onClick = onSecondaryAction,
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor =
+                                if (isLoggedIn) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.primary
+                                },
+                        ),
+                ) {
+                    Text(
+                        text =
+                            if (isLoggedIn) {
+                                stringResource(R.string.action_logout)
+                            } else {
+                                stringResource(R.string.advanced_login)
+                            },
+                    )
+                }
             }
         }
     }
@@ -221,7 +599,6 @@ fun ProfileScreen(
 
 /**
  * A cleaner action card with an icon, title, description, and chevron.
- * Uses surfaceContainerLow for tonal depth instead of a flat row.
  */
 @Composable
 private fun ProfileActionCard(
@@ -233,10 +610,11 @@ private fun ProfileActionCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        shape = ProfileCardShape,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Row(
@@ -246,10 +624,11 @@ private fun ProfileActionCard(
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                modifier =
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
             ) {
                 Icon(
                     painter = painterResource(iconRes),
@@ -281,8 +660,8 @@ private fun ProfileActionCard(
 }
 
 /**
- * Listening time card — shows actual total listening time inline with a
- * "View Stats >" link, inspired by the reference design.
+ * Listening time card — the total sits left of the label, with a divider
+ * and the "View Stats >" link underneath.
  */
 @Composable
 private fun ProfileListeningTimeCard(
@@ -293,44 +672,103 @@ private fun ProfileListeningTimeCard(
     val totalMinutes = totalListeningTimeMs / 60_000
     val hours = totalMinutes / 60
     val minutes = totalMinutes % 60
-    val timeText = "${hours}h | ${minutes}m"
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        shape = ProfileCardShape,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(ProfileCardPadding),
         ) {
-            Text(
-                text = "Total Listening time",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Row(modifier = Modifier.weight(1f, fill = false)) {
+                    ListeningTimeValue(value = hours, unit = "h")
+                    Box(
+                        modifier =
+                            Modifier
+                                .padding(horizontal = 14.dp, vertical = 4.dp)
+                                .width(1.dp)
+                                .height(32.dp)
+                                .background(dividerColor),
+                    )
+                    ListeningTimeValue(value = minutes, unit = "m")
+                }
+                Text(
+                    text = stringResource(R.string.profile_total_listening_time),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.widthIn(max = 116.dp).padding(bottom = 4.dp),
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 18.dp),
+                color = dividerColor,
             )
-            Text(
-                text = timeText,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = "View Stats >",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = onViewStats),
-            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier =
+                    Modifier
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onViewStats)
+                        .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_view_stats),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = onSurfaceVariant,
+                )
+                Icon(
+                    painter = painterResource(R.drawable.navigate_next),
+                    contentDescription = null,
+                    tint = onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }
 
+/** One half of the listening total: a large figure with a small unit. */
+@Composable
+private fun ListeningTimeValue(
+    value: Long,
+    unit: String,
+) {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Text(
+            text = unit,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 1.dp, bottom = 6.dp),
+        )
+    }
+}
+
 /**
- * Version card with a large version number — inspired by the reference
- * design's "Version & about app" card. Clicking the card opens the
+ * Version card with a large version number. Clicking the card opens the
  * update page; the "About app" button opens the about page.
  */
 @Composable
@@ -343,50 +781,92 @@ private fun ProfileVersionCard(
 ) {
     Card(
         modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-        ),
+        shape = ProfileCardShape,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(ProfileCardPadding),
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-            ) {
-                Text(
-                    text = version.take(1),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Version & about app",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "$version ${if (isDebug) "· Debug" else "· Release"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
             Text(
-                text = "About app",
+                text = stringResource(R.string.profile_version_and_about),
                 style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.clickable(onClick = onAboutClick),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = version,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text =
+                            stringResource(
+                                if (isDebug) {
+                                    R.string.profile_debug_build
+                                } else {
+                                    R.string.profile_release_build
+                                },
+                            ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                FilledTonalButton(
+                    onClick = onAboutClick,
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                ) {
+                    Text(
+                        text = stringResource(R.string.profile_about_app),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
         }
+    }
+}
+
+/** A faint dot grid, the texture the reference screen leans on. */
+private fun Modifier.dotGrid(
+    color: Color,
+    step: Dp = 22.dp,
+    radius: Dp = 1.dp,
+): Modifier =
+    drawBehind {
+        drawDotGrid(
+            color = color,
+            step = step.toPx(),
+            radius = radius.toPx(),
+        )
+    }
+
+private fun DrawScope.drawDotGrid(
+    color: Color,
+    step: Float,
+    radius: Float,
+) {
+    if (step <= 0f) return
+    var y = step / 2f
+    while (y < size.height) {
+        var x = step / 2f
+        while (x < size.width) {
+            drawCircle(color = color, radius = radius, center = Offset(x, y))
+            x += step
+        }
+        y += step
     }
 }
