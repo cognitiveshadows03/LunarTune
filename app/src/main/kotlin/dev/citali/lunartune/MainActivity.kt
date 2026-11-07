@@ -260,7 +260,7 @@ import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.PureBlackKey
-import dev.citali.lunartune.constants.NewUiModeKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.RemindAfterKey
 import dev.citali.lunartune.constants.SYSTEM_DEFAULT
 import dev.citali.lunartune.constants.SearchSource
@@ -862,7 +862,7 @@ class MainActivity : FragmentActivity() {
                 }
             val pureBlackEnabled by rememberPreference(PureBlackKey, defaultValue = false)
             val pureBlack = pureBlackEnabled && useDarkTheme
-            val newUiMode by rememberPreference(NewUiModeKey, defaultValue = false)
+            val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = true)
 
             val customThemeSeedPalette =
                 remember(customThemeColorValue) {
@@ -962,7 +962,6 @@ class MainActivity : FragmentActivity() {
                 disableAnimations = disableAnimations,
                 fontPreference = fontPreference,
                 customFontUri = customFontUri,
-                newUiMode = newUiMode,
             ) {
                 val onboardingViewModel: OnboardingViewModel = hiltViewModel()
                 val onboardingState by onboardingViewModel.screenState.collectAsStateWithLifecycle()
@@ -1524,12 +1523,11 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    // Hide the status bar in new UI mode for an immersive,
-                    // edge-to-edge layout. Content extends behind the cutout
-                    // without the app adding fill padding.
-                    LaunchedEffect(newUiMode) {
+                    // Hide the status bar for an immersive, edge-to-edge layout.
+                    // On by default — toggle in Appearance settings.
+                    LaunchedEffect(hideStatusBar) {
                         val controller = WindowCompat.getInsetsController(window, window.decorView)
-                        if (newUiMode && !aodModeEnabled) {
+                        if (hideStatusBar && !aodModeEnabled) {
                             controller.systemBarsBehavior =
                                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                             controller.hide(WindowInsetsCompat.Type.statusBars())

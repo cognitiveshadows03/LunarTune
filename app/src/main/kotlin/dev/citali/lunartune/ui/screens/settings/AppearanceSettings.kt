@@ -90,6 +90,7 @@ import dev.citali.lunartune.constants.DefaultLibraryFilterOrder
 import dev.citali.lunartune.constants.DefaultLibraryFilterOrderPreference
 import dev.citali.lunartune.constants.DefaultOpenTabKey
 import dev.citali.lunartune.constants.DisableAnimationsKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.DynamicThemeKey
 import dev.citali.lunartune.constants.FontPreferenceKey

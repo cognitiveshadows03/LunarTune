@@ -94,7 +94,6 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.GridThumbnailHeight
 import dev.citali.lunartune.constants.ListItemHeight
 import dev.citali.lunartune.constants.ListThumbnailSize
-import dev.citali.lunartune.ui.theme.LocalNewUiMode
 import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.ThumbnailCornerRadius
 import dev.citali.lunartune.db.entities.Album
@@ -137,85 +136,6 @@ import kotlin.math.roundToInt
 import kotlin.random.Random
 import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider as buildSnapLayoutInfoProvider
 
-/**
- * Strict spacing scale for the home screen. Use only these values for
- * vertical and horizontal spacing so the layout rhythm stays consistent.
- */
-object HomeSpacing {
-    val xxs = 4.dp
-    val xs = 8.dp
-    val sm = 12.dp
-    val md = 16.dp
-    val lg = 20.dp
-    val xl = 24.dp
-}
-
-/**
- * Wraps home section content in a tonal card when new UI mode is on.
- * Uses surfaceContainerLow for tonal elevation instead of drop shadows.
- * In standard mode, renders content directly (no card).
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun HomeSectionContainer(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    val newUiMode = LocalNewUiMode.current
-    if (newUiMode) {
-        Surface(
-            modifier = modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.large,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-        ) {
-            Box(modifier = Modifier.padding(HomeSpacing.md)) {
-                content()
-            }
-        }
-    } else {
-        Box(modifier = modifier) {
-            content()
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-fun HomeGreetingHeader(
-    modifier: Modifier = Modifier,
-) {
-    val hour = remember {
-        java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    }
-    val greeting =
-        when (hour) {
-            in 5..11 -> "Good morning"
-            in 12..16 -> "Good afternoon"
-            in 17..20 -> "Good evening"
-            else -> "Good night"
-        }
-    Column(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = HomeSpacing.lg, vertical = HomeSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(HomeSpacing.xxs),
-    ) {
-        Text(
-            text = "$greeting \uD83D\uDD25",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = stringResource(R.string.home_greeting_subtitle),
-            style = MaterialTheme.typography.titleLargeEmphasized,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-        )
-    }
-}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -227,7 +147,6 @@ fun HomeSectionHeader(
     thumbnail: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
-    val newUiMode = LocalNewUiMode.current
     val shadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
     // scrim is black in both themes; derive the shadow polarity from the text
     // itself so light mode gets a light shadow behind dark glyphs.
@@ -239,12 +158,9 @@ fun HomeSectionHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = if (newUiMode) 72.dp else 64.dp)
+                .heightIn(min = 64.dp)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(
-                    horizontal = if (newUiMode) HomeSpacing.lg else HomeSpacing.md,
-                    vertical = if (newUiMode) HomeSpacing.sm else HomeSpacing.xs,
-                ),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         thumbnail?.invoke()
         Column(
@@ -263,7 +179,7 @@ fun HomeSectionHeader(
             Text(
                 text = title,
                 style =
-                    (if (newUiMode) MaterialTheme.typography.headlineSmallEmphasized else MaterialTheme.typography.titleLargeEmphasized).copy(
+                    MaterialTheme.typography.titleLargeEmphasized.copy(
                         // Legibility over artwork with no backdrop blob: a
                         // shadow that hugs the glyphs and fades with the art.
                         shadow =

@@ -81,7 +81,6 @@ import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.home.HomeAction
 import dev.citali.lunartune.home.HomeScreenState
 import dev.citali.lunartune.home.HomeUiState
-import dev.citali.lunartune.ui.theme.LocalNewUiMode
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.ui.component.ExpressivePullToRefreshBox
@@ -315,8 +314,7 @@ private fun HomeContent(
             )
         }
 
-        val newUiMode = LocalNewUiMode.current
-        val hasHeaderImage = effectiveHeaderImageUri.isNotBlank() && !newUiMode
+        val hasHeaderImage = effectiveHeaderImageUri.isNotBlank()
         // The header's local text dim rides the same fade as the artwork: once
         // the image has scrolled away there is nothing left to dim against.
         // Only read scroll state in composition when a header image exists, and quantize it via
@@ -380,22 +378,12 @@ private fun HomeContent(
                 LazyColumn(
                     state = lazyListState,
                     contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
-                    verticalArrangement = Arrangement.spacedBy(if (newUiMode) 8.dp else 0.dp),
                     modifier =
                         Modifier
                             .widthIn(max = HomeFeedMaxWidth)
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    if (newUiMode) {
-                        item(
-                            key = "home_greeting",
-                            contentType = "greeting",
-                        ) {
-                            HomeGreetingHeader()
-                        }
-                    }
-
                     if (remoteQuickPicks?.items?.isNotEmpty() == true) {
                         item(
                             key = "home_remote_quick_picks_header",
@@ -410,18 +398,16 @@ private fun HomeContent(
                             key = "home_remote_quick_picks",
                             contentType = "quick_picks",
                         ) {
-                            HomeSectionContainer {
-                                RemoteQuickPicksSection(
-                                    section = remoteQuickPicks,
-                                    mediaMetadata = mediaMetadata,
-                                    isPlaying = isPlaying,
-                                    displayMode = uiState.quickPicksDisplayMode,
-                                    navController = navController,
-                                    playerConnection = playerConnection,
-                                    menuState = menuState,
-                                    haptic = haptic,
-                                )
-                            }
+                            RemoteQuickPicksSection(
+                                section = remoteQuickPicks,
+                                mediaMetadata = mediaMetadata,
+                                isPlaying = isPlaying,
+                                displayMode = uiState.quickPicksDisplayMode,
+                                navController = navController,
+                                playerConnection = playerConnection,
+                                menuState = menuState,
+                                haptic = haptic,
+                            )
                         }
                     } else if (
                         uiState.quickPicksMode != QuickPicks.DONT_SHOW &&
@@ -440,8 +426,7 @@ private fun HomeContent(
                             key = "home_quick_picks",
                             contentType = "quick_picks",
                         ) {
-                            HomeSectionContainer {
-                                QuickPicksSection(
+                            QuickPicksSection(
                                     quickPicks = uiState.quickPicks,
                                     mediaMetadata = mediaMetadata,
                                     isPlaying = isPlaying,
@@ -451,7 +436,6 @@ private fun HomeContent(
                                     menuState = menuState,
                                     haptic = haptic,
                                 )
-                            }
                         }
                     }
 
