@@ -107,6 +107,7 @@ import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.HomeViewModel
 import dev.citali.lunartune.viewmodels.ProfileViewModel
+import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -127,6 +128,7 @@ fun ProfileScreen(
     val accountNameFromViewModel by viewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
     val totalListeningTimeMs by profileViewModel.totalListeningTimeMs.collectAsStateWithLifecycle()
+    val totalPlayCount by profileViewModel.totalPlayCount.collectAsStateWithLifecycle()
     val firstListenDate by profileViewModel.firstListenDate.collectAsStateWithLifecycle()
 
     val (accountNamePref) = rememberPreference(AccountNameKey, "")
@@ -228,13 +230,11 @@ fun ProfileScreen(
                     )
                 }
 
-                // History shortcut.
+                // History — the all-time play count, laid out like the stats card.
                 item(key = "profile_history") {
-                    ProfileActionCard(
-                        title = stringResource(R.string.history),
-                        description = stringResource(R.string.profile_history_description),
-                        iconRes = R.drawable.history,
-                        onClick = { navController.navigate("history") },
+                    ProfileHistoryCard(
+                        totalPlayCount = totalPlayCount,
+                        onViewHistory = { navController.navigate("history") },
                     )
                 }
 
@@ -766,6 +766,85 @@ private fun ListeningTimeValue(
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(start = 1.dp, bottom = 6.dp),
         )
+    }
+}
+
+/**
+ * History card — the all-time play count in the same shape as the listening
+ * card: the figure on the left, its label on the right, then a divider and
+ * the shortcut into the history list.
+ */
+@Composable
+private fun ProfileHistoryCard(
+    totalPlayCount: Int,
+    onViewHistory: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val plays = remember(totalPlayCount) { NumberFormat.getIntegerInstance().format(totalPlayCount) }
+    val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+    val dividerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = ProfileCardShape,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(ProfileCardPadding),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Text(
+                    text = plays,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = stringResource(R.string.profile_songs_played),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = onSurfaceVariant,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.widthIn(max = 116.dp).padding(start = 12.dp, bottom = 4.dp),
+                )
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.padding(top = 18.dp),
+                color = dividerColor,
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier =
+                    Modifier
+                        .padding(top = 10.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onViewHistory)
+                        .padding(vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_view_history),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = onSurfaceVariant,
+                )
+                Icon(
+                    painter = painterResource(R.drawable.navigate_next),
+                    contentDescription = null,
+                    tint = onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 

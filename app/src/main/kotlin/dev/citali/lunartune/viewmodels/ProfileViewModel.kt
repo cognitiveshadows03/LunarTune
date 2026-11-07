@@ -11,6 +11,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.citali.lunartune.db.MusicDatabase
+import dev.citali.lunartune.db.entities.ListeningTotals
 import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,6 +32,10 @@ private object ProfileSnapshotCache {
     @Volatile
     var totalListeningTimeMs: Long = 0L
 
+    /** All-time play count, shown on the history card. */
+    @Volatile
+    var totalPlayCount: Int = 0
+
     /** `null` until a listen has ever been recorded. */
     @Volatile
     var firstListenDate: LocalDate? = null
@@ -42,18 +47,46 @@ class ProfileViewModel
     constructor(
         database: MusicDatabase,
     ) : ViewModel() {
-        /** All-time total listening time in milliseconds. */
-        val totalListeningTimeMs: StateFlow<Long> =
+        /**
+         * Both all-time totals in one read: the listening card wants the time, the history card
+         * wants the number of plays, and they come out of the same aggregate row.
+         */
+        private val listening: StateFlow<ListeningTotals> =
             database
                 .listeningTotals(
                     fromTimestamp = 0L,
                     toTimestamp = System.currentTimeMillis(),
-                ).map { it.totalTimeListened }
-                .onEach { ProfileSnapshotCache.totalListeningTimeMs = it }
+                ).onEach {
+                    ProfileSnapshotCache.totalListeningTimeMs = it.totalTimeListened
+                    ProfileSnapshotCache.totalPlayCount = it.totalPlayCount
+                }
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.WhileSubscribed(5_000),
+                    ListeningTotals(
+                        totalPlayCount = ProfileSnapshotCache.totalPlayCount,
+                        totalTimeListened = ProfileSnapshotCache.totalListeningTimeMs,
+                    ),
+                )
+
+        /** All-time total listening time in milliseconds. */
+        val totalListeningTimeMs: StateFlow<Long> =
+            listening
+                .map { it.totalTimeListened }
                 .stateIn(
                     viewModelScope,
                     SharingStarted.WhileSubscribed(5_000),
                     ProfileSnapshotCache.totalListeningTimeMs,
+                )
+
+        /** All-time number of plays, i.e. how many songs were started in the app. */
+        val totalPlayCount: StateFlow<Int> =
+            listening
+                .map { it.totalPlayCount }
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.WhileSubscribed(5_000),
+                    ProfileSnapshotCache.totalPlayCount,
                 )
 
         /**
