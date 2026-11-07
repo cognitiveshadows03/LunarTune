@@ -716,7 +716,7 @@ fun AccountSettings(
 }
 
 @Composable
-private fun AccountSummaryCard(
+internal fun AccountSummaryCard(
     isLoggedIn: Boolean,
     accountName: String,
     accountEmail: String,

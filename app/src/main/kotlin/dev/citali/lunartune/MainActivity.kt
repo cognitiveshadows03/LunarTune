@@ -157,6 +157,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -205,6 +206,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.window.core.layout.WindowSizeClass
 import coil3.imageLoader
+import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.allowHardware
 import coil3.toBitmap
@@ -2111,12 +2113,9 @@ class MainActivity : FragmentActivity() {
                                                                 latestVersionName,
                                                                 BuildConfig.VERSION_NAME,
                                                             )
-                                                    FrostedTopBarMenu(
-                                                        hazeState = hazeState,
-                                                        expanded = topBarMenuExpanded,
-                                                        onExpandedChange = { topBarMenuExpanded = it },
+                                                    AccountAvatarButton(
                                                         updateAvailable = updateAvailable,
-                                                        onNavigate = { route -> navController.navigate(route) },
+                                                        onClick = { navController.navigate("profile") },
                                                     )
                                                 },
                                                 scrollBehavior = null,
@@ -3646,6 +3645,56 @@ private val MenuSheetShadowSpread = 6.dp
  * gap between bars - the older look - while the sheet keeps its current width
  * and the expressive motion on the way in and out.
  */
+/**
+ * Circular account avatar button that replaces the grid context-menu icon.
+ * Shows the user's profile picture (or a fallback account icon) and
+ * navigates to the profile page on click. Shows an update badge when
+ * a new version is available.
+ */
+@Composable
+private fun AccountAvatarButton(
+    updateAvailable: Boolean,
+    onClick: () -> Unit,
+) {
+    val viewModel: HomeViewModel = hiltViewModel()
+    val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
+    val accountName by viewModel.accountName.collectAsStateWithLifecycle()
+
+    BadgedBox(badge = {
+        if (updateAvailable) {
+            Badge()
+        }
+    }) {
+        val modifier =
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(onClick = onClick)
+
+        if (!accountImageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = accountImageUrl,
+                contentDescription = accountName,
+                modifier = modifier,
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.account),
+                    contentDescription = accountName,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun FrostedTopBarMenu(
     hazeState: HazeState,
