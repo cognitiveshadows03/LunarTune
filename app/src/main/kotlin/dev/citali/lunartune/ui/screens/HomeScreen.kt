@@ -315,7 +315,8 @@ private fun HomeContent(
             )
         }
 
-        val hasHeaderImage = effectiveHeaderImageUri.isNotBlank()
+        val newUiMode = LocalNewUiMode.current
+        val hasHeaderImage = effectiveHeaderImageUri.isNotBlank() && !newUiMode
         // The header's local text dim rides the same fade as the artwork: once
         // the image has scrolled away there is nothing left to dim against.
         // Only read scroll state in composition when a header image exists, and quantize it via
@@ -365,8 +366,6 @@ private fun HomeContent(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val forgottenItemWidthFactor = if (maxWidth * 0.475f >= 320.dp) 0.475f else 0.9f
                 val forgottenItemWidth = maxWidth.coerceAtMost(HomeFeedMaxWidth) * forgottenItemWidthFactor
-
-                val newUiMode = LocalNewUiMode.current
 
                 val forgottenSnapLayoutInfoProvider =
                     remember(forgottenFavoritesGridState, forgottenItemWidthFactor) {
