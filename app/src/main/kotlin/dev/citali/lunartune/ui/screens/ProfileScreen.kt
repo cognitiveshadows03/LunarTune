@@ -10,12 +10,19 @@
 package dev.citali.lunartune.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,9 +43,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -49,11 +54,13 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,11 +71,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,6 +101,7 @@ import dev.citali.lunartune.constants.AccountEmailKey
 import dev.citali.lunartune.constants.AccountNameKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.ui.component.IconButton
+import dev.citali.lunartune.ui.theme.rememberProfileCardColors
 import dev.citali.lunartune.ui.screens.settings.AccountSwitcherSheetHost
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
@@ -321,8 +334,17 @@ private fun ProfileIdentityCard(
     onSwitchAccount: () -> Unit,
     onSecondaryAction: () -> Unit,
 ) {
+    val cardColors = rememberProfileCardColors(accountImageUrl)
+    val accent = cardColors.accent
+    val deep = cardColors.deep ?: accent
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    val ribbonColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    val ribbonBase = MaterialTheme.colorScheme.surfaceContainerLowest
+    val ribbonColor =
+        if (accent != null) {
+            accent.copy(alpha = 0.20f).compositeOver(ribbonBase)
+        } else {
+            ribbonBase
+        }
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val dotColor = MaterialTheme.colorScheme.onSurface
 
@@ -359,6 +381,8 @@ private fun ProfileIdentityCard(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .profileCardWash(accent = accent, deep = deep)
+                        .holographicSheen(accent = accent)
                         .dotGrid(color = dotColor.copy(alpha = 0.04f), step = 18.dp, radius = 1.dp),
             ) {
                 // IntrinsicSize.Min lets the ribbon stretch to the height
@@ -401,17 +425,25 @@ private fun ProfileIdentityCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(20.dp),
                         ) {
+                            // The wavy cookie the account screen already uses, a
+                            // size up and ringed so it reads as the card's seal.
+                            val avatarShape = MaterialShapes.Cookie9Sided.toShape()
                             Surface(
-                                modifier = Modifier.size(88.dp),
-                                shape = CircleShape,
+                                modifier = Modifier.size(104.dp),
+                                shape = avatarShape,
                                 color = MaterialTheme.colorScheme.primaryContainer,
+                                border =
+                                    BorderStroke(
+                                        1.5.dp,
+                                        (accent ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.45f),
+                                    ),
                             ) {
                                 if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
                                     AsyncImage(
                                         model = accountImageUrl,
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                        modifier = Modifier.fillMaxSize().clip(avatarShape),
                                     )
                                 } else {
                                     Box(
@@ -451,7 +483,7 @@ private fun ProfileIdentityCard(
                                         text = subtitle,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
@@ -459,31 +491,25 @@ private fun ProfileIdentityCard(
                         }
                     }
 
-                // The ribbon hugs the card's right edge and runs the full
-                // height of it, carrying the account's name sideways.
-                Box(
-                    modifier =
-                        Modifier
-                            .width(CardRibbonWidth)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
-                            .background(ribbonColor),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = ribbonText,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        softWrap = false,
+                    // The ribbon hugs the card's right edge and runs the full
+                    // height of it, carrying the account's name sideways.
+                    var ribbonHeightPx by remember { mutableStateOf(0) }
+                    Box(
                         modifier =
                             Modifier
-                                .rotate(90f)
-                                .wrapContentWidth(align = Alignment.CenterHorizontally, unbounded = true),
-                    )
-                }
+                                .width(CardRibbonWidth)
+                                .fillMaxHeight()
+                                .onSizeChanged { ribbonHeightPx = it.height }
+                                .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
+                                .background(ribbonColor),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        RibbonMarquee(
+                            text = ribbonText,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                            availablePx = ribbonHeightPx,
+                        )
+                    }
                 }
             }
         }
@@ -813,6 +839,104 @@ private fun ProfileVersionCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * The ribbon's sideways caption. It scrolls when the name and handle are longer than the card
+ * is tall, and simply sits there when they fit.
+ */
+@Composable
+private fun RibbonMarquee(
+    text: String,
+    color: Color,
+    availablePx: Int,
+    modifier: Modifier = Modifier,
+) {
+    val density = LocalDensity.current
+    // Rotated 90°, so the track the caption scrolls along is the ribbon's
+    // length, not its width.
+    val trackWidth = with(density) { availablePx.toDp() }
+
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.sp,
+        color = color,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = TextAlign.Center,
+        modifier =
+            modifier
+                .then(if (availablePx > 0) Modifier.width(trackWidth) else Modifier)
+                .basicMarquee(iterations = Int.MAX_VALUE)
+                .rotate(90f),
+    )
+}
+
+/**
+ * Washes the identity card in the avatar's own colours, so two accounts never open onto the
+ * same card. Fades out towards the bottom-right to keep the type readable.
+ */
+@Composable
+private fun Modifier.profileCardWash(
+    accent: Color?,
+    deep: Color?,
+): Modifier {
+    if (accent == null || deep == null) return this
+    return drawBehind {
+        drawRect(
+            brush =
+                Brush.linearGradient(
+                    colors =
+                        listOf(
+                            accent.copy(alpha = 0.34f),
+                            deep.copy(alpha = 0.18f),
+                            Color.Transparent,
+                        ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height * 1.15f),
+                ),
+        )
+    }
+}
+
+/**
+ * A slow band of light crossing the card — the holographic part. Kept very faint and only
+ * painted when there is an avatar colour to reflect.
+ */
+@Composable
+private fun Modifier.holographicSheen(accent: Color?): Modifier {
+    if (accent == null) return this
+    val transition = rememberInfiniteTransition(label = "profileCardSheen")
+    val progress by
+        transition.animateFloat(
+            initialValue = -0.5f,
+            targetValue = 1.5f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 5200, easing = LinearEasing),
+                ),
+            label = "profileCardSheenProgress",
+        )
+    return drawWithContent {
+        drawContent()
+        val bandWidth = size.width * 0.5f
+        val x = progress * (size.width + bandWidth) - bandWidth
+        drawRect(
+            brush =
+                Brush.linearGradient(
+                    colors =
+                        listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.09f),
+                            Color.Transparent,
+                        ),
+                    start = Offset(x, 0f),
+                    end = Offset(x + bandWidth, size.height),
+                ),
+        )
     }
 }
 
