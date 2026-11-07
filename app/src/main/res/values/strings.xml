@@ -1355,7 +1355,6 @@
     <string name="profile_view_stats">View Stats</string>
     <string name="profile_version_and_about">Version &amp; about app</string>
     <string name="profile_about_app">About app</string>
-    <string name="profile_edit_account">Edit account</string>
     <string name="profile_release_build">Release build</string>
     <string name="profile_debug_build">Debug build</string>
     <string name="profile_history_description">Recently played tracks</string>

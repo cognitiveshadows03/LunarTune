@@ -89,9 +89,9 @@ import dev.citali.lunartune.constants.AccountEmailKey
 import dev.citali.lunartune.constants.AccountNameKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.ui.component.IconButton
+import dev.citali.lunartune.ui.screens.settings.AccountSwitcherSheetHost
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
-import dev.citali.lunartune.viewmodels.AccountChannelsState
 import dev.citali.lunartune.viewmodels.HomeViewModel
 import dev.citali.lunartune.viewmodels.ProfileViewModel
 import java.time.LocalDate
@@ -113,7 +113,6 @@ fun ProfileScreen(
 ) {
     val accountNameFromViewModel by viewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
-    val accountChannelsState by viewModel.accountChannelsState.collectAsStateWithLifecycle()
     val totalListeningTimeMs by profileViewModel.totalListeningTimeMs.collectAsStateWithLifecycle()
     val firstListenDate by profileViewModel.firstListenDate.collectAsStateWithLifecycle()
 
@@ -130,14 +129,8 @@ fun ProfileScreen(
             isLoggedIn -> stringResource(R.string.account)
             else -> stringResource(R.string.login)
         }
-    val hasSwitchableChannels =
-        (accountChannelsState as? AccountChannelsState.Success)
-            ?.channels
-            ?.items
-            ?.size
-            .let { (it ?: 0) > 1 }
-
     var accountActionsExpanded by rememberSaveable { mutableStateOf(false) }
+    var showAccountSwitcher by rememberSaveable { mutableStateOf(false) }
 
     // Bottom inset for the mini player — used as content padding so the
     // list scrolls behind the mini player area instead of leaving a
@@ -198,7 +191,6 @@ fun ProfileScreen(
                         firstListenDate = firstListenDate,
                         actionsExpanded = accountActionsExpanded,
                         onToggleActions = { accountActionsExpanded = !accountActionsExpanded },
-                        onEditAccount = { navController.navigate("settings/account") },
                         onPrimaryAction = {
                             if (isLoggedIn) {
                                 navController.navigate("account")
@@ -206,13 +198,12 @@ fun ProfileScreen(
                                 navController.navigate(buildLoginRoute())
                             }
                         },
-                        onSwitchAccount = { navController.navigate("settings/account") },
+                        onSwitchAccount = { showAccountSwitcher = true },
                         onSecondaryAction = {
                             if (isLoggedIn) {
                                 navController.navigate("settings/account")
                             }
                         },
-                        accountSwitcherEnabled = isLoggedIn || hasSwitchableChannels,
                     )
                 }
 
@@ -261,6 +252,17 @@ fun ProfileScreen(
             }
         }
     }
+
+    // The same sheet account settings opens, hosted with its own state so
+    // switching accounts works from the profile without a detour.
+    AccountSwitcherSheetHost(
+        visible = showAccountSwitcher,
+        onDismiss = { showAccountSwitcher = false },
+        onAddAnotherAccount = {
+            showAccountSwitcher = false
+            navController.navigate(buildLoginRoute())
+        },
+    )
 }
 
 /**
@@ -315,11 +317,9 @@ private fun ProfileIdentityCard(
     firstListenDate: LocalDate?,
     actionsExpanded: Boolean,
     onToggleActions: () -> Unit,
-    onEditAccount: () -> Unit,
     onPrimaryAction: () -> Unit,
     onSwitchAccount: () -> Unit,
     onSecondaryAction: () -> Unit,
-    accountSwitcherEnabled: Boolean,
 ) {
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
     val ribbonColor = MaterialTheme.colorScheme.surfaceContainerLowest
@@ -395,15 +395,6 @@ private fun ProfileIdentityCard(
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
                             }
-                            Icon(
-                                painter = painterResource(R.drawable.edit),
-                                contentDescription = stringResource(R.string.profile_edit_account),
-                                tint = onSurfaceVariant,
-                                modifier =
-                                    Modifier
-                                        .size(16.dp)
-                                        .clickable(onClick = onEditAccount),
-                            )
                         }
 
                         Row(
@@ -447,27 +438,14 @@ private fun ProfileIdentityCard(
                                     letterSpacing = 1.5.sp,
                                     color = onSurfaceVariant,
                                 )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = displayName,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                    )
-                                    Icon(
-                                        painter = painterResource(R.drawable.edit),
-                                        contentDescription = stringResource(R.string.profile_edit_account),
-                                        tint = onSurfaceVariant,
-                                        modifier =
-                                            Modifier
-                                                .padding(start = 6.dp)
-                                                .size(16.dp)
-                                                .clickable(onClick = onEditAccount),
-                                    )
-                                }
+                                Text(
+                                    text = displayName,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
                                 if (subtitle != null) {
                                     Text(
                                         text = subtitle,
@@ -560,10 +538,7 @@ private fun ProfileIdentityCard(
                     )
                 }
 
-                FilledTonalIconButton(
-                    onClick = onSwitchAccount,
-                    enabled = accountSwitcherEnabled,
-                ) {
+                FilledTonalIconButton(onClick = onSwitchAccount) {
                     Icon(
                         painter = painterResource(R.drawable.expand_more),
                         contentDescription = stringResource(R.string.saved_accounts),
