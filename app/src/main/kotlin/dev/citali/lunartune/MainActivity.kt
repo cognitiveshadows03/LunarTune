@@ -862,7 +862,7 @@ class MainActivity : FragmentActivity() {
                 }
             val pureBlackEnabled by rememberPreference(PureBlackKey, defaultValue = false)
             val pureBlack = pureBlackEnabled && useDarkTheme
-            val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = true)
+            val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = false)
 
             val customThemeSeedPalette =
                 remember(customThemeColorValue) {
@@ -3226,8 +3226,11 @@ class MainActivity : FragmentActivity() {
         // style that owns the whole screen gets the bar taken away, and so does the
         // full-screen lyrics page: it is its own surface with its own close
         // affordance, so the bar only ever sat on top of it.
+        val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = false)
+
         val shouldHideStatusBars =
-            isYearInMusicScreen ||
+            hideStatusBar ||
+                isYearInMusicScreen ||
                 (
                     playerBottomSheetState.isExpandedOrExpanding &&
                         playerDesignStyle.hidesStatusBar

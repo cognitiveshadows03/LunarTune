@@ -233,6 +233,7 @@ fun AppearanceSettings(navController: NavController) {
             defaultValue = MiniPlayerBackgroundStyle.THEME,
         )
     val (pureBlack, onPureBlackChange) = rememberPreference(PureBlackKey, defaultValue = false)
+    val (hideStatusBar, onHideStatusBarChange) = rememberPreference(HideStatusBarKey, defaultValue = false)
     val (disableBlur, onDisableBlurChange) = rememberPreference(DisableBlurKey, defaultValue = false)
     val (disableAnimations, onDisableAnimationsChange) =
         rememberPreference(
@@ -1199,6 +1200,16 @@ fun AppearanceSettings(navController: NavController) {
                         description = stringResource(R.string.navigation_bar_settings_subtitle),
                         icon = { Icon(painterResource(R.drawable.nav_bar), null) },
                         onClick = { navController.navigate("settings/appearance/navigation_bar") },
+                    )
+                }
+
+                item {
+                    SwitchPreference(
+                        title = { Text(stringResource(R.string.hide_status_bar)) },
+                        description = stringResource(R.string.hide_status_bar_desc),
+                        icon = { Icon(painterResource(R.drawable.status), null) },
+                        checked = hideStatusBar,
+                        onCheckedChange = onHideStatusBarChange,
                     )
                 }
 
