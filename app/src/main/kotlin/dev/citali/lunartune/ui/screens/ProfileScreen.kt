@@ -741,20 +741,20 @@ private fun ProfileNameText(
         val widthPx = constraints.maxWidth.coerceAtMost(4096)
         val fontSize =
             remember(text, widthPx, baseStyle, fontScale) {
-                var size = baseStyle.fontSize
-                while (size > ProfileNameMinFontSize) {
+                var size = baseStyle.fontSize.value
+                while (size > ProfileNameMinFontSize.value) {
                     val laidOut =
                         measurer.measure(
                             text = AnnotatedString(text),
-                            style = baseStyle.copy(fontSize = size),
+                            style = baseStyle.copy(fontSize = size.sp),
                             maxLines = 1,
                             softWrap = false,
                             constraints = Constraints(maxWidth = widthPx),
                         )
                     if (!laidOut.hasVisualOverflow) break
-                    size -= 0.5.sp
+                    size -= 0.5f
                 }
-                size
+                size.sp
             }
 
         Text(

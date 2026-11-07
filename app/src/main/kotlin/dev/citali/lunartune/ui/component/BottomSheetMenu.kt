@@ -115,12 +115,13 @@ fun BottomSheetMenu(
             // The sheet pads its content by the status bar *and* the display
             // cutout; with the bar hidden that padding is the only thing left up
             // there, so it shows as a blank band the height of the camera hole.
-            contentWindowInsets =
+            contentWindowInsets = {
                 if (hideStatusBar) {
                     WindowInsets(0)
                 } else {
                     WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
-                },
+                }
+            },
         ) {
             // The menu's own content settles on a spring instead of simply being there
             // when the sheet finishes rising. Scale grows out of the bottom edge - where
