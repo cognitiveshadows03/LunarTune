@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -76,7 +77,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -338,13 +338,11 @@ private fun ProfileIdentityCard(
     val accent = cardColors.accent
     val deep = cardColors.deep ?: accent
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    val ribbonBase = MaterialTheme.colorScheme.surfaceContainerLowest
-    val ribbonColor =
-        if (accent != null) {
-            accent.copy(alpha = 0.20f).compositeOver(ribbonBase)
-        } else {
-            ribbonBase
-        }
+    // A tint, not a slab: painted translucent so the wash and the sheen keep
+    // running underneath it. The old opaque fill sat on its own base colour,
+    // which left a hard-edged strip stuck to the right of the card.
+    val ribbonColor = accent?.copy(alpha = 0.14f) ?: Color.Transparent
+    val ribbonEdge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val dotColor = MaterialTheme.colorScheme.onSurface
 
@@ -463,19 +461,25 @@ private fun ProfileIdentityCard(
                                 }
                             }
 
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
                                 Text(
                                     text = stringResource(R.string.profile_id_card_of),
                                     style = MaterialTheme.typography.labelMedium,
                                     letterSpacing = 1.5.sp,
                                     color = onSurfaceVariant,
                                 )
+                                // Two lines, because a long name in the stock
+                                // bold face is wider than the column left over
+                                // beside the avatar and the ribbon.
                                 Text(
                                     text = displayName,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 if (subtitle != null) {
@@ -500,13 +504,24 @@ private fun ProfileIdentityCard(
                                 .width(CardRibbonWidth)
                                 .fillMaxHeight()
                                 .onSizeChanged { ribbonHeightPx = it.height }
-                                .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
                                 .background(ribbonColor),
                         contentAlignment = Alignment.Center,
                     ) {
+                        // A hairline edge rather than a second rounded clip — the
+                        // card already clips to its own shape, and two clips at
+                        // the same corner never quite agree.
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterStart)
+                                    .fillMaxHeight()
+                                    .padding(vertical = 18.dp)
+                                    .width(1.dp)
+                                    .background(ribbonEdge),
+                        )
                         RibbonMarquee(
                             text = ribbonText,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                             availablePx = ribbonHeightPx,
                         )
                     }
@@ -932,6 +947,7 @@ private fun RibbonMarquee(
     availablePx: Int,
     modifier: Modifier = Modifier,
 ) {
+    if (availablePx <= 0) return
     val density = LocalDensity.current
     // Rotated 90°, so the track the caption scrolls along is the ribbon's
     // length, not its width.
@@ -948,7 +964,12 @@ private fun RibbonMarquee(
         textAlign = TextAlign.Center,
         modifier =
             modifier
-                .then(if (availablePx > 0) Modifier.width(trackWidth) else Modifier)
+                // The ribbon is only 44 dp wide, and a parent's width cap would
+                // squeeze the caption into a sliver before it is turned. Let it
+                // measure at its full length and hang over the edges; the card
+                // clips the overhang away.
+                .wrapContentSize(align = Alignment.Center, unbounded = true)
+                .width(trackWidth)
                 .basicMarquee(iterations = Int.MAX_VALUE)
                 .rotate(90f),
     )
