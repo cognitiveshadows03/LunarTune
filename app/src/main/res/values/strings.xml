@@ -1352,6 +1352,8 @@
     <string name="profile_listening_since">listening since %1$s</string>
     <string name="profile_total_listening_time">Total listening time</string>
     <string name="profile_view_stats">View Stats</string>
+    <string name="profile_section_listening">Listening</string>
+    <string name="profile_section_app">App</string>
     <string name="profile_songs_played">Songs played</string>
     <string name="profile_view_history">View history</string>
     <string name="profile_version_and_about">Version &amp; about app</string>

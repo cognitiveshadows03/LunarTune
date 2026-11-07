@@ -26,11 +26,13 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,6 +42,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -84,9 +87,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -100,6 +106,7 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AccountChannelHandleKey
 import dev.citali.lunartune.constants.AccountEmailKey
 import dev.citali.lunartune.constants.AccountNameKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.theme.rememberProfileCardColors
@@ -119,6 +126,8 @@ private val ProfileCardPadding = 20.dp
 
 /** Width of the vertical "…'s CARD" ribbon on the identity card. */
 private val CardRibbonWidth = 44.dp
+private val ProfileGroupItemSpacing = 2.dp
+private val ProfileNameMinFontSize = 14.sp
 
 @Composable
 fun ProfileScreen(
@@ -133,6 +142,10 @@ fun ProfileScreen(
     val firstListenDate by profileViewModel.firstListenDate.collectAsStateWithLifecycle()
 
     val (accountNamePref) = rememberPreference(AccountNameKey, "")
+    // With the status bar hidden there is nothing to reserve at the top — the
+    // screens that pad for it anyway are the ones that leave a blank band the
+    // height of the cutout.
+    val (hideStatusBar) = rememberPreference(HideStatusBarKey, defaultValue = false)
     val (accountEmail) = rememberPreference(AccountEmailKey, "")
     val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
     val (innerTubeCookie) = rememberPreference(InnerTubeCookieKey, "")
@@ -167,7 +180,18 @@ fun ProfileScreen(
                 .background(screenBackground)
                 .dotGrid(color = dotColor.copy(alpha = 0.05f)),
     ) {
-        Scaffold(containerColor = Color.Transparent) { innerPadding ->
+        Scaffold(
+            containerColor = Color.Transparent,
+            // The default content insets include the display cutout, which is
+            // still there once the bar is gone: the greeting would start below
+            // an empty strip instead of drawing behind the camera hole.
+            contentWindowInsets =
+                if (hideStatusBar) {
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                } else {
+                    WindowInsets.safeDrawing
+                },
+        ) { innerPadding ->
             LazyColumn(
                 modifier =
                     Modifier
@@ -223,40 +247,47 @@ fun ProfileScreen(
                     )
                 }
 
-                // Stats — listening time inline with a "View Stats >" link.
-                item(key = "profile_stats") {
-                    ProfileListeningTimeCard(
-                        totalListeningTimeMs = totalListeningTimeMs,
-                        onViewStats = { navController.navigate("stats") },
-                    )
+                // The two listening numbers belong together, so they share a
+                // group the way settings stacks its entries under a heading.
+                item(key = "profile_listening") {
+                    Column(verticalArrangement = Arrangement.spacedBy(ProfileGroupItemSpacing)) {
+                        ProfileSectionTitle(stringResource(R.string.profile_section_listening))
+
+                        // Listening time inline with a "View Stats >" link.
+                        ProfileListeningTimeCard(
+                            totalListeningTimeMs = totalListeningTimeMs,
+                            onViewStats = { navController.navigate("stats") },
+                        )
+
+                        // The all-time play count, laid out like the card above.
+                        ProfileHistoryCard(
+                            totalPlayCount = totalPlayCount,
+                            onViewHistory = { navController.navigate("history") },
+                        )
+                    }
                 }
 
-                // History — the all-time play count, laid out like the stats card.
-                item(key = "profile_history") {
-                    ProfileHistoryCard(
-                        totalPlayCount = totalPlayCount,
-                        onViewHistory = { navController.navigate("history") },
-                    )
-                }
+                // App info and the way out to settings, grouped the same way.
+                item(key = "profile_app") {
+                    Column(verticalArrangement = Arrangement.spacedBy(ProfileGroupItemSpacing)) {
+                        ProfileSectionTitle(stringResource(R.string.profile_section_app))
 
-                // Version info — opens update page; "About app" opens about.
-                item(key = "profile_version") {
-                    ProfileVersionCard(
-                        version = BuildConfig.VERSION_NAME,
-                        isDebug = BuildConfig.DEBUG,
-                        onClick = { navController.navigate("settings/update") },
-                        onAboutClick = { navController.navigate("settings/about") },
-                    )
-                }
+                        // Version info — opens update page; "About app" opens about.
+                        ProfileVersionCard(
+                            version = BuildConfig.VERSION_NAME,
+                            isDebug = BuildConfig.DEBUG,
+                            onClick = { navController.navigate("settings/update") },
+                            onAboutClick = { navController.navigate("settings/about") },
+                        )
 
-                // Open settings — at the bottom after scrolling.
-                item(key = "profile_open_settings") {
-                    ProfileActionCard(
-                        title = stringResource(R.string.settings),
-                        description = stringResource(R.string.profile_settings_description),
-                        iconRes = R.drawable.settings,
-                        onClick = { navController.navigate("settings") },
-                    )
+                        // Open settings — the last card before the spacer.
+                        ProfileActionCard(
+                            title = stringResource(R.string.settings),
+                            description = stringResource(R.string.profile_settings_description),
+                            iconRes = R.drawable.settings,
+                            onClick = { navController.navigate("settings") },
+                        )
+                    }
                 }
 
                 // Spacer so the last item can scroll above the mini player.
@@ -481,17 +512,10 @@ private fun ProfileIdentityCard(
                                     letterSpacing = 1.5.sp,
                                     color = onSurfaceVariant,
                                 )
-                                // Two lines, because a long name in the stock
-                                // bold face is wider than the column left over
-                                // beside the avatar and the ribbon.
-                                Text(
-                                    text = displayName,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
+                                // One line, shrunk to fit: the card is the
+                                // name's fixed home, so the type gives way
+                                // instead of the name wrapping or truncating.
+                                ProfileNameText(text = displayName)
                                 if (subtitle != null) {
                                     Text(
                                         text = subtitle,
@@ -677,6 +701,69 @@ private fun ProfileActionCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** The heading settings puts above a group of entries, reused here. */
+@Composable
+private fun ProfileSectionTitle(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier.padding(start = 4.dp, top = 6.dp, bottom = 8.dp),
+    )
+}
+
+/**
+ * The card's display name on a single line, scaled down until it fits. A long name in the
+ * stock bold face is wider than the column left over beside the avatar and the ribbon, and
+ * shrinking reads better there than either wrapping onto a second line or an ellipsis.
+ */
+@Composable
+private fun ProfileNameText(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val fontScale = LocalDensity.current.fontScale
+    val baseStyle =
+        MaterialTheme.typography.headlineSmall.copy(
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val widthPx = constraints.maxWidth.coerceAtMost(4096)
+        val fontSize =
+            remember(text, widthPx, baseStyle, fontScale) {
+                var size = baseStyle.fontSize
+                while (size > ProfileNameMinFontSize) {
+                    val laidOut =
+                        measurer.measure(
+                            text = AnnotatedString(text),
+                            style = baseStyle.copy(fontSize = size),
+                            maxLines = 1,
+                            softWrap = false,
+                            constraints = Constraints(maxWidth = widthPx),
+                        )
+                    if (!laidOut.hasVisualOverflow) break
+                    size -= 0.5.sp
+                }
+                size
+            }
+
+        Text(
+            text = text,
+            style = baseStyle,
+            fontSize = fontSize,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
