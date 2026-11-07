@@ -736,6 +736,9 @@
     <string name="restore_archivetune_backup_detected">ArchiveTune backup detected. It will be converted to LunarTune format.</string>
     <string name="restore_database_incompatible">The library database in this backup could not be converted for this version of LunarTune.</string>
     <string name="discord_integration">Discord Integration</string>
+    <string name="modules">Modules</string>
+    <string name="modules_description">Manage audio source, lyrics, and look modules</string>
+    <string name="modules_empty_state">No modules installed yet. Modules will appear here once the module loading system is available.</string>
     <string name="account_integrations_summary">Discord, Last.fm, Libre.fm, ListenBrainz</string>
     <string name="account_row_identity_title">Customize Settings Account row</string>
     <string name="account_row_identity_description">Show your channel name, handle, profile picture, and banner. Turn off to restore the stock Account row.</string>

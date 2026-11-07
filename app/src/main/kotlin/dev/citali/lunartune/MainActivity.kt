@@ -163,6 +163,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -336,6 +337,7 @@ import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.ui.theme.LunarTuneTheme
 import dev.citali.lunartune.ui.theme.extractThemeColor
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
+import dev.citali.lunartune.ui.utils.AppMotion
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.ui.utils.resetHeightOffset
 import dev.citali.lunartune.utils.PreferenceStore
@@ -577,6 +579,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Follow the system animator duration scale so LunarTune's animations
+        // respect Developer Options → Animator duration scale (like Mochy Music).
+        AppMotion.followSystemScale(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes =
                 window.attributes.apply {
@@ -630,7 +635,14 @@ class MainActivity : FragmentActivity() {
                 }
         }
 
-        setContent {
+        // Create a motion-aware recomposer so every animation in the app
+        // reads AppMotion.durationScale each frame — the system animator
+        // scale and the disable-animations preference both flow through it.
+        val motionRecomposer = window.decorView.createLifecycleAwareWindowRecomposer(
+            AppMotion.durationScale,
+            lifecycle,
+        )
+        setContent(parent = motionRecomposer) {
             // Cold start: hold a plain starting surface over everything (including
             // the navigation bar) until the app has bound and produced a frame.
             // This removes the empty screen shell / skeleton flash that used to
@@ -831,6 +843,10 @@ class MainActivity : FragmentActivity() {
                 DisableAnimationsKey,
                 defaultValue = defaultDisableAnimations,
             )
+            // Route the disable-animations preference through AppMotion so
+            // every animation in the app reads it via the MotionDurationScale
+            // wired into the window recomposer — no more scattered snap()/tween(0).
+            AppMotion.enabled = !disableAnimations
             val forceHighRefreshRate by rememberPreference(
                 ForceHighRefreshRateKey,
                 defaultValue = true,

@@ -195,6 +195,15 @@ android {
             applicationIdSuffix = ".debug"
             isDebuggable = true
         }
+        // Release-identical performance with the profiler still attachable.
+        create("profileable") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".profileable"
+            isProfileable = true
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            proguardFiles("proguard-rules.pro")
+        }
     }
 
     compileOptions {
@@ -242,6 +251,27 @@ android {
         }
     }
 
+}
+
+// Compose compiler configuration — strips source-position metadata in
+// release/profileable builds (pure per-composition overhead in shipping
+// builds) and declares a stability configuration file so Compose treats
+// List/Map/Set and known immutable model packages as stable.
+composeCompiler {
+    val buildingReleaseLike = gradle.startParameter.taskNames.any { name ->
+        name.contains("Release", ignoreCase = true) ||
+            name.contains("Profileable", ignoreCase = true)
+    }
+    includeSourceInformation.set(!buildingReleaseLike)
+
+    if (project.hasProperty("composeMetrics")) {
+        metricsDestination.set(layout.buildDirectory.dir("compose-metrics"))
+        reportsDestination.set(layout.buildDirectory.dir("compose-reports"))
+    }
+
+    stabilityConfigurationFiles.add(
+        rootProject.layout.projectDirectory.file("compose_compiler_config.conf")
+    )
 }
 
 kotlin {

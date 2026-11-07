@@ -70,6 +70,7 @@ import dev.citali.lunartune.ui.screens.settings.DiscordSettings
 import dev.citali.lunartune.ui.screens.settings.HiddenPlaylistsScreen
 import dev.citali.lunartune.ui.screens.settings.IconScreen
 import dev.citali.lunartune.ui.screens.settings.IntegrationScreen
+import dev.citali.lunartune.ui.screens.settings.ModuleScreen
 import dev.citali.lunartune.ui.screens.settings.InternetSettings
 import dev.citali.lunartune.ui.screens.settings.LastFMSettings
 import dev.citali.lunartune.ui.screens.settings.LogcatScreen
@@ -582,6 +583,11 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/integration") {
         DrillPageContainer(pureBlack) {
             IntegrationScreen(navController)
+        }
+    }
+    composable("settings/modules") {
+        DrillPageContainer(pureBlack) {
+            ModuleScreen(navController)
         }
     }
     composable("settings/ai_integration") {
