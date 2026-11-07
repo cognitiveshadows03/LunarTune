@@ -55,6 +55,7 @@ import kotlin.math.min
 val DefaultThemeColor = Color(0xFFED5564)
 val LocalLunarTuneFontPreference = staticCompositionLocalOf { AppFontPreference.DEFAULT }
 val LocalLunarTuneFontFamily = staticCompositionLocalOf { AppFontFamily }
+val LocalNewUiMode = staticCompositionLocalOf { false }
 
 @Composable
 fun rememberLunarTuneLyricsFontFamily(): FontFamily {
@@ -82,6 +83,7 @@ fun LunarTuneTheme(
     disableAnimations: Boolean = false,
     fontPreference: AppFontPreference = AppFontPreference.DEFAULT,
     customFontUri: String = "",
+    newUiMode: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -210,29 +212,52 @@ fun LunarTuneTheme(
         }
 
     val expressiveShapes =
-        remember {
-            Shapes(
-                extraSmall =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(8.dp),
-                small =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(12.dp),
-                medium =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(16.dp),
-                large =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(24.dp),
-                extraLarge =
-                    androidx.compose.foundation.shape
-                        .RoundedCornerShape(32.dp),
-            )
+        remember(newUiMode) {
+            if (newUiMode) {
+                // New UI mode: slightly larger, cleaner corners — closer to
+                // the Google Material 3 Expressive / iOS card aesthetic.
+                Shapes(
+                    extraSmall =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(10.dp),
+                    small =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(14.dp),
+                    medium =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(20.dp),
+                    large =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(28.dp),
+                    extraLarge =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(36.dp),
+                )
+            } else {
+                Shapes(
+                    extraSmall =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(8.dp),
+                    small =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(12.dp),
+                    medium =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(16.dp),
+                    large =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(24.dp),
+                    extraLarge =
+                        androidx.compose.foundation.shape
+                            .RoundedCornerShape(32.dp),
+                )
+            }
         }
 
     CompositionLocalProvider(
         LocalLunarTuneFontPreference provides fontPreference,
         LocalLunarTuneFontFamily provides resolvedFontFamily,
+        LocalNewUiMode provides newUiMode,
     ) {
         MaterialExpressiveTheme(
             colorScheme = animatedColorScheme,

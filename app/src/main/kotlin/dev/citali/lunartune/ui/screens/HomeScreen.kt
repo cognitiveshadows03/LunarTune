@@ -81,6 +81,7 @@ import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
 import dev.citali.lunartune.home.HomeAction
 import dev.citali.lunartune.home.HomeScreenState
 import dev.citali.lunartune.home.HomeUiState
+import dev.citali.lunartune.ui.theme.LocalNewUiMode
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.ui.component.ExpressivePullToRefreshBox
@@ -383,6 +384,29 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
+                    val newUiMode = LocalNewUiMode.current
+                    if (newUiMode) {
+                        item(
+                            key = "home_category_chips",
+                            contentType = "category_chips",
+                        ) {
+                            HomeCategoryChips(
+                                chips =
+                                    buildList {
+                                        add(stringResource(R.string.quick_picks) to 1)
+                                        if (uiState.speedDialItems.isNotEmpty()) {
+                                            add(stringResource(R.string.speed_dial) to 3)
+                                        }
+                                        add(stringResource(R.string.keep_listening) to 5)
+                                        if (uiState.forgottenFavorites.isNotEmpty()) {
+                                            add(stringResource(R.string.forgotten_favorites) to 7)
+                                        }
+                                    },
+                                listState = lazyListState,
+                            )
+                        }
+                    }
+
                     if (remoteQuickPicks?.items?.isNotEmpty() == true) {
                         item(
                             key = "home_remote_quick_picks_header",

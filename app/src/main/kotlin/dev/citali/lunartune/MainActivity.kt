@@ -257,6 +257,7 @@ import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.PureBlackKey
+import dev.citali.lunartune.constants.NewUiModeKey
 import dev.citali.lunartune.constants.RemindAfterKey
 import dev.citali.lunartune.constants.SYSTEM_DEFAULT
 import dev.citali.lunartune.constants.SearchSource
@@ -843,6 +844,7 @@ class MainActivity : FragmentActivity() {
                 }
             val pureBlackEnabled by rememberPreference(PureBlackKey, defaultValue = false)
             val pureBlack = pureBlackEnabled && useDarkTheme
+            val newUiMode by rememberPreference(NewUiModeKey, defaultValue = false)
 
             val customThemeSeedPalette =
                 remember(customThemeColorValue) {
@@ -942,6 +944,7 @@ class MainActivity : FragmentActivity() {
                 disableAnimations = disableAnimations,
                 fontPreference = fontPreference,
                 customFontUri = customFontUri,
+                newUiMode = newUiMode,
             ) {
                 val onboardingViewModel: OnboardingViewModel = hiltViewModel()
                 val onboardingState by onboardingViewModel.screenState.collectAsStateWithLifecycle()

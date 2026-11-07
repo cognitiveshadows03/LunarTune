@@ -1098,3 +1098,5 @@ enum class TabTransitionStyle {
 }
 
 val TabTransitionKey = stringPreferencesKey("tabTransition")
+
+val NewUiModeKey = booleanPreferencesKey("newUiMode")
