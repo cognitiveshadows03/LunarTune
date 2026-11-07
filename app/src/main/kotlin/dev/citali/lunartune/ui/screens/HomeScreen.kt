@@ -366,29 +366,7 @@ private fun HomeContent(
                 val forgottenItemWidthFactor = if (maxWidth * 0.475f >= 320.dp) 0.475f else 0.9f
                 val forgottenItemWidth = maxWidth.coerceAtMost(HomeFeedMaxWidth) * forgottenItemWidthFactor
 
-                // Pre-compute category chip labels and section indices for the
-                // new UI mode so they don't need @Composable reads inside the
-                // LazyColumn scope.
                 val newUiMode = LocalNewUiMode.current
-                val quickPicksLabel = stringResource(R.string.quick_picks)
-                val speedDialLabel = stringResource(R.string.speed_dial)
-                val keepListeningLabel = stringResource(R.string.keep_listening)
-                val forgottenFavoritesLabel = stringResource(R.string.forgotten_favorites)
-                val categoryChips =
-                    if (newUiMode) {
-                        buildList {
-                            add(quickPicksLabel to 1)
-                            if (uiState.speedDialItems.isNotEmpty()) {
-                                add(speedDialLabel to 3)
-                            }
-                            add(keepListeningLabel to 5)
-                            if (uiState.forgottenFavorites.isNotEmpty()) {
-                                add(forgottenFavoritesLabel to 7)
-                            }
-                        }
-                    } else {
-                        emptyList()
-                    }
 
                 val forgottenSnapLayoutInfoProvider =
                     remember(forgottenFavoritesGridState, forgottenItemWidthFactor) {
@@ -403,21 +381,19 @@ private fun HomeContent(
                 LazyColumn(
                     state = lazyListState,
                     contentPadding = LocalPlayerAwareWindowInsets.current.asPaddingValues(),
+                    verticalArrangement = Arrangement.spacedBy(if (newUiMode) 8.dp else 0.dp),
                     modifier =
                         Modifier
                             .widthIn(max = HomeFeedMaxWidth)
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    if (categoryChips.isNotEmpty()) {
+                    if (newUiMode) {
                         item(
-                            key = "home_category_chips",
-                            contentType = "category_chips",
+                            key = "home_greeting",
+                            contentType = "greeting",
                         ) {
-                            HomeCategoryChips(
-                                chips = categoryChips,
-                                listState = lazyListState,
-                            )
+                            HomeGreetingHeader()
                         }
                     }
 

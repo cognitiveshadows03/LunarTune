@@ -48,15 +48,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -69,7 +64,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,11 +90,11 @@ import coil3.request.crossfade
 import coil3.size.Size
 import dev.citali.lunartune.ui.utils.displayArtworkUrl
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.GridThumbnailHeight
 import dev.citali.lunartune.constants.ListItemHeight
 import dev.citali.lunartune.constants.ListThumbnailSize
+import dev.citali.lunartune.ui.theme.LocalNewUiMode
 import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.ThumbnailCornerRadius
 import dev.citali.lunartune.db.entities.Album
@@ -146,44 +140,37 @@ import dev.citali.lunartune.ui.utils.SnapLayoutInfoProvider as buildSnapLayoutIn
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun HomeCategoryChips(
-    chips: List<Pair<String, Int>>,
-    listState: LazyListState,
+fun HomeGreetingHeader(
     modifier: Modifier = Modifier,
 ) {
-    val scope = rememberCoroutineScope()
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    val hour = remember {
+        java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    }
+    val greeting =
+        when (hour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            in 17..20 -> "Good evening"
+            else -> "Good night"
+        }
+    Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 6.dp),
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        chips.forEach { (label, index) ->
-            FilterChip(
-                selected = false,
-                onClick = {
-                    scope.launch { listState.scrollToItem(index) }
-                },
-                label = {
-                    Text(
-                        text = label,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                shapes = FilterChipDefaults.shapes(),
-                colors =
-                    FilterChipDefaults.filterChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
-                        labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    ),
-                border = null,
-            )
-        }
+        Text(
+            text = "$greeting \uD83D\uDD25",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.home_greeting_subtitle),
+            style = MaterialTheme.typography.headlineMediumEmphasized,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+        )
     }
 }
 
@@ -197,6 +184,7 @@ fun HomeSectionHeader(
     thumbnail: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
 ) {
+    val newUiMode = LocalNewUiMode.current
     val shadowBlurPx = with(LocalDensity.current) { 8.dp.toPx() }
     // scrim is black in both themes; derive the shadow polarity from the text
     // itself so light mode gets a light shadow behind dark glyphs.
@@ -208,9 +196,9 @@ fun HomeSectionHeader(
         modifier =
             modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = if (newUiMode) 72.dp else 64.dp)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = if (newUiMode) 20.dp else 16.dp, vertical = if (newUiMode) 12.dp else 8.dp),
     ) {
         thumbnail?.invoke()
         Column(
@@ -229,7 +217,7 @@ fun HomeSectionHeader(
             Text(
                 text = title,
                 style =
-                    MaterialTheme.typography.titleLargeEmphasized.copy(
+                    (if (newUiMode) MaterialTheme.typography.headlineSmallEmphasized else MaterialTheme.typography.titleLargeEmphasized).copy(
                         // Legibility over artwork with no backdrop blob: a
                         // shadow that hugs the glyphs and fades with the art.
                         shadow =
