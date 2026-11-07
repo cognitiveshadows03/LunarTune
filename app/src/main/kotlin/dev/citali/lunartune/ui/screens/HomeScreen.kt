@@ -365,6 +365,31 @@ private fun HomeContent(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val forgottenItemWidthFactor = if (maxWidth * 0.475f >= 320.dp) 0.475f else 0.9f
                 val forgottenItemWidth = maxWidth.coerceAtMost(HomeFeedMaxWidth) * forgottenItemWidthFactor
+
+                // Pre-compute category chip labels and section indices for the
+                // new UI mode so they don't need @Composable reads inside the
+                // LazyColumn scope.
+                val newUiMode = LocalNewUiMode.current
+                val quickPicksLabel = stringResource(R.string.quick_picks)
+                val speedDialLabel = stringResource(R.string.speed_dial)
+                val keepListeningLabel = stringResource(R.string.keep_listening)
+                val forgottenFavoritesLabel = stringResource(R.string.forgotten_favorites)
+                val categoryChips =
+                    if (newUiMode) {
+                        buildList {
+                            add(quickPicksLabel to 1)
+                            if (uiState.speedDialItems.isNotEmpty()) {
+                                add(speedDialLabel to 3)
+                            }
+                            add(keepListeningLabel to 5)
+                            if (uiState.forgottenFavorites.isNotEmpty()) {
+                                add(forgottenFavoritesLabel to 7)
+                            }
+                        }
+                    } else {
+                        emptyList()
+                    }
+
                 val forgottenSnapLayoutInfoProvider =
                     remember(forgottenFavoritesGridState, forgottenItemWidthFactor) {
                         SnapLayoutInfoProvider(
@@ -384,24 +409,13 @@ private fun HomeContent(
                             .fillMaxWidth()
                             .align(Alignment.TopCenter),
                 ) {
-                    val newUiMode = LocalNewUiMode.current
-                    if (newUiMode) {
+                    if (categoryChips.isNotEmpty()) {
                         item(
                             key = "home_category_chips",
                             contentType = "category_chips",
                         ) {
                             HomeCategoryChips(
-                                chips =
-                                    buildList {
-                                        add(stringResource(R.string.quick_picks) to 1)
-                                        if (uiState.speedDialItems.isNotEmpty()) {
-                                            add(stringResource(R.string.speed_dial) to 3)
-                                        }
-                                        add(stringResource(R.string.keep_listening) to 5)
-                                        if (uiState.forgottenFavorites.isNotEmpty()) {
-                                            add(stringResource(R.string.forgotten_favorites) to 7)
-                                        }
-                                    },
+                                chips = categoryChips,
                                 listState = lazyListState,
                             )
                         }
