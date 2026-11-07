@@ -12,9 +12,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,6 +43,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import dev.citali.lunartune.LocalAnimationsDisabled
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -84,6 +89,7 @@ fun BottomSheetMenu(
     background: Color = MaterialTheme.colorScheme.surface,
 ) {
     val focusManager = LocalFocusManager.current
+    val (hideStatusBar) = rememberPreference(HideStatusBarKey, defaultValue = false)
 
     state.dialogContent?.invoke()
 
@@ -106,6 +112,15 @@ fun BottomSheetMenu(
                 )
             },
             modifier = modifier.fillMaxHeight(),
+            // The sheet pads its content by the status bar *and* the display
+            // cutout; with the bar hidden that padding is the only thing left up
+            // there, so it shows as a blank band the height of the camera hole.
+            contentWindowInsets =
+                if (hideStatusBar) {
+                    WindowInsets(0)
+                } else {
+                    WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                },
         ) {
             // The menu's own content settles on a spring instead of simply being there
             // when the sheet finishes rising. Scale grows out of the bottom edge - where
