@@ -61,16 +61,19 @@ import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.AccountChannelsState
 import dev.citali.lunartune.viewmodels.HomeViewModel
+import dev.citali.lunartune.viewmodels.ProfileViewModel
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
 @Composable
 fun ProfileScreen(
     navController: NavController,
     viewModel: HomeViewModel = hiltViewModel(),
+    profileViewModel: ProfileViewModel = hiltViewModel(),
 ) {
     val accountNameFromViewModel by viewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
     val accountChannelsState by viewModel.accountChannelsState.collectAsStateWithLifecycle()
+    val totalListeningTimeMs by profileViewModel.totalListeningTimeMs.collectAsStateWithLifecycle()
 
     val (accountNamePref) = rememberPreference(AccountNameKey, "")
     val (accountEmail) = rememberPreference(AccountEmailKey, "")
@@ -170,13 +173,11 @@ fun ProfileScreen(
                 )
             }
 
-            // Stats — inline card with a "View Stats >" action.
+            // Stats — shows actual listening time inline with a "View Stats >" link.
             item(key = "profile_stats") {
-                ProfileActionCard(
-                    title = stringResource(R.string.stats),
-                    description = "View your listening statistics",
-                    iconRes = R.drawable.stats,
-                    onClick = { navController.navigate("stats") },
+                ProfileListeningTimeCard(
+                    totalListeningTimeMs = totalListeningTimeMs,
+                    onViewStats = { navController.navigate("stats") },
                 )
             }
 
@@ -190,12 +191,13 @@ fun ProfileScreen(
                 )
             }
 
-            // Version info — large version number, links to About.
+            // Version info — opens update page; "About app" button opens about.
             item(key = "profile_version") {
                 ProfileVersionCard(
                     version = BuildConfig.VERSION_NAME,
                     isDebug = BuildConfig.DEBUG,
-                    onClick = { navController.navigate("settings/about") },
+                    onClick = { navController.navigate("settings/update") },
+                    onAboutClick = { navController.navigate("settings/about") },
                 )
             }
 
@@ -279,14 +281,64 @@ private fun ProfileActionCard(
 }
 
 /**
+ * Listening time card — shows actual total listening time inline with a
+ * "View Stats >" link, inspired by the reference design.
+ */
+@Composable
+private fun ProfileListeningTimeCard(
+    totalListeningTimeMs: Long,
+    onViewStats: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val totalMinutes = totalListeningTimeMs / 60_000
+    val hours = totalMinutes / 60
+    val minutes = totalMinutes % 60
+    val timeText = "${hours}h | ${minutes}m"
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Total Listening time",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = timeText,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "View Stats >",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(onClick = onViewStats),
+            )
+        }
+    }
+}
+
+/**
  * Version card with a large version number — inspired by the reference
- * design's "Version & about app" card.
+ * design's "Version & about app" card. Clicking the card opens the
+ * update page; the "About app" button opens the about page.
  */
 @Composable
 private fun ProfileVersionCard(
     version: String,
     isDebug: Boolean,
     onClick: () -> Unit,
+    onAboutClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -329,10 +381,11 @@ private fun ProfileVersionCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Icon(
-                painter = painterResource(R.drawable.navigate_next),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            Text(
+                text = "About app",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(onClick = onAboutClick),
             )
         }
     }
