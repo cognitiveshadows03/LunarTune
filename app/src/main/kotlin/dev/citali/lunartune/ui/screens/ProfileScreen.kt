@@ -71,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
@@ -338,11 +339,20 @@ private fun ProfileIdentityCard(
     val accent = cardColors.accent
     val deep = cardColors.deep ?: accent
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-    // A tint, not a slab: painted translucent so the wash and the sheen keep
-    // running underneath it. The old opaque fill sat on its own base colour,
-    // which left a hard-edged strip stuck to the right of the card.
-    val ribbonColor = accent?.copy(alpha = 0.14f) ?: Color.Transparent
-    val ribbonEdge = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    // A tint that fades out of the card towards the ribbon's outer edge. Any
+    // flat fill here — opaque or not — draws a vertical seam where the wash
+    // behind it changes; a gradient has no edge to give away.
+    val ribbonBrush =
+        accent?.let {
+            Brush.horizontalGradient(
+                colors = listOf(Color.Transparent, it.copy(alpha = 0.22f)),
+            )
+        }
+    // Room for the caption to end before it runs under the card's corners.
+    val ribbonInsetPx =
+        with(LocalDensity.current) {
+            ProfileCardPadding.roundToPx()
+        }
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val dotColor = MaterialTheme.colorScheme.onSurface
 
@@ -504,25 +514,19 @@ private fun ProfileIdentityCard(
                                 .width(CardRibbonWidth)
                                 .fillMaxHeight()
                                 .onSizeChanged { ribbonHeightPx = it.height }
-                                .background(ribbonColor),
+                                .then(
+                                    if (ribbonBrush != null) {
+                                        Modifier.background(ribbonBrush)
+                                    } else {
+                                        Modifier
+                                    },
+                                ).clipToBounds(),
                         contentAlignment = Alignment.Center,
                     ) {
-                        // A hairline edge rather than a second rounded clip — the
-                        // card already clips to its own shape, and two clips at
-                        // the same corner never quite agree.
-                        Box(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.CenterStart)
-                                    .fillMaxHeight()
-                                    .padding(vertical = 18.dp)
-                                    .width(1.dp)
-                                    .background(ribbonEdge),
-                        )
                         RibbonMarquee(
                             text = ribbonText,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            availablePx = ribbonHeightPx,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                            availablePx = (ribbonHeightPx - ribbonInsetPx * 2).coerceAtLeast(0),
                         )
                     }
                 }
@@ -964,14 +968,16 @@ private fun RibbonMarquee(
         textAlign = TextAlign.Center,
         modifier =
             modifier
-                // The ribbon is only 44 dp wide, and a parent's width cap would
-                // squeeze the caption into a sliver before it is turned. Let it
-                // measure at its full length and hang over the edges; the card
-                // clips the overhang away.
+                // Order matters here, twice over. The ribbon is only 44 dp wide,
+                // so the caption has to be measured unbounded first or the width
+                // cap squeezes it into a sliver. And the turn has to come before
+                // the marquee, because the marquee clips to its own bounds: turn
+                // it afterwards and the clip is applied in the unrotated frame,
+                // which slices the sideways line down to a single glyph.
                 .wrapContentSize(align = Alignment.Center, unbounded = true)
+                .rotate(90f)
                 .width(trackWidth)
-                .basicMarquee(iterations = Int.MAX_VALUE)
-                .rotate(90f),
+                .basicMarquee(iterations = Int.MAX_VALUE),
     )
 }
 

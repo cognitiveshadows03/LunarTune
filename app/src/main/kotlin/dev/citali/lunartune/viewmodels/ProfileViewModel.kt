@@ -55,7 +55,11 @@ class ProfileViewModel
             database
                 .listeningTotals(
                     fromTimestamp = 0L,
-                    toTimestamp = System.currentTimeMillis(),
+                    // Everything, not "everything up to the moment this view model
+                    // was built". That bound was frozen once, so plays from the
+                    // current session never made it into the totals and the
+                    // profile read a few plays short of the year-in-music recap.
+                    toTimestamp = Long.MAX_VALUE,
                 ).onEach {
                     ProfileSnapshotCache.totalListeningTimeMs = it.totalTimeListened
                     ProfileSnapshotCache.totalPlayCount = it.totalPlayCount
