@@ -562,6 +562,7 @@ private fun StylesHeader(
     }
 }
 
+@Composable
 private fun StylesActionBar(
     editEnabled: Boolean,
     onEdit: () -> Unit,
