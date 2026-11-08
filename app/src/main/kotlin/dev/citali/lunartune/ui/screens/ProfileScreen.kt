@@ -814,15 +814,15 @@ private fun CardChip(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    // A smart-card chip: a lilac metal plate divided by the contact lines a
+    // A smart-card chip: a gold metal plate divided by the contact lines a
     // real one carries, rather than a flat square with a cross through it.
     val metal =
         listOf(
-            Color(0xFFF3EDFC),
-            accent.copy(alpha = 0.75f),
-            Color(0xFFE4D8F4),
+            Color(0xFFFCEFB4),
+            Color(0xFFD4A437),
+            Color(0xFFE8C97A),
         )
-    val line = Color(0xFF2F2743).copy(alpha = 0.30f)
+    val line = Color(0xFF4A3408).copy(alpha = 0.35f)
     Canvas(
         modifier =
             modifier
