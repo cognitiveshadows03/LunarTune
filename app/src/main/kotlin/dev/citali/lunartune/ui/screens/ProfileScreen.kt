@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -85,11 +86,13 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -150,6 +153,7 @@ private val ProfileCardPadding = 20.dp
 /** Width of the vertical "…'s CARD" ribbon on the identity card. */
 private val CardRibbonWidth = 44.dp
 private val ProfileNameMinFontSize = 14.sp
+private val ProfileLanyardInset = 54.dp
 private val DotGridStep = 22.dp
 private val DotGridRadius = 1.dp
 
@@ -182,6 +186,15 @@ fun ProfileScreen(
             accountNamePref.isNotBlank() -> accountNamePref
             isLoggedIn -> stringResource(R.string.account)
             else -> stringResource(R.string.login)
+        }
+    // What the lanyard's charms have earned so far.
+    val milestones =
+        remember(totalListeningTimeMs, totalPlayCount) {
+            listOf(
+                ProfileMilestone("100h", totalListeningTimeMs >= 100L * 3_600_000L),
+                ProfileMilestone("500h", totalListeningTimeMs >= 500L * 3_600_000L),
+                ProfileMilestone("1k", totalPlayCount >= 1_000),
+            )
         }
     var accountActionsExpanded by rememberSaveable { mutableStateOf(false) }
     var showAccountSwitcher by rememberSaveable { mutableStateOf(false) }
@@ -323,6 +336,7 @@ fun ProfileScreen(
                         accountImageUrl = accountImageUrl,
                         firstListenDate = firstListenDate,
                         recentDays = recentDays,
+                        milestones = milestones,
                         actionsExpanded = accountActionsExpanded,
                         onToggleActions = { accountActionsExpanded = !accountActionsExpanded },
                         onPrimaryAction = {
@@ -450,6 +464,7 @@ private fun ProfileIdentityCard(
     accountImageUrl: String?,
     firstListenDate: LocalDate?,
     recentDays: List<ProfileDayListening>,
+    milestones: List<ProfileMilestone>,
     actionsExpanded: Boolean,
     onToggleActions: () -> Unit,
     onPrimaryAction: () -> Unit,
@@ -495,166 +510,181 @@ private fun ProfileIdentityCard(
         }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Card(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .profileCardEntrance(),
-            shape = ProfileCardShape,
-            colors = CardDefaults.cardColors(containerColor = containerColor),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .profileCardWash(accent = accent, deep = deep)
-                        .guilloche(accent = accent)
-                        .holographicSheen(accent = accent)
-                        .dotGrid(color = dotColor.copy(alpha = 0.04f), step = 18.dp, radius = 1.dp),
+        // One transform for both, so the badge hardware rides in with the card
+        // instead of settling a frame late.
+        Box(modifier = Modifier.fillMaxWidth().profileCardEntrance()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = ProfileCardShape,
+                colors = CardDefaults.cardColors(containerColor = containerColor),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
-                // IntrinsicSize.Min lets the ribbon stretch to the height
-                // the content settles on, so it always spans the card.
-                Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-                    Column(
-                        modifier =
-                            Modifier
-                                .weight(1f)
-                                .padding(ProfileCardPadding),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = stringResource(R.string.profile_label),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Medium,
-                                letterSpacing = 2.sp,
-                                color = onSurfaceVariant,
-                            )
-                            if (accountHandle.isNotBlank()) {
-                                Text(
-                                    text = accountHandle,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    // The whole leftover width: a second weighted
-                                    // spacer used to halve it and cut the handle.
-                                    modifier = Modifier.weight(1f),
-                                )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
-                            }
-                            // The card's chip, sitting in the corner the way a
-                            // printed card carries one.
-                            CardChip(accent = accent ?: MaterialTheme.colorScheme.primary)
-                        }
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(20.dp),
-                        ) {
-                            // The wavy cookie the account screen already uses, a
-                            // size up and ringed so it reads as the card's seal.
-                            val avatarShape = MaterialShapes.Cookie9Sided.toShape()
-                            Surface(
-                                modifier = Modifier.size(104.dp),
-                                shape = avatarShape,
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                border =
-                                    BorderStroke(
-                                        1.5.dp,
-                                        (accent ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.45f),
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .profileCardWash(accent = accent, deep = deep)
+                            .guilloche(accent = accent)
+                            .holographicSheen(accent = accent)
+                            .dotGrid(color = dotColor.copy(alpha = 0.04f), step = 18.dp, radius = 1.dp),
+                ) {
+                    // IntrinsicSize.Min lets the ribbon stretch to the height
+                    // the content settles on, so it always spans the card.
+                    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                        Column(
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    // Room at the top for the hole the strap runs
+                                    // through, so nothing sits under the grommet.
+                                    .padding(
+                                        start = ProfileCardPadding,
+                                        end = ProfileCardPadding,
+                                        top = ProfileLanyardInset,
+                                        bottom = ProfileCardPadding,
                                     ),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = accountImageUrl,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize().clip(avatarShape),
+                                Text(
+                                    text = stringResource(R.string.profile_label),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 2.sp,
+                                    color = onSurfaceVariant,
+                                )
+                                if (accountHandle.isNotBlank()) {
+                                    Text(
+                                        text = accountHandle,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        letterSpacing = 1.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        // The whole leftover width: a second weighted
+                                        // spacer used to halve it and cut the handle.
+                                        modifier = Modifier.weight(1f),
                                     )
                                 } else {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            painter =
-                                                painterResource(
-                                                    if (isLoggedIn) R.drawable.account else R.drawable.login,
-                                                ),
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                                // The card's chip, sitting in the corner the way a
+                                // printed card carries one.
+                                CardChip(accent = accent ?: MaterialTheme.colorScheme.primary)
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                            ) {
+                                // The wavy cookie the account screen already uses, a
+                                // size up and ringed so it reads as the card's seal.
+                                val avatarShape = MaterialShapes.Cookie9Sided.toShape()
+                                Surface(
+                                    modifier = Modifier.size(104.dp),
+                                    shape = avatarShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border =
+                                        BorderStroke(
+                                            1.5.dp,
+                                            (accent ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.45f),
+                                        ),
+                                ) {
+                                    if (isLoggedIn && !accountImageUrl.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = accountImageUrl,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(36.dp),
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().clip(avatarShape),
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                painter =
+                                                    painterResource(
+                                                        if (isLoggedIn) R.drawable.account else R.drawable.login,
+                                                    ),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(36.dp),
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.profile_id_card_of),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        letterSpacing = 1.5.sp,
+                                        color = onSurfaceVariant,
+                                    )
+                                    // One line, shrunk to fit: the card is the
+                                    // name's fixed home, so the type gives way
+                                    // instead of the name wrapping or truncating.
+                                    ProfileNameText(text = displayName)
+                                    if (subtitle != null) {
+                                        Text(
+                                            text = subtitle,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                     }
                                 }
                             }
 
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.profile_id_card_of),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    letterSpacing = 1.5.sp,
-                                    color = onSurfaceVariant,
-                                )
-                                // One line, shrunk to fit: the card is the
-                                // name's fixed home, so the type gives way
-                                // instead of the name wrapping or truncating.
-                                ProfileNameText(text = displayName)
-                                if (subtitle != null) {
-                                    Text(
-                                        text = subtitle,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                            }
+                            // The week at a glance: one square per day, tinted by
+                            // how much that day was listened to.
+                            SevenDayRibbon(days = recentDays, accent = accent)
                         }
 
-                        // The week at a glance: one square per day, tinted by
-                        // how much that day was listened to.
-                        SevenDayRibbon(days = recentDays, accent = accent)
-                    }
-
-                    // The ribbon hugs the card's right edge and runs the full
-                    // height of it, carrying the account's name sideways.
-                    var ribbonHeightPx by remember { mutableStateOf(0) }
-                    Box(
-                        modifier =
-                            Modifier
-                                .width(CardRibbonWidth)
-                                .fillMaxHeight()
-                                .onSizeChanged { ribbonHeightPx = it.height }
-                                .then(
-                                    if (ribbonBrush != null) {
-                                        Modifier.background(ribbonBrush)
-                                    } else {
-                                        Modifier
-                                    },
-                                ).clipToBounds(),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        RibbonMarquee(
-                            text = ribbonText,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                            // The caption runs the card's whole height, edge to
-                            // edge; the card's own shape clips the ends.
-                            availablePx = ribbonHeightPx,
-                        )
+                        // The ribbon hugs the card's right edge and runs the full
+                        // height of it, carrying the account's name sideways.
+                        var ribbonHeightPx by remember { mutableStateOf(0) }
+                        Box(
+                            modifier =
+                                Modifier
+                                    .width(CardRibbonWidth)
+                                    .fillMaxHeight()
+                                    .onSizeChanged { ribbonHeightPx = it.height }
+                                    .then(
+                                        if (ribbonBrush != null) {
+                                            Modifier.background(ribbonBrush)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ).clipToBounds(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            RibbonMarquee(
+                                text = ribbonText,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                                // The caption runs the card's whole height, edge to
+                                // edge; the card's own shape clips the ends.
+                                availablePx = ribbonHeightPx,
+                            )
+                        }
                     }
                 }
             }
+
+            // The badge hardware lies on top of the card, so it is drawn after
+            // it: strap out of the punched hole, grommet, clip, charms.
+            ProfileLanyard(
+                milestones = milestones,
+                modifier = Modifier.align(Alignment.TopStart),
+            )
         }
 
         Row(
@@ -804,6 +834,165 @@ private fun ProfileActionCard(
     }
 }
 
+/** One charm on the lanyard: a milestone tag that fills in once it is earned. */
+private data class ProfileMilestone(
+    val label: String,
+    val unlocked: Boolean,
+)
+
+/**
+ * The badge hardware. A strap comes out of a punched hole in the card's top-left corner, a
+ * grommet rings the punch, a clip hangs off it, and the charms dangle from the clip on a thin
+ * wire: a record for the listening, then a tag per milestone. Drawn above the card because the
+ * strap and the clip lie on top of it.
+ */
+@Composable
+private fun ProfileLanyard(
+    milestones: List<ProfileMilestone>,
+    modifier: Modifier = Modifier,
+) {
+    val pageColor = MaterialTheme.colorScheme.background
+    val strapColor = MaterialTheme.colorScheme.surfaceContainerHighest
+    val metal =
+        listOf(
+            Color(0xFFF1EBF9),
+            Color(0xFFAFA2C6),
+            Color(0xFFF7F3FC),
+        )
+    val ghost = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.22f)
+
+    Box(modifier = modifier.size(width = 130.dp, height = 56.dp)) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val hole = Offset(18.dp.toPx(), 18.dp.toPx())
+            val strapWidth = 9.dp.toPx()
+            // The strap runs out through the corner of the card.
+            val strapEnd = Offset(1.dp.toPx(), 1.dp.toPx())
+            val metalStroke = 1.6.dp.toPx()
+
+            // The strap, leaving the card through the corner and fading out
+            // the way a lanyard runs on out of frame.
+            drawLine(
+                brush =
+                    Brush.linearGradient(
+                        colors = listOf(strapColor, strapColor.copy(alpha = 0f)),
+                        start = hole,
+                        end = strapEnd,
+                    ),
+                start = hole,
+                end = strapEnd,
+                strokeWidth = strapWidth,
+                cap = StrokeCap.Round,
+            )
+            drawLine(
+                color = Color.White.copy(alpha = 0.28f),
+                start = hole + Offset(0f, -strapWidth * 0.22f),
+                end = strapEnd + Offset(0f, -strapWidth * 0.22f),
+                strokeWidth = strapWidth * 0.18f,
+                cap = StrokeCap.Round,
+            )
+
+            // The punch: the page shows through, ringed by a grommet.
+            drawCircle(color = pageColor, radius = 5.4.dp.toPx(), center = hole)
+            drawCircle(
+                brush = Brush.linearGradient(metal),
+                radius = 7.6.dp.toPx(),
+                center = hole,
+                style = Stroke(width = metalStroke),
+            )
+
+            // The clip, hanging off the grommet on the inside of the card.
+            drawRoundRect(
+                brush = Brush.linearGradient(metal),
+                topLeft = Offset(hole.x - 4.dp.toPx(), hole.y + 3.dp.toPx()),
+                size = Size(8.dp.toPx(), 13.dp.toPx()),
+                cornerRadius = CornerRadius(4.dp.toPx()),
+                style = Stroke(width = metalStroke),
+            )
+
+            // The wire the charms hang from, hooked onto the clip.
+            drawLine(
+                color = Color(0xFF9A8DB4),
+                start = Offset(hole.x, hole.y + 15.dp.toPx()),
+                end = Offset(112.dp.toPx(), hole.y + 15.dp.toPx()),
+                strokeWidth = 1.1.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+
+            // The record, on the end of the wire.
+            val disc = Offset(112.dp.toPx(), hole.y + 24.dp.toPx())
+            val radius = 6.5.dp.toPx()
+            drawCircle(color = Color(0xFF9A8DB4), radius = 1.8.dp.toPx(), center = Offset(disc.x, hole.y + 15.dp.toPx()), style = Stroke(width = 1.dp.toPx()))
+            drawCircle(brush = Brush.linearGradient(metal), radius = radius, center = disc)
+            drawCircle(color = Color(0xFF241E33), radius = radius * 0.62f, center = disc)
+            drawCircle(color = Color(0xFF7A6D96), radius = radius * 0.20f, center = disc)
+        }
+
+        Row(
+            modifier = Modifier.offset(x = 32.dp, y = 32.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            milestones.forEachIndexed { index, milestone ->
+                MilestoneCharm(
+                    milestone = milestone,
+                    metal = metal,
+                    ghost = ghost,
+                    // Charms never hang dead straight on a real badge.
+                    modifier = Modifier.rotate(if (index % 2 == 0) 3f else -4f),
+                )
+            }
+        }
+    }
+}
+
+/** One milestone tag: stamped metal when earned, an outline when it is still to come. */
+@Composable
+private fun MilestoneCharm(
+    milestone: ProfileMilestone,
+    metal: List<Color>,
+    ghost: Color,
+    modifier: Modifier = Modifier,
+) {
+    val labelColor =
+        if (milestone.unlocked) {
+            Color(0xFF2B2338)
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        }
+
+    Box(
+        modifier = modifier.size(width = 22.dp, height = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.matchParentSize()) {
+            val corner = CornerRadius(3.dp.toPx())
+            if (milestone.unlocked) {
+                drawRoundRect(brush = Brush.linearGradient(metal), cornerRadius = corner)
+                // The eyelet it hangs by.
+                drawCircle(
+                    color = Color(0xFF2B2338).copy(alpha = 0.55f),
+                    radius = 1.dp.toPx(),
+                    center = Offset(size.width / 2f, 1.8.dp.toPx()),
+                )
+            } else {
+                drawRoundRect(
+                    color = ghost,
+                    cornerRadius = corner,
+                    style = Stroke(width = 0.8.dp.toPx()),
+                )
+            }
+        }
+        Text(
+            text = milestone.label,
+            fontSize = 6.sp,
+            lineHeight = 7.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.2.sp,
+            color = labelColor,
+            maxLines = 1,
+        )
+    }
+}
+
 /**
  * The contact chip a printed card carries, drawn as a small tinted plate with the hairlines a
  * chip has. Purely decorative — it is what makes the card read as a card.
@@ -813,45 +1002,59 @@ private fun CardChip(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val plate = Color.White.copy(alpha = 0.30f)
+    // A smart-card chip: a lilac metal plate divided by the contact lines a
+    // real one carries, rather than a flat square with a cross through it.
+    val metal =
+        listOf(
+            Color(0xFFF3EDFC),
+            accent.copy(alpha = 0.75f),
+            Color(0xFFE4D8F4),
+        )
+    val line = Color(0xFF2F2743).copy(alpha = 0.30f)
     Canvas(
         modifier =
             modifier
-                .size(width = 26.dp, height = 20.dp)
+                .size(width = 28.dp, height = 22.dp)
                 .clip(RoundedCornerShape(5.dp)),
     ) {
-        // A metal plate rather than a flat square: the gradient runs across the
-        // contacts so it catches the light the way an embossed chip does.
+        drawRect(brush = Brush.linearGradient(metal))
+        val inset = 3.5.dp.toPx()
+        val stroke = 0.9.dp.toPx()
+        val corner = CornerRadius(2.5.dp.toPx())
+        drawRoundRect(
+            color = line,
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - inset * 2f, size.height - inset * 2f),
+            cornerRadius = corner,
+            style = Stroke(width = stroke),
+        )
+        // The contact pattern: one line across the middle, the verticals
+        // stopping at it from opposite sides.
+        drawLine(
+            color = line,
+            start = Offset(inset, size.height / 2f),
+            end = Offset(size.width - inset, size.height / 2f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = line,
+            start = Offset(size.width / 3f, inset),
+            end = Offset(size.width / 3f, size.height / 2f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = line,
+            start = Offset(size.width * 2f / 3f, size.height / 2f),
+            end = Offset(size.width * 2f / 3f, size.height - inset),
+            strokeWidth = stroke,
+        )
+        // A face highlight so the plate catches the light.
         drawRect(
             brush =
                 Brush.verticalGradient(
-                    colors =
-                        listOf(
-                            accent.copy(alpha = 0.66f),
-                            accent.copy(alpha = 0.28f),
-                            accent.copy(alpha = 0.50f),
-                        ),
+                    listOf(Color.White.copy(alpha = 0.45f), Color.Transparent),
                 ),
-        )
-        val stroke = size.minDimension * 0.055f
-        val inset = size.minDimension * 0.18f
-        drawRect(
-            color = plate,
-            topLeft = Offset(inset, inset),
-            size = Size(size.width - inset * 2f, size.height - inset * 2f),
-            style = Stroke(width = stroke),
-        )
-        drawLine(
-            color = plate,
-            start = Offset(0f, size.height * 0.5f),
-            end = Offset(inset, size.height * 0.5f),
-            strokeWidth = stroke,
-        )
-        drawLine(
-            color = plate,
-            start = Offset(size.width - inset, size.height * 0.5f),
-            end = Offset(size.width, size.height * 0.5f),
-            strokeWidth = stroke,
+            size = Size(size.width, size.height * 0.38f),
         )
     }
 }
