@@ -86,6 +86,17 @@ jobs:
               commit -m "Icon pack: advance to ${actual:0:9}"
           git push origin "HEAD:${{ github.event.repository.default_branch }}"
 
+  verifyKotlinCompiler:
+    name: Verify Kotlin compiler checksum
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Verify kotlin-compiler-embeddable jar matches the pinned SHA-256
+        shell: bash
+        run: python3 scripts/verify_kotlin_compiler.py
+
   build:
     name: Build Release APKs (${{ matrix.distribution }}-${{ matrix.device }}-${{ matrix.abi }})
     # always() so that the icon pack job being skipped on ordinary runs does not skip this one,
@@ -94,10 +105,11 @@ jobs:
       always()
       && needs.notifyTelegram.result == 'success'
       && (needs.bumpIconPack.result == 'success' || needs.bumpIconPack.result == 'skipped')
+      && needs.verifyKotlinCompiler.result == 'success'
       && github.actor != 'dependabot[bot]'
       && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
-    needs: [notifyTelegram, bumpIconPack]
+    needs: [notifyTelegram, bumpIconPack, verifyKotlinCompiler]
 
     strategy:
       matrix:
@@ -458,8 +470,9 @@ jobs:
           done
 
   build_debug:
-    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
+    if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]' && needs.verifyKotlinCompiler.result == 'success'
     runs-on: ubuntu-latest
+    needs: [verifyKotlinCompiler]
 
     steps:
       - uses: actions/checkout@v7
