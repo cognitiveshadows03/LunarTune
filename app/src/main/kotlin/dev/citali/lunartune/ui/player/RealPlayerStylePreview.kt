@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -22,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -118,7 +120,7 @@ fun RealPlayerStylePreview(
             else -> Triple(textColor, textColor.copy(alpha = 0.24f), textColor)
         }
 
-    scaleToFit(modifier = modifier) {
+    scaleToFit(backdropUrl = mediaMetadata.thumbnailUrl, modifier = modifier) {
         Box(modifier = ConsumeAllPointerInput) {
             when (style) {
                 PlayerDesignStyle.V7,
@@ -252,32 +254,54 @@ fun RealPlayerStylePreview(
 }
 
 /**
- * Renders [content] at phone size and scales it to fit the space it is given.
+ * Lays [content] out at a real phone size and scales it into the space it is given.
  *
- * The width is the only thing that matters for the scale: a card keeps the phone's
- * aspect ratio, so the height falls out of it and the styles see a layout they
- * would recognise.
+ * The scale is the smaller of the two fits, so the card always shows the whole
+ * player: cropping is what made the previous version look cut off. Whatever is
+ * left over is covered by the style's own artwork, blurred, so the letterboxing
+ * reads as part of the design rather than as an empty band.
+ *
+ * The design box is measured with `requiredSize`, so a card inside a scrolling
+ * parent - where the maximum height is unbounded - still lays out at phone
+ * proportions instead of stretching to infinity.
  */
 @Composable
 private fun scaleToFit(
+    backdropUrl: String?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier = modifier) {
         val designWidth = 393.dp
-        val scale = (maxWidth / designWidth).coerceAtLeast(0.05f)
-        val designHeight = (maxHeight / scale).coerceAtLeast(200.dp)
-        Box(
-            modifier =
-                Modifier
-                    .size(width = designWidth, height = designHeight)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        transformOrigin = TransformOrigin(0f, 0f)
-                    },
-        ) {
-            content()
+        val designHeight = 852.dp
+        val widthScale = maxWidth / designWidth
+        val heightScale = if (maxHeight.value.isFinite()) maxHeight / designHeight else widthScale
+        val scale = minOf(widthScale, heightScale).coerceAtLeast(0.05f)
+
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = backdropUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = 0.55f }
+                        .blur(24.dp),
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)))
+            Box(
+                modifier =
+                    Modifier
+                        .requiredSize(width = designWidth, height = designHeight)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                        },
+            ) {
+                content()
+            }
         }
     }
 }

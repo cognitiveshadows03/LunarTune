@@ -7,19 +7,14 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,8 +30,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -54,12 +47,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -84,6 +78,7 @@ import dev.citali.lunartune.constants.PlayerButtonsStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.ShowPlayerVolumeBarKey
+import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
@@ -100,7 +95,6 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
@@ -117,6 +111,42 @@ import kotlin.math.roundToInt
  * [PlayerDesignStyle] is only written when the user asks for it, so backing out
  * leaves the app untouched; asking for it hands the previewed song to the player
  * and grows the focused card into the sheet.
+ */
+/**
+ * One page of the rail: a style, plus the style that belongs beneath it.
+ *
+ * Immersive carries Immersive Extended and Expressive carries Material Extended,
+ * because those pairs are the ones worth comparing side by side - so they share a
+ * page, stacked, while every group still pages horizontally.
+ */
+private data class StyleGroup(
+    val primary: PlayerDesignStyle,
+    val secondary: PlayerDesignStyle? = null,
+) {
+    val members: List<PlayerDesignStyle>
+        get() = listOfNotNull(primary, secondary)
+}
+
+private val StyleGroups =
+    listOf(
+        StyleGroup(PlayerDesignStyle.V2),
+        StyleGroup(PlayerDesignStyle.V4),
+        StyleGroup(PlayerDesignStyle.V5),
+        StyleGroup(PlayerDesignStyle.V6, PlayerDesignStyle.V9),
+        StyleGroup(PlayerDesignStyle.V7, PlayerDesignStyle.V8),
+        StyleGroup(PlayerDesignStyle.V10),
+    )
+
+/**
+ * Player styles picked in a focus carousel instead of a list, showing the player's
+ * real layout for each style around the newest entry in play history.
+ *
+ * Pages page sideways. Immersive / Immersive Extended and Expressive / Material
+ * Extended share a page with the second style stacked under the first, so both are
+ * visible at once; tapping either card focuses it for Set.
+ *
+ * [PlayerDesignStyle] is only written when the user asks for it, so backing out
+ * leaves the app untouched.
  */
 @Composable
 fun PlayerStyleCarousel(
@@ -149,31 +179,15 @@ fun PlayerStyleCarousel(
     val previewMetadata = remember(lastPlayedSong) { lastPlayedSong?.toMediaMetadata() }
     val playerConnection = LocalPlayerConnection.current
 
-    var currentStyle by remember { mutableStateOf(selectedStyle) }
-
+    val initialPage =
+        StyleGroups.indexOfFirst { selectedStyle in it.members }.coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = initialPage) { StyleGroups.size }
     val scope = rememberCoroutineScope()
-    val horizontalPagerState =
-        rememberPagerState(
-            initialPage = HorizontalStyles.indexOf(currentStyle).coerceAtLeast(0),
-        ) { HorizontalStyles.size }
-    val verticalListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = VerticalStyles.indexOf(currentStyle).coerceAtLeast(0),
-    )
 
-    // A settle in either rail is the only thing that moves the selection.
-    LaunchedEffect(horizontalPagerState) {
-        snapshotFlow { horizontalPagerState.settledPage }
-            .filter { !currentStyle.isVerticalStyle() }
-            .collect { page ->
-                HorizontalStyles.getOrNull(page)?.let { currentStyle = it }
-            }
-    }
-    LaunchedEffect(verticalListState) {
-        snapshotFlow { verticalListState.firstVisibleItemIndex }
-            .filter { currentStyle.isVerticalStyle() }
-            .collect { index ->
-                VerticalStyles.getOrNull(index)?.let { currentStyle = it }
-            }
+    // Within a paired page either card can be the one Set applies.
+    var focusedStyle by remember { mutableStateOf(selectedStyle) }
+    LaunchedEffect(pagerState.currentPage) {
+        focusedStyle = StyleGroups[pagerState.currentPage.coerceIn(StyleGroups.indices)].primary
     }
 
     val hazeState = rememberHazeState()
@@ -196,7 +210,7 @@ fun PlayerStyleCarousel(
     val morphProgress = remember { Animatable(0f) }
 
     val finish = {
-        onSelectedStyleChange(currentStyle)
+        onSelectedStyleChange(focusedStyle)
         lastPlayedSong?.let { song ->
             playerConnection?.playQueue(YouTubeQueue.radio(song.toMediaMetadata()))
         }
@@ -218,60 +232,29 @@ fun PlayerStyleCarousel(
                     .hazeSource(hazeState),
         ) {
             StylesHeader(
-                styleName = currentStyle.displayName(),
+                styleName = focusedStyle.displayName(),
                 onBack = navController::navigateUp,
             )
 
-            Box(modifier = Modifier.weight(1f)) {
-                AnimatedContent(
-                    targetState = currentStyle.isVerticalStyle(),
-                    transitionSpec = {
-                        if (targetState) {
-                            (fadeIn(tween(220)) + slideInVertically(tween(320)) { it / 12 }) togetherWith
-                                fadeOut(tween(160))
-                        } else {
-                            fadeIn(tween(220)) togetherWith
-                                (fadeOut(tween(160)) + slideOutVertically(tween(320)) { it / 12 })
-                        }
-                    },
-                    label = "styleRailAxis",
-                ) { isVertical ->
-                    if (isVertical) {
-                        StylesColumn(
-                            pagerState = verticalListState,
-                            metadata = previewMetadata,
-                            navController = navController,
-                            onFocusedCardBoundsChange = { cardBounds = it },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    } else {
-                        StylesPager(
-                            pagerState = horizontalPagerState,
-                            metadata = previewMetadata,
-                            navController = navController,
-                            onFocusedCardBoundsChange = { cardBounds = it },
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-            }
+            StylesPager(
+                groups = StyleGroups,
+                pagerState = pagerState,
+                metadata = previewMetadata,
+                focusedStyle = focusedStyle,
+                onStyleFocus = { focusedStyle = it },
+                onFocusedCardBoundsChange = { cardBounds = it },
+                navController = navController,
+                modifier = Modifier.weight(1f),
+            )
 
             PagerDots(
-                selectedStyle = currentStyle,
-                onSelect = { style ->
-                    currentStyle = style
-                    scope.launch {
-                        if (style.isVerticalStyle()) {
-                            verticalListState.animateScrollToItem(VerticalStyles.indexOf(style))
-                        } else {
-                            horizontalPagerState.animateScrollToPage(HorizontalStyles.indexOf(style))
-                        }
-                    }
-                },
+                groups = StyleGroups,
+                selectedPage = pagerState.currentPage,
+                onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
             )
 
             StylesActionBar(
-                editEnabled = currentStyle.supportsCustomization(),
+                editEnabled = focusedStyle.supportsCustomization(),
                 onEdit = { showEditSheet = true },
                 onSet = {
                     val from = cardBounds
@@ -297,7 +280,7 @@ fun PlayerStyleCarousel(
                 from = from,
                 to = to,
                 progress = morphProgress.value,
-                style = currentStyle,
+                style = focusedStyle,
                 metadata = previewMetadata,
                 navController = navController,
             )
@@ -309,7 +292,7 @@ fun PlayerStyleCarousel(
             exit = fadeOut(tween(160)),
         ) {
             StylesEditOverlay(
-                styleName = currentStyle.displayName(),
+                styleName = focusedStyle.displayName(),
                 hazeState = hazeState,
                 popupStyle = popupStyle,
                 backgroundStyle = backgroundStyle,
@@ -324,26 +307,209 @@ fun PlayerStyleCarousel(
     }
 }
 
-/** Styles that read as a set, and so stack instead of paging sideways. */
-private val VerticalStyles =
-    listOf(
-        PlayerDesignStyle.V6,
-        PlayerDesignStyle.V7,
-        PlayerDesignStyle.V8,
-        PlayerDesignStyle.V9,
-    )
-
-private val HorizontalStyles =
-    listOf(
-        PlayerDesignStyle.V2,
-        PlayerDesignStyle.V4,
-        PlayerDesignStyle.V5,
-        PlayerDesignStyle.V10,
-    )
-
-private fun PlayerDesignStyle.isVerticalStyle(): Boolean = this in VerticalStyles
-
 private fun Rect.hasArea(): Boolean = width > 1f && height > 1f
+
+/**
+ * Focuses a card on tap.
+ *
+ * The preview inside the card consumes every pointer event so the player's own
+ * handlers stay inert, and that would also eat a normal click on the card. This
+ * watches the initial pass, which reaches this modifier before any descendant can
+ * consume it, and only fires when the finger stayed inside the touch slop - so a
+ * drag still pages the rail.
+ */
+private fun Modifier.tapToFocus(onFocus: () -> Unit): Modifier =
+    pointerInput(onFocus) {
+        awaitPointerEventScope {
+            while (true) {
+                val down =
+                    awaitPointerEvent(PointerEventPass.Initial)
+                        .changes
+                        .firstOrNull { it.pressed } ?: continue
+                val start = down.position
+                var released: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                while (true) {
+                    val change =
+                        awaitPointerEvent(PointerEventPass.Initial)
+                            .changes
+                            .firstOrNull { it.id == down.id } ?: break
+                    if (!change.pressed) {
+                        released = change
+                        break
+                    }
+                }
+                val end = released
+                if (end != null && (end.position - start).getDistance() < viewConfiguration.touchSlop) {
+                    onFocus()
+                }
+            }
+        }
+    }
+
+
+/* ------------------------------------------------------------------ */
+/* rail                                                                */
+/* ------------------------------------------------------------------ */
+
+@Composable
+private fun StylesPager(
+    groups: List<StyleGroup>,
+    pagerState: androidx.compose.foundation.pager.PagerState,
+    metadata: MediaMetadata?,
+    focusedStyle: PlayerDesignStyle,
+    onStyleFocus: (PlayerDesignStyle) -> Unit,
+    onFocusedCardBoundsChange: (Rect) -> Unit,
+    navController: NavHostController,
+    modifier: Modifier = Modifier,
+) {
+    val configuration = LocalConfiguration.current
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val screenWidth = configuration.screenWidthDp.dp
+        val cardWidth =
+            (screenWidth * 0.66f)
+                .coerceAtMost(320.dp)
+                .coerceAtLeast(180.dp)
+        val gap = 12.dp
+        val available = (maxHeight - 20.dp).coerceAtLeast(cardWidth * 1.4f)
+
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = (maxWidth - cardWidth) / 2),
+            pageSpacing = 14.dp,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            val group = groups[page]
+            val offset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+            val distance = offset.absoluteValue.coerceIn(0f, 1f)
+
+            val primaryHeight =
+                if (group.secondary == null) {
+                    available
+                } else {
+                    ((available - gap) * 0.58f).coerceAtLeast(cardWidth * 1.1f)
+                }
+            val secondaryHeight =
+                ((available - gap - primaryHeight).coerceAtLeast(cardWidth * 0.55f))
+
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val scale = 1f - distance * 0.06f
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = 1f - distance * 0.35f
+                        },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                StyleCard(
+                    style = group.primary,
+                    metadata = metadata,
+                    navController = navController,
+                    cardWidth = cardWidth,
+                    cardHeight = primaryHeight,
+                    focused = page == pagerState.currentPage && focusedStyle == group.primary,
+                    onBoundsChange = onFocusedCardBoundsChange,
+                    onFocus = { onStyleFocus(group.primary) },
+                )
+                group.secondary?.let { secondary ->
+                    Spacer(Modifier.height(gap))
+                    StyleCard(
+                        style = secondary,
+                        metadata = metadata,
+                        navController = navController,
+                        cardWidth = cardWidth,
+                        cardHeight = secondaryHeight,
+                        focused = page == pagerState.currentPage && focusedStyle == secondary,
+                        onBoundsChange = onFocusedCardBoundsChange,
+                        onFocus = { onStyleFocus(secondary) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StyleCard(
+    style: PlayerDesignStyle,
+    metadata: MediaMetadata?,
+    navController: NavHostController,
+    cardWidth: Dp,
+    cardHeight: Dp,
+    focused: Boolean,
+    onBoundsChange: (Rect) -> Unit,
+    onFocus: () -> Unit,
+) {
+    val boundsModifier =
+        if (focused) {
+            Modifier.onGloballyPositioned { onBoundsChange(it.boundsInWindow()) }
+        } else {
+            Modifier
+        }
+    Surface(
+        shape = RoundedCornerShape(cardWidth * 0.09f),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+        border =
+            if (focused) {
+                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+            } else {
+                null
+            },
+        shadowElevation = if (focused) 16.dp else 4.dp,
+        modifier =
+            Modifier
+                .size(width = cardWidth, height = cardHeight)
+                .then(boundsModifier)
+                .tapToFocus(onFocus),
+    ) {
+        RealPlayerStylePreview(
+            style = style,
+            mediaMetadata = metadata,
+            navController = navController,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun PagerDots(
+    groups: List<StyleGroup>,
+    selectedPage: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        groups.forEachIndexed { index, _ ->
+            val selected = index == selectedPage
+            Box(
+                modifier =
+                    Modifier
+                        .padding(horizontal = 3.dp)
+                        .size(width = if (selected) 16.dp else 5.dp, height = 5.dp)
+                        .background(
+                            color =
+                                if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                },
+                            shape = CircleShape,
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { onSelect(index) },
+                        ),
+            )
+        }
+    }
+}
 
 /* ------------------------------------------------------------------ */
 /* chrome                                                              */
@@ -396,183 +562,6 @@ private fun StylesHeader(
     }
 }
 
-/* ------------------------------------------------------------------ */
-/* rails                                                               */
-/* ------------------------------------------------------------------ */
-
-private fun cardWidthFor(screenWidth: Dp): Dp =
-    (screenWidth * 0.66f)
-        .coerceAtMost(300.dp)
-        .coerceAtLeast(190.dp)
-
-@Composable
-private fun StylesPager(
-    pagerState: androidx.compose.foundation.pager.PagerState,
-    metadata: dev.citali.lunartune.models.MediaMetadata?,
-    navController: NavHostController,
-    onFocusedCardBoundsChange: (Rect) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val configuration = LocalConfiguration.current
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val screenWidth = configuration.screenWidthDp.dp
-        val cardWidth = cardWidthFor(screenWidth)
-        val cardHeight =
-            (cardWidth * 2.12f)
-                .coerceAtMost((maxHeight - 20.dp).coerceAtLeast(cardWidth * 1.4f))
-                .coerceAtLeast(cardWidth * 1.4f)
-
-        HorizontalPager(
-            state = pagerState,
-            contentPadding = PaddingValues(horizontal = (maxWidth - cardWidth) / 2),
-            pageSpacing = 14.dp,
-            modifier = Modifier.fillMaxSize(),
-        ) { page ->
-            val offset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-            val distance = offset.absoluteValue.coerceIn(0f, 1f)
-            val focused = distance < 0.5f
-            StyleCard(
-                style = HorizontalStyles[page],
-                metadata = metadata,
-                navController = navController,
-                cardWidth = cardWidth,
-                cardHeight = cardHeight,
-                distance = distance,
-                focused = focused,
-                onBoundsChange = onFocusedCardBoundsChange,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun StylesColumn(
-    pagerState: androidx.compose.foundation.lazy.LazyListState,
-    metadata: dev.citali.lunartune.models.MediaMetadata?,
-    navController: NavHostController,
-    onFocusedCardBoundsChange: (Rect) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val configuration = LocalConfiguration.current
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val screenWidth = configuration.screenWidthDp.dp
-        val cardWidth = cardWidthFor(screenWidth)
-        val cardHeight =
-            (cardWidth * 2.12f)
-                .coerceAtMost((maxHeight - 40.dp).coerceAtLeast(cardWidth * 1.4f))
-                .coerceAtLeast(cardWidth * 1.4f)
-        val spacing = 14.dp
-        // The column centres the current card, so the neighbours lean in above and below.
-        val verticalPadding = ((maxHeight - cardHeight) / 2).coerceAtLeast(0.dp)
-
-        LazyColumn(
-            state = pagerState,
-            flingBehavior = rememberSnapFlingBehavior(pagerState),
-            contentPadding = PaddingValues(vertical = verticalPadding),
-            verticalArrangement = Arrangement.spacedBy(spacing),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(VerticalStyles.size) { index ->
-                val distance =
-                    (index - pagerState.firstVisibleItemIndex).absoluteValue
-                        .coerceAtMost(1)
-                        .toFloat() * 0.06f
-                StyleCard(
-                    style = VerticalStyles[index],
-                    metadata = metadata,
-                    navController = navController,
-                    cardWidth = cardWidth,
-                    cardHeight = cardHeight,
-                    distance = distance,
-                    focused = index == pagerState.firstVisibleItemIndex,
-                    onBoundsChange = onFocusedCardBoundsChange,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StyleCard(
-    style: PlayerDesignStyle,
-    metadata: dev.citali.lunartune.models.MediaMetadata?,
-    navController: NavHostController,
-    cardWidth: Dp,
-    cardHeight: Dp,
-    distance: Float,
-    focused: Boolean,
-    onBoundsChange: (Rect) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Surface(
-            shape = RoundedCornerShape(cardWidth * 0.1f),
-            color = MaterialTheme.colorScheme.surfaceContainer,
-            shadowElevation = if (focused) 18.dp else 6.dp,
-            modifier =
-                Modifier
-                    .size(width = cardWidth, height = cardHeight)
-                    .graphicsLayer {
-                        val scale = 1f - distance * 0.06f
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = 1f - distance
-                    }
-                    .onGloballyPositioned { coordinates ->
-                        if (focused) onBoundsChange(coordinates.boundsInWindow())
-                    },
-        ) {
-            RealPlayerStylePreview(
-                style = style,
-                mediaMetadata = metadata,
-                navController = navController,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-@Composable
-private fun PagerDots(
-    selectedStyle: PlayerDesignStyle,
-    onSelect: (PlayerDesignStyle) -> Unit,
-) {
-    val all = HorizontalStyles + VerticalStyles
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        all.forEach { style ->
-            val selected = style == selectedStyle
-            Box(
-                modifier =
-                    Modifier
-                        .padding(horizontal = 3.dp)
-                        .size(width = if (selected) 16.dp else 5.dp, height = 5.dp)
-                        .background(
-                            color =
-                                if (selected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                },
-                            shape = CircleShape,
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onSelect(style) },
-                        ),
-            )
-        }
-    }
-}
-
-@Composable
 private fun StylesActionBar(
     editEnabled: Boolean,
     onEdit: () -> Unit,
