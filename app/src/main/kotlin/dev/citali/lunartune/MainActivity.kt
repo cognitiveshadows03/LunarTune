@@ -87,6 +87,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -160,6 +161,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -220,6 +222,11 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.aod.ACTION_AOD_MODE
+import dev.citali.lunartune.constants.AccountBannerSourceKey
+import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
+import dev.citali.lunartune.constants.AccountChannelHandleKey
+import dev.citali.lunartune.constants.AccountNameKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.AodModeEnabledKey
 import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.AppFontPreference
@@ -319,6 +326,7 @@ import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.player.BottomSheetPlayer
 import dev.citali.lunartune.ui.screens.LOGIN_URL_ARGUMENT
 import dev.citali.lunartune.ui.screens.Screens
+import dev.citali.lunartune.ui.screens.settings.AccountBanner
 import dev.citali.lunartune.ui.screens.buildLoginRoute
 import dev.citali.lunartune.ui.screens.navigationBuilder
 import dev.citali.lunartune.ui.screens.onboarding.OnboardingRoute
@@ -3725,6 +3733,10 @@ private fun FrostedTopBarMenu(
     val sheetShadow = MaterialTheme.colorScheme.scrim
     val motionScheme = MaterialTheme.motionScheme
     val pillColor = lerp(barColor, MaterialTheme.colorScheme.onSurface, 0.05f)
+    val context = LocalContext.current
+    val viewModel: HomeViewModel = hiltViewModel()
+    val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
+    val accountName by viewModel.accountName.collectAsStateWithLifecycle()
 
     val (accountBannerSource) = rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
     val (accountBannerUpdatedAt) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
