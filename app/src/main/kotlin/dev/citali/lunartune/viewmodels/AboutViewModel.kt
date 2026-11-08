@@ -422,13 +422,19 @@ class AboutViewModel
                                 ),
                         ),
                         TeamMember(
-                            // No public profile to link to, so the row is a
-                            // credit and nothing more.
-                            avatarUrl = "",
+                            avatarUrl = "https://github.com/realidkroo.png?size=200",
                             name = "Mochy Music",
                             positionResId = R.string.about_position_mochy,
-                            profileUrl = null,
-                            links = AboutLinkCollection.of(),
+                            profileUrl = "https://github.com/realidkroo/Mochy-Music",
+                            links =
+                                AboutLinkCollection.of(
+                                    AboutLinkUiModel(
+                                        id = "github",
+                                        iconResId = R.drawable.github,
+                                        labelResId = R.string.about_content_desc_github,
+                                        url = "https://github.com/realidkroo/Mochy-Music",
+                                    ),
+                                ),
                         ),
                     ),
                 contributorsState = contributorsState,

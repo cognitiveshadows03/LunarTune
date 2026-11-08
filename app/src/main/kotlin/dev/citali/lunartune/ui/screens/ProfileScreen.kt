@@ -10,10 +10,13 @@
 package dev.citali.lunartune.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -21,9 +24,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +52,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -65,6 +73,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -78,13 +87,28 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -101,6 +125,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.BuildConfig
+import dev.citali.lunartune.LocalAnimationsDisabled
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.AccountChannelHandleKey
@@ -114,20 +139,25 @@ import dev.citali.lunartune.ui.screens.settings.AccountSwitcherSheetHost
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.HomeViewModel
+import dev.citali.lunartune.viewmodels.ProfileDayListening
 import dev.citali.lunartune.viewmodels.ProfileViewModel
 import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import kotlin.math.PI
+import kotlin.math.sin
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
-private val ProfileCardShape = RoundedCornerShape(28.dp)
+private val ProfileCardShapeRadius = 28.dp
+private val ProfileCardShape = RoundedCornerShape(ProfileCardShapeRadius)
 private val ProfileCardPadding = 20.dp
 
 /** Width of the vertical "…'s CARD" ribbon on the identity card. */
 private val CardRibbonWidth = 44.dp
-private val ProfileGroupItemSpacing = 2.dp
 private val ProfileNameMinFontSize = 14.sp
+private val DotGridStep = 22.dp
+private val DotGridRadius = 1.dp
 
 @Composable
 fun ProfileScreen(
@@ -138,6 +168,7 @@ fun ProfileScreen(
     val accountNameFromViewModel by viewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
     val totalListeningTimeMs by profileViewModel.totalListeningTimeMs.collectAsStateWithLifecycle()
+    val recentDays by profileViewModel.recentDays.collectAsStateWithLifecycle()
     val totalPlayCount by profileViewModel.totalPlayCount.collectAsStateWithLifecycle()
     val firstListenDate by profileViewModel.firstListenDate.collectAsStateWithLifecycle()
 
@@ -173,12 +204,58 @@ fun ProfileScreen(
     val screenBackground = MaterialTheme.colorScheme.background
     val dotColor = MaterialTheme.colorScheme.onSurface
 
+    // The dot grid is a surface, not wallpaper: it swells under a finger and
+    // lifts while the page is scrolling, and every dot it crosses ticks.
+    val listState = rememberLazyListState()
+    val haptics = LocalHapticFeedback.current
+    val animationsDisabled = LocalAnimationsDisabled.current
+    val dotStepPx = with(LocalDensity.current) { DotGridStep.toPx() }
+    var touchPoint by remember { mutableStateOf<Offset?>(null) }
+    var lastDotCell by remember { mutableStateOf(-1) }
+    var lastTickAt by remember { mutableStateOf(0L) }
+    val scrollEnergy by
+        animateFloatAsState(
+            targetValue = if (listState.isScrollInProgress) 1f else 0f,
+            label = "profileDotEnergy",
+        )
+
     Box(
         modifier =
             Modifier
                 .fillMaxSize()
                 .background(screenBackground)
-                .dotGrid(color = dotColor.copy(alpha = 0.05f)),
+                .reactiveDotGrid(
+                    color = dotColor.copy(alpha = 0.05f),
+                    // Read inside the draw pass: the grid then invalidates
+                    // only its own drawing when a finger moves, instead of
+                    // recomposing the page underneath it.
+                    touch = { touchPoint },
+                    energy = { scrollEnergy },
+                ).pointerInput(dotStepPx, animationsDisabled) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val change = event.changes.firstOrNull() ?: continue
+                            if (!change.pressed) {
+                                touchPoint = null
+                                lastDotCell = -1
+                                continue
+                            }
+                            touchPoint = change.position
+                            val cell =
+                                (change.position.x / dotStepPx).toInt() * 10_000 +
+                                    (change.position.y / dotStepPx).toInt()
+                            if (cell != lastDotCell) {
+                                lastDotCell = cell
+                                val now = System.currentTimeMillis()
+                                if (!animationsDisabled && now - lastTickAt > 45L) {
+                                    lastTickAt = now
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                }
+                            }
+                        }
+                    }
+                },
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -193,6 +270,7 @@ fun ProfileScreen(
                 },
         ) { innerPadding ->
             LazyColumn(
+                state = listState,
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -229,6 +307,7 @@ fun ProfileScreen(
                         accountEmail = accountEmail,
                         accountImageUrl = accountImageUrl,
                         firstListenDate = firstListenDate,
+                        recentDays = recentDays,
                         actionsExpanded = accountActionsExpanded,
                         onToggleActions = { accountActionsExpanded = !accountActionsExpanded },
                         onPrimaryAction = {
@@ -247,47 +326,38 @@ fun ProfileScreen(
                     )
                 }
 
-                // The two listening numbers belong together, so they share a
-                // group the way settings stacks its entries under a heading.
-                item(key = "profile_listening") {
-                    Column(verticalArrangement = Arrangement.spacedBy(ProfileGroupItemSpacing)) {
-                        ProfileSectionTitle(stringResource(R.string.profile_section_listening))
-
-                        // Listening time inline with a "View Stats >" link.
-                        ProfileListeningTimeCard(
-                            totalListeningTimeMs = totalListeningTimeMs,
-                            onViewStats = { navController.navigate("stats") },
-                        )
-
-                        // The all-time play count, laid out like the card above.
-                        ProfileHistoryCard(
-                            totalPlayCount = totalPlayCount,
-                            onViewHistory = { navController.navigate("history") },
-                        )
-                    }
+                // Stats — listening time inline with a "View Stats >" link.
+                item(key = "profile_stats") {
+                    ProfileListeningTimeCard(
+                        totalListeningTimeMs = totalListeningTimeMs,
+                        onViewStats = { navController.navigate("stats") },
+                    )
                 }
 
-                // App info and the way out to settings, grouped the same way.
-                item(key = "profile_app") {
-                    Column(verticalArrangement = Arrangement.spacedBy(ProfileGroupItemSpacing)) {
-                        ProfileSectionTitle(stringResource(R.string.profile_section_app))
+                // History — the all-time play count, laid out like the stats card.
+                item(key = "profile_history") {
+                    ProfileHistoryCard(
+                        totalPlayCount = totalPlayCount,
+                        onViewHistory = { navController.navigate("history") },
+                    )
+                }
 
-                        // Version info — opens update page; "About app" opens about.
-                        ProfileVersionCard(
-                            version = BuildConfig.VERSION_NAME,
-                            isDebug = BuildConfig.DEBUG,
-                            onClick = { navController.navigate("settings/update") },
-                            onAboutClick = { navController.navigate("settings/about") },
-                        )
+                // Version info — opens update page; "About app" opens about.
+                item(key = "profile_version") {
+                    ProfileVersionCard(
+                        version = BuildConfig.VERSION_NAME,
+                        isDebug = BuildConfig.DEBUG,
+                        onClick = { navController.navigate("settings/update") },
+                        onAboutClick = { navController.navigate("settings/about") },
+                    )
+                }
 
-                        // Open settings — the last card before the spacer.
-                        ProfileActionCard(
-                            title = stringResource(R.string.settings),
-                            description = stringResource(R.string.profile_settings_description),
-                            iconRes = R.drawable.settings,
-                            onClick = { navController.navigate("settings") },
-                        )
-                    }
+                // Shortcuts — a rail of pills instead of full-width rows.
+                item(key = "profile_shortcuts") {
+                    ProfileShortcutRail(
+                        shortcuts = profileShortcuts,
+                        onOpen = { route -> navController.navigate(route) },
+                    )
                 }
 
                 // Spacer so the last item can scroll above the mini player.
@@ -360,6 +430,7 @@ private fun ProfileIdentityCard(
     accountEmail: String,
     accountImageUrl: String?,
     firstListenDate: LocalDate?,
+    recentDays: List<ProfileDayListening>,
     actionsExpanded: Boolean,
     onToggleActions: () -> Unit,
     onPrimaryAction: () -> Unit,
@@ -379,13 +450,20 @@ private fun ProfileIdentityCard(
                 colors = listOf(Color.Transparent, it.copy(alpha = 0.22f)),
             )
         }
-    // Room for the caption to end before it runs under the card's corners.
-    val ribbonInsetPx =
-        with(LocalDensity.current) {
-            ProfileCardPadding.roundToPx()
-        }
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val dotColor = MaterialTheme.colorScheme.onSurface
+    val density = LocalDensity.current
+
+    // The card is a card: a notch is punched where the ribbon would tear off,
+    // so the shape says "ticket stub" and not "settings row".
+    val cardShape =
+        remember(density) {
+            punchedCardShape(
+                notchRadiusPx = with(density) { 8.dp.toPx() },
+                cornerRadiusPx = with(density) { ProfileCardShapeRadius.toPx() },
+                notchOffsetPx = with(density) { CardRibbonWidth.toPx() },
+            )
+        }
 
     val ribbonText =
         if (accountHandle.isNotBlank()) {
@@ -411,8 +489,11 @@ private fun ProfileIdentityCard(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = ProfileCardShape,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .profileCardEntrance(),
+            shape = cardShape,
             colors = CardDefaults.cardColors(containerColor = containerColor),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         ) {
@@ -421,6 +502,7 @@ private fun ProfileIdentityCard(
                     Modifier
                         .fillMaxWidth()
                         .profileCardWash(accent = accent, deep = deep)
+                        .guilloche(accent = accent)
                         .holographicSheen(accent = accent)
                         .dotGrid(color = dotColor.copy(alpha = 0.04f), step = 18.dp, radius = 1.dp),
             ) {
@@ -455,9 +537,11 @@ private fun ProfileIdentityCard(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false),
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.weight(1f))
                             }
+                            Spacer(modifier = Modifier.weight(1f))
+                            // The card's chip, sitting in the corner the way a
+                            // printed card carries one.
+                            CardChip(accent = accent ?: MaterialTheme.colorScheme.primary)
                         }
 
                         Row(
@@ -527,6 +611,10 @@ private fun ProfileIdentityCard(
                                 }
                             }
                         }
+
+                        // The week at a glance: one square per day, tinted by
+                        // how much that day was listened to.
+                        SevenDayRibbon(days = recentDays, accent = accent)
                     }
 
                     // The ribbon hugs the card's right edge and runs the full
@@ -550,7 +638,9 @@ private fun ProfileIdentityCard(
                         RibbonMarquee(
                             text = ribbonText,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
-                            availablePx = (ribbonHeightPx - ribbonInsetPx * 2).coerceAtLeast(0),
+                            // The caption runs the card's whole height, edge to
+                            // edge; the card's own shape clips the ends.
+                            availablePx = ribbonHeightPx,
                         )
                     }
                 }
@@ -643,80 +733,121 @@ private fun ProfileIdentityCard(
 }
 
 /**
- * A cleaner action card with an icon, title, description, and chevron.
+ * The shortcuts, as a rail of pills that scroll sideways. Three of them fit most screens; on a
+ * narrow one the rail carries them instead of squeezing the labels.
  */
 @Composable
-private fun ProfileActionCard(
-    title: String,
-    description: String,
-    iconRes: Int,
-    onClick: () -> Unit,
+private fun ProfileShortcutRail(
+    shortcuts: List<ProfileShortcut>,
+    onOpen: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = ProfileCardShape,
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
+        shortcuts.forEach { shortcut ->
+            Surface(
+                shape = RoundedCornerShape(percent = 50),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 modifier =
-                    Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                    Modifier.clickable { onOpen(shortcut.route) },
             ) {
-                Icon(
-                    painter = painterResource(iconRes),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(22.dp),
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        painter = painterResource(shortcut.iconRes),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Text(
+                        text = stringResource(shortcut.labelRes),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                    )
+                }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Icon(
-                painter = painterResource(R.drawable.navigate_next),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
 
-/** The heading settings puts above a group of entries, reused here. */
+/**
+ * The contact chip a printed card carries, drawn as a small tinted plate with the hairlines a
+ * chip has. Purely decorative — it is what makes the card read as a card.
+ */
 @Composable
-private fun ProfileSectionTitle(
-    text: String,
+private fun CardChip(
+    accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = modifier.padding(start = 4.dp, top = 6.dp, bottom = 8.dp),
-    )
+    val hairline = Color.White.copy(alpha = 0.35f)
+    Canvas(
+        modifier =
+            modifier
+                .size(width = 30.dp, height = 22.dp)
+                .clip(RoundedCornerShape(6.dp)),
+    ) {
+        drawRect(
+            brush =
+                Brush.linearGradient(
+                    colors = listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.22f)),
+                ),
+        )
+        val stroke = size.minDimension * 0.03f
+        for (fraction in listOf(1f / 3f, 2f / 3f)) {
+            val y = size.height * fraction
+            drawLine(hairline, Offset(0f, y), Offset(size.width, y), stroke)
+        }
+        drawLine(hairline, Offset(size.width / 2f, 0f), Offset(size.width / 2f, size.height), stroke)
+    }
+}
+
+/**
+ * The last seven days as a row of squares, each tinted by how much of that day was listened to.
+ * Squares rather than a chart: it survives a screenshot and a thumbnail.
+ */
+@Composable
+private fun SevenDayRibbon(
+    days: List<ProfileDayListening>,
+    accent: Color?,
+    modifier: Modifier = Modifier,
+) {
+    if (days.isEmpty()) return
+    val quiet = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
+    val tint = accent ?: MaterialTheme.colorScheme.primary
+    val loudest = remember(days) { days.maxOf { it.minutes }.coerceAtLeast(1L) }
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.profile_last_seven_days),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            days.forEach { day ->
+                val strength = (day.minutes.toFloat() / loudest).coerceIn(0f, 1f)
+                Box(
+                    modifier =
+                        Modifier
+                            .size(width = 14.dp, height = 14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(lerp(quiet, tint, strength)),
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -1141,6 +1272,162 @@ private fun Modifier.holographicSheen(accent: Color?): Modifier {
     }
 }
 
+/**
+ * A rounded card with a semicircular notch punched through its top and bottom edges — the
+ * perforation a ribbon stub would tear along. The notch sits on the ribbon's inner edge, so the
+ * cut lines up with the tint on every card regardless of its width.
+ */
+private fun punchedCardShape(
+    notchRadiusPx: Float,
+    cornerRadiusPx: Float,
+    notchOffsetPx: Float,
+): Shape =
+    GenericShape { size, _ ->
+        val body =
+            Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        left = 0f,
+                        top = 0f,
+                        right = size.width,
+                        bottom = size.height,
+                        cornerRadius = CornerRadius(cornerRadiusPx),
+                    ),
+                )
+            }
+        val notchX = size.width - notchOffsetPx
+        listOf(0f, size.height).forEach { edgeY ->
+            val notch =
+                Path().apply {
+                    addOval(Rect(center = Offset(notchX, edgeY), radius = notchRadiusPx))
+                }
+            body.op(body, notch, PathOperation.Difference)
+        }
+        addPath(body)
+    }
+
+/**
+ * The interlaced linework of a banknote, drawn behind the card's content. Two mirrored families
+ * of slow sine waves, faint enough to read as texture and not as decoration.
+ */
+@Composable
+private fun Modifier.guilloche(accent: Color?): Modifier {
+    val color = (accent ?: MaterialTheme.colorScheme.onSurface).copy(alpha = 0.08f)
+    return drawBehind {
+        if (size.width <= 0f || size.height <= 0f) return@drawBehind
+        val stroke = Stroke(width = 0.7.dp.toPx())
+        val amplitude = size.height * 0.10f
+        val rows = 9
+        val segments = 36
+        var row = 0
+        var y = -amplitude
+        val step = size.height / rows.toFloat()
+        while (y < size.height + amplitude) {
+            val phase = (row.toFloat() / rows) * (PI / 3).toFloat()
+            val line = Path()
+            val mirror = Path()
+            for (segment in 0..segments) {
+                val x = size.width * segment / segments
+                val wave = (sin(x / size.width * 2f * PI.toFloat() + phase) * amplitude)
+                if (segment == 0) {
+                    line.moveTo(x, y + wave)
+                    mirror.moveTo(x, size.height - (y + wave))
+                } else {
+                    line.lineTo(x, y + wave)
+                    mirror.lineTo(x, size.height - (y + wave))
+                }
+            }
+            drawPath(line, color, style = stroke)
+            drawPath(mirror, color, style = stroke)
+            y += step
+            row++
+        }
+    }
+}
+
+/**
+ * The card sweeps into place from the top-left when the profile opens — the same gesture a card
+ * makes when it is laid on a table. Skipped entirely when animations are switched off.
+ */
+@Composable
+private fun Modifier.profileCardEntrance(): Modifier {
+    val animationsDisabled = LocalAnimationsDisabled.current
+    val progress = remember { Animatable(if (animationsDisabled) 1f else 0f) }
+
+    LaunchedEffect(animationsDisabled) {
+        if (animationsDisabled) {
+            progress.snapTo(1f)
+        } else {
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec =
+                    spring(
+                        dampingRatio = 0.82f,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+            )
+        }
+    }
+
+    return graphicsLayer {
+        val travelled = 1f - progress.value
+        transformOrigin = TransformOrigin(0f, 0f)
+        translationX = -120.dp.toPx() * travelled
+        translationY = -160.dp.toPx() * travelled
+        rotationZ = -5f * travelled
+        val scale = 0.94f + 0.06f * progress.value
+        scaleX = scale
+        scaleY = scale
+        alpha = progress.value.coerceIn(0f, 1f)
+    }
+}
+
+/**
+ * The dot grid the screen sits on. It lifts while the page is scrolling and swells around a
+ * finger, so the texture answers to the hand instead of sitting there as wallpaper.
+ */
+private fun Modifier.reactiveDotGrid(
+    color: Color,
+    touch: () -> Offset?,
+    energy: () -> Float,
+    step: Dp = DotGridStep,
+    radius: Dp = DotGridRadius,
+): Modifier =
+    drawBehind {
+        val touchPoint = touch()
+        val energyValue = energy()
+        val stepPx = step.toPx()
+        if (stepPx <= 0f) return@drawBehind
+        val baseRadius = radius.toPx()
+        val pulseRadius = stepPx * 4.5f
+        val energyAlpha = (color.alpha * (1f + 1.6f * energyValue)).coerceIn(0f, 1f)
+        val energyRadius = baseRadius * (1f + 0.6f * energyValue)
+
+        var y = stepPx / 2f
+        while (y < size.height) {
+            var x = stepPx / 2f
+            while (x < size.width) {
+                var dotRadius = energyRadius
+                var dotAlpha = energyAlpha
+                if (touchPoint != null) {
+                    val distance = (touchPoint - Offset(x, y)).getDistance()
+                    if (distance < pulseRadius) {
+                        val closeness = 1f - distance / pulseRadius
+                        dotRadius += baseRadius * 2.4f * closeness
+                        dotAlpha = (dotAlpha + 0.45f * closeness).coerceIn(0f, 1f)
+                    }
+                }
+                drawCircle(
+                    color = color.copy(alpha = dotAlpha),
+                    radius = dotRadius,
+                    center = Offset(x, y),
+                )
+                x += stepPx
+            }
+            y += stepPx
+        }
+    }
+
 /** A faint dot grid, the texture the reference screen leans on. */
 private fun Modifier.dotGrid(
     color: Color,
@@ -1171,3 +1458,17 @@ private fun DrawScope.drawDotGrid(
         y += step
     }
 }
+
+/** The pills under the cards: the places the profile is a doorway to. */
+private val profileShortcuts =
+    listOf(
+        ProfileShortcut(R.string.settings, R.drawable.settings, "settings"),
+        ProfileShortcut(R.string.account, R.drawable.account, "settings/account"),
+        ProfileShortcut(R.string.about, R.drawable.info, "settings/about"),
+    )
+
+private data class ProfileShortcut(
+    @StringRes val labelRes: Int,
+    @DrawableRes val iconRes: Int,
+    val route: String,
+)

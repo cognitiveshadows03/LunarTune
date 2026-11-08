@@ -13,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.ListeningTotals
 import java.time.LocalDate
+import java.time.ZoneOffset
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,14 @@ import kotlinx.coroutines.flow.stateIn
  * answered. Seeding the flows from here means a reopened card paints the numbers it already had
  * and only touches them when they actually change.
  */
+/**
+ * One day of the last week, as the identity card's ribbon of squares reads it.
+ */
+data class ProfileDayListening(
+    val day: LocalDate,
+    val minutes: Long,
+)
+
 private object ProfileSnapshotCache {
     @Volatile
     var totalListeningTimeMs: Long = 0L
@@ -35,6 +44,10 @@ private object ProfileSnapshotCache {
     /** All-time play count, shown on the history card. */
     @Volatile
     var totalPlayCount: Int = 0
+
+    /** The last seven days, oldest first. */
+    @Volatile
+    var recentDays: List<ProfileDayListening> = emptyList()
 
     /** `null` until a listen has ever been recorded. */
     @Volatile
@@ -94,6 +107,32 @@ class ProfileViewModel
                 )
 
         /**
+         * The last seven days of listening, oldest first, with quiet days filled in so the
+         * identity card can draw a square per day without having to reason about gaps.
+         */
+        val recentDays: StateFlow<List<ProfileDayListening>> =
+            database
+                .listeningByDate(
+                    fromTimestamp = weekStartTimestamp(),
+                    toTimestamp = Long.MAX_VALUE,
+                ).map { rows ->
+                    val byDay = rows.associate { it.day to it.timeListened }
+                    val today = LocalDate.now(ZoneOffset.UTC)
+                    (6 downTo 0).map { back ->
+                        val date = today.minusDays(back.toLong())
+                        ProfileDayListening(
+                            day = date,
+                            minutes = (byDay[date.toString()] ?: 0L) / 60_000,
+                        )
+                    }
+                }.onEach { ProfileSnapshotCache.recentDays = it }
+                .stateIn(
+                    viewModelScope,
+                    SharingStarted.WhileSubscribed(5_000),
+                    ProfileSnapshotCache.recentDays,
+                )
+
+        /**
          * Date of the very first play stored in the database, or `null` while the library has
          * never recorded a listen. The profile card shows it as the date the account started
          * listening on this device.
@@ -109,3 +148,16 @@ class ProfileViewModel
                     ProfileSnapshotCache.firstListenDate,
                 )
     }
+
+/**
+ * Start of the seven-day window, a second before midnight so the first day's first event is
+ * inside the strict `timestamp >` comparison the query uses.
+ */
+private fun weekStartTimestamp(): Long =
+    LocalDate
+        .now(ZoneOffset.UTC)
+        .minusDays(6)
+        .atStartOfDay()
+        .minusSeconds(1)
+        .toInstant(ZoneOffset.UTC)
+        .toEpochMilli()
