@@ -187,7 +187,7 @@ fun AppearanceSettings(navController: NavController) {
             DarkModeKey,
             defaultValue = DarkMode.AUTO,
         )
-    val (playerDesignStyle, onPlayerDesignStyleChange) =
+    val (playerDesignStyle, _) =
         rememberEnumPreference(
             PlayerDesignStyleKey,
             defaultValue = PlayerDesignStyle.V7,
@@ -765,13 +765,12 @@ fun AppearanceSettings(navController: NavController) {
 
             PreferenceGroup(title = stringResource(R.string.player)) {
                 item {
-                    EnumListPreference(
+                    // The styles are chosen by looking at them, so the row hands
+                    // over to the carousel instead of listing names in a sheet.
+                    PreferenceEntry(
                         title = { Text(stringResource(R.string.player_design_style)) },
-                        icon = { Icon(painterResource(R.drawable.palette), null) },
-                        selectedValue = playerDesignStyle,
-                        onValueSelected = onPlayerDesignStyleChange,
-                        valueText = {
-                            when (it) {
+                        description =
+                            when (playerDesignStyle) {
                                 PlayerDesignStyle.V2 -> stringResource(R.string.player_design_v2)
                                 PlayerDesignStyle.V4 -> stringResource(R.string.player_design_v4)
                                 PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
@@ -780,8 +779,9 @@ fun AppearanceSettings(navController: NavController) {
                                 PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
                                 PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
                                 PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)
-                            }
-                        },
+                            },
+                        icon = { Icon(painterResource(R.drawable.palette), null) },
+                        onClick = { navController.navigate("settings/appearance/player_style") },
                     )
                 }
 

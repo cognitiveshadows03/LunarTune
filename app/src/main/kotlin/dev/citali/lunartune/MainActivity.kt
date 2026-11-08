@@ -304,6 +304,7 @@ import dev.citali.lunartune.ui.component.BottomSheetPage
 import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.COLLAPSED_ANCHOR
 import dev.citali.lunartune.ui.component.PrimaryTabsHost
+import dev.citali.lunartune.ui.component.rememberPlayerSheetPresenter
 import dev.citali.lunartune.ui.component.rememberPrimaryRootDepthState
 import dev.citali.lunartune.ui.component.DISMISSED_ANCHOR
 import dev.citali.lunartune.ui.component.EXPANDED_ANCHOR
@@ -1417,6 +1418,14 @@ class MainActivity : FragmentActivity() {
                                     MiniPlayerHeight,
                             expandedBound = maxHeight,
                         )
+                    // Screens inside the nav graph cannot reach the sheet, so the one
+                    // action they need - expand the player - is published here and
+                    // dropped again when the sheet goes away.
+                    val playerSheetPresenter = rememberPlayerSheetPresenter()
+                    DisposableEffect(playerBottomSheetState, playerSheetPresenter) {
+                        playerSheetPresenter.bind { playerBottomSheetState.expandSoft() }
+                        onDispose { playerSheetPresenter.unbind() }
+                    }
                     // One line per geometry change, in the app's own log viewer: when
                     // the row and the bar disagree, these are the numbers that say
                     // which of them moved. The row's anchor now glides on the bar's
@@ -2752,6 +2761,7 @@ class MainActivity : FragmentActivity() {
                                             scrollBehavior = topAppBarScrollBehavior,
                                             latestVersionName = { latestVersionName },
                                             primaryRootDepthState = primaryRootDepthState,
+                                            playerSheetPresenter = playerSheetPresenter,
                                             onSelectPrimaryTab = { screen ->
                                                 selectedPrimaryTabRoute = screen.route
                                             },

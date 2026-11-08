@@ -36,6 +36,7 @@ import dev.citali.lunartune.constants.UpdateChannel
 import dev.citali.lunartune.defaultUpdateChannel
 import dev.citali.lunartune.musicrecognition.MusicRecognitionDetailsRoute
 import dev.citali.lunartune.musicrecognition.MusicRecognitionRoute
+import dev.citali.lunartune.ui.component.PlayerSheetPresenter
 import dev.citali.lunartune.ui.component.PrimaryRootDepthState
 import dev.citali.lunartune.ui.component.PrimaryRootNavProxy
 import dev.citali.lunartune.ui.screens.artist.ArtistAlbumsScreen
@@ -80,6 +81,7 @@ import dev.citali.lunartune.ui.screens.settings.MusicTransferScreen
 import dev.citali.lunartune.ui.screens.settings.NavigationBarSettings
 import dev.citali.lunartune.ui.screens.settings.PalettePickerScreen
 import dev.citali.lunartune.ui.screens.settings.PlayerSettings
+import dev.citali.lunartune.ui.screens.settings.PlayerStyleCarousel
 import dev.citali.lunartune.ui.screens.settings.PrivacySettings
 import dev.citali.lunartune.ui.screens.settings.SettingsScreen
 import dev.citali.lunartune.ui.screens.settings.StorageSettings
@@ -121,6 +123,7 @@ fun NavGraphBuilder.navigationBuilder(
     scrollBehavior: TopAppBarScrollBehavior,
     latestVersionName: () -> String,
     primaryRootDepthState: PrimaryRootDepthState,
+    playerSheetPresenter: PlayerSheetPresenter,
     onSelectPrimaryTab: (Screens) -> Unit,
     pureBlack: Boolean = false,
     disableAnimations: Boolean = false,
@@ -492,6 +495,11 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/appearance") {
         DrillPageContainer(pureBlack) {
             AppearanceSettings(navController)
+        }
+    }
+    composable("settings/appearance/player_style") {
+        DrillPageContainer(pureBlack) {
+            PlayerStyleCarousel(navController, playerSheetPresenter)
         }
     }
     composable("settings/appearance/icon") {
