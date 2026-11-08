@@ -2446,7 +2446,7 @@ private fun AppleMusicLyricsPageTransition(
 }
 
 @Composable
-private fun V8PlayerBackdrop(
+internal fun V8PlayerBackdrop(
     thumbnailUrl: String?,
     backdropBlurAmount: Int,
     modifier: Modifier = Modifier,
@@ -3026,7 +3026,7 @@ private data class V7PlayerBackdropState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LittlePlayerContent(
+internal fun LittlePlayerContent(
     mediaMetadata: MediaMetadata,
     sliderPosition: Long?,
     positionMs: Long,

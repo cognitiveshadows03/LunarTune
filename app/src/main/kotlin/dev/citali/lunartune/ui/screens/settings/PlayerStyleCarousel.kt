@@ -7,14 +7,19 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,8 +35,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,11 +48,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -61,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -75,14 +84,12 @@ import dev.citali.lunartune.constants.PlayerButtonsStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.ShowPlayerVolumeBarKey
-import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.playback.queues.YouTubeQueue
 import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
 import dev.citali.lunartune.ui.component.PlayerSheetPresenter
 import dev.citali.lunartune.ui.component.frostedNavBarStyle
-import dev.citali.lunartune.ui.player.PlayerStylePreviewContent
-import dev.citali.lunartune.ui.player.PlayerStylePreviewData
+import dev.citali.lunartune.ui.player.RealPlayerStylePreview
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.PlayerStylePreviewViewModel
@@ -93,25 +100,29 @@ import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 /**
- * Player styles picked in a focus carousel instead of a list.
+ * Player styles picked in a focus carousel instead of a list, showing the player's
+ * real layout for each style around the newest entry in play history.
  *
- * Every card draws that style's player around the newest entry in play history,
- * so the choice is made by looking at the thing itself. [PlayerDesignStyle] is
- * only written when the user asks for it, so backing out leaves the app
- * untouched; asking for it hands the previewed song to the player and grows the
- * focused card into the sheet.
+ * The rail changes axis with the styles: Modern, Cinematic, Little and Apple Music
+ * page sideways, while Expressive, Immersive, Immersive Extended and Material
+ * Extended stack in a column you scroll up and down, because those four are the
+ * ones you compare as a set.
+ *
+ * [PlayerDesignStyle] is only written when the user asks for it, so backing out
+ * leaves the app untouched; asking for it hands the previewed song to the player
+ * and grows the focused card into the sheet.
  */
 @Composable
 fun PlayerStyleCarousel(
     navController: NavHostController,
     playerSheetPresenter: PlayerSheetPresenter,
 ) {
-    val styles = remember { PlayerDesignStyle.entries }
     val (selectedStyle, onSelectedStyleChange) =
         rememberEnumPreference(
             key = PlayerDesignStyleKey,
@@ -135,12 +146,35 @@ fun PlayerStyleCarousel(
 
     val viewModel: PlayerStylePreviewViewModel = hiltViewModel()
     val lastPlayedSong by viewModel.lastPlayedSong.collectAsStateWithLifecycle()
-    val previewData = remember(lastPlayedSong) { lastPlayedSong.toPreviewData() }
+    val previewMetadata = remember(lastPlayedSong) { lastPlayedSong?.toMediaMetadata() }
     val playerConnection = LocalPlayerConnection.current
 
-    val pagerState =
-        rememberPagerState(initialPage = styles.indexOf(selectedStyle).coerceAtLeast(0)) { styles.size }
+    var currentStyle by remember { mutableStateOf(selectedStyle) }
+
     val scope = rememberCoroutineScope()
+    val horizontalPagerState =
+        rememberPagerState(
+            initialPage = HorizontalStyles.indexOf(currentStyle).coerceAtLeast(0),
+        ) { HorizontalStyles.size }
+    val verticalListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = VerticalStyles.indexOf(currentStyle).coerceAtLeast(0),
+    )
+
+    // A settle in either rail is the only thing that moves the selection.
+    LaunchedEffect(horizontalPagerState) {
+        snapshotFlow { horizontalPagerState.settledPage }
+            .filter { !currentStyle.isVerticalStyle() }
+            .collect { page ->
+                HorizontalStyles.getOrNull(page)?.let { currentStyle = it }
+            }
+    }
+    LaunchedEffect(verticalListState) {
+        snapshotFlow { verticalListState.firstVisibleItemIndex }
+            .filter { currentStyle.isVerticalStyle() }
+            .collect { index ->
+                VerticalStyles.getOrNull(index)?.let { currentStyle = it }
+            }
+    }
 
     val hazeState = rememberHazeState()
     // colours are read in composition, so the style is built from captured values
@@ -154,9 +188,6 @@ fun PlayerStyleCarousel(
                 blurRadiusDp = 18f,
             )
         }
-
-    val currentStyle = styles[pagerState.currentPage.coerceIn(styles.indices)]
-    val supportsCustomization = currentStyle.supportsCustomization()
 
     var showEditSheet by remember { mutableStateOf(false) }
     var cardBounds by remember { mutableStateOf<Rect?>(null) }
@@ -190,20 +221,57 @@ fun PlayerStyleCarousel(
                 styleName = currentStyle.displayName(),
                 onBack = navController::navigateUp,
             )
-            StylesPager(
-                styles = styles,
-                pagerState = pagerState,
-                previewData = previewData,
-                onFocusedCardBoundsChange = { cardBounds = it },
-                modifier = Modifier.weight(1f),
-            )
+
+            Box(modifier = Modifier.weight(1f)) {
+                AnimatedContent(
+                    targetState = currentStyle.isVerticalStyle(),
+                    transitionSpec = {
+                        if (targetState) {
+                            (fadeIn(tween(220)) + slideInVertically(tween(320)) { it / 12 }) togetherWith
+                                fadeOut(tween(160))
+                        } else {
+                            fadeIn(tween(220)) togetherWith
+                                (fadeOut(tween(160)) + slideOutVertically(tween(320)) { it / 12 })
+                        }
+                    },
+                    label = "styleRailAxis",
+                ) { isVertical ->
+                    if (isVertical) {
+                        StylesColumn(
+                            pagerState = verticalListState,
+                            metadata = previewMetadata,
+                            navController = navController,
+                            onFocusedCardBoundsChange = { cardBounds = it },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        StylesPager(
+                            pagerState = horizontalPagerState,
+                            metadata = previewMetadata,
+                            navController = navController,
+                            onFocusedCardBoundsChange = { cardBounds = it },
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+            }
+
             PagerDots(
-                count = styles.size,
-                selectedIndex = pagerState.currentPage,
-                onSelect = { index -> scope.launch { pagerState.animateScrollToPage(index) } },
+                selectedStyle = currentStyle,
+                onSelect = { style ->
+                    currentStyle = style
+                    scope.launch {
+                        if (style.isVerticalStyle()) {
+                            verticalListState.animateScrollToItem(VerticalStyles.indexOf(style))
+                        } else {
+                            horizontalPagerState.animateScrollToPage(HorizontalStyles.indexOf(style))
+                        }
+                    }
+                },
             )
+
             StylesActionBar(
-                editEnabled = supportsCustomization,
+                editEnabled = currentStyle.supportsCustomization(),
                 onEdit = { showEditSheet = true },
                 onSet = {
                     val from = cardBounds
@@ -230,7 +298,8 @@ fun PlayerStyleCarousel(
                 to = to,
                 progress = morphProgress.value,
                 style = currentStyle,
-                data = previewData,
+                metadata = previewMetadata,
+                navController = navController,
             )
         }
 
@@ -254,6 +323,25 @@ fun PlayerStyleCarousel(
         }
     }
 }
+
+/** Styles that read as a set, and so stack instead of paging sideways. */
+private val VerticalStyles =
+    listOf(
+        PlayerDesignStyle.V6,
+        PlayerDesignStyle.V7,
+        PlayerDesignStyle.V8,
+        PlayerDesignStyle.V9,
+    )
+
+private val HorizontalStyles =
+    listOf(
+        PlayerDesignStyle.V2,
+        PlayerDesignStyle.V4,
+        PlayerDesignStyle.V5,
+        PlayerDesignStyle.V10,
+    )
+
+private fun PlayerDesignStyle.isVerticalStyle(): Boolean = this in VerticalStyles
 
 private fun Rect.hasArea(): Boolean = width > 1f && height > 1f
 
@@ -308,21 +396,27 @@ private fun StylesHeader(
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* rails                                                               */
+/* ------------------------------------------------------------------ */
+
+private fun cardWidthFor(screenWidth: Dp): Dp =
+    (screenWidth * 0.66f)
+        .coerceAtMost(300.dp)
+        .coerceAtLeast(190.dp)
+
 @Composable
 private fun StylesPager(
-    styles: List<PlayerDesignStyle>,
-    pagerState: PagerState,
-    previewData: PlayerStylePreviewData,
+    pagerState: androidx.compose.foundation.pager.PagerState,
+    metadata: dev.citali.lunartune.models.MediaMetadata?,
+    navController: NavHostController,
     onFocusedCardBoundsChange: (Rect) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val configuration = LocalConfiguration.current
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val screenWidth = configuration.screenWidthDp.dp
-        val cardWidth =
-            (screenWidth * 0.66f)
-                .coerceAtMost(300.dp)
-                .coerceAtLeast(190.dp)
+        val cardWidth = cardWidthFor(screenWidth)
         val cardHeight =
             (cardWidth * 2.12f)
                 .coerceAtMost((maxHeight - 20.dp).coerceAtLeast(cardWidth * 1.4f))
@@ -337,53 +431,123 @@ private fun StylesPager(
             val offset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
             val distance = offset.absoluteValue.coerceIn(0f, 1f)
             val focused = distance < 0.5f
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            val scale = 1f - distance * 0.06f
-                            scaleX = scale
-                            scaleY = scale
-                            alpha = 1f - distance * 0.3f
-                        },
-                contentAlignment = Alignment.Center,
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(cardWidth * 0.1f),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                    shadowElevation = if (focused) 18.dp else 6.dp,
-                    modifier =
-                        Modifier
-                            .size(width = cardWidth, height = cardHeight)
-                            .onGloballyPositioned { coordinates ->
-                                if (focused) onFocusedCardBoundsChange(coordinates.boundsInWindow())
-                            },
-                ) {
-                    PlayerStylePreviewContent(
-                        style = styles[page],
-                        data = previewData,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
+            StyleCard(
+                style = HorizontalStyles[page],
+                metadata = metadata,
+                navController = navController,
+                cardWidth = cardWidth,
+                cardHeight = cardHeight,
+                distance = distance,
+                focused = focused,
+                onBoundsChange = onFocusedCardBoundsChange,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StylesColumn(
+    pagerState: androidx.compose.foundation.lazy.LazyListState,
+    metadata: dev.citali.lunartune.models.MediaMetadata?,
+    navController: NavHostController,
+    onFocusedCardBoundsChange: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val configuration = LocalConfiguration.current
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val screenWidth = configuration.screenWidthDp.dp
+        val cardWidth = cardWidthFor(screenWidth)
+        val cardHeight =
+            (cardWidth * 2.12f)
+                .coerceAtMost((maxHeight - 40.dp).coerceAtLeast(cardWidth * 1.4f))
+                .coerceAtLeast(cardWidth * 1.4f)
+        val spacing = 14.dp
+        // The column centres the current card, so the neighbours lean in above and below.
+        val verticalPadding = ((maxHeight - cardHeight) / 2).coerceAtLeast(0.dp)
+
+        LazyColumn(
+            state = pagerState,
+            flingBehavior = rememberSnapFlingBehavior(pagerState),
+            contentPadding = PaddingValues(vertical = verticalPadding),
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            items(VerticalStyles.size) { index ->
+                val distance =
+                    (index - pagerState.firstVisibleItemIndex).absoluteValue
+                        .coerceAtMost(1)
+                        .toFloat() * 0.06f
+                StyleCard(
+                    style = VerticalStyles[index],
+                    metadata = metadata,
+                    navController = navController,
+                    cardWidth = cardWidth,
+                    cardHeight = cardHeight,
+                    distance = distance,
+                    focused = index == pagerState.firstVisibleItemIndex,
+                    onBoundsChange = onFocusedCardBoundsChange,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun PagerDots(
-    count: Int,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
+private fun StyleCard(
+    style: PlayerDesignStyle,
+    metadata: dev.citali.lunartune.models.MediaMetadata?,
+    navController: NavHostController,
+    cardWidth: Dp,
+    cardHeight: Dp,
+    distance: Float,
+    focused: Boolean,
+    onBoundsChange: (Rect) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Surface(
+            shape = RoundedCornerShape(cardWidth * 0.1f),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            shadowElevation = if (focused) 18.dp else 6.dp,
+            modifier =
+                Modifier
+                    .size(width = cardWidth, height = cardHeight)
+                    .graphicsLayer {
+                        val scale = 1f - distance * 0.06f
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = 1f - distance
+                    }
+                    .onGloballyPositioned { coordinates ->
+                        if (focused) onBoundsChange(coordinates.boundsInWindow())
+                    },
+        ) {
+            RealPlayerStylePreview(
+                style = style,
+                mediaMetadata = metadata,
+                navController = navController,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PagerDots(
+    selectedStyle: PlayerDesignStyle,
+    onSelect: (PlayerDesignStyle) -> Unit,
+) {
+    val all = HorizontalStyles + VerticalStyles
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        repeat(count) { index ->
-            val selected = index == selectedIndex
+        all.forEach { style ->
+            val selected = style == selectedStyle
             Box(
                 modifier =
                     Modifier
@@ -401,7 +565,7 @@ private fun PagerDots(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClick = { onSelect(index) },
+                            onClick = { onSelect(style) },
                         ),
             )
         }
@@ -654,7 +818,8 @@ private fun MorphingPreview(
     to: Rect,
     progress: Float,
     style: PlayerDesignStyle,
-    data: PlayerStylePreviewData,
+    metadata: dev.citali.lunartune.models.MediaMetadata?,
+    navController: NavHostController,
 ) {
     // The card grows toward the sheet's frame on the same curve the sheet uses,
     // then hands over: the two never have to line up pixel for pixel.
@@ -673,7 +838,12 @@ private fun MorphingPreview(
                     .size(width = width.toDp(), height = height.toDp())
                     .graphicsLayer { alpha = 1f - (p * 0.12f) },
         ) {
-            PlayerStylePreviewContent(style = style, data = data, modifier = Modifier.fillMaxSize())
+            RealPlayerStylePreview(
+                style = style,
+                mediaMetadata = metadata,
+                navController = navController,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
@@ -701,32 +871,3 @@ private fun PlayerDesignStyle.supportsCustomization(): Boolean =
         this == PlayerDesignStyle.V4 ||
         this == PlayerDesignStyle.V5 ||
         this == PlayerDesignStyle.V6
-
-/**
- * One frozen frame of the newest history entry. Nothing here invents playback:
- * elapsed time is a fixed third of the track so the card reads as "mid song"
- * without pretending to be live.
- */
-private fun Song?.toPreviewData(): PlayerStylePreviewData {
-    val song = this ?: return PlayerStylePreviewData(
-        title = "",
-        artist = "",
-        artworkUrl = null,
-        elapsedLabel = "--:--",
-        totalLabel = "--:--",
-        progress = 0.35f,
-    )
-    val duration = song.song.duration
-    val hasDuration = duration > 0
-    val elapsedSeconds = if (hasDuration) (duration * 0.35f).roundToInt() else 0
-    return PlayerStylePreviewData(
-        title = song.song.title,
-        artist = song.artists.joinToString(", ") { it.name },
-        artworkUrl = song.song.thumbnailUrl,
-        elapsedLabel = if (hasDuration) formatClock(elapsedSeconds) else "--:--",
-        totalLabel = if (hasDuration) formatClock(duration) else "--:--",
-        progress = 0.35f,
-    )
-}
-
-private fun formatClock(totalSeconds: Int): String = "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
