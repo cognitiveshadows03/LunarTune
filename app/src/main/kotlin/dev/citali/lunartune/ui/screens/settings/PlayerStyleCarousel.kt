@@ -143,11 +143,14 @@ fun PlayerStyleCarousel(
     val scope = rememberCoroutineScope()
 
     val hazeState = rememberHazeState()
+    // colours are read in composition, so the style is built from captured values
+    val popupScrim = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+    val popupFallbackScrim = MaterialTheme.colorScheme.surface.copy(alpha = FrostedFallbackAlpha)
     val popupStyle =
-        remember {
+        remember(popupScrim, popupFallbackScrim) {
             frostedNavBarStyle(
-                scrim = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                fallbackScrim = MaterialTheme.colorScheme.surface.copy(alpha = FrostedFallbackAlpha),
+                scrim = popupScrim,
+                fallbackScrim = popupFallbackScrim,
                 blurRadiusDp = 18f,
             )
         }

@@ -291,13 +291,13 @@ private fun ImmersivePreview(
             PreviewHeaderRow(unit * 0.055f)
             if (extended) {
                 Spacer(Modifier.height(unit * 0.03f))
-                PreviewLyricLine(data.lyricLine, unit * 0.045f)
+                PreviewLyricLine(data.lyricLine, fractionSp(unit, 0.045f))
             }
             Spacer(Modifier.weight(1f))
             PreviewTitleBlock(data, unit, titleFraction = 0.066f, subFraction = 0.044f, align = TextAlign.Start)
             if (extended && !data.qualityLabel.isNullOrBlank()) {
                 Spacer(Modifier.height(unit * 0.02f))
-                PreviewQualityChip(data.qualityLabel, unit * 0.031f)
+                PreviewQualityChip(data.qualityLabel, fractionSp(unit, 0.031f))
             }
             Spacer(Modifier.height(unit * 0.035f))
             PreviewProgressBar(data.progress, height = unit * 0.01f)
@@ -427,7 +427,7 @@ private fun FullArtPreview(
             )
             if (!data.qualityLabel.isNullOrBlank()) {
                 Spacer(Modifier.height(unit * 0.02f))
-                PreviewQualityChip(data.qualityLabel, unit * 0.03f)
+                PreviewQualityChip(data.qualityLabel, fractionSp(unit, 0.03f))
             }
             Spacer(Modifier.height(unit * 0.045f))
             PreviewProgressBar(data.progress, height = unit * 0.008f)
