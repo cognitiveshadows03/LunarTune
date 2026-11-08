@@ -756,7 +756,14 @@ enum class PlayerDesignStyle {
     V8,
     V9,
     V10,
+
+    /** A record on a plinth: the artwork rides the label, the arm reads as the seek. */
+    TURNTABLE,
     ;
+
+    /** Styles that own their whole surface and draw no app background under it. */
+    val isPortedSurface: Boolean
+        get() = this == TURNTABLE
 
     /**
      * Styles that draw their own chrome edge to edge and expect the status bar

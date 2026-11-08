@@ -317,6 +317,8 @@
     <string name="player_design_v8">Immersive Extended</string>
     <string name="player_design_v9">Material Extended</string>
     <string name="player_design_v10">Apple Music</string>
+    <string name="player_design_turntable">Turntable</string>
+    <string name="player_style_now_playing">Now playing</string>
     <string name="player_style_carousel_title">Styles</string>
     <string name="player_style_carousel_edit">Edit</string>
     <string name="player_style_carousel_set">Set</string>

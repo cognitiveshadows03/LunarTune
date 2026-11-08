@@ -608,7 +608,7 @@ fun Queue(
                     )
                 }
 
-                PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10 -> {
+                PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.TURNTABLE -> {
                     val audioDevice by playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle()
 
                     val view = LocalView.current

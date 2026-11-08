@@ -7,6 +7,8 @@
 
 package dev.citali.lunartune.ui.player
 
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -194,6 +196,34 @@ fun RealPlayerStylePreview(
                     )
                 }
 
+                PlayerDesignStyle.TURNTABLE -> {
+                    TurntablePlayerContent(
+                        mediaMetadata = mediaMetadata,
+                        isPlaying = true,
+                        canSkipPrevious = true,
+                        canSkipNext = true,
+                        isLiked = false,
+                        sliderPosition = null,
+                        position = positionMs,
+                        duration = durationMs,
+                        isShuffleOn = false,
+                        isRepeatOn = false,
+                        onPlayPause = {},
+                        onSkipPrevious = {},
+                        onSkipNext = {},
+                        onToggleLike = {},
+                        onShuffleClick = {},
+                        onRepeatClick = {},
+                        onSliderValueChange = {},
+                        onSliderValueChangeFinished = {},
+                        onCollapseClick = {},
+                        onQueueClick = {},
+                        onLyricsClick = {},
+                        onMenuClick = {},
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+
                 else -> {
                     // Modern, Cinematic, Little and Expressive all share the player's
                     // tall layout: artwork on top, then the style's own controls block,
@@ -255,12 +285,15 @@ fun RealPlayerStylePreview(
 }
 
 /**
- * Lays [content] out at a real phone size and scales it into the space it is given.
+ * Lays [content] out at a real phone size, scaled into the space it is given and
+ * framed as a device.
  *
  * The scale is the smaller of the two fits, so the card always shows the whole
- * player: cropping is what made the previous version look cut off. Whatever is
- * left over is covered by the style's own artwork, blurred, so the letterboxing
- * reads as part of the design rather than as an empty band.
+ * player. The leftover space used to be filled with the artwork blurred, which
+ * read as a letterbox rather than as part of the design - a page of stacked styles
+ * was mostly smeared cover. Now the player sits in a rounded frame with a hairline
+ * edge and a shadow, on a soft wash of the song's own colour, so the margin reads
+ * as the page rather than as the design.
  *
  * The design box is measured with `requiredSize`, so a card inside a scrolling
  * parent - where the maximum height is unbounded - still lays out at phone
@@ -272,6 +305,7 @@ private fun scaleToFit(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val deviceShape = RoundedCornerShape(26.dp)
     BoxWithConstraints(modifier = modifier) {
         val designWidth = 393.dp
         val designHeight = 852.dp
@@ -280,6 +314,7 @@ private fun scaleToFit(
         val scale = minOf(widthScale, heightScale).coerceAtLeast(0.05f)
 
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // a wash of the song's colour, low enough to stay a backdrop
             AsyncImage(
                 model = backdropUrl,
                 contentDescription = null,
@@ -287,10 +322,19 @@ private fun scaleToFit(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .graphicsLayer { alpha = 0.55f }
-                        .blur(24.dp),
+                        .graphicsLayer { alpha = 0.18f }
+                        .blur(48.dp),
             )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)))
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.6f)),
+                            ),
+                        ),
+            )
             Box(
                 modifier =
                     Modifier
@@ -299,9 +343,19 @@ private fun scaleToFit(
                             scaleX = scale
                             scaleY = scale
                             transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            shape = deviceShape
+                            clip = true
+                            shadowElevation = 18.dp.toPx()
                         },
             ) {
                 content()
+                // the device edge, drawn last so it sits over the artwork
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .border(1.dp, Color.White.copy(alpha = 0.10f), deviceShape),
+                )
             }
         }
     }

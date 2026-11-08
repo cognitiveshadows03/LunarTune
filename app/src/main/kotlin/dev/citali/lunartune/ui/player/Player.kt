@@ -420,7 +420,8 @@ fun BottomSheetPlayer(
     )
     val playerUsesFixedBackground =
         (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) ||
-            playerDesignStyle == PlayerDesignStyle.V9
+            playerDesignStyle == PlayerDesignStyle.V9 ||
+            playerDesignStyle.isPortedSurface
     val playerBackground =
         if (playerUsesFixedBackground) PlayerBackgroundStyle.DEFAULT else storedPlayerBackground
 
@@ -765,7 +766,7 @@ fun BottomSheetPlayer(
     val TextBackgroundColor =
         if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicTextColor
-        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
+        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
             Color.White
         } else {
             when (playerBackground) {
@@ -783,7 +784,7 @@ fun BottomSheetPlayer(
     val icBackgroundColor =
         if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicBgColor
-        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
+        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
             Color.Black
         } else {
             when (playerBackground) {
@@ -815,7 +816,7 @@ fun BottomSheetPlayer(
                 }
             }
         }.let { (tb, ib) ->
-            if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
+            if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
                 Pair(Color.White, Color.Black)
             } else if (playerDesignStyle == PlayerDesignStyle.V9) {
                 Pair(dynamicAccentColor, dynamicIconButtonColor)
@@ -1505,7 +1506,8 @@ fun BottomSheetPlayer(
             playerDesignStyle != PlayerDesignStyle.V5 &&
             playerDesignStyle != PlayerDesignStyle.V7 &&
             (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10) &&
-            playerDesignStyle != PlayerDesignStyle.V9
+            playerDesignStyle != PlayerDesignStyle.V9 &&
+            !playerDesignStyle.isPortedSurface
         ) {
             PlayerBackground(
                 playerBackground =
@@ -1800,6 +1802,64 @@ fun BottomSheetPlayer(
                             Spacer(Modifier.weight(1f))
                         }
                     }
+                } else if (playerDesignStyle == PlayerDesignStyle.TURNTABLE) {
+                    enrichedMetadata?.let { metadata ->
+                        val shuffleOn by playerConnection.shuffleModeEnabled.collectAsState()
+                        TurntablePlayerContent(
+                            mediaMetadata = metadata,
+                            isPlaying = isPlaying,
+                            canSkipPrevious = canSkipPrevious,
+                            canSkipNext = canSkipNext,
+                            isLiked = currentSongLiked,
+                            sliderPosition = sliderPosition,
+                            position = position,
+                            duration = duration,
+                            isShuffleOn = shuffleOn,
+                            isRepeatOn = repeatMode != Player.REPEAT_MODE_OFF,
+                            onPlayPause = playerConnection::togglePlayPause,
+                            onSkipPrevious = playerConnection::seekToPrevious,
+                            onSkipNext = playerConnection::seekToNext,
+                            onToggleLike = playerConnection::toggleLike,
+                            onShuffleClick = { playerConnection.player.shuffleModeEnabled = !shuffleOn },
+                            onRepeatClick = {
+                                playerConnection.player.repeatMode =
+                                    when (repeatMode) {
+                                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                        else -> Player.REPEAT_MODE_OFF
+                                    }
+                            },
+                            onSliderValueChange = updatedOnSliderValueChange,
+                            onSliderValueChangeFinished = updatedOnSliderValueChangeFinished,
+                            onCollapseClick = { state.collapseSoft() },
+                            onQueueClick = openQueue,
+                            onLyricsClick = { isLyricsScreenVisible = true },
+                            onMenuClick = {
+                                menuState.show {
+                                    PlayerMenu(
+                                        mediaMetadata = metadata,
+                                        navController = navController,
+                                        playerBottomSheetState = state,
+                                        onShowDetailsDialog = {
+                                            bottomSheetPageState.show {
+                                                ShowMediaInfo(metadata.id)
+                                            }
+                                        },
+                                        onDismiss = menuState::dismiss,
+                                    )
+                                }
+                            },
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(bottom = queueSheetState.collapsedBound)
+                                    .windowInsetsPadding(
+                                        WindowInsets.systemBars.only(
+                                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                                        ),
+                                    ).nestedScroll(state.preUpPostDownNestedScrollConnection),
+                        )
+                    }
                 }
             }
 
@@ -2046,6 +2106,64 @@ fun BottomSheetPlayer(
                                     .windowInsetsPadding(
                                         WindowInsets.systemBars.only(
                                             WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                                        ),
+                                    ).nestedScroll(state.preUpPostDownNestedScrollConnection),
+                        )
+                    }
+                } else if (playerDesignStyle == PlayerDesignStyle.TURNTABLE) {
+                    enrichedMetadata?.let { metadata ->
+                        val shuffleOn by playerConnection.shuffleModeEnabled.collectAsState()
+                        TurntablePlayerContent(
+                            mediaMetadata = metadata,
+                            isPlaying = isPlaying,
+                            canSkipPrevious = canSkipPrevious,
+                            canSkipNext = canSkipNext,
+                            isLiked = currentSongLiked,
+                            sliderPosition = sliderPosition,
+                            position = position,
+                            duration = duration,
+                            isShuffleOn = shuffleOn,
+                            isRepeatOn = repeatMode != Player.REPEAT_MODE_OFF,
+                            onPlayPause = playerConnection::togglePlayPause,
+                            onSkipPrevious = playerConnection::seekToPrevious,
+                            onSkipNext = playerConnection::seekToNext,
+                            onToggleLike = playerConnection::toggleLike,
+                            onShuffleClick = { playerConnection.player.shuffleModeEnabled = !shuffleOn },
+                            onRepeatClick = {
+                                playerConnection.player.repeatMode =
+                                    when (repeatMode) {
+                                        Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ALL
+                                        Player.REPEAT_MODE_ALL -> Player.REPEAT_MODE_ONE
+                                        else -> Player.REPEAT_MODE_OFF
+                                    }
+                            },
+                            onSliderValueChange = updatedOnSliderValueChange,
+                            onSliderValueChangeFinished = updatedOnSliderValueChangeFinished,
+                            onCollapseClick = { state.collapseSoft() },
+                            onQueueClick = openQueue,
+                            onLyricsClick = { isLyricsScreenVisible = true },
+                            onMenuClick = {
+                                menuState.show {
+                                    PlayerMenu(
+                                        mediaMetadata = metadata,
+                                        navController = navController,
+                                        playerBottomSheetState = state,
+                                        onShowDetailsDialog = {
+                                            bottomSheetPageState.show {
+                                                ShowMediaInfo(metadata.id)
+                                            }
+                                        },
+                                        onDismiss = menuState::dismiss,
+                                    )
+                                }
+                            },
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(bottom = queueSheetState.collapsedBound)
+                                    .windowInsetsPadding(
+                                        WindowInsets.systemBars.only(
+                                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
                                         ),
                                     ).nestedScroll(state.preUpPostDownNestedScrollConnection),
                         )

@@ -135,6 +135,7 @@ private val StyleGroups =
         StyleGroup(PlayerDesignStyle.V6, PlayerDesignStyle.V9),
         StyleGroup(PlayerDesignStyle.V7, PlayerDesignStyle.V8),
         StyleGroup(PlayerDesignStyle.V10),
+        StyleGroup(PlayerDesignStyle.TURNTABLE),
     )
 
 /**
@@ -853,6 +854,7 @@ private fun PlayerDesignStyle.displayName(): String =
         PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
         PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
         PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)
+        PlayerDesignStyle.TURNTABLE -> stringResource(R.string.player_design_turntable)
     }
 
 /** The four styles whose background and button options the player honours. */
