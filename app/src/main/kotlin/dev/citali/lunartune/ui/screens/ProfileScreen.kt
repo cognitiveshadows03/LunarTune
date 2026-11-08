@@ -26,7 +26,6 @@ import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -67,6 +66,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -737,11 +737,15 @@ private fun ProfileNameText(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val widthPx = constraints.maxWidth.coerceAtMost(4096)
-        val fontSize =
-            remember(text, widthPx, baseStyle, fontScale) {
-                var size = baseStyle.fontSize.value
+    // The width comes from the text's own layout rather than from a
+    // BoxWithConstraints: the card's row asks for intrinsic heights to stretch
+    // the ribbon, and a subcomposing layout in that chain throws on the query.
+    var availableWidthPx by remember { mutableIntStateOf(0) }
+
+    val fontSize =
+        remember(text, availableWidthPx, baseStyle, fontScale) {
+            var size = baseStyle.fontSize.value
+            if (availableWidthPx > 0) {
                 while (size > ProfileNameMinFontSize.value) {
                     val laidOut =
                         measurer.measure(
@@ -749,22 +753,26 @@ private fun ProfileNameText(
                             style = baseStyle.copy(fontSize = size.sp),
                             maxLines = 1,
                             softWrap = false,
-                            constraints = Constraints(maxWidth = widthPx),
+                            constraints = Constraints(maxWidth = availableWidthPx),
                         )
                     if (!laidOut.hasVisualOverflow) break
                     size -= 0.5f
                 }
-                size.sp
             }
+            size.sp
+        }
 
-        Text(
-            text = text,
-            style = baseStyle,
-            fontSize = fontSize,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    Text(
+        text = text,
+        style = baseStyle,
+        fontSize = fontSize,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .onSizeChanged { availableWidthPx = it.width },
+    )
 }
 
 /**
