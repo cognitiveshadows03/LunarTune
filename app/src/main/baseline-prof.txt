@@ -7,6 +7,13 @@
 # builds in CI (AGP parses + merges this file into the APK's profile metadata
 # and ProfileInstaller applies it on first launch; a malformed rule would fail
 # the release build, so CI green == profile parses + packages).
+
+# Blanket AOT rule for all LunarTune code — every new screen/class is
+# automatically ahead-of-time compiled at install time. Measured by Mochy
+# Music to cut slow frames on Home scrolling by ~50%.
+HSPLdev/citali/lunartune/**->**(**)**
+Ldev/citali/lunartune/**;
+
 #
 # Journey coverage (per the performance-optimization spec):
 #   - Cold/warm startup: App, MainActivity, theme, navigation graph

@@ -716,7 +716,7 @@ fun AccountSettings(
 }
 
 @Composable
-private fun AccountSummaryCard(
+internal fun AccountSummaryCard(
     isLoggedIn: Boolean,
     accountName: String,
     accountEmail: String,
@@ -1033,6 +1033,95 @@ private fun AccountSummaryCard(
 private val BannerHeight = 150.dp
 private val BodyOverlap = 28.dp
 private val ProfileAvatarSize = 96.dp
+
+/**
+ * The account switcher with its own state, for screens that only need to open
+ * it. Account settings keeps a separate copy because it edits the same
+ * preferences inline; everywhere else should use this host instead of
+ * re-deriving the saved-account bookkeeping.
+ */
+@Composable
+internal fun AccountSwitcherSheetHost(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    onAddAnotherAccount: () -> Unit,
+) {
+    if (!visible) return
+
+    val (accountNamePref) = rememberPreference(AccountNameKey, "")
+    val (accountEmail) = rememberPreference(AccountEmailKey, "")
+    val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
+    val (innerTubeCookie) = rememberPreference(InnerTubeCookieKey, "")
+    val (visitorData) = rememberPreference(VisitorDataKey, "")
+    val (dataSyncId) = rememberPreference(DataSyncIdKey, "")
+    val (ytmSync) = rememberPreference(YtmSyncKey, true)
+    val (forceSyncOnAccountSwitch) = rememberPreference(ForceSyncOnAccountSwitchKey, false)
+    val (selectedYtmPlaylists) = rememberPreference(SelectedYtmPlaylistsKey, "")
+    val (savedAccountsJson, onSavedAccountsJsonChange) = rememberPreference(SavedAccountsKey, "")
+    val savedAccounts =
+        remember(savedAccountsJson) {
+            SavedAccountCollection(decodeSavedAccounts(savedAccountsJson))
+        }
+
+    val viewModel: HomeViewModel = hiltViewModel()
+    val accountNameFromViewModel by viewModel.accountName.collectAsStateWithLifecycle()
+    val accountChannelsState by viewModel.accountChannelsState.collectAsStateWithLifecycle()
+
+    val isLoggedIn =
+        remember(innerTubeCookie) {
+            hasYouTubeLoginCookie(innerTubeCookie)
+        }
+
+    val saveCurrentAccount: () -> Unit = {
+        val existing = decodeSavedAccounts(savedAccountsJson)
+        if (isLoggedIn && existing.none { it.innerTubeCookie == innerTubeCookie }) {
+            val newAccount =
+                SavedAccount(
+                    id = UUID.randomUUID().toString(),
+                    name = if (accountNameFromViewModel.isNotBlank()) accountNameFromViewModel else accountNamePref,
+                    email = accountEmail,
+                    channelHandle = accountChannelHandle,
+                    innerTubeCookie = innerTubeCookie,
+                    visitorData = visitorData,
+                    dataSyncId = dataSyncId,
+                    ytmSync = ytmSync,
+                    selectedYtmPlaylists = selectedYtmPlaylists,
+                )
+            onSavedAccountsJsonChange(encodeSavedAccounts(existing + newAccount))
+        }
+    }
+
+    AccountSwitcherSheet(
+        isLoggedIn = isLoggedIn,
+        savedAccounts = savedAccounts,
+        activeInnerTubeCookie = innerTubeCookie,
+        activeDataSyncId = dataSyncId,
+        accountChannelsState = accountChannelsState,
+        onSaveAccount = saveCurrentAccount,
+        onSwitchAccount = { account ->
+            viewModel.switchToAccount(
+                account = account,
+                forceSyncOnSwitch = forceSyncOnAccountSwitch,
+            )
+        },
+        onSwitchAccountChannel = { channel ->
+            viewModel.switchToAccountChannel(
+                channel = channel,
+                forceSyncOnSwitch = forceSyncOnAccountSwitch,
+            )
+        },
+        onRemoveAccount = { account ->
+            val existing = decodeSavedAccounts(savedAccountsJson)
+            onSavedAccountsJsonChange(encodeSavedAccounts(existing.filter { it.id != account.id }))
+        },
+        onAddAnotherAccount = {
+            // Keep the account in use before leaving, so it stays one tap away.
+            saveCurrentAccount()
+            onAddAnotherAccount()
+        },
+        onDismiss = onDismiss,
+    )
+}
 
 @Composable
 private fun AccountSwitcherSheet(

@@ -47,7 +47,6 @@ import dev.citali.lunartune.constants.HideVideoKey
 import dev.citali.lunartune.constants.EnableHapticFeedbackKey
 import dev.citali.lunartune.constants.ListenBrainzEnabledKey
 import dev.citali.lunartune.constants.LowDataModeKey
-import dev.citali.lunartune.constants.MonochromeEnabledKey
 import dev.citali.lunartune.constants.LyricsAutoHidePlayerControlsKey
 import dev.citali.lunartune.constants.LyricsClickKey
 import dev.citali.lunartune.constants.LyricsScrollKey
@@ -192,7 +191,6 @@ fun buildSettingsGroups(
                 SettingsChild("Crossfade gapless", "crossfade_gapless", listOf("crossfade gapless", "gapless crossfade", "seamless crossfade")) { SearchResultSwitch(CrossfadeGaplessKey, true) },
                 SettingsChild("Skip silence", "skip_silence", listOf("silence", "skip silence", "blank", "quiet")) { SearchResultSwitch(SkipSilenceKey, false) },
                 SettingsChild("Audio normalization", "audio_normalization", listOf("normalization", "loudness", "normalize", "volume level")) { SearchResultSwitch(AudioNormalizationKey, true) },
-                SettingsChild("Monochrome lossless source", "monochrome_lossless", listOf("monochrome", "lossless", "flac", "hires", "hi-res", "tidal", "stream source")) { SearchResultSwitch(MonochromeEnabledKey, false) },
                 SettingsChild("Audio offload", "audio_offload", listOf("offload", "audio offload", "hardware decoder")) { SearchResultSwitch(AudioOffload, false) },
                 SettingsChild("Seek seconds add-up", "seek_seconds", listOf("seek", "skip", "forward", "rewind", "seconds")) { SearchResultSwitch(SeekExtraSeconds, false) },
                 SettingsChild("Pause on device mute", "pause_mute", listOf("mute", "pause mute", "headphone", "silence detect")) { SearchResultSwitch(PauseOnDeviceMuteKey, false) },

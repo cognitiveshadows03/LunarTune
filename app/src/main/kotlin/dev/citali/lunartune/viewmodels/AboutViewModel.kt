@@ -422,32 +422,17 @@ class AboutViewModel
                                 ),
                         ),
                         TeamMember(
-                            avatarUrl = "https://avatars.githubusercontent.com/vivizzz007?v=4",
-                            name = "Vivi Music",
-                            positionResId = R.string.about_position_vivi,
-                            profileUrl = "https://github.com/vivizzz007/vivi-music",
+                            avatarUrl = "https://github.com/realidkroo.png?size=200",
+                            name = "Mochy Music",
+                            positionResId = R.string.about_position_mochy,
+                            profileUrl = "https://github.com/realidkroo/Mochy-Music",
                             links =
                                 AboutLinkCollection.of(
                                     AboutLinkUiModel(
                                         id = "github",
                                         iconResId = R.drawable.github,
                                         labelResId = R.string.about_content_desc_github,
-                                        url = "https://github.com/vivizzz007/vivi-music",
-                                    ),
-                                ),
-                        ),
-                        TeamMember(
-                            avatarUrl = "https://avatars.githubusercontent.com/monochrome-music?v=4",
-                            name = "Monochrome",
-                            positionResId = R.string.about_position_monochrome,
-                            profileUrl = "https://github.com/monochrome-music/monochrome",
-                            links =
-                                AboutLinkCollection.of(
-                                    AboutLinkUiModel(
-                                        id = "github",
-                                        iconResId = R.drawable.github,
-                                        labelResId = R.string.about_content_desc_github,
-                                        url = "https://github.com/monochrome-music/monochrome",
+                                        url = "https://github.com/realidkroo/Mochy-Music",
                                     ),
                                 ),
                         ),

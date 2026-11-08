@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,22 +25,17 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -54,18 +48,12 @@ import androidx.navigation.NavController
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.DefaultStreamSources
-import dev.citali.lunartune.constants.MonochromeEnabledKey
-import dev.citali.lunartune.constants.MonochromeInstanceKey
 import dev.citali.lunartune.constants.PlayerStreamClient
 import dev.citali.lunartune.constants.PlayerStreamClientKey
 import dev.citali.lunartune.constants.StreamSourcesEnabledKey
 import dev.citali.lunartune.constants.StreamSourcesOrderKey
 import dev.citali.lunartune.constants.deserializeStreamSourcesOrder
-import dev.citali.lunartune.monochrome.MonochromeAudioProvider
 import dev.citali.lunartune.ui.component.IconButton
-import dev.citali.lunartune.ui.component.PreferenceEntry
-import dev.citali.lunartune.ui.component.PreferenceGroup
-import dev.citali.lunartune.ui.component.SwitchPreference
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -77,24 +65,6 @@ fun StreamSourcesSettings(navController: NavController) {
     val (enabledRaw, onEnabledRawChange) = rememberPreference(StreamSourcesEnabledKey, defaultValue = defaultEnabled)
     val (preferred, onPreferredChange) =
         rememberEnumPreference(PlayerStreamClientKey, defaultValue = PlayerStreamClient.WEB_REMIX)
-    val (monochromeEnabled, onMonochromeEnabledChange) =
-        rememberPreference(MonochromeEnabledKey, defaultValue = false)
-    val (monochromeInstance, onMonochromeInstanceChange) =
-        rememberPreference(MonochromeInstanceKey, defaultValue = MonochromeAudioProvider.DEFAULT_INSTANCE)
-    var showInstanceDialog by remember { mutableStateOf(false) }
-    var instanceDraft by remember { mutableStateOf(monochromeInstance) }
-    var monochromeStatus by remember {
-        mutableStateOf<MonochromeAudioProvider.MonochromeStatus?>(null)
-    }
-    var statusCheckTick by remember { mutableStateOf(0) }
-    LaunchedEffect(monochromeInstance, statusCheckTick) {
-        monochromeStatus = null
-        monochromeStatus =
-            MonochromeAudioProvider.checkStatus(
-                monochromeInstance.ifBlank { MonochromeAudioProvider.DEFAULT_INSTANCE },
-            )
-    }
-
     val order = deserializeStreamSourcesOrder(orderRaw)
     val enabled =
         enabledRaw
@@ -235,90 +205,9 @@ fun StreamSourcesSettings(navController: NavController) {
                 )
             }
 
-            PreferenceGroup(title = stringResource(R.string.lossless_source)) {
-                item {
-                    SwitchPreference(
-                        title = { Text(stringResource(R.string.monochrome_lossless)) },
-                        description = stringResource(R.string.monochrome_lossless_description),
-                        checked = monochromeEnabled,
-                        onCheckedChange = onMonochromeEnabledChange,
-                    )
-                }
-                item {
-                    val statusText =
-                        when (monochromeStatus) {
-                            null -> stringResource(R.string.monochrome_status_checking)
-                            MonochromeAudioProvider.MonochromeStatus.ACTIVE ->
-                                stringResource(R.string.monochrome_status_active)
-                            MonochromeAudioProvider.MonochromeStatus.MAINTENANCE ->
-                                stringResource(R.string.monochrome_status_maintenance)
-                            MonochromeAudioProvider.MonochromeStatus.DOWN ->
-                                stringResource(R.string.monochrome_status_down)
-                            MonochromeAudioProvider.MonochromeStatus.UNKNOWN ->
-                                stringResource(R.string.monochrome_status_unknown)
-                        }
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.monochrome_status)) },
-                        description = statusText,
-                        onClick = { statusCheckTick++ },
-                    )
-                }
-                item {
-                    PreferenceEntry(
-                        title = { Text(stringResource(R.string.monochrome_instance)) },
-                        description = MonochromeAudioProvider.effectiveInstance(monochromeInstance),
-                        onClick = {
-                            instanceDraft = MonochromeAudioProvider.effectiveInstance(monochromeInstance)
-                            showInstanceDialog = true
-                        },
-                    )
-                }
-            }
         }
     }
 
-    if (showInstanceDialog) {
-        BasicAlertDialog(onDismissRequest = { showInstanceDialog = false }) {
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            ) {
-                Column(modifier = Modifier.padding(24.dp)) {
-                    Text(
-                        text = stringResource(R.string.monochrome_instance_dialog_title),
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = instanceDraft,
-                        onValueChange = { instanceDraft = it },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.monochrome_instance_dialog_hint)) },
-                    )
-                    Spacer(Modifier.height(20.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        TextButton(onClick = { showInstanceDialog = false }) {
-                            Text(stringResource(android.R.string.cancel))
-                        }
-                        TextButton(
-                            onClick = {
-                                onMonochromeInstanceChange(
-                                    instanceDraft.trim().ifBlank { MonochromeAudioProvider.DEFAULT_INSTANCE },
-                                )
-                                showInstanceDialog = false
-                            },
-                        ) {
-                            Text(stringResource(R.string.monochrome_instance_save))
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable

@@ -88,7 +88,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
@@ -164,7 +163,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.createLifecycleAwareWindowRecomposer
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -222,11 +221,6 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import dev.citali.lunartune.aod.ACTION_AOD_MODE
 import dev.citali.lunartune.constants.AodModeEnabledKey
-import dev.citali.lunartune.constants.AccountBannerSourceKey
-import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
-import dev.citali.lunartune.constants.AccountChannelHandleKey
-import dev.citali.lunartune.constants.AccountNameKey
-import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.AppBarHeight
 import dev.citali.lunartune.constants.AppFontPreference
 import dev.citali.lunartune.constants.AppLanguageKey
@@ -266,6 +260,7 @@ import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.PureBlackKey
+import dev.citali.lunartune.constants.HideStatusBarKey
 import dev.citali.lunartune.constants.RemindAfterKey
 import dev.citali.lunartune.constants.SYSTEM_DEFAULT
 import dev.citali.lunartune.constants.SearchSource
@@ -334,7 +329,6 @@ import dev.citali.lunartune.ui.screens.search.OnlineSearchScreen
 import dev.citali.lunartune.ui.screens.search.decodeOnlineSearchQuery
 import dev.citali.lunartune.ui.screens.search.onlineSearchResultRoute
 import dev.citali.lunartune.ui.screens.settings.ApplyForcedRefreshRate
-import dev.citali.lunartune.ui.screens.settings.AccountBanner
 import dev.citali.lunartune.ui.screens.settings.DarkMode
 import dev.citali.lunartune.ui.screens.settings.NavigationTab
 import dev.citali.lunartune.ui.theme.ColorSaver
@@ -343,6 +337,7 @@ import dev.citali.lunartune.ui.theme.LunarMotion
 import dev.citali.lunartune.ui.theme.LunarTuneTheme
 import dev.citali.lunartune.ui.theme.extractThemeColor
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
+import dev.citali.lunartune.ui.utils.AppMotion
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.ui.utils.resetHeightOffset
 import dev.citali.lunartune.utils.PreferenceStore
@@ -584,6 +579,9 @@ class MainActivity : FragmentActivity() {
         super.onCreate(savedInstanceState)
         window.decorView.layoutDirection = View.LAYOUT_DIRECTION_LTR
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Follow the system animator duration scale so LunarTune's animations
+        // respect Developer Options → Animator duration scale (like Mochy Music).
+        AppMotion.followSystemScale(this)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes =
                 window.attributes.apply {
@@ -637,7 +635,14 @@ class MainActivity : FragmentActivity() {
                 }
         }
 
-        setContent {
+        // Create a motion-aware recomposer so every animation in the app
+        // reads AppMotion.durationScale each frame — the system animator
+        // scale and the disable-animations preference both flow through it.
+        val motionRecomposer = window.decorView.createLifecycleAwareWindowRecomposer(
+            AppMotion.durationScale,
+            lifecycle,
+        )
+        setContent(parent = motionRecomposer) {
             // Cold start: hold a plain starting surface over everything (including
             // the navigation bar) until the app has bound and produced a frame.
             // This removes the empty screen shell / skeleton flash that used to
@@ -838,6 +843,10 @@ class MainActivity : FragmentActivity() {
                 DisableAnimationsKey,
                 defaultValue = defaultDisableAnimations,
             )
+            // Route the disable-animations preference through AppMotion so
+            // every animation in the app reads it via the MotionDurationScale
+            // wired into the window recomposer — no more scattered snap()/tween(0).
+            AppMotion.enabled = !disableAnimations
             val forceHighRefreshRate by rememberPreference(
                 ForceHighRefreshRateKey,
                 defaultValue = true,
@@ -853,6 +862,7 @@ class MainActivity : FragmentActivity() {
                 }
             val pureBlackEnabled by rememberPreference(PureBlackKey, defaultValue = false)
             val pureBlack = pureBlackEnabled && useDarkTheme
+            val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = false)
 
             val customThemeSeedPalette =
                 remember(customThemeColorValue) {
@@ -1062,8 +1072,6 @@ class MainActivity : FragmentActivity() {
                     val networkBannerViewModel: NetworkBannerViewModel = hiltViewModel()
                     val allLocalItems by homeViewModel.allLocalItems.collectAsState()
                     val allYtItems by homeViewModel.allYtItems.collectAsState()
-                    val accountImageUrl by homeViewModel.accountImageUrl.collectAsState()
-                    val accountName by homeViewModel.accountName.collectAsState()
                     val networkBannerState by networkBannerViewModel.bannerState.collectAsStateWithLifecycle()
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val onlineSearchEncodedQuery =
@@ -1512,6 +1520,21 @@ class MainActivity : FragmentActivity() {
                                 setShowWhenLocked(false)
                                 setTurnScreenOn(false)
                             }
+                        }
+                    }
+
+                    // Hide the status bar for an immersive, edge-to-edge layout.
+                    // On by default — toggle in Appearance settings.
+                    LaunchedEffect(hideStatusBar) {
+                        val controller = WindowCompat.getInsetsController(window, window.decorView)
+                        if (hideStatusBar && !aodModeEnabled) {
+                            controller.systemBarsBehavior =
+                                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                            controller.hide(WindowInsetsCompat.Type.statusBars())
+                        } else if (!aodModeEnabled) {
+                            controller.show(WindowInsetsCompat.Type.statusBars())
+                            controller.systemBarsBehavior =
+                                WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
                         }
                     }
 
@@ -2104,14 +2127,9 @@ class MainActivity : FragmentActivity() {
                                                                 latestVersionName,
                                                                 BuildConfig.VERSION_NAME,
                                                             )
-                                                    FrostedTopBarMenu(
-                                                        hazeState = hazeState,
-                                                        expanded = topBarMenuExpanded,
-                                                        onExpandedChange = { topBarMenuExpanded = it },
+                                                    AccountAvatarButton(
                                                         updateAvailable = updateAvailable,
-                                                        accountImageUrl = accountImageUrl,
-                                                        accountName = accountName,
-                                                        onNavigate = { route -> navController.navigate(route) },
+                                                        onClick = { navController.navigate("profile") },
                                                     )
                                                 },
                                                 scrollBehavior = null,
@@ -3208,8 +3226,11 @@ class MainActivity : FragmentActivity() {
         // style that owns the whole screen gets the bar taken away, and so does the
         // full-screen lyrics page: it is its own surface with its own close
         // affordance, so the bar only ever sat on top of it.
+        val hideStatusBar by rememberPreference(HideStatusBarKey, defaultValue = false)
+
         val shouldHideStatusBars =
-            isYearInMusicScreen ||
+            hideStatusBar ||
+                isYearInMusicScreen ||
                 (
                     playerBottomSheetState.isExpandedOrExpanding &&
                         playerDesignStyle.hidesStatusBar
@@ -3623,7 +3644,7 @@ private val MenuSheetContentWidth = 232.dp
  */
 private val MenuSheetMaxWidth = 272.dp
 
-/** Corner radius of one grouped pill inside the sheet. */
+/** Corner radius of one standalone action bar inside the sheet. */
 private val MenuGroupCorner = 18.dp
 
 /** Gap between the grouped pills, like the spacing between notification cards. */
@@ -3636,24 +3657,69 @@ private val MenuSheetShadowRoom = 6.dp
 private val MenuSheetShadowSpread = 6.dp
 
 /**
- * Replaces the top-bar action cluster with the account avatar. It opens one
- * floating frosted panel whose actions are grouped into opaque rounded pills -
- * like the cards in the system notification shade - led by an account pill
- * wearing the saved account banner. The tinted frost, dim and primary rim stay
- * on the sheet behind them. The popup is ours rather than the platform menu so
- * the entrance can follow the expressive motion scheme instead of a bounce.
+ * Replaces the top-bar action cluster with the grid trigger that opens one
+ * floating frosted panel. Every action is its own opaque rounded bar with a
+ * gap between bars - the older look - while the sheet keeps its current width
+ * and the expressive motion on the way in and out.
  */
+/**
+ * Circular account avatar button that replaces the grid context-menu icon.
+ * Shows the user's profile picture (or a fallback account icon) and
+ * navigates to the profile page on click. Shows an update badge when
+ * a new version is available.
+ */
+@Composable
+private fun AccountAvatarButton(
+    updateAvailable: Boolean,
+    onClick: () -> Unit,
+) {
+    val viewModel: HomeViewModel = hiltViewModel()
+    val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
+    val accountName by viewModel.accountName.collectAsStateWithLifecycle()
+
+    BadgedBox(badge = {
+        if (updateAvailable) {
+            Badge()
+        }
+    }) {
+        val modifier =
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .clickable(onClick = onClick)
+
+        if (!accountImageUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = accountImageUrl,
+                contentDescription = accountName,
+                modifier = modifier,
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.account),
+                    contentDescription = accountName,
+                    modifier = Modifier.size(24.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun FrostedTopBarMenu(
     hazeState: HazeState,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     updateAvailable: Boolean,
-    accountImageUrl: String?,
-    accountName: String,
     onNavigate: (String) -> Unit,
 ) {
-    val context = LocalContext.current
     val sheetShape = RoundedCornerShape(MenuSheetCorner)
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val sheetShadow = MaterialTheme.colorScheme.scrim
@@ -3696,22 +3762,10 @@ private fun FrostedTopBarMenu(
                     Badge()
                 }
             }) {
-                if (accountImageUrl.isNullOrBlank()) {
-                    Icon(
-                        painter = painterResource(R.drawable.grid_view),
-                        contentDescription = stringResource(R.string.more_options),
-                    )
-                } else {
-                    AsyncImage(
-                        model = accountImageUrl,
-                        contentDescription = stringResource(R.string.more_options),
-                        contentScale = ContentScale.Crop,
-                        modifier =
-                            Modifier
-                                .size(32.dp)
-                                .clip(CircleShape),
-                    )
-                }
+                Icon(
+                    painter = painterResource(R.drawable.grid_view),
+                    contentDescription = stringResource(R.string.more_options),
+                )
             }
         }
 
@@ -3761,7 +3815,7 @@ private fun FrostedTopBarMenu(
                                         frostedTopMenuStyle(
                                             // Light enough that the blur from the screen behind
                                             // actually reads through the panel: the frost lives in the
-                                            // gaps between the pills, and an opaque fill hid all of it.
+                                            // gaps between the bars, and an opaque fill hid all of it.
                                             scrim = barColor.copy(alpha = 0.50f),
                                             fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
                                         ),
@@ -4063,7 +4117,6 @@ private fun FrostedTopBarMenuDivider() {
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
     )
 }
-
 @Composable
 private fun OnlineSearchSortMenu(
     selectedSort: OnlineSearchSort,

@@ -364,6 +364,7 @@ private fun HomeContent(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val forgottenItemWidthFactor = if (maxWidth * 0.475f >= 320.dp) 0.475f else 0.9f
                 val forgottenItemWidth = maxWidth.coerceAtMost(HomeFeedMaxWidth) * forgottenItemWidthFactor
+
                 val forgottenSnapLayoutInfoProvider =
                     remember(forgottenFavoritesGridState, forgottenItemWidthFactor) {
                         SnapLayoutInfoProvider(
@@ -426,15 +427,15 @@ private fun HomeContent(
                             contentType = "quick_picks",
                         ) {
                             QuickPicksSection(
-                                quickPicks = uiState.quickPicks,
-                                mediaMetadata = mediaMetadata,
-                                isPlaying = isPlaying,
-                                displayMode = uiState.quickPicksDisplayMode,
-                                navController = navController,
-                                playerConnection = playerConnection,
-                                menuState = menuState,
-                                haptic = haptic,
-                            )
+                                    quickPicks = uiState.quickPicks,
+                                    mediaMetadata = mediaMetadata,
+                                    isPlaying = isPlaying,
+                                    displayMode = uiState.quickPicksDisplayMode,
+                                    navController = navController,
+                                    playerConnection = playerConnection,
+                                    menuState = menuState,
+                                    haptic = haptic,
+                                )
                         }
                     }
 

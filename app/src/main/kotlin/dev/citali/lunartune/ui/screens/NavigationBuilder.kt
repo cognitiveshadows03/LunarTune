@@ -221,6 +221,11 @@ fun NavGraphBuilder.navigationBuilder(
             AccountScreen(navController, scrollBehavior)
         }
     }
+    composable("profile") {
+        DrillPageContainer(pureBlack) {
+            ProfileScreen(navController)
+        }
+    }
     composable("new_release") {
         DrillPageContainer(pureBlack) {
             NewReleaseScreen(navController, scrollBehavior)
