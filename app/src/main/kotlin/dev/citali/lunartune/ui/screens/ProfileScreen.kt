@@ -28,7 +28,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +52,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +76,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,6 +90,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -108,8 +108,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.annotation.DrawableRes
-import androidx.annotation.StringRes
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -148,6 +146,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
 private val ProfileCardShapeRadius = 28.dp
@@ -211,7 +210,10 @@ fun ProfileScreen(
     val haptics = LocalHapticFeedback.current
     val animationsDisabled = LocalAnimationsDisabled.current
     val dotStepPx = with(LocalDensity.current) { DotGridStep.toPx() }
+    val scope = rememberCoroutineScope()
+    val dotGlow = remember { Animatable(0f) }
     var touchPoint by remember { mutableStateOf<Offset?>(null) }
+    var touching by remember { mutableStateOf(false) }
     var lastDotCell by remember { mutableStateOf(-1) }
     var lastTickAt by remember { mutableStateOf(0L) }
     val scrollEnergy by
@@ -231,6 +233,7 @@ fun ProfileScreen(
                     // only its own drawing when a finger moves, instead of
                     // recomposing the page underneath it.
                     touch = { touchPoint },
+                    glow = { dotGlow.value },
                     energy = { scrollEnergy },
                 ).pointerInput(dotStepPx, animationsDisabled) {
                     awaitPointerEventScope {
@@ -238,18 +241,35 @@ fun ProfileScreen(
                             val event = awaitPointerEvent(PointerEventPass.Initial)
                             val change = event.changes.firstOrNull() ?: continue
                             if (!change.pressed) {
-                                touchPoint = null
+                                if (touching) {
+                                    touching = false
+                                    // The light fades on its own after the
+                                    // finger has gone, then the position is
+                                    // dropped.
+                                    scope.launch {
+                                        dotGlow.animateTo(0f, tween(durationMillis = 700))
+                                        touchPoint = null
+                                    }
+                                }
                                 lastDotCell = -1
                                 continue
                             }
                             touchPoint = change.position
+                            if (!touching) {
+                                touching = true
+                                scope.launch {
+                                    dotGlow.animateTo(1f, tween(durationMillis = 180))
+                                }
+                            }
                             val cell =
                                 (change.position.x / dotStepPx).toInt() * 10_000 +
                                     (change.position.y / dotStepPx).toInt()
                             if (cell != lastDotCell) {
                                 lastDotCell = cell
                                 val now = System.currentTimeMillis()
-                                if (!animationsDisabled && now - lastTickAt > 45L) {
+                                // One tick per dot crossed, spaced far enough
+                                // apart to feel like texture, not a rattle.
+                                if (!animationsDisabled && now - lastTickAt > 80L) {
                                     lastTickAt = now
                                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 }
@@ -353,11 +373,15 @@ fun ProfileScreen(
                     )
                 }
 
-                // Shortcuts — a rail of pills instead of full-width rows.
-                item(key = "profile_shortcuts") {
-                    ProfileShortcutRail(
-                        shortcuts = profileShortcuts,
-                        onOpen = { route -> navController.navigate(route) },
+                // Open settings — at the bottom after scrolling. The account
+                // and about shortcuts live in the card and the version card, so
+                // this is the only one that needs a row of its own.
+                item(key = "profile_open_settings") {
+                    ProfileActionCard(
+                        title = stringResource(R.string.settings),
+                        description = stringResource(R.string.profile_settings_description),
+                        iconRes = R.drawable.settings,
+                        onClick = { navController.navigate("settings") },
                     )
                 }
 
@@ -536,10 +560,13 @@ private fun ProfileIdentityCard(
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false),
+                                    // The whole leftover width: a second weighted
+                                    // spacer used to halve it and cut the handle.
+                                    modifier = Modifier.weight(1f),
                                 )
+                            } else {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
-                            Spacer(modifier = Modifier.weight(1f))
                             // The card's chip, sitting in the corner the way a
                             // printed card carries one.
                             CardChip(accent = accent ?: MaterialTheme.colorScheme.primary)
@@ -734,48 +761,63 @@ private fun ProfileIdentityCard(
 }
 
 /**
- * The shortcuts, as a rail of pills that scroll sideways. Three of them fit most screens; on a
- * narrow one the rail carries them instead of squeezing the labels.
+ * A cleaner action card with an icon, title, description, and chevron.
  */
 @Composable
-private fun ProfileShortcutRail(
-    shortcuts: List<ProfileShortcut>,
-    onOpen: (String) -> Unit,
+private fun ProfileActionCard(
+    title: String,
+    description: String,
+    iconRes: Int,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    Card(
+        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = ProfileCardShape,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        shortcuts.forEach { shortcut ->
-            Surface(
-                shape = RoundedCornerShape(percent = 50),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier =
-                    Modifier.clickable { onOpen(shortcut.route) },
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(
-                        painter = painterResource(shortcut.iconRes),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = stringResource(shortcut.labelRes),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                    )
-                }
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(22.dp),
+                )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Icon(
+                painter = painterResource(R.drawable.navigate_next),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -789,25 +831,46 @@ private fun CardChip(
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
-    val hairline = Color.White.copy(alpha = 0.35f)
+    val plate = Color.White.copy(alpha = 0.30f)
     Canvas(
         modifier =
             modifier
-                .size(width = 30.dp, height = 22.dp)
-                .clip(RoundedCornerShape(6.dp)),
+                .size(width = 26.dp, height = 20.dp)
+                .clip(RoundedCornerShape(5.dp)),
     ) {
+        // A metal plate rather than a flat square: the gradient runs across the
+        // contacts so it catches the light the way an embossed chip does.
         drawRect(
             brush =
-                Brush.linearGradient(
-                    colors = listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.22f)),
+                Brush.verticalGradient(
+                    colors =
+                        listOf(
+                            accent.copy(alpha = 0.66f),
+                            accent.copy(alpha = 0.28f),
+                            accent.copy(alpha = 0.50f),
+                        ),
                 ),
         )
-        val stroke = size.minDimension * 0.03f
-        for (fraction in listOf(1f / 3f, 2f / 3f)) {
-            val y = size.height * fraction
-            drawLine(hairline, Offset(0f, y), Offset(size.width, y), stroke)
-        }
-        drawLine(hairline, Offset(size.width / 2f, 0f), Offset(size.width / 2f, size.height), stroke)
+        val stroke = size.minDimension * 0.055f
+        val inset = size.minDimension * 0.18f
+        drawRect(
+            color = plate,
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - inset * 2f, size.height - inset * 2f),
+            style = Stroke(width = stroke),
+        )
+        drawLine(
+            color = plate,
+            start = Offset(0f, size.height * 0.5f),
+            end = Offset(inset, size.height * 0.5f),
+            strokeWidth = stroke,
+        )
+        drawLine(
+            color = plate,
+            start = Offset(size.width - inset, size.height * 0.5f),
+            end = Offset(size.width, size.height * 0.5f),
+            strokeWidth = stroke,
+        )
     }
 }
 
@@ -1363,23 +1426,37 @@ private fun Modifier.profileCardEntrance(): Modifier {
                 targetValue = 1f,
                 animationSpec =
                     spring(
-                        dampingRatio = 0.82f,
-                        stiffness = Spring.StiffnessMediumLow,
+                        // Slow, and deliberately under-damped: the card lands
+                        // with one soft overshoot and settles, instead of
+                        // stopping dead on its anchor.
+                        dampingRatio = 0.56f,
+                        stiffness = Spring.StiffnessVeryLow * 1.7f,
                     ),
             )
         }
     }
 
     return graphicsLayer {
-        val travelled = 1f - progress.value
+        val travelled = progress.value
+        val remaining = 1f - travelled
+        // The card does not cut the corner: it swings in along a quadratic arc
+        // from above-left of its slot, so it reads as being laid down rather
+        // than slid in on a diagonal.
+        val startX = -150.dp.toPx()
+        val startY = -240.dp.toPx()
+        val controlX = -26.dp.toPx()
+        val controlY = -72.dp.toPx()
+        translationX = remaining * remaining * startX + 2f * remaining * travelled * controlX
+        translationY = remaining * remaining * startY + 2f * remaining * travelled * controlY
+        // Banked into the turn, squaring up as it lands.
+        rotationZ = -8f * remaining
         transformOrigin = TransformOrigin(0f, 0f)
-        translationX = -120.dp.toPx() * travelled
-        translationY = -160.dp.toPx() * travelled
-        rotationZ = -5f * travelled
-        val scale = 0.94f + 0.06f * progress.value
+        val scale = 0.92f + 0.08f * travelled
         scaleX = scale
         scaleY = scale
-        alpha = progress.value.coerceIn(0f, 1f)
+        // Fully opaque well before it lands, so the bounce is of the card and
+        // not of a ghost.
+        alpha = (travelled * 2.4f).coerceIn(0f, 1f)
     }
 }
 
@@ -1390,19 +1467,21 @@ private fun Modifier.profileCardEntrance(): Modifier {
 private fun Modifier.reactiveDotGrid(
     color: Color,
     touch: () -> Offset?,
+    glow: () -> Float,
     energy: () -> Float,
     step: Dp = DotGridStep,
     radius: Dp = DotGridRadius,
 ): Modifier =
     drawBehind {
         val touchPoint = touch()
+        val glowValue = glow()
         val energyValue = energy()
         val stepPx = step.toPx()
         if (stepPx <= 0f) return@drawBehind
         val baseRadius = radius.toPx()
-        val pulseRadius = stepPx * 4.5f
-        val energyAlpha = (color.alpha * (1f + 1.6f * energyValue)).coerceIn(0f, 1f)
-        val energyRadius = baseRadius * (1f + 0.6f * energyValue)
+        val pulseRadius = stepPx * 3.4f
+        val energyAlpha = (color.alpha * (1f + 1.1f * energyValue)).coerceIn(0f, 1f)
+        val energyRadius = baseRadius * (1f + 0.35f * energyValue)
 
         var y = stepPx / 2f
         while (y < size.height) {
@@ -1410,12 +1489,14 @@ private fun Modifier.reactiveDotGrid(
             while (x < size.width) {
                 var dotRadius = energyRadius
                 var dotAlpha = energyAlpha
-                if (touchPoint != null) {
+                if (touchPoint != null && glowValue > 0.01f) {
                     val distance = (touchPoint - Offset(x, y)).getDistance()
                     if (distance < pulseRadius) {
-                        val closeness = 1f - distance / pulseRadius
-                        dotRadius += baseRadius * 2.4f * closeness
-                        dotAlpha = (dotAlpha + 0.45f * closeness).coerceIn(0f, 1f)
+                        val closeness = (1f - distance / pulseRadius) * glowValue
+                        // Barely more than a lift: the dots answer the finger
+                        // without turning into a light show.
+                        dotRadius += baseRadius * 1.5f * closeness
+                        dotAlpha = (dotAlpha + 0.26f * closeness).coerceIn(0f, 1f)
                     }
                 }
                 drawCircle(
@@ -1459,17 +1540,3 @@ private fun DrawScope.drawDotGrid(
         y += step
     }
 }
-
-/** The pills under the cards: the places the profile is a doorway to. */
-private val profileShortcuts =
-    listOf(
-        ProfileShortcut(R.string.settings, R.drawable.settings, "settings"),
-        ProfileShortcut(R.string.account, R.drawable.account, "settings/account"),
-        ProfileShortcut(R.string.about, R.drawable.info, "settings/about"),
-    )
-
-private data class ProfileShortcut(
-    @StringRes val labelRes: Int,
-    @DrawableRes val iconRes: Int,
-    val route: String,
-)

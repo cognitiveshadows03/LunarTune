@@ -1353,6 +1353,7 @@
     <string name="profile_total_listening_time">Total listening time</string>
     <string name="profile_view_stats">View Stats</string>
     <string name="profile_last_seven_days">Last 7 days</string>
+    <string name="profile_settings_description">App preferences and more</string>
     <string name="profile_songs_played">Songs played</string>
     <string name="profile_view_history">View history</string>
     <string name="profile_version_and_about">Version &amp; about app</string>
