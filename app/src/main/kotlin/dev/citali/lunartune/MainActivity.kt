@@ -3691,28 +3691,25 @@ private fun AccountAvatarButton(
             Badge()
         }
     }) {
-        val modifier =
-            Modifier
-                .size(40.dp)
+        Box(
+            modifier = Modifier
+                .size(48.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .clickable(onClick = onClick)
-
-        if (!accountImageUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = accountImageUrl,
-                contentDescription = accountName,
-                modifier = modifier,
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Box(
-                modifier = modifier,
-                contentAlignment = Alignment.Center,
-            ) {
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.60f))
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!accountImageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = accountImageUrl,
+                    contentDescription = accountName.ifBlank { stringResource(R.string.account) },
+                    modifier = Modifier.size(32.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
                 Icon(
                     painter = painterResource(R.drawable.account),
-                    contentDescription = accountName,
+                    contentDescription = accountName.ifBlank { stringResource(R.string.account) },
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

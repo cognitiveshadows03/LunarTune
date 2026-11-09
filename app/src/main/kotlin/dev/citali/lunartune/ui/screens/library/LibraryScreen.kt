@@ -29,7 +29,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
@@ -190,9 +194,14 @@ fun LibraryScreen(
         }
     }
 
+    // Match the main TopAppBar's insets, including its reserved status-bar
+    // space while hidden. Visibility-dependent statusBars moved chips upward
+    // without moving the header, leaving them on top of the title/avatar.
+    val headerInsets = WindowInsets.systemBarsIgnoringVisibility
+        .union(WindowInsets.displayCutout).only(WindowInsetsSides.Top)
     val pageTopPad =
         if (shellHeightPx == 0) {
-            WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + AppBarHeight + 64.dp + 4.dp
+            headerInsets.asPaddingValues().calculateTopPadding() + AppBarHeight + 64.dp + 4.dp
         } else {
             with(density) { shellHeightPx.toDp() } + 4.dp
         }
@@ -391,7 +400,7 @@ fun LibraryScreen(
                     // Ride the Library header slide: the chips leave with the
                     // top bar on scroll down and return with it on scroll up.
                     .offset { IntOffset(0, scrollBehavior.state.heightOffset.roundToInt()) }
-                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .windowInsetsPadding(headerInsets)
                     .padding(top = AppBarHeight),
         ) {
             LazyRow(
