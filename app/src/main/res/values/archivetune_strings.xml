@@ -817,4 +817,7 @@
     <string name="aod_mode_exit">Exit AOD</string>
     <string name="playlist_source_local">Local</string>
     <string name="playlist_source_online">Online</string>
+    <string name="haptic_strength">Haptic strength</string>
+    <string name="haptic_strength_value">%1$d%%</string>
+    <string name="haptic_strength_description">Uses LunarTune’s haptic toggle, independent of system touch feedback. Release to preview. Strength varies by device.</string>
 </resources>

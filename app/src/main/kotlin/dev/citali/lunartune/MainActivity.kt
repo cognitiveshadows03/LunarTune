@@ -1876,14 +1876,15 @@ class MainActivity : FragmentActivity() {
                             handleIntent(intent, navController)
                         }
                     }
-                    val haptic = LocalHapticFeedback.current
+                    val hapticContext = LocalContext.current
                     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
+                    val (hapticStrength) = rememberPreference(dev.citali.lunartune.constants.HapticStrengthKey, 25)
                     val customHaptic =
-                        remember(haptic, enableHapticFeedback) {
+                        remember(hapticContext, enableHapticFeedback, hapticStrength) {
                             object : HapticFeedback {
                                 override fun performHapticFeedback(hapticFeedbackType: HapticFeedbackType) {
                                     if (enableHapticFeedback) {
-                                        haptic.performHapticFeedback(hapticFeedbackType)
+                                        dev.citali.lunartune.utils.performAppHaptic(hapticContext, hapticStrength)
                                     }
                                 }
                             }
