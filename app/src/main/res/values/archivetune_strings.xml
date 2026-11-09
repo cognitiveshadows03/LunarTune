@@ -819,5 +819,5 @@
     <string name="playlist_source_online">Online</string>
     <string name="haptic_strength">Haptic strength</string>
     <string name="haptic_strength_value">%1$d%%</string>
-    <string name="haptic_strength_description">Uses LunarTune’s haptic toggle, independent of system touch feedback. Release to preview. Strength varies by device.</string>
+    <string name="haptic_strength_description">Adjusts only the interactive dot-grid vibration strength, not feedback from buttons, switches, or other controls. Release to preview. Strength varies by device.</string>
 </resources>
