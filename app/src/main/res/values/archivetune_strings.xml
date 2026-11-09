@@ -820,4 +820,17 @@
     <string name="haptic_strength">Haptic strength</string>
     <string name="haptic_strength_value">%1$d%%</string>
     <string name="haptic_strength_description">Adjusts only the interactive dot-grid vibration strength, not feedback from buttons, switches, or other controls. Release to preview. Strength varies by device.</string>
+    <string name="stats_your_listening">Your listening</string>
+    <string name="stats_your_favourites">Your favourites</string>
+    <string name="stats_period_week">Week</string>
+    <string name="stats_period_month">Month</string>
+    <string name="stats_period_year">Year</string>
+    <string name="stats_period_all">All time</string>
+    <string name="stats_more_periods">Browse periods</string>
+    <string name="stats_hide_periods">Hide period options</string>
+    <string name="stats_listening_rhythm">Your listening rhythm</string>
+    <string name="stats_favourite_album">Your top album</string>
+    <string name="recap_humour_short">A short set. Very exclusive.</string>
+    <string name="recap_humour_medium">Silence had some competition.</string>
+    <string name="recap_humour_long">Silence didn’t stand a chance.</string>
 </resources>

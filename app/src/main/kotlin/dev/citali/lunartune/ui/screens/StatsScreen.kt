@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
@@ -81,6 +82,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -285,6 +287,19 @@ fun StatsScreen(
                 .toList()
         }
 
+    val periodLabel = when (selectedOption) {
+        OptionStats.WEEKS -> weeklyDates.getOrNull(indexChips)?.second
+        OptionStats.MONTHS -> monthlyDates.getOrNull(indexChips)?.second
+        OptionStats.YEARS -> yearlyDates.getOrNull(indexChips)?.second
+        OptionStats.CONTINUOUS -> when (indexChips) {
+            StatPeriod.WEEK_1.ordinal -> stringResource(R.string.stats_period_week)
+            StatPeriod.MONTH_1.ordinal -> stringResource(R.string.stats_period_month)
+            StatPeriod.YEAR_1.ordinal -> stringResource(R.string.stats_period_year)
+            StatPeriod.ALL.ordinal -> stringResource(R.string.stats_period_all)
+            else -> stringResource(R.string.continuous)
+        }
+    } ?: stringResource(R.string.stats_period_all)
+    var showDetailedPeriods by remember { mutableStateOf(false) }
     val topAppBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -296,14 +311,14 @@ fun StatsScreen(
             LargeFlexibleTopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.stats),
+                        text = stringResource(R.string.stats_your_listening),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
                 subtitle = {
                     Text(
-                        text = stringResource(R.string.settings_stats_subtitle),
+                        text = periodLabel,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -346,7 +361,18 @@ fun StatsScreen(
                         .padding(top = scaffoldPadding.calculateTopPadding()),
             ) {
                 item(key = "rangeControls", contentType = "controls") {
-                    StatsFilterPanel(modifier = Modifier.animateItem()) {
+                    Column(Modifier.animateItem()) {
+                        StatsReplayPeriods(
+                            selected = if (selectedOption == OptionStats.CONTINUOUS) indexChips else -1,
+                            onSelect = { period ->
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                viewModel.onOptionSelected(OptionStats.CONTINUOUS)
+                                viewModel.onChipIndexChanged(period)
+                            },
+                            detailed = showDetailedPeriods,
+                            onToggleDetailed = { showDetailedPeriods = !showDetailedPeriods },
+                        )
+                    if (showDetailedPeriods) StatsFilterPanel {
                         ChoiceChipsRow(
                             chips =
                                 when (selectedOption) {
@@ -386,6 +412,7 @@ fun StatsScreen(
                             onValueUpdate = viewModel::onChipIndexChanged,
                         )
                     }
+                    }
                 }
 
                 if (!data.hasPlaysInPeriod) {
@@ -419,35 +446,17 @@ fun StatsScreen(
                     )
                 }
 
-                item(key = "artistDistribution", contentType = "insights") {
-                    if (mostPlayedArtists.isNotEmpty()) {
-                        val rankedArtistCount = mostPlayedArtists.count { (it.timeListened ?: 0) > 0 }
-                        Column(modifier = Modifier.animateItem()) {
-                            StatsSectionHeader(
-                                title = stringResource(R.string.stats_artist_breakdown),
-                                supportingText =
-                                    pluralStringResource(
-                                        R.plurals.stats_artist_count,
-                                        rankedArtistCount,
-                                        rankedArtistCount,
-                                    ),
-                            )
-                            SegmentedArtistChart(
-                                artists = mostPlayedArtists,
-                                totalTimeListened = listeningSummary.totalTimeListened,
-                                animationKey = selectedOption to indexChips,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
-
                 item(key = "spotlights", contentType = "spotlights") {
                     val topSong = mostPlayedSongsStats.firstOrNull()
                     StatsHighlightsSection(
+                        topAlbum = mostPlayedAlbums.firstOrNull(),
+                        onTopSongClick = {
+                            mostPlayedSongsStats.firstOrNull()?.let { song ->
+                                songsById[song.id]?.let { entity ->
+                                    playerConnection?.playQueue(YouTubeQueue(endpoint = WatchEndpoint(song.id), preloadItem = entity.toMediaMetadata()))
+                                }
+                            }
+                        },
                         topArtist = mostPlayedArtists.firstOrNull(),
                         topSong = topSong,
                         topSongEntity =
@@ -455,23 +464,6 @@ fun StatsScreen(
                                 mostPlayedSongs.firstOrNull { it.id == rankedSong.id }
                             },
                         navController = navController,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "listeningPatterns", contentType = "insights") {
-                    StatsListeningPatterns(
-                        daySlots = listeningByDayOfWeek,
-                        hourSlots = listeningByHour,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "listeningCalendar", contentType = "insights") {
-                    StatsListeningCalendar(
-                        calendar = listeningCalendar,
-                        selectedRange = selectedCalendarRange,
-                        onRangeSelected = viewModel::onCalendarRangeSelected,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -503,6 +495,7 @@ fun StatsScreen(
                     val songEntity = songsById[song.id] ?: return@itemsIndexed
                     RankedSongItem(
                         song = song,
+                        artistNames = songEntity.artists.joinToString { it.name },
                         rank = index + 1,
                         count = visibleRankedSongs.size,
                         isActive = song.id == mediaMetadata?.id,
@@ -665,6 +658,50 @@ fun StatsScreen(
                         }
                     }
                 }
+                item(key = "listeningPatterns", contentType = "insights") {
+                    StatsListeningPatterns(
+                        daySlots = listeningByDayOfWeek,
+                        hourSlots = listeningByHour,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
+                item(key = "listeningCalendar", contentType = "insights") {
+                    StatsListeningCalendar(
+                        calendar = listeningCalendar,
+                        selectedRange = selectedCalendarRange,
+                        onRangeSelected = viewModel::onCalendarRangeSelected,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
+                item(key = "artistDistribution", contentType = "insights") {
+                    if (mostPlayedArtists.isNotEmpty()) {
+                        val rankedArtistCount = mostPlayedArtists.count { (it.timeListened ?: 0) > 0 }
+                        Column(modifier = Modifier.animateItem()) {
+                            StatsSectionHeader(
+                                title = stringResource(R.string.stats_artist_breakdown),
+                                supportingText =
+                                    pluralStringResource(
+                                        R.plurals.stats_artist_count,
+                                        rankedArtistCount,
+                                        rankedArtistCount,
+                                    ),
+                            )
+                            SegmentedArtistChart(
+                                artists = mostPlayedArtists,
+                                totalTimeListened = listeningSummary.totalTimeListened,
+                                animationKey = selectedOption to indexChips,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                }
+
+
             }
 
             if (isYearPickerOpen) {
@@ -859,7 +896,7 @@ private fun StatsListeningPatterns(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = stringResource(R.string.stats_listening_patterns),
+            text = stringResource(R.string.stats_listening_rhythm),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 4.dp),
@@ -926,6 +963,7 @@ private fun StatsSectionHeader(
 @Composable
 private fun RankedSongItem(
     song: SongWithStats,
+    artistNames: String,
     rank: Int,
     count: Int,
     isActive: Boolean,
@@ -978,26 +1016,21 @@ private fun RankedSongItem(
                 )
             }
         },
+        trailingContent = {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(makeCompactTimeString(song.timeListened ?: 0L), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                Text(pluralStringResource(R.plurals.n_time, song.songCountListened, song.songCountListened), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
         supportingContent = {
-            Text(
-                text =
-                    joinByBullet(
-                        pluralStringResource(
-                            R.plurals.n_time,
-                            song.songCountListened,
-                            song.songCountListened,
-                        ),
-                        makeTimeString(song.timeListened),
-                    ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Text(artistNames, maxLines = 1, overflow = TextOverflow.Ellipsis)
         },
     ) {
         Text(
             text = song.title,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }
@@ -1181,8 +1214,8 @@ private fun StatsListeningTimeHero(
         color = MaterialTheme.colorScheme.primaryContainer,
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = stringResource(R.string.stats_total_time_listened),
@@ -1191,7 +1224,7 @@ private fun StatsListeningTimeHero(
             )
             Text(
                 text = makeTimeString(summary.totalTimeListened) ?: "-",
-                style = MaterialTheme.typography.displaySmall,
+                style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = foreground,
             )
@@ -1236,43 +1269,36 @@ private fun StatsHighlightsSection(
     topArtist: Artist?,
     topSong: SongWithStats?,
     topSongEntity: Song?,
+    topAlbum: dev.citali.lunartune.db.entities.Album?,
+    onTopSongClick: () -> Unit,
     navController: NavController,
     modifier: Modifier = Modifier,
 ) {
-    if (topArtist == null && topSong == null) return
-
-    Column(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (topArtist != null) {
-            StatsHighlightCard(
-                title = stringResource(R.string.stats_favourite_artist),
-                mainText = topArtist.artist.name,
-                subText = "${topArtist.songCount} ${stringResource(
-                    R.string.songs,
-                ).lowercase()} • ${makeTimeString(topArtist.timeListened?.toLong())}",
-                imageUrl = topArtist.artist.thumbnailUrl,
-                useCircleShape = true,
-                onClick = { navController.navigate("artist/${topArtist.id}") },
-            )
-        }
-        if (topSong != null && topSongEntity != null) {
-            StatsHighlightCard(
-                title = stringResource(R.string.stats_favourite_song),
-                mainText = topSong.title,
-                subText = "${pluralStringResource(
-                    R.plurals.n_time,
-                    topSong.songCountListened,
-                    topSong.songCountListened,
-                )} • ${makeTimeString(topSong.timeListened)}",
-                imageUrl = topSong.thumbnailUrl,
-                useCircleShape = false,
-                onClick = {},
-            )
+    if (topArtist == null && topSong == null && topAlbum == null) return
+    Column(modifier.padding(vertical = 12.dp)) {
+        StatsSectionHeader(title = stringResource(R.string.stats_your_favourites), supportingText = "")
+        BoxWithConstraints {
+            val cardWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (topSong != null && topSongEntity != null) item(key = "song") {
+                    StatsHighlightCard(stringResource(R.string.stats_favourite_song), topSong.title,
+                        joinByBullet(topSongEntity.artists.joinToString { it.name }, makeTimeString(topSong.timeListened)),
+                        topSong.thumbnailUrl, false, onTopSongClick, Modifier.width(cardWidth))
+                }
+                if (topArtist != null) item(key = "artist") {
+                    StatsHighlightCard(stringResource(R.string.stats_favourite_artist), topArtist.artist.name,
+                        makeTimeString(topArtist.timeListened?.toLong()) ?: "—", topArtist.artist.thumbnailUrl,
+                        true, { navController.navigate("artist/${topArtist.id}") }, Modifier.width(cardWidth))
+                }
+                if (topAlbum != null) item(key = "album") {
+                    StatsHighlightCard(stringResource(R.string.stats_favourite_album), topAlbum.title,
+                        joinByBullet(topAlbum.artists.joinToString { it.name }, makeTimeString(topAlbum.timeListened)),
+                        topAlbum.thumbnailUrl, false, { navController.navigate("album/${topAlbum.id}") }, Modifier.width(cardWidth))
+                }
+            }
         }
     }
 }
@@ -1285,49 +1311,59 @@ private fun StatsHighlightCard(
     imageUrl: String?,
     useCircleShape: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
+    val palette = dev.citali.lunartune.ui.theme.rememberProfileCardColors(imageUrl)
+    val accent = palette.accent ?: MaterialTheme.colorScheme.primary
+    val base = MaterialTheme.colorScheme.surfaceContainerHigh
     ElevatedCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.elevatedCardColors(),
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = base),
     ) {
-        Row(
-            modifier =
-                Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        Column(
+            modifier = Modifier.fillMaxWidth().heightIn(min = 320.dp)
+                .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.23f), Color.Transparent)))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AsyncImage(
-                model = imageUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .size(80.dp)
-                        .clip(if (useCircleShape) CircleShape else MaterialTheme.shapes.medium),
+                model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.size(if (useCircleShape) 160.dp else 148.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .clip(if (useCircleShape) CircleShape else RoundedCornerShape(18.dp)),
             )
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = mainText,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = subText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Text(mainText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(subText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed: Boolean, onToggleDetailed: () -> Unit) {
+    val periods = listOf(
+        StatPeriod.WEEK_1.ordinal to R.string.stats_period_week,
+        StatPeriod.MONTH_1.ordinal to R.string.stats_period_month,
+        StatPeriod.YEAR_1.ordinal to R.string.stats_period_year,
+        StatPeriod.ALL.ordinal to R.string.stats_period_all,
+    )
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+            LazyRow(contentPadding = PaddingValues(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(periods, key = { it.first }) { (value, label) ->
+                    Surface(onClick = { onSelect(value) }, shape = RoundedCornerShape(16.dp),
+                        color = if (selected == value) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        contentColor = if (selected == value) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ) {
+                        Text(stringResource(label), modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
             }
+        }
+        TextButton(onClick = onToggleDetailed, modifier = Modifier.align(Alignment.End)) {
+            Text(stringResource(if (detailed) R.string.stats_hide_periods else R.string.stats_more_periods))
         }
     }
 }

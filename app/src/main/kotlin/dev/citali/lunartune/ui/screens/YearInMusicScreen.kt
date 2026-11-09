@@ -741,7 +741,13 @@ private fun TotalsRecapCard(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                text = stringResource(R.string.year_in_music_totals_title),
+                text = stringResource(
+                    when {
+                        card.totalListeningTime < 60L * 60_000L -> R.string.recap_humour_short
+                        card.totalListeningTime < 1_000L * 60_000L -> R.string.recap_humour_medium
+                        else -> R.string.recap_humour_long
+                    },
+                ),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Black,
                 color = RecapCream,
