@@ -86,6 +86,7 @@ fun BottomSheet(
     onDismiss: (() -> Unit)? = null,
     backHandlerEnabled: Boolean = true,
     collapsedGesturesEnabled: Boolean = true,
+    dragGesturesEnabled: Boolean = true,
     /**
      * What a tap on the collapsed row does. Defaults to the quiet settle, which is
      * right for the player; a sheet that is opened by a gesture elsewhere passes
@@ -140,7 +141,7 @@ fun BottomSheet(
                     // which opened a sheet those styles never use. Only arm it
                     // for a sheet that is actually open, so it can still be
                     // swiped back down.
-                    if (collapsedGesturesEnabled || state.isExpandedOrExpanding) {
+                    if (dragGesturesEnabled && (collapsedGesturesEnabled || state.isExpandedOrExpanding)) {
                         Modifier.bottomSheetDraggable(state, onDismiss)
                     } else {
                         Modifier
