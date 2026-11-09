@@ -37,13 +37,14 @@ internal fun SettingsIdentityCard(
     imageUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    connectedBelow: Boolean = false,
 ) {
     val colors = rememberProfileCardColors(imageUrl)
     val accent = colors.accent ?: MaterialTheme.colorScheme.primary
     val deep = colors.deep ?: MaterialTheme.colorScheme.secondaryContainer
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = if (connectedBelow) 6.dp else 28.dp, bottomEnd = if (connectedBelow) 6.dp else 28.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier,
     ) {

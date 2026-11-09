@@ -57,6 +57,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -89,6 +90,10 @@ import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
+import dev.citali.lunartune.ui.component.DotTextureRegions
+import dev.citali.lunartune.ui.component.LocalDotTextureRegions
+import dev.citali.lunartune.ui.component.excludeDotTexture
+import dev.citali.lunartune.ui.component.dotTextureHaptics
 import dev.citali.lunartune.ui.component.interactiveDotSurface
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ScreenImageHeader
@@ -460,6 +465,8 @@ fun SettingsScreen(
         searchQuery = ""
     }
 
+    val dotRegions = remember { DotTextureRegions() }
+    CompositionLocalProvider(LocalDotTextureRegions provides dotRegions) {
     AnimatedContent(
         targetState = searchActive,
         transitionSpec = {
@@ -496,6 +503,7 @@ fun SettingsScreen(
         topBar = {
             if (effectiveHeaderImageUri.isBlank() || searchQuery.isNotBlank()) {
                 LargeFlexibleTopAppBar(
+                    modifier = Modifier.excludeDotTexture(),
                     title = {
                         Text(
                             text = stringResource(R.string.settings),
@@ -527,7 +535,7 @@ fun SettingsScreen(
                 background = MaterialTheme.colorScheme.surface,
                 ink = MaterialTheme.colorScheme.onSurface,
                 scrolling = listState.isScrollInProgress,
-            ),
+            ).dotTextureHaptics(),
         ) {
         LazyColumn(
             state = listState,
@@ -557,6 +565,7 @@ fun SettingsScreen(
                 item(key = "settings_image_header", contentType = "image_header") {
                     ScreenImageHeader(
                         imageUri = effectiveHeaderImageUri,
+                        modifier = Modifier.excludeDotTexture(),
                                 blendColor = MaterialTheme.colorScheme.surface,
                     ) {
                         IconButton(
@@ -589,7 +598,7 @@ fun SettingsScreen(
                         modifier =
                             Modifier
                                 .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding)
-                                .padding(bottom = SettingsDimensions.SectionSpacing),
+                                .padding(bottom = SettingsDimensions.SectionSpacing).excludeDotTexture(),
                     )
                 }
             }
@@ -612,7 +621,7 @@ fun SettingsScreen(
                         modifier =
                             Modifier
                                 .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding)
-                                .padding(bottom = SettingsDimensions.SectionSpacing),
+                                .padding(bottom = SettingsDimensions.SectionSpacing).excludeDotTexture(),
                     )
                 }
             }
@@ -626,7 +635,7 @@ fun SettingsScreen(
                     modifier =
                         Modifier
                             .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
-                            .fillMaxWidth(),
+                            .fillMaxWidth().excludeDotTexture(),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -721,6 +730,7 @@ fun SettingsScreen(
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
             TopAppBar(
+                modifier = Modifier.excludeDotTexture(),
                 title = {
                     Text(
                         text = stringResource(R.string.settings),
@@ -750,6 +760,8 @@ fun SettingsScreen(
     }
 }
 
+}
+
 /** The account identity shown on the first settings row, shared by both group layouts. */
 private data class SettingsAccountChrome(
     val bannerModel: Any?,
@@ -777,7 +789,8 @@ private fun SettingsEntryRow(
             subtitle = account.channelHandle.takeIf { showIdentity && it.isNotBlank() } ?: settingsItem.subtitle,
             imageUrl = account.imageUrl.takeIf { showIdentity },
             onClick = settingsItem.onClick,
-            modifier = modifier,
+            modifier = modifier.excludeDotTexture(),
+            connectedBelow = index < count - 1,
         )
         return
     }
@@ -790,7 +803,7 @@ private fun SettingsEntryRow(
             account.imageUrl.takeIf { showIdentity && !it.isNullOrBlank() },
         titleOverride = account.rowTitle.takeIf { showIdentity && it.isNotBlank() },
         subtitleOverride = account.channelHandle.takeIf { showIdentity && it.isNotBlank() },
-        modifier = modifier,
+        modifier = modifier.excludeDotTexture(),
         flat = flat,
     )
 }

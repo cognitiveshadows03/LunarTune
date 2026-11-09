@@ -87,7 +87,6 @@ import dev.citali.lunartune.ui.screens.settings.StreamSourcesSettings
 import dev.citali.lunartune.ui.screens.settings.ThemeCreatorScreen
 import dev.citali.lunartune.ui.screens.settings.UpdateScreen
 import dev.citali.lunartune.ui.theme.LunarMotion
-import dev.citali.lunartune.ui.component.dotTextureHaptics
 import dev.citali.lunartune.viewmodels.OnlineSearchSort
 
 private val DrillTransitionCornerShape = RoundedCornerShape(24.dp)
@@ -95,7 +94,6 @@ private val DrillTransitionCornerShape = RoundedCornerShape(24.dp)
 @Composable
 private fun AnimatedContentScope.DrillPageContainer(
     pureBlack: Boolean,
-    textureHaptics: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val containerColor = if (pureBlack) Color.Black else MaterialTheme.colorScheme.surface
@@ -111,9 +109,7 @@ private fun AnimatedContentScope.DrillPageContainer(
                         shape = RectangleShape
                         clip = false
                     }
-                }.background(containerColor).then(
-                    if (textureHaptics) Modifier.dotTextureHaptics() else Modifier,
-                ),
+                }.background(containerColor),
     ) {
         content()
     }
@@ -479,7 +475,7 @@ fun NavGraphBuilder.navigationBuilder(
         }
     }
     composable("settings") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             SettingsScreen(navController, latestVersionName())
         }
     }
@@ -492,7 +488,7 @@ fun NavGraphBuilder.navigationBuilder(
             },
         ),
     ) { entry ->
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             AccountSettings(
                 navController,
                 latestVersionName(),
@@ -501,139 +497,139 @@ fun NavGraphBuilder.navigationBuilder(
         }
     }
     composable("settings/hidden_playlists") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             HiddenPlaylistsScreen(navController)
         }
     }
     composable("settings/appearance") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             AppearanceSettings(navController)
         }
     }
     composable("settings/appearance/icon") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             IconScreen(navController)
         }
     }
     composable("settings/appearance/navigation_bar") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             NavigationBarSettings(navController)
         }
     }
     composable("settings/appearance/aod_customized") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             AodCustomizedScreen(navController)
         }
     }
     composable("settings/appearance/palette_picker") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             PalettePickerScreen(navController)
         }
     }
     composable("settings/appearance/lyrics_animations") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             LyricsAnimationSettings(navController)
         }
     }
     composable("settings/appearance/theme_creator") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             ThemeCreatorScreen(navController)
         }
     }
     composable("settings/content") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             ContentSettings(navController)
         }
     }
     composable("settings/lyrics") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             LyricsSettings(navController)
         }
     }
     composable("settings/internet") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             InternetSettings(navController)
         }
     }
     composable("settings/player") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             PlayerSettings(navController)
         }
     }
     composable("settings/player/stream_sources") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             StreamSourcesSettings(navController)
         }
     }
     composable("settings/player/chiper") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             ChiperSettings(navController)
         }
     }
     composable("settings/storage") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             StorageSettings(navController)
         }
     }
     composable("settings/privacy") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             PrivacySettings(navController)
         }
     }
     composable("settings/backup_restore") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             BackupAndRestore(navController)
         }
     }
     composable("settings/music_transfer") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             MusicTransferScreen(navController)
         }
     }
     composable("settings/discord") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             DiscordSettings(navController)
         }
     }
     composable("settings/integration") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             IntegrationScreen(navController)
         }
     }
     composable("settings/ai_integration") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             AiIntegrationSettings(navController)
         }
     }
     composable("settings/music_together") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             MusicTogetherScreen(navController)
         }
     }
     composable("settings/lastfm") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             LastFMSettings(navController)
         }
     }
     composable("settings/discord/experimental") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             dev.citali.lunartune.ui.screens.settings
                 .DiscordExperimental(navController)
         }
     }
     composable("settings/misc") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             DebugSettings(navController)
         }
     }
     composable("settings/logcat") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             LogcatScreen(navController)
         }
     }
     if (BuildConfig.UPDATER_AVAILABLE) {
         composable("settings/update") {
-            DrillPageContainer(pureBlack, textureHaptics = true) {
+            DrillPageContainer(pureBlack) {
                 UpdateScreen(navController, onUpToDate = onClearUpdateBadge)
             }
         }
@@ -651,17 +647,17 @@ fun NavGraphBuilder.navigationBuilder(
     ) { backStackEntry ->
         val channelName = backStackEntry.arguments?.getString("channel")
         val channel = UpdateChannel.fromStoredName(channelName, defaultUpdateChannel)
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             ChangelogScreen(navController, channel = channel)
         }
     }
     composable("settings/about") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             AboutScreen(navController)
         }
     }
     composable("customize_background") {
-        DrillPageContainer(pureBlack, textureHaptics = true) {
+        DrillPageContainer(pureBlack) {
             CustomizeBackground(navController)
         }
     }
