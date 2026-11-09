@@ -479,9 +479,21 @@ fun NavGraphBuilder.navigationBuilder(
             SettingsScreen(navController, latestVersionName())
         }
     }
-    composable("settings/account") {
+    composable(
+        route = "settings/account?openTokenEditor={openTokenEditor}",
+        arguments = listOf(
+            navArgument("openTokenEditor") {
+                type = NavType.BoolType
+                defaultValue = false
+            },
+        ),
+    ) { entry ->
         DrillPageContainer(pureBlack) {
-            AccountSettings(navController, latestVersionName())
+            AccountSettings(
+                navController,
+                latestVersionName(),
+                openTokenEditor = entry.arguments?.getBoolean("openTokenEditor") == true,
+            )
         }
     }
     composable("settings/hidden_playlists") {

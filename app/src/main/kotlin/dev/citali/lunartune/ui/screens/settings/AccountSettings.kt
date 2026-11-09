@@ -87,6 +87,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
@@ -172,6 +173,7 @@ private data class SavedAccountCollection(
 fun AccountSettings(
     navController: NavController,
     latestVersionName: String,
+    openTokenEditor: Boolean = false,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -327,7 +329,7 @@ fun AccountSettings(
             .let { (it ?: 0) > 1 }
 
     var showToken by remember { mutableStateOf(false) }
-    var showTokenEditor by remember { mutableStateOf(false) }
+    var showTokenEditor by rememberSaveable { mutableStateOf(openTokenEditor) }
     var showUnsavedAccountDialog by remember { mutableStateOf(false) }
     var showAccountSwitcher by remember { mutableStateOf(false) }
 

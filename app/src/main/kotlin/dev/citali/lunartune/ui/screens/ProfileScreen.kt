@@ -141,6 +141,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.rukamori.archivetune.innertube.utils.hasYouTubeLoginCookie
 
@@ -186,6 +187,18 @@ fun ProfileScreen(
         }
     var accountActionsExpanded by rememberSaveable { mutableStateOf(false) }
     var showAccountSwitcher by rememberSaveable { mutableStateOf(false) }
+
+    // Restart the timeout each time the actions are revealed.
+    LaunchedEffect(accountActionsExpanded) {
+        if (accountActionsExpanded) {
+            delay(5_000L)
+            accountActionsExpanded = false
+        }
+    }
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) accountActionsExpanded = false
+    }
+
 
     // Bottom inset for the mini player — used as content padding so the
     // list scrolls behind the mini player area instead of leaving a
@@ -337,6 +350,8 @@ fun ProfileScreen(
                         onSecondaryAction = {
                             if (isLoggedIn) {
                                 navController.navigate("settings/account")
+                            } else {
+                                navController.navigate("settings/account?openTokenEditor=true")
                             }
                         },
                     )
