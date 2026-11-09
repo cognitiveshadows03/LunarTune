@@ -89,6 +89,7 @@ import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
 import dev.citali.lunartune.constants.SharedScreenHeaderImageUriKey
+import dev.citali.lunartune.ui.component.interactiveDotSurface
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ScreenImageHeader
 import dev.citali.lunartune.ui.utils.appBarScrollBehavior
@@ -521,7 +522,13 @@ fun SettingsScreen(
             }
         },
     ) { innerPadding ->
-        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxSize().interactiveDotSurface(
+                background = MaterialTheme.colorScheme.surface,
+                ink = MaterialTheme.colorScheme.onSurface,
+                scrolling = listState.isScrollInProgress,
+            ),
+        ) {
         LazyColumn(
             state = listState,
             modifier =
@@ -764,6 +771,16 @@ private fun SettingsEntryRow(
 ) {
     val isAccountRow = settingsItem.key == "account"
     val showIdentity = account.identityEnabled && isAccountRow && account.isLoggedIn
+    if (isAccountRow && account.identityEnabled) {
+        SettingsIdentityCard(
+            title = account.rowTitle.takeIf { showIdentity && it.isNotBlank() } ?: settingsItem.title,
+            subtitle = account.channelHandle.takeIf { showIdentity && it.isNotBlank() } ?: settingsItem.subtitle,
+            imageUrl = account.imageUrl.takeIf { showIdentity },
+            onClick = settingsItem.onClick,
+            modifier = modifier,
+        )
+        return
+    }
     SettingsSegmentedItem(
         item = settingsItem,
         index = index,
