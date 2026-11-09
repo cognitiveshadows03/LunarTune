@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +38,11 @@ internal fun SettingsIdentityCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     connectedBelow: Boolean = false,
+    bannerModel: Any? = null,
 ) {
+    var bannerLoaded by remember(bannerModel) { mutableStateOf(false) }
+    val titleInk = if (bannerLoaded) Color.White else MaterialTheme.colorScheme.onSurface
+    val secondaryInk = if (bannerLoaded) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
     val colors = rememberProfileCardColors(imageUrl)
     val accent = colors.accent ?: MaterialTheme.colorScheme.primary
     val deep = colors.deep ?: MaterialTheme.colorScheme.secondaryContainer
@@ -48,38 +52,57 @@ internal fun SettingsIdentityCard(
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = modifier,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().drawBehind {
-                drawRect(Brush.linearGradient(listOf(accent.copy(alpha = 0.24f), deep.copy(alpha = 0.12f), Color.Transparent)))
-                for (row in -1..7) {
-                    val path = Path()
-                    for (segment in 0..40) {
-                        val x = size.width * segment / 40f
-                        val y = size.height * row / 6f + sin(segment / 40f * 6.28f + row) * size.height * 0.12f
-                        if (segment == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        Box {
+            if (bannerModel != null) {
+                AsyncImage(
+                    model = bannerModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize(),
+                    onSuccess = { bannerLoaded = true },
+                    onError = { bannerLoaded = false },
+                )
+                if (bannerLoaded) {
+                    Box(Modifier.matchParentSize().background(
+                        Brush.horizontalGradient(listOf(Color.Black.copy(alpha = 0.66f), Color.Black.copy(alpha = 0.42f))),
+                    ))
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().drawBehind {
+                    if (!bannerLoaded) {
+                        drawRect(Brush.linearGradient(listOf(accent.copy(alpha = 0.24f), deep.copy(alpha = 0.12f), Color.Transparent)))
+                        for (row in -1..7) {
+                            val path = Path()
+                            for (segment in 0..40) {
+                                val x = size.width * segment / 40f
+                                val y = size.height * row / 6f + sin(segment / 40f * 6.28f + row) * size.height * 0.12f
+                                if (segment == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                            }
+                            drawPath(path, accent.copy(alpha = 0.08f), style = Stroke(0.7.dp.toPx()))
+                        }
                     }
-                    drawPath(path, accent.copy(alpha = 0.08f), style = Stroke(0.7.dp.toPx()))
-                }
-            }.padding(20.dp),
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)),
+                }.padding(20.dp),
             ) {
-                if (!imageUrl.isNullOrBlank()) {
-                    AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                } else {
-                    Icon(painterResource(R.drawable.account), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(56.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)),
+                ) {
+                    if (!imageUrl.isNullOrBlank()) {
+                        AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Icon(painterResource(R.drawable.account), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-            }
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, color = titleInk, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (!subtitle.isNullOrBlank()) {
+                        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = secondaryInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-            }
+        }
         }
     }
 }

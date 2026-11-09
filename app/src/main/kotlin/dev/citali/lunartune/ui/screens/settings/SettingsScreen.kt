@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,6 +87,7 @@ import dev.citali.lunartune.constants.AccountBannerUpdatedAtKey
 import dev.citali.lunartune.constants.AccountChannelHandleKey
 import dev.citali.lunartune.constants.AccountNameKey
 import dev.citali.lunartune.constants.AccountRowIdentityEnabledKey
+import dev.citali.lunartune.constants.AccountYouTubeBannerHandleKey
 import dev.citali.lunartune.constants.AccountYouTubeBannerUrlKey
 import dev.citali.lunartune.constants.InnerTubeCookieKey
 import dev.citali.lunartune.constants.SettingsHeaderImageUriKey
@@ -144,7 +146,8 @@ fun SettingsScreen(
     val effectiveHeaderImageUri = settingsHeaderImageUri.ifBlank { sharedHeaderImageUri }
     val (accountBannerSource) = rememberPreference(AccountBannerSourceKey, AccountBanner.SOURCE_YOUTUBE)
     val (accountBannerUpdatedAt) = rememberPreference(AccountBannerUpdatedAtKey, 0L)
-    val (accountYouTubeBannerUrl) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val (accountYouTubeBannerUrl, onBannerUrlChange) = rememberPreference(AccountYouTubeBannerUrlKey, "")
+    val (bannerHandle, onBannerHandleChange) = rememberPreference(AccountYouTubeBannerHandleKey, "")
     val (accountNamePreference) = rememberPreference(AccountNameKey, "")
     val (accountChannelHandle) = rememberPreference(AccountChannelHandleKey, "")
     val (accountRowIdentityEnabled) = rememberPreference(AccountRowIdentityEnabledKey, true)
@@ -154,6 +157,16 @@ fun SettingsScreen(
     val accountNameFromViewModel by accountViewModel.accountName.collectAsStateWithLifecycle()
     val accountImageUrl by accountViewModel.accountImageUrl.collectAsStateWithLifecycle()
     val accountRowTitle = accountNameFromViewModel.ifBlank { accountNamePreference }
+    LaunchedEffect(isAccountLoggedIn, accountChannelHandle, accountBannerSource) {
+        if (isAccountLoggedIn && accountBannerSource == AccountBanner.SOURCE_YOUTUBE &&
+            accountChannelHandle.isNotBlank() && bannerHandle != accountChannelHandle
+        ) {
+            AccountBanner.fetchYouTubeBanner(accountChannelHandle)?.let { url ->
+                onBannerUrlChange(url)
+                onBannerHandleChange(accountChannelHandle)
+            }
+        }
+    }
     val accountRowBannerModel: Any? =
         when (accountBannerSource) {
             AccountBanner.SOURCE_CUSTOM ->
@@ -164,7 +177,7 @@ fun SettingsScreen(
                         .diskCacheKey("settings_account_banner_$accountBannerUpdatedAt")
                         .build()
                 }
-            AccountBanner.SOURCE_YOUTUBE -> accountYouTubeBannerUrl.takeIf { it.isNotBlank() }
+            AccountBanner.SOURCE_YOUTUBE -> accountYouTubeBannerUrl.takeIf { isAccountLoggedIn && it.isNotBlank() && bannerHandle == accountChannelHandle }
             else -> null
         }
     val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -714,6 +727,7 @@ fun SettingsScreen(
                                 index = index,
                                 count = listItems.size,
                                 account = accountChrome,
+                                onIdentityClick = { navController.navigate("profile") },
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
@@ -788,6 +802,7 @@ private fun SettingsEntryRow(
     index: Int,
     count: Int,
     account: SettingsAccountChrome,
+    onIdentityClick: () -> Unit,
     modifier: Modifier = Modifier,
     flat: Boolean = false,
 ) {
@@ -798,7 +813,8 @@ private fun SettingsEntryRow(
             title = account.rowTitle.takeIf { showIdentity && it.isNotBlank() } ?: settingsItem.title,
             subtitle = account.channelHandle.takeIf { showIdentity && it.isNotBlank() } ?: settingsItem.subtitle,
             imageUrl = account.imageUrl.takeIf { showIdentity },
-            onClick = settingsItem.onClick,
+            onClick = onIdentityClick,
+            bannerModel = account.bannerModel,
             modifier = modifier.excludeDotTexture(),
             connectedBelow = index < count - 1,
         )

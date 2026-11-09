@@ -456,6 +456,7 @@ fun AccountSettings(
             ) {
                 item {
                     AccountSummaryCard(
+                        compact = true,
                         isLoggedIn = isLoggedIn,
                         accountName = displayName,
                         accountEmail = accountEmail,
@@ -728,7 +729,11 @@ internal fun AccountSummaryCard(
     onPrimaryAction: () -> Unit,
     onSecondaryAction: () -> Unit,
     onOpenAccountSwitcher: () -> Unit,
+    compact: Boolean = false,
 ) {
+    val bannerHeight = if (compact) 88.dp else BannerHeight
+    val avatarSize = if (compact) 64.dp else ProfileAvatarSize
+    val overlap = if (compact) 16.dp else BodyOverlap
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val (bannerSource, onBannerSourceChange) =
@@ -803,14 +808,14 @@ internal fun AccountSummaryCard(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .height(BannerHeight),
+                            .height(bannerHeight),
                 )
             }
 
             Column(
                 modifier =
                     Modifier
-                        .then(if (hasBanner) Modifier.overlapUp(BodyOverlap) else Modifier)
+                        .then(if (hasBanner) Modifier.overlapUp(overlap) else Modifier)
                         .fillMaxWidth()
                         .background(containerColor, if (hasBanner) bodyShape else RectangleShape)
                         .padding(start = 20.dp, end = 20.dp, bottom = 20.dp, top = if (hasBanner) 0.dp else 20.dp),
@@ -820,13 +825,13 @@ internal fun AccountSummaryCard(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .then(if (hasBanner) Modifier.overlapUp(ProfileAvatarSize / 2) else Modifier),
+                            .then(if (hasBanner) Modifier.overlapUp(avatarSize / 2) else Modifier),
                     verticalAlignment = Alignment.Bottom,
                 ) {
                     val avatarShape = MaterialShapes.Cookie9Sided.toShape()
                     Box(contentAlignment = Alignment.BottomEnd) {
                         Surface(
-                            modifier = Modifier.size(ProfileAvatarSize),
+                            modifier = Modifier.size(avatarSize),
                             shape = avatarShape,
                             color = MaterialTheme.colorScheme.primaryContainer,
                             border = BorderStroke(3.dp, containerColor),
