@@ -663,8 +663,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
             }
 
-            // Back to one floating card per entry (the earlier settings look),
-            // but the logical group labels stay above each cluster.
+            // Preserve the connected account group; category groups use a mixed-height dashboard.
             visibleGroups.forEachIndexed { groupIndex, group ->
                 item(
                     key = "settings_group_$groupIndex",
@@ -698,7 +697,9 @@ fun SettingsScreen(
                                     ),
                             )
                         }
-                        group.items.forEachIndexed { index, settingsItem ->
+                        if (groupIndex > 0) {
+                            SettingsDashboardTiles(group.items)
+                        } else group.items.forEachIndexed { index, settingsItem ->
                             SettingsEntryRow(
                                 settingsItem = settingsItem,
                                 index = index,
