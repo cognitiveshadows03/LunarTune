@@ -96,13 +96,12 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -215,7 +214,7 @@ fun ProfileScreen(
     // The dot grid is a surface, not wallpaper: it swells under a finger and
     // lifts while the page is scrolling, and every dot it crosses ticks.
     val listState = rememberLazyListState()
-    val haptics = LocalHapticFeedback.current
+    val hapticView = LocalView.current
     val animationsDisabled = LocalAnimationsDisabled.current
     val dotStepPx = with(LocalDensity.current) { DotGridStep.toPx() }
     val scope = rememberCoroutineScope()
@@ -224,6 +223,7 @@ fun ProfileScreen(
     var touching by remember { mutableStateOf(false) }
     var lastDotCell by remember { mutableStateOf(-1) }
     var lastTickAt by remember { mutableStateOf(0L) }
+    var lastTexturePoint by remember { mutableStateOf<Offset?>(null) }
     val scrollEnergy by
         animateFloatAsState(
             targetValue = if (listState.isScrollInProgress) 1f else 0f,
@@ -243,7 +243,7 @@ fun ProfileScreen(
                     touch = { touchPoint },
                     glow = { dotGlow.value },
                     energy = { scrollEnergy },
-                ).pointerInput(dotStepPx, animationsDisabled) {
+                ).pointerInput(dotStepPx, animationsDisabled, hapticView) {
                     awaitPointerEventScope {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -260,6 +260,7 @@ fun ProfileScreen(
                                     }
                                 }
                                 lastDotCell = -1
+                                lastTexturePoint = null
                                 continue
                             }
                             touchPoint = change.position
@@ -272,14 +273,30 @@ fun ProfileScreen(
                             val cell =
                                 (change.position.x / dotStepPx).toInt() * 10_000 +
                                     (change.position.y / dotStepPx).toInt()
-                            if (cell != lastDotCell) {
+                            if (lastDotCell == -1) {
+                                // No extra tick on touch-down: buttons own their press feedback.
                                 lastDotCell = cell
-                                val now = System.currentTimeMillis()
-                                // One tick per dot crossed, spaced far enough
-                                // apart to feel like texture, not a rattle.
-                                if (!animationsDisabled && now - lastTickAt > 80L) {
+                                lastTexturePoint = change.position
+                            } else if (cell != lastDotCell) {
+                                lastDotCell = cell
+                                val now = android.os.SystemClock.uptimeMillis()
+                                val travelled = lastTexturePoint?.let {
+                                    (change.position - it).getDistance()
+                                } ?: 0f
+                                // Spatial and time gates prevent boundary jitter and buzzing
+                                // during fast scrolling. Nothing runs while the finger rests.
+                                if (!animationsDisabled && travelled >= dotStepPx * 0.65f && now - lastTickAt >= 65L) {
                                     lastTickAt = now
-                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    lastTexturePoint = change.position
+                                    val feedback =
+                                        if (android.os.Build.VERSION.SDK_INT >= 34) {
+                                            android.view.HapticFeedbackConstants.SEGMENT_FREQUENT_TICK
+                                        } else {
+                                            android.view.HapticFeedbackConstants.CLOCK_TICK
+                                        }
+                                    // No override flags: honour the system's haptic preferences.
+                                    // Frequent ticks may be silent on hardware without soft haptics.
+                                    hapticView.performHapticFeedback(feedback)
                                 }
                             }
                         }
