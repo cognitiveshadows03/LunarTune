@@ -146,9 +146,6 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.C
-import androidx.media3.common.Player.REPEAT_MODE_ALL
-import androidx.media3.common.Player.REPEAT_MODE_OFF
-import androidx.media3.common.Player.REPEAT_MODE_ONE
 import androidx.media3.common.Player.STATE_BUFFERING
 import androidx.media3.common.Player.STATE_READY
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -423,8 +420,7 @@ fun BottomSheetPlayer(
     )
     val playerUsesFixedBackground =
         (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) ||
-            playerDesignStyle == PlayerDesignStyle.V9 ||
-            playerDesignStyle.isPortedSurface
+            playerDesignStyle == PlayerDesignStyle.V9
     val playerBackground =
         if (playerUsesFixedBackground) PlayerBackgroundStyle.DEFAULT else storedPlayerBackground
 
@@ -769,7 +765,7 @@ fun BottomSheetPlayer(
     val TextBackgroundColor =
         if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicTextColor
-        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
+        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
             Color.White
         } else {
             when (playerBackground) {
@@ -787,7 +783,7 @@ fun BottomSheetPlayer(
     val icBackgroundColor =
         if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicBgColor
-        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
+        } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
             Color.Black
         } else {
             when (playerBackground) {
@@ -819,7 +815,7 @@ fun BottomSheetPlayer(
                 }
             }
         }.let { (tb, ib) ->
-            if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) || playerDesignStyle.isPortedSurface) {
+            if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
                 Pair(Color.White, Color.Black)
             } else if (playerDesignStyle == PlayerDesignStyle.V9) {
                 Pair(dynamicAccentColor, dynamicIconButtonColor)
@@ -1509,8 +1505,7 @@ fun BottomSheetPlayer(
             playerDesignStyle != PlayerDesignStyle.V5 &&
             playerDesignStyle != PlayerDesignStyle.V7 &&
             (playerDesignStyle != PlayerDesignStyle.V8 && playerDesignStyle != PlayerDesignStyle.V10) &&
-            playerDesignStyle != PlayerDesignStyle.V9 &&
-            !playerDesignStyle.isPortedSurface
+            playerDesignStyle != PlayerDesignStyle.V9
         ) {
             PlayerBackground(
                 playerBackground =
@@ -1759,64 +1754,6 @@ fun BottomSheetPlayer(
                             onSliderValueChangeFinished = onSliderValueChangeFinished,
                             landscape = true,
                             gradientColors = gradientColors,
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(bottom = queueSheetState.collapsedBound)
-                                    .windowInsetsPadding(
-                                        WindowInsets.systemBars.only(
-                                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
-                                        ),
-                                    ).nestedScroll(state.preUpPostDownNestedScrollConnection),
-                        )
-                    }
-                } else if (playerDesignStyle == PlayerDesignStyle.TURNTABLE) {
-                    enrichedMetadata?.let { metadata ->
-                        val shuffleOn by playerConnection.shuffleModeEnabled.collectAsState()
-                        TurntablePlayerContent(
-                            mediaMetadata = metadata,
-                            isPlaying = isPlaying,
-                            canSkipPrevious = canSkipPrevious,
-                            canSkipNext = canSkipNext,
-                            isLiked = currentSongLiked,
-                            sliderPosition = sliderPosition,
-                            position = position,
-                            duration = duration,
-                            isShuffleOn = shuffleOn,
-                            isRepeatOn = repeatMode != REPEAT_MODE_OFF,
-                            onPlayPause = playerConnection::togglePlayPause,
-                            onSkipPrevious = playerConnection::seekToPrevious,
-                            onSkipNext = playerConnection::seekToNext,
-                            onToggleLike = playerConnection::toggleLike,
-                            onShuffleClick = { playerConnection.player.shuffleModeEnabled = !shuffleOn },
-                            onRepeatClick = {
-                                playerConnection.player.repeatMode =
-                                    when (repeatMode) {
-                                        REPEAT_MODE_OFF -> REPEAT_MODE_ALL
-                                        REPEAT_MODE_ALL -> REPEAT_MODE_ONE
-                                        else -> REPEAT_MODE_OFF
-                                    }
-                            },
-                            onSliderValueChange = updatedOnSliderValueChange,
-                            onSliderValueChangeFinished = updatedOnSliderValueChangeFinished,
-                            onCollapseClick = { state.collapseSoft() },
-                            onQueueClick = openQueue,
-                            onLyricsClick = { isLyricsScreenVisible = true },
-                            onMenuClick = {
-                                menuState.show {
-                                    PlayerMenu(
-                                        mediaMetadata = metadata,
-                                        navController = navController,
-                                        playerBottomSheetState = state,
-                                        onShowDetailsDialog = {
-                                            bottomSheetPageState.show {
-                                                ShowMediaInfo(metadata.id)
-                                            }
-                                        },
-                                        onDismiss = menuState::dismiss,
-                                    )
-                                }
-                            },
                             modifier =
                                 Modifier
                                     .fillMaxSize()
@@ -2109,64 +2046,6 @@ fun BottomSheetPlayer(
                                     .windowInsetsPadding(
                                         WindowInsets.systemBars.only(
                                             WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
-                                        ),
-                                    ).nestedScroll(state.preUpPostDownNestedScrollConnection),
-                        )
-                    }
-                } else if (playerDesignStyle == PlayerDesignStyle.TURNTABLE) {
-                    enrichedMetadata?.let { metadata ->
-                        val shuffleOn by playerConnection.shuffleModeEnabled.collectAsState()
-                        TurntablePlayerContent(
-                            mediaMetadata = metadata,
-                            isPlaying = isPlaying,
-                            canSkipPrevious = canSkipPrevious,
-                            canSkipNext = canSkipNext,
-                            isLiked = currentSongLiked,
-                            sliderPosition = sliderPosition,
-                            position = position,
-                            duration = duration,
-                            isShuffleOn = shuffleOn,
-                            isRepeatOn = repeatMode != REPEAT_MODE_OFF,
-                            onPlayPause = playerConnection::togglePlayPause,
-                            onSkipPrevious = playerConnection::seekToPrevious,
-                            onSkipNext = playerConnection::seekToNext,
-                            onToggleLike = playerConnection::toggleLike,
-                            onShuffleClick = { playerConnection.player.shuffleModeEnabled = !shuffleOn },
-                            onRepeatClick = {
-                                playerConnection.player.repeatMode =
-                                    when (repeatMode) {
-                                        REPEAT_MODE_OFF -> REPEAT_MODE_ALL
-                                        REPEAT_MODE_ALL -> REPEAT_MODE_ONE
-                                        else -> REPEAT_MODE_OFF
-                                    }
-                            },
-                            onSliderValueChange = updatedOnSliderValueChange,
-                            onSliderValueChangeFinished = updatedOnSliderValueChangeFinished,
-                            onCollapseClick = { state.collapseSoft() },
-                            onQueueClick = openQueue,
-                            onLyricsClick = { isLyricsScreenVisible = true },
-                            onMenuClick = {
-                                menuState.show {
-                                    PlayerMenu(
-                                        mediaMetadata = metadata,
-                                        navController = navController,
-                                        playerBottomSheetState = state,
-                                        onShowDetailsDialog = {
-                                            bottomSheetPageState.show {
-                                                ShowMediaInfo(metadata.id)
-                                            }
-                                        },
-                                        onDismiss = menuState::dismiss,
-                                    )
-                                }
-                            },
-                            modifier =
-                                Modifier
-                                    .fillMaxSize()
-                                    .padding(bottom = queueSheetState.collapsedBound)
-                                    .windowInsetsPadding(
-                                        WindowInsets.systemBars.only(
-                                            WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
                                         ),
                                     ).nestedScroll(state.preUpPostDownNestedScrollConnection),
                         )
@@ -2567,7 +2446,7 @@ private fun AppleMusicLyricsPageTransition(
 }
 
 @Composable
-internal fun V8PlayerBackdrop(
+private fun V8PlayerBackdrop(
     thumbnailUrl: String?,
     backdropBlurAmount: Int,
     modifier: Modifier = Modifier,
@@ -3147,7 +3026,7 @@ private data class V7PlayerBackdropState(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun LittlePlayerContent(
+private fun LittlePlayerContent(
     mediaMetadata: MediaMetadata,
     sliderPosition: Long?,
     positionMs: Long,
