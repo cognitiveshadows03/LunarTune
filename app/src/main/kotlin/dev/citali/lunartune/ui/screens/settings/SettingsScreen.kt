@@ -453,7 +453,13 @@ fun SettingsScreen(
             emptyList()
         }
     }
-    val visibleGroups = filteredGroups
+    // Dashboard categories must never also appear as legacy list rows.
+    val identityKeys = setOf("account", "stats")
+    val dashboardKeys = filteredGroups.flatMap { it.items }
+        .map { it.key }.filterNot { it in identityKeys }.toSet()
+    val visibleGroups = filteredGroups.map { group ->
+        group.copy(items = group.items.distinctBy { it.key })
+    }
     val collapseThresholdPx = with(LocalDensity.current) { 150.dp.roundToPx() }
     val imageHeaderCollapsed =
         effectiveHeaderImageUri.isNotBlank() &&
@@ -697,20 +703,23 @@ fun SettingsScreen(
                                     ),
                             )
                         }
-                        if (groupIndex > 0) {
-                            SettingsDashboardTiles(group.items)
-                        } else group.items.forEachIndexed { index, settingsItem ->
+                        val dashboardItems = group.items.filter { it.key in dashboardKeys }
+                        val listItems = group.items.filterNot { it.key in dashboardKeys }
+                        if (dashboardItems.isNotEmpty()) {
+                            SettingsDashboardTiles(dashboardItems)
+                        }
+                        listItems.forEachIndexed { index, settingsItem ->
                             SettingsEntryRow(
                                 settingsItem = settingsItem,
                                 index = index,
-                                count = group.items.size,
+                                count = listItems.size,
                                 account = accountChrome,
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .padding(
                                             bottom =
-                                                if (index < group.items.lastIndex) {
+                                                if (index < listItems.lastIndex) {
                                                     SettingsDimensions.SegmentedItemGap
                                                 } else {
                                                     0.dp
