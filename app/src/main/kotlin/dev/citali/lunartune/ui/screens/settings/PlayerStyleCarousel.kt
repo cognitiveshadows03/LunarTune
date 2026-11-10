@@ -162,7 +162,6 @@ fun PlayerStyleCarousel(
                     state = familyPagers[page],
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
                     pageSpacing = 16.dp,
-                    verticalAlignment = Alignment.Top,
                     userScrollEnabled = families[page].size > 1,
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
