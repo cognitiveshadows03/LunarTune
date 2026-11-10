@@ -63,6 +63,8 @@ fun PlayerStyleCarousel(
     navController: NavHostController,
     viewModel: PlayerStylePreviewViewModel = hiltViewModel(),
 ) {
+    val configuration = LocalConfiguration.current
+    val deviceRatio = configuration.screenWidthDp.toFloat() / configuration.screenHeightDp.coerceAtLeast(1)
     val context = LocalContext.current
     val connection = LocalPlayerConnection.current
     val currentMetadata by remember(connection) { connection?.mediaMetadata ?: flowOf(null) }
@@ -131,7 +133,7 @@ fun PlayerStyleCarousel(
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(playerStyleName(selected), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val cardWidth = minOf(maxWidth * 0.78f, maxHeight * (393f / 852f))
+            val cardWidth = minOf(maxWidth * 0.86f, maxHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -142,7 +144,7 @@ fun PlayerStyleCarousel(
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
                 Surface(
-                    modifier = Modifier.width(cardWidth).aspectRatio(393f / 852f).graphicsLayer {
+                    modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
                         scaleX = 1f - offset * 0.055f
                         scaleY = 1f - offset * 0.055f
                         alpha = 1f - offset * 0.25f
@@ -230,9 +232,7 @@ fun PlayerStyleCarousel(
                         else -> {
                             Text(stringResource(R.string.player_background_style), style = MaterialTheme.typography.titleSmall)
                             PlayerBackgroundStyle.entries.forEach { option ->
-                                val supported = (option != PlayerBackgroundStyle.BLUR || Build.VERSION.SDK_INT >= 31) &&
-                                    (option != PlayerBackgroundStyle.CUSTOM || customImage.isNotBlank())
-                                DraftChoice(backgroundName(option), draftBackground == option, enabled = supported) { draftBackground = option }
+                                DraftChoice(backgroundName(option), draftBackground == option) { draftBackground = option }
                             }
                             if (customImage.isBlank()) Text(stringResource(R.string.player_styles_custom_image_hint), style = MaterialTheme.typography.bodySmall)
                         }

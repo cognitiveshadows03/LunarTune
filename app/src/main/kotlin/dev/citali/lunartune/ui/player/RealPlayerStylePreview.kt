@@ -13,6 +13,16 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
+import androidx.compose.runtime.produceState
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.toArgb
+import coil3.imageLoader
+import coil3.request.ImageRequest
+import coil3.toBitmap
+import androidx.palette.graphics.Palette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import dev.citali.lunartune.ui.theme.PlayerColorExtractor
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.material3.MaterialTheme
 import dev.citali.lunartune.constants.*
@@ -129,14 +139,39 @@ fun RealPlayerStylePreview(
     val durationMs = (mediaMetadata.duration * 1000L).coerceAtLeast(1L)
     val positionMs = (durationMs * 0.35f).toLong()
 
+    val fallback = MaterialTheme.colorScheme.primary
+    val colors by produceState(initialValue = listOf(fallback), mediaMetadata.thumbnailUrl, fallback) {
+        val extracted = runCatching {
+            withContext(Dispatchers.IO) {
+                val image = context.imageLoader.execute(ImageRequest.Builder(context)
+                    .data(mediaMetadata.thumbnailUrl).size(128).allowHardware(false).build()).image
+                image?.toBitmap()?.let { bitmap ->
+                    val palette = Palette.from(bitmap)
+                        .maximumColorCount(PlayerColorExtractor.Config.MAX_COLOR_COUNT)
+                        .resizeBitmapArea(PlayerColorExtractor.Config.BITMAP_AREA).generate()
+                    PlayerColorExtractor.extractGradientColors(palette, fallback.toArgb())
+                }
+            }
+        }.getOrNull()
+        value = extracted?.takeIf { it.isNotEmpty() } ?: listOf(fallback)
+    }
+    val dominant = colors.firstOrNull() ?: fallback
+    val dark = MaterialTheme.colorScheme.surface.let { (it.red + it.green + it.blue) / 3f < 0.5f }
+    val v9Text = remember(dominant, dark) {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(dominant.toArgb(), hsv)
+        hsv[1] = if (dark) hsv[1].coerceAtMost(0.12f) else hsv[1].coerceIn(0.12f, 0.35f)
+        hsv[2] = if (dark) 0.96f else 0.08f
+        Color(android.graphics.Color.HSVToColor(hsv))
+    }
+    val v9Icon = if (0.299f * dominant.red + 0.587f * dominant.green + 0.114f * dominant.blue > 0.5f) Color.Black else Color.White
+
     val textColor = if (background == PlayerBackgroundStyle.DEFAULT) MaterialTheme.colorScheme.onSurface else Color.White
     val (textBackgroundColor, textButtonColor, iconButtonColor) =
         when (style) {
             PlayerDesignStyle.V9 ->
                 Triple(
-                    androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                    androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant,
-                    androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                    v9Text, dominant, v9Icon,
                 )
 
             else -> Triple(textColor,
@@ -266,7 +301,16 @@ fun RealPlayerStylePreview(
                         onLyricsClick = {},
                         onSliderValueChange = {},
                         onSliderValueChangeFinished = {},
-                        modifier = Modifier.fillMaxSize(),
+                        gradientColors = colors,
+                        modifier = Modifier.fillMaxSize().padding(top = 8.dp, bottom = 100.dp),
+                    )
+                    QueueCollapsedContentV9(
+                        showCodecOnPlayer = false, currentFormat = null,
+                        textBackgroundColor = textBackgroundColor,
+                        sleepTimerEnabled = false, sleepTimerTimeLeft = 0L,
+                        shuffleModeEnabled = false, repeatMode = Player.REPEAT_MODE_OFF,
+                        onShuffleClick = {}, onRepeatModeClick = {}, onMenuClick = {}, onSleepTimerClick = {},
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
                     )
                 }
 
@@ -354,8 +398,8 @@ private fun scaleToFit(
     val actualConfiguration = LocalConfiguration.current
     val virtualConfiguration = remember(actualConfiguration) {
         Configuration(actualConfiguration).apply {
-            screenWidthDp = 393
-            screenHeightDp = 852
+            screenWidthDp = actualConfiguration.screenWidthDp.coerceAtLeast(1)
+            screenHeightDp = actualConfiguration.screenHeightDp.coerceAtLeast(1)
             orientation = Configuration.ORIENTATION_PORTRAIT
         }
     }
@@ -364,8 +408,8 @@ private fun scaleToFit(
             Box(Modifier.fillMaxSize()) { content() }
         }
     }, modifier = modifier) { measurables, constraints ->
-        val designWidth = 393.dp.roundToPx()
-        val designHeight = 852.dp.roundToPx()
+        val designWidth = virtualConfiguration.screenWidthDp.dp.roundToPx()
+        val designHeight = virtualConfiguration.screenHeightDp.dp.roundToPx()
         val width = constraints.maxWidth
         val height = constraints.maxHeight
         val scale = minOf(width.toFloat() / designWidth, height.toFloat() / designHeight)

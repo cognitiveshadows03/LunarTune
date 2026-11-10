@@ -846,5 +846,5 @@
     <string name="player_styles_tab_slider">Slider</string>
     <string name="player_styles_tab_buttons">Buttons</string>
     <string name="player_styles_tab_background">Background</string>
-    <string name="player_styles_custom_image_hint">Choose a custom player image in Appearance to enable Custom. Blur requires Android 12 or later.</string>
+    <string name="player_styles_custom_image_hint">Set the image used by Custom in Appearance. Player Blur is supported on older Android versions too.</string>
 </resources>
