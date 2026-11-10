@@ -317,6 +317,14 @@
     <string name="player_design_v8">Immersive Extended</string>
     <string name="player_design_v9">Material Extended</string>
     <string name="player_design_v10">Apple Music</string>
+    <string name="player_design_v2_desc">The classic — artwork first, controls below</string>
+    <string name="player_design_v4_desc">A theatrical stage for the artwork</string>
+    <string name="player_design_v5_desc">A compact player that stays out of the way</string>
+    <string name="player_design_v6_desc">Big art, big type, bold color</string>
+    <string name="player_design_v7_desc">A backdrop that wraps you in the artwork</string>
+    <string name="player_design_v8_desc">Immersive with a fuller, extended layout</string>
+    <string name="player_design_v9_desc">A rounded Material take with layered depth</string>
+    <string name="player_design_v10_desc">A layout inspired by the Apple Music player</string>
     <string name="player_style_for_song">Player style</string>
     <string name="player_style_use_default">Use default from settings</string>
     <string name="per_song_settings">Song options</string>

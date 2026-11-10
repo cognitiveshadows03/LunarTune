@@ -110,11 +110,11 @@ fun PlayerStyleCarousel(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { navController.navigateUp() }, enabled = !saving) {
+            FilledTonalButton(onClick = { navController.navigateUp() }, enabled = !saving) {
                 Text(stringResource(R.string.player_styles_exit))
             }
             Spacer(Modifier.weight(1f))
-            FilledTonalButton(
+            FilledButton(
                 enabled = !saving && !pager.isScrollInProgress && !familyPagers[pager.currentPage].isScrollInProgress,
                 onClick = {
                     val styleToApply = selected
@@ -145,21 +145,31 @@ fun PlayerStyleCarousel(
         }
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Crossfade(targetState = selected, animationSpec = tween(250), label = "styleName") { style ->
-            Text(
-                playerStyleName(style),
-                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
-                style = MaterialTheme.typography.headlineSmall,
-                textAlign = TextAlign.Center,
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    playerStyleName(style),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp),
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    playerStyleDescription(style),
+                    modifier = Modifier.padding(bottom = 10.dp, start = 32.dp, end = 32.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             // Cards sit slightly smaller so a strip at the bottom stays free. Styles that
             // ship a base and an extended version use that strip to peek the sibling
             // card from the bottom edge; single styles simply keep the breathing room.
-            val reservedBottom = maxHeight * 0.13f
+            val reservedBottom = maxHeight * 0.18f
             val pageGap = 26.dp
             val cardHeight = maxHeight - reservedBottom
-            val cardWidth = minOf(maxWidth * 0.86f, cardHeight * deviceRatio)
+            val cardWidth = minOf(maxWidth * 0.76f, cardHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -379,6 +389,18 @@ internal fun playerStyleName(style: PlayerDesignStyle): String = stringResource(
     PlayerDesignStyle.V8 -> R.string.player_design_v8
     PlayerDesignStyle.V9 -> R.string.player_design_v9
     PlayerDesignStyle.V10 -> R.string.player_design_v10
+})
+
+@Composable
+internal fun playerStyleDescription(style: PlayerDesignStyle): String = stringResource(when (style) {
+    PlayerDesignStyle.V2 -> R.string.player_design_v2_desc
+    PlayerDesignStyle.V4 -> R.string.player_design_v4_desc
+    PlayerDesignStyle.V5 -> R.string.player_design_v5_desc
+    PlayerDesignStyle.V6 -> R.string.player_design_v6_desc
+    PlayerDesignStyle.V7 -> R.string.player_design_v7_desc
+    PlayerDesignStyle.V8 -> R.string.player_design_v8_desc
+    PlayerDesignStyle.V9 -> R.string.player_design_v9_desc
+    PlayerDesignStyle.V10 -> R.string.player_design_v10_desc
 })
 
 @Composable
