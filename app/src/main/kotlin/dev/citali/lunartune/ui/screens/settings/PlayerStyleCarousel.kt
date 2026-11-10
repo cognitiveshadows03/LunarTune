@@ -143,7 +143,12 @@ fun PlayerStyleCarousel(
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(playerStyleName(selected), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val cardWidth = minOf(maxWidth * 0.86f, maxHeight * deviceRatio)
+            // Cards sit slightly smaller so a strip at the bottom stays free. Styles that
+            // ship a base and an extended version use that strip to peek the sibling
+            // card from the bottom edge; single styles simply keep the breathing room.
+            val reservedBottom = maxHeight * 0.13f
+            val cardHeight = maxHeight - reservedBottom
+            val cardWidth = minOf(maxWidth * 0.86f, cardHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -156,17 +161,20 @@ fun PlayerStyleCarousel(
                 VerticalPager(
                     state = familyPagers[page],
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
-                    pageSpacing = 24.dp,
+                    pageSpacing = 16.dp,
+                    verticalAlignment = Alignment.Top,
                     userScrollEnabled = families[page].size > 1,
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
                 val cardStyle = families[page][row]
+                val verticalOffset = abs(familyPagers[page].currentPage - row + familyPagers[page].currentPageOffsetFraction).coerceIn(0f, 1f)
                 val isSelected = page == pager.currentPage && row == familyPagers[page].currentPage
                 Surface(
                     modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
-                        scaleX = 1f - offset * 0.055f
-                        scaleY = 1f - offset * 0.055f
-                        alpha = 1f - offset * 0.25f
+                        val squeeze = 1f - verticalOffset * 0.05f
+                        scaleX = (1f - offset * 0.055f) * squeeze
+                        scaleY = (1f - offset * 0.055f) * squeeze
+                        alpha = (1f - offset * 0.25f) * (1f - verticalOffset * 0.35f)
                     },
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(if (isSelected) 2.dp else 1.dp,

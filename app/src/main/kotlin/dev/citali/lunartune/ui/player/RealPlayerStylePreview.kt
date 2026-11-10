@@ -320,7 +320,7 @@ fun RealPlayerStylePreview(
                     PlayerBackground(
                         playerBackground = if (background == PlayerBackgroundStyle.GLOW_ANIMATED) PlayerBackgroundStyle.GLOW else background,
                         mediaMetadata = mediaMetadata,
-                        gradientColors = listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.surface),
+                        gradientColors = colors,
                         disableBlur = disableBlur, blurRadius = blurRadius,
                         playerCustomImageUri = customImage, playerCustomBlur = customBlur,
                         playerCustomContrast = customContrast, playerCustomBrightness = customBrightness,
