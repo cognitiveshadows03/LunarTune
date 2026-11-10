@@ -15,6 +15,9 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -141,12 +144,20 @@ fun PlayerStyleCarousel(
             ) { Text(stringResource(R.string.player_styles_apply)) }
         }
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(playerStyleName(selected), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+        Crossfade(targetState = selected, animationSpec = tween(250), label = "styleName") { style ->
+            Text(
+                playerStyleName(style),
+                modifier = Modifier.padding(top = 6.dp, bottom = 12.dp),
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+            )
+        }
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             // Cards sit slightly smaller so a strip at the bottom stays free. Styles that
             // ship a base and an extended version use that strip to peek the sibling
             // card from the bottom edge; single styles simply keep the breathing room.
             val reservedBottom = maxHeight * 0.13f
+            val pageGap = 26.dp
             val cardHeight = maxHeight - reservedBottom
             val cardWidth = minOf(maxWidth * 0.86f, cardHeight * deviceRatio)
             HorizontalPager(
@@ -161,7 +172,7 @@ fun PlayerStyleCarousel(
                 VerticalPager(
                     state = familyPagers[page],
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
-                    pageSpacing = 16.dp,
+                    pageSpacing = pageGap,
                     userScrollEnabled = families[page].size > 1,
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
@@ -212,6 +223,34 @@ fun PlayerStyleCarousel(
 
                     }
                 }
+                }
+            }
+            // Floating indicators — no background, hovering in the strip/gap below the
+            // card. Horizontal always shows the family page; vertical only appears when
+            // the selected family ships a base and an extended version.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = cardHeight + pageGap / 2 - 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                families.forEachIndexed { index, _ ->
+                    PageDot(active = pager.currentPage == index)
+                }
+            }
+            if (families[pager.currentPage].size > 1) {
+                val familyState = familyPagers[pager.currentPage]
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 10.dp, bottom = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    families[pager.currentPage].indices.forEach { index ->
+                        PageDot(active = familyState.currentPage == index)
+                    }
                 }
             }
         }
@@ -268,6 +307,21 @@ fun PlayerStyleCarousel(
             }
         }
     }
+}
+
+@Composable
+private fun PageDot(active: Boolean) {
+    val dotSize by animateDpAsState(
+        targetValue = if (active) 7.dp else 5.dp,
+        animationSpec = tween(200),
+        label = "pageDot",
+    )
+    Box(
+        Modifier
+            .size(dotSize)
+            .clip(CircleShape)
+            .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+    )
 }
 
 @Composable
