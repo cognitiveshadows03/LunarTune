@@ -142,9 +142,6 @@ fun LunarTuneTheme(
     val appColorScheme =
         remember(seedPalette, themeColor, darkTheme) {
             when {
-                // Legacy Android deliberately uses neutral roles, including custom palettes.
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.S ->
-                    materialKolorScheme(Color(0xFF808080), darkTheme, 0.0, PaletteStyle.Monochrome)
                 seedPalette != null ->
                     exactPaletteColorScheme(
                         palette = seedPalette,

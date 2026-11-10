@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
@@ -76,9 +77,18 @@ fun PlayerStyleCarousel(
     val (savedButtons) = rememberEnumPreference(PlayerButtonsStyleKey, PlayerButtonsStyle.DEFAULT)
     val (savedBackground) = rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
     val (customImage) = rememberPreference(PlayerCustomImageUriKey, "")
-    val styles = remember { PlayerDesignStyle.entries.toList() }
-    val pager = rememberPagerState(initialPage = styles.indexOf(savedStyle).coerceAtLeast(0)) { styles.size }
-    val selected = styles[pager.currentPage]
+    val families = remember {
+        listOf(
+            listOf(PlayerDesignStyle.V2), listOf(PlayerDesignStyle.V4), listOf(PlayerDesignStyle.V5),
+            listOf(PlayerDesignStyle.V6, PlayerDesignStyle.V9),
+            listOf(PlayerDesignStyle.V7, PlayerDesignStyle.V8), listOf(PlayerDesignStyle.V10),
+        )
+    }
+    val familyPagers = families.map { family ->
+        rememberPagerState(initialPage = family.indexOf(savedStyle).coerceAtLeast(0)) { family.size }
+    }
+    val pager = rememberPagerState(initialPage = families.indexOfFirst { savedStyle in it }.coerceAtLeast(0)) { families.size }
+    val selected = families[pager.currentPage][familyPagers[pager.currentPage].currentPage]
     var draftSlider by rememberSaveable { mutableStateOf(savedSlider) }
     var draftButtons by rememberSaveable { mutableStateOf(savedButtons) }
     var draftBackground by rememberSaveable { mutableStateOf(savedBackground) }
@@ -102,7 +112,7 @@ fun PlayerStyleCarousel(
             }
             Spacer(Modifier.weight(1f))
             FilledTonalButton(
-                enabled = !saving && !pager.isScrollInProgress,
+                enabled = !saving && !pager.isScrollInProgress && !familyPagers[pager.currentPage].isScrollInProgress,
                 onClick = {
                     val styleToApply = selected
                     saving = true
@@ -133,7 +143,9 @@ fun PlayerStyleCarousel(
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(playerStyleName(selected), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val cardWidth = minOf(maxWidth * 0.86f, maxHeight * deviceRatio)
+            // Leave a small vertical peek for the extended card without changing its ratio.
+            val cardHeight = maxHeight * 0.88f
+            val cardWidth = minOf(maxWidth * 0.86f, cardHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -143,6 +155,15 @@ fun PlayerStyleCarousel(
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+                VerticalPager(
+                    state = familyPagers[page],
+                    pageSize = PageSize.Fixed(cardWidth / deviceRatio),
+                    pageSpacing = 24.dp,
+                    userScrollEnabled = families[page].size > 1,
+                    modifier = Modifier.fillMaxSize(),
+                ) { row ->
+                val cardStyle = families[page][row]
+                val isSelected = page == pager.currentPage && row == familyPagers[page].currentPage
                 Surface(
                     modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
                         scaleX = 1f - offset * 0.055f
@@ -150,14 +171,14 @@ fun PlayerStyleCarousel(
                         alpha = 1f - offset * 0.25f
                     },
                     shape = RoundedCornerShape(28.dp),
-                    border = BorderStroke(if (page == pager.currentPage) 2.dp else 1.dp,
-                        if (page == pager.currentPage) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    border = BorderStroke(if (isSelected) 2.dp else 1.dp,
+                        if (isSelected) Color.White else MaterialTheme.colorScheme.outlineVariant),
                     color = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))) {
                         if (metadata != null && connection != null) {
                             RealPlayerStylePreview(
-                                style = styles[page], mediaMetadata = metadata, navController = navController,
+                                style = cardStyle, mediaMetadata = metadata, navController = navController,
                                 modifier = Modifier.fillMaxSize(), sliderOverride = draftSlider,
                                 buttonsOverride = draftButtons, backgroundOverride = draftBackground,
                             )
@@ -175,13 +196,20 @@ fun PlayerStyleCarousel(
                         })
                     }
                 }
+                }
             }
         }
         Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            styles.forEachIndexed { index, _ ->
+            families.forEachIndexed { index, _ ->
                 Box(Modifier.size(if (pager.currentPage == index) 7.dp else 5.dp).clip(CircleShape)
                     .background(if (pager.currentPage == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant))
             }
+        }
+        if (families[pager.currentPage].size > 1) {
+            Text(stringResource(R.string.player_styles_vertical_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 6.dp))
         }
         if (saveFailed) Text(stringResource(R.string.player_styles_save_failed), color = MaterialTheme.colorScheme.error)
         if (customizable) {
