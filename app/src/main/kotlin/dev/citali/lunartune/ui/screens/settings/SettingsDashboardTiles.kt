@@ -13,8 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.lerp
@@ -66,6 +68,7 @@ private fun SettingsDashboardTile(
         "lyrics", "integration", "internet" -> scheme.tertiary
         else -> scheme.secondary
     }
+    val badgeShape = settingsIconShape(item.key)
     val surface = scheme.surfaceContainerLow
     val ink = scheme.onSurface
     Surface(
@@ -76,15 +79,21 @@ private fun SettingsDashboardTile(
         modifier = modifier.heightIn(min = if (portrait) 318.dp else if (wide) 164.dp else 172.dp).excludeDotTexture(),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().drawBehind {
-                drawCircle(accent.copy(alpha = 0.055f), radius = size.width * 0.48f,
-                    center = Offset(size.width, size.height), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-                drawCircle(accent.copy(alpha = 0.035f), radius = size.width * 0.64f,
-                    center = Offset(size.width, size.height), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            modifier = Modifier.fillMaxWidth().drawWithCache {
+                // Exactly the icon's shape, enlarged and clipped by the card surface.
+                val edge = size.minDimension * 1.25f
+                val outline = badgeShape.createOutline(Size(edge, edge), layoutDirection, this)
+                val left = size.width * 0.96f - edge / 2f
+                val top = size.height * 0.96f - edge / 2f
+                onDrawBehind {
+                    withTransform({ translate(left, top) }) {
+                        drawOutline(outline, accent.copy(alpha = 0.065f))
+                    }
+                }
             }.padding(18.dp),
         ) {
             Box(
-                modifier = Modifier.size(52.dp).clip(settingsIconShape(item.key)).background(accent.copy(alpha = 0.16f)),
+                modifier = Modifier.size(52.dp).clip(badgeShape).background(accent.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
                 BadgedBox(badge = {
