@@ -278,7 +278,7 @@ internal fun PrewarmLyricsSceneEffect(
                 for (w in containerWidthsDp) {
                     // A transient Infinity/NaN width would make the lyrics library throw
                     // while the pane is being laid out during a song change.
-                    if (w.value.isFinite() && w > 0.dp &&
+                    if (w.value.isFinite() && w >= 128.dp &&
                         none { kotlin.math.abs((it - w).value) < 0.5f }) add(w)
                 }
             }

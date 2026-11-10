@@ -74,8 +74,8 @@ private const val CAPTION_REFLOW_DURATION_MS = 340L
  * preparation never takes the player down.
  */
 internal fun safeLyricsWidthPx(rawWidthPx: Float): Float =
-    (if (rawWidthPx.isFinite() && rawWidthPx > 1f) rawWidthPx else DEFAULT_LYRICS_WIDTH_PX)
-        .coerceIn(2f, MAX_LYRICS_WIDTH_PX)
+    (if (rawWidthPx.isFinite() && rawWidthPx >= MIN_LYRICS_WIDTH_PX) rawWidthPx else DEFAULT_LYRICS_WIDTH_PX)
+        .coerceIn(MIN_LYRICS_WIDTH_PX, MAX_LYRICS_WIDTH_PX)
 
 /** Last-resort guard: a bad geometry must never crash playback, it just skips this frame. */
 internal fun <T> guardLyricsPreparation(block: () -> T): T? =
@@ -85,6 +85,7 @@ internal fun <T> guardLyricsPreparation(block: () -> T): T? =
         null
     }
 
+private const val MIN_LYRICS_WIDTH_PX = 96f
 private const val DEFAULT_LYRICS_WIDTH_PX = 320f
 private const val MAX_LYRICS_WIDTH_PX = 4096f
 
@@ -548,6 +549,12 @@ fun LunarKaraokeLyricsView(
     val layoutDirection = LocalLayoutDirection.current
 
     BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        // Animated/hidden panes can briefly have only a few pixels available.
+        // Do not prepare or cache character-wide rows for that transitional frame.
+        // BoxWithConstraints recomposes with the real bounds when layout settles.
+        if (!maxWidth.value.isFinite() || maxWidth < 128.dp || maxHeight <= 0.dp) {
+            return@BoxWithConstraints
+        }
         val anchorOffset =
             when (anchor) {
                 is LyricsAnchor.Fixed -> anchor.offset.coerceIn(0.dp, maxHeight)
