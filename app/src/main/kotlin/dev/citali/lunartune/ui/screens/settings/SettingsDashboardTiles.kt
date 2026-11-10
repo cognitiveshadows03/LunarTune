@@ -60,19 +60,14 @@ private fun SettingsDashboardTile(
     portrait: Boolean = false,
     wide: Boolean = false,
 ) {
-    val dark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val hue = when (item.key) {
-        "appearance" -> Color(0xFF8544BC)
-        "playback", "internet" -> Color(0xFF287D9C)
-        "lyrics", "downloads" -> Color(0xFF426CB0)
-        "content", "storage" -> Color(0xFFAC6935)
-        "behavior", "backup_restore" -> Color(0xFF40885C)
-        "integration", "ai_integration" -> Color(0xFF9E477A)
-        else -> MaterialTheme.colorScheme.primary
+    val scheme = MaterialTheme.colorScheme
+    val accent = when (item.key) {
+        "appearance", "playback", "updates" -> scheme.primary
+        "lyrics", "integration", "internet" -> scheme.tertiary
+        else -> scheme.secondary
     }
-    val accent = lerp(MaterialTheme.colorScheme.primary, hue, 0.25f)
-    val surface = lerp(MaterialTheme.colorScheme.surfaceContainerLow, accent, if (dark) 0.12f else 0.08f)
-    val ink = MaterialTheme.colorScheme.onSurface
+    val surface = scheme.surfaceContainerLow
+    val ink = scheme.onSurface
     Surface(
         onClick = item.onClick,
         shape = RoundedCornerShape(28.dp),
@@ -104,9 +99,9 @@ private fun SettingsDashboardTile(
                 style = if (portrait || wide) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
             )
-            if ((portrait || wide) && !item.subtitle.isNullOrBlank()) {
+            if (!item.subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(6.dp))
-                Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = ink.copy(alpha = 0.76f))
+                Text(item.subtitle, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             }
             item.badge?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(8.dp))

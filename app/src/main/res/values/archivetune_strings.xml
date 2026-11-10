@@ -508,14 +508,14 @@
     <string name="settings_section_player_content">Player &amp; Content</string>
     <string name="settings_appearance_subtitle">Theme, colours &amp; layout</string>
     <string name="settings_playback_title">Playback</string>
-    <string name="settings_playback_subtitle">Audio &amp; playback controls</string>
+    <string name="settings_playback_subtitle">Audio &amp; queue</string>
     <string name="settings_behavior_title">Behavior</string>
-    <string name="settings_behavior_subtitle">History, privacy &amp; haptics</string>
+    <string name="settings_behavior_subtitle">History &amp; privacy</string>
     <string name="settings_integration_subtitle">Connect your services</string>
     <string name="settings_backup_restore_subtitle">Keep your settings safe</string>
     <string name="settings_developer_options_title">Developer Options</string>
     <string name="settings_developer_options_subtitle">Experiments &amp; diagnostics</string>
-    <string name="settings_lyrics_subtitle">Providers, display &amp; translation</string>
+    <string name="settings_lyrics_subtitle">Display &amp; translation</string>
     <string name="settings_content_subtitle">Language &amp; discovery</string>
     <string name="settings_internet_subtitle">Connection, proxy &amp; DNS</string>
     <string name="settings_po_token_subtitle">Playback verification and visitor data</string>

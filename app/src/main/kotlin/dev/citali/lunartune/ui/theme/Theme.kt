@@ -39,6 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamicColorScheme
+import com.materialkolor.hct.Hct
+import com.materialkolor.ktx.toColor
 import com.materialkolor.ktx.toHct
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -350,16 +352,51 @@ private fun materialKolorDynamicColorScheme(
     isDark: Boolean,
     contrastLevel: Double = 0.0,
     style: PaletteStyle,
-): ColorScheme =
-    mergedSeedColorScheme(
-        primarySeed = keyColor,
-        secondarySeed = keyColor,
-        tertiarySeed = keyColor,
-        neutralSeed = keyColor,
-        isDark = isDark,
-        contrastLevel = contrastLevel,
-        style = style,
+): ColorScheme {
+    val seed = keyColor.toHct()
+    val hue = seed.hue
+    fun tone(h: Double, chroma: Double, t: Int): Color = Hct.from(h, chroma, t.toDouble()).toColor()
+    fun p(t: Int) = tone(hue, maxOf(48.0, seed.chroma), t)
+    fun s(t: Int) = tone(hue, 16.0, t)
+    fun t(t: Int) = tone((hue + 60.0) % 360.0, 24.0, t)
+    fun n(t: Int) = tone(hue, 4.0, t)
+    fun nv(t: Int) = tone(hue, 8.0, t)
+    // Generate independent HCT tonal families, not three primary-colour schemes.
+    // Gamut mapping may reduce achievable chroma at very light/dark tones.
+    return materialKolorScheme(keyColor, isDark, contrastLevel, style).copy(
+        primary = p(if (isDark) 80 else 40),
+        onPrimary = p(if (isDark) 20 else 100),
+        primaryContainer = p(if (isDark) 30 else 90),
+        onPrimaryContainer = p(if (isDark) 90 else 10),
+        inversePrimary = p(if (isDark) 40 else 80),
+        secondary = s(if (isDark) 80 else 40),
+        onSecondary = s(if (isDark) 20 else 100),
+        secondaryContainer = s(if (isDark) 30 else 90),
+        onSecondaryContainer = s(if (isDark) 90 else 10),
+        tertiary = t(if (isDark) 80 else 40),
+        onTertiary = t(if (isDark) 20 else 100),
+        tertiaryContainer = t(if (isDark) 30 else 90),
+        onTertiaryContainer = t(if (isDark) 90 else 10),
+        background = n(if (isDark) 6 else 98),
+        onBackground = n(if (isDark) 90 else 10),
+        surface = n(if (isDark) 6 else 98),
+        onSurface = n(if (isDark) 90 else 10),
+        surfaceVariant = nv(if (isDark) 30 else 90),
+        onSurfaceVariant = nv(if (isDark) 80 else 30),
+        surfaceDim = n(if (isDark) 6 else 87),
+        surfaceBright = n(if (isDark) 24 else 98),
+        surfaceContainerLowest = n(if (isDark) 4 else 100),
+        surfaceContainerLow = n(if (isDark) 10 else 96),
+        surfaceContainer = n(if (isDark) 12 else 94),
+        surfaceContainerHigh = n(if (isDark) 17 else 92),
+        surfaceContainerHighest = n(if (isDark) 22 else 90),
+        inverseSurface = n(if (isDark) 90 else 20),
+        inverseOnSurface = n(if (isDark) 20 else 95),
+        outline = nv(if (isDark) 60 else 50),
+        outlineVariant = nv(if (isDark) 30 else 80),
+        surfaceTint = p(if (isDark) 80 else 40),
     )
+}
 
 private fun mergedSeedColorScheme(
     primarySeed: Color,
