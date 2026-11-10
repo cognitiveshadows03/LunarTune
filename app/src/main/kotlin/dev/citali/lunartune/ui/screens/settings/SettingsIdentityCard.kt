@@ -106,3 +106,26 @@ internal fun SettingsIdentityCard(
         }
     }
 }
+
+/** The listening shortcut shares the dashboard's tonal surface rather than a mismatched list row. */
+@Composable
+internal fun SettingsListeningShortcut(item: SettingsItem, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = item.onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = androidx.compose.ui.graphics.lerp(MaterialTheme.colorScheme.surfaceContainerLow, MaterialTheme.colorScheme.primary, 0.10f),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(52.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+                Icon(item.icon, contentDescription = null, modifier = Modifier.size(26.dp), tint = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                item.subtitle?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            Icon(painterResource(R.drawable.navigate_next), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}

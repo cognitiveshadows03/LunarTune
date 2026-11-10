@@ -993,29 +993,18 @@ private fun ProfileListeningTimeCard(
         Column(
             modifier = Modifier.fillMaxWidth().padding(ProfileCardPadding),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Row(modifier = Modifier.weight(1f, fill = false)) {
-                    ListeningTimeValue(value = hours, unit = "h")
-                    Box(
-                        modifier =
-                            Modifier
-                                .padding(horizontal = 14.dp, vertical = 4.dp)
-                                .width(1.dp)
-                                .height(32.dp)
-                                .background(dividerColor),
-                    )
-                    ListeningTimeValue(value = minutes, unit = "m")
-                }
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = stringResource(R.string.profile_total_listening_time),
                     style = MaterialTheme.typography.labelLarge,
                     color = onSurfaceVariant,
-                    textAlign = TextAlign.End,
-                    modifier = Modifier.widthIn(max = 116.dp).padding(bottom = 4.dp),
                 )
+                // Reserve real spacing: never let a wide custom font paint into the caption.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ListeningTimeValue(value = hours, unit = "h")
+                    Box(Modifier.padding(horizontal = 16.dp).width(1.dp).height(32.dp).background(dividerColor))
+                    ListeningTimeValue(value = minutes, unit = "m")
+                }
             }
 
             HorizontalDivider(

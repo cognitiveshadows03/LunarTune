@@ -366,8 +366,7 @@ fun StatsScreen(
                             selected = if (selectedOption == OptionStats.CONTINUOUS) indexChips else -1,
                             onSelect = { period ->
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                viewModel.onOptionSelected(OptionStats.CONTINUOUS)
-                                viewModel.onChipIndexChanged(period)
+                                viewModel.onReplayPeriodSelected(period)
                             },
                             detailed = showDetailedPeriods,
                             onToggleDetailed = { showDetailedPeriods = !showDetailedPeriods },
@@ -1223,7 +1222,7 @@ private fun StatsListeningTimeHero(
                 color = foreground,
             )
             Text(
-                text = makeTimeString(summary.totalTimeListened) ?: "-",
+                text = makeCompactTimeString(summary.totalTimeListened),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = foreground,
@@ -1351,13 +1350,13 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
     )
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            LazyRow(contentPadding = PaddingValues(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                items(periods, key = { it.first }) { (value, label) ->
-                    Surface(onClick = { onSelect(value) }, shape = RoundedCornerShape(16.dp),
+            Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                periods.forEach { (value, label) ->
+                    Surface(onClick = { onSelect(value) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
                         color = if (selected == value) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                         contentColor = if (selected == value) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     ) {
-                        Text(stringResource(label), modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp), style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(label), modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge)
                     }
                 }
             }

@@ -25,35 +25,28 @@ import dev.citali.lunartune.ui.component.excludeDotTexture
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Three-item runs form a portrait tile beside two stacked tiles; no nested scrolling. */
+/** A full-width lead card and balanced pairs; long titles always get room to breathe. */
 @Composable
 internal fun SettingsDashboardTiles(items: List<SettingsItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val roomy = configuration.screenWidthDp >= 380 && configuration.fontScale <= 1.15f
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         var index = 0
+        if (items.isNotEmpty()) {
+            SettingsDashboardTile(items.first(), Modifier.fillMaxWidth(), wide = true)
+            index = 1
+        }
         while (index < items.size) {
-            val remaining = items.size - index
-            if (remaining >= 3) {
-                val tall = items[index]
-                val top = items[index + 1]
-                val bottom = items[index + 2]
-                Row(
-                    Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    SettingsDashboardTile(tall, Modifier.weight(1f).fillMaxHeight(), portrait = true)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SettingsDashboardTile(top, Modifier.fillMaxWidth())
-                        SettingsDashboardTile(bottom, Modifier.fillMaxWidth())
-                    }
+            val first = items[index]
+            val second = items.getOrNull(index + 1)
+            if (roomy && second != null && first.title.length <= 15 && second.title.length <= 15) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SettingsDashboardTile(first, Modifier.weight(1f).fillMaxHeight())
+                    SettingsDashboardTile(second, Modifier.weight(1f).fillMaxHeight())
                 }
-                index += 3
-            } else if (remaining == 2) {
-                // A wide card breaks up the masonry rather than ending every section in squares.
-                SettingsDashboardTile(items[index], Modifier.fillMaxWidth(), wide = true)
-                SettingsDashboardTile(items[index + 1], Modifier.fillMaxWidth(), wide = true)
                 index += 2
             } else {
-                SettingsDashboardTile(items[index], Modifier.fillMaxWidth(), wide = true)
+                SettingsDashboardTile(first, Modifier.fillMaxWidth(), wide = true)
                 index++
             }
         }
@@ -77,34 +70,26 @@ private fun SettingsDashboardTile(
         "integration", "ai_integration" -> Color(0xFF9E477A)
         else -> MaterialTheme.colorScheme.primary
     }
-    val surface = if (dark) lerp(Color(0xFF131116), hue, 0.55f) else lerp(Color.White, hue, 0.16f)
-    val ink = if (dark) lerp(Color.White, hue, 0.18f) else lerp(Color(0xFF17121D), hue, 0.2f)
+    val accent = lerp(MaterialTheme.colorScheme.primary, hue, 0.25f)
+    val surface = lerp(MaterialTheme.colorScheme.surfaceContainerLow, accent, if (dark) 0.12f else 0.08f)
+    val ink = MaterialTheme.colorScheme.onSurface
     Surface(
         onClick = item.onClick,
         shape = RoundedCornerShape(28.dp),
         color = surface,
         contentColor = ink,
-        modifier = modifier.heightIn(min = if (portrait) 318.dp else if (wide) 172.dp else 154.dp).excludeDotTexture(),
+        modifier = modifier.heightIn(min = if (portrait) 318.dp else if (wide) 164.dp else 172.dp).excludeDotTexture(),
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().drawBehind {
-                // A quiet, clipped petal silhouette echoes the category's expressive badge.
-                val center = Offset(size.width * 0.98f, size.height * 0.95f)
-                val radius = size.width * 0.48f
-                val path = Path()
-                for (i in 0..120) {
-                    val angle = i / 120f * 6.283185f
-                    val r = radius * (1f + 0.12f * sin(angle * 7f))
-                    val x = center.x + cos(angle) * r
-                    val y = center.y + sin(angle) * r
-                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                }
-                path.close()
-                drawPath(path, ink.copy(alpha = 0.055f))
+                drawCircle(accent.copy(alpha = 0.055f), radius = size.width * 0.48f,
+                    center = Offset(size.width, size.height), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                drawCircle(accent.copy(alpha = 0.035f), radius = size.width * 0.64f,
+                    center = Offset(size.width, size.height), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
             }.padding(18.dp),
         ) {
             Box(
-                modifier = Modifier.size(52.dp).clip(settingsIconShape(item.key)).background(ink.copy(alpha = 0.12f)),
+                modifier = Modifier.size(52.dp).clip(settingsIconShape(item.key)).background(accent.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
                 BadgedBox(badge = {
@@ -116,7 +101,7 @@ private fun SettingsDashboardTile(
             if (portrait) Spacer(Modifier.weight(1f).heightIn(min = 60.dp)) else Spacer(Modifier.height(18.dp))
             Text(
                 item.title,
-                style = if (portrait || wide) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+                style = if (portrait || wide) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Medium,
             )
             if ((portrait || wide) && !item.subtitle.isNullOrBlank()) {

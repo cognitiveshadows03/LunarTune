@@ -734,7 +734,7 @@ fun SettingsScreen(
                                         .padding(
                                             bottom =
                                                 if (index < listItems.lastIndex) {
-                                                    SettingsDimensions.SegmentedItemGap
+                                                    12.dp
                                                 } else {
                                                     0.dp
                                                 },
@@ -816,8 +816,12 @@ private fun SettingsEntryRow(
             onClick = onIdentityClick,
             bannerModel = account.bannerModel,
             modifier = modifier.excludeDotTexture(),
-            connectedBelow = index < count - 1,
+            connectedBelow = false,
         )
+        return
+    }
+    if (settingsItem.key == "stats") {
+        SettingsListeningShortcut(settingsItem, modifier.excludeDotTexture())
         return
     }
     SettingsSegmentedItem(

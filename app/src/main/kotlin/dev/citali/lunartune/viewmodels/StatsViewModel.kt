@@ -159,8 +159,7 @@ class StatsViewModel
     constructor(
         private val database: MusicDatabase,
     ) : ViewModel() {
-        private val selectedOption = MutableStateFlow(OptionStats.CONTINUOUS)
-        private val indexChips = MutableStateFlow(0)
+        private val periodSelection = MutableStateFlow(OptionStats.CONTINUOUS to 0)
         private val isSongListExpanded = MutableStateFlow(false)
         private val isYearPickerOpen = MutableStateFlow(false)
         private val refreshRequest = MutableStateFlow(0L)
@@ -179,15 +178,18 @@ class StatsViewModel
         }
 
         fun onOptionSelected(option: OptionStats) {
-            if (selectedOption.value == option) return
-            selectedOption.value = option
-            indexChips.value = 0
+            if (periodSelection.value.first == option) return
+            periodSelection.value = option to 0
             isSongListExpanded.value = false
         }
 
         fun onChipIndexChanged(index: Int) {
-            if (indexChips.value == index) return
-            indexChips.value = index
+            periodSelection.value = periodSelection.value.first to index
+            isSongListExpanded.value = false
+        }
+
+        fun onReplayPeriodSelected(index: Int) {
+            periodSelection.value = OptionStats.CONTINUOUS to index
             isSongListExpanded.value = false
         }
 
@@ -207,7 +209,7 @@ class StatsViewModel
             refreshRequest.value += 1L
         }
 
-        private fun periodPair() = combine(selectedOption, indexChips) { opt, idx -> Pair(opt, idx) }
+        private fun periodPair() = periodSelection
 
         private fun weekdayOccurrenceCounts(
             startInclusive: LocalDate,
@@ -590,10 +592,10 @@ class StatsViewModel
                     combine(
                         primaryStats,
                         listeningStats,
-                        selectedOption,
-                        indexChips,
+                        periodSelection,
                         isSongListExpanded,
-                    ) { primary, listening, option, periodIndex, expanded ->
+                    ) { primary, listening, selection, expanded ->
+                        val (option, periodIndex) = selection
                         val summary =
                             ListeningSummary(
                                 totalPlayCount = listening.totals.totalPlayCount,
@@ -654,9 +656,9 @@ class StatsViewModel
                 // otherwise greet the user with an empty last-week view and no hint that
                 // older stats exist.
                 val latest = runCatching { database.latestEventTimestamp().first() }.getOrNull()
-                if (latest != null && selectedOption.value == OptionStats.CONTINUOUS && indexChips.value == 0) {
+                if (latest != null && periodSelection.value == (OptionStats.CONTINUOUS to 0)) {
                     val period = StatPeriod.entries.firstOrNull { it.toTimeMillis() < latest } ?: StatPeriod.ALL
-                    indexChips.value = period.ordinal
+                    periodSelection.value = OptionStats.CONTINUOUS to period.ordinal
                 }
                 initialPeriodResolved.value = true
             }
