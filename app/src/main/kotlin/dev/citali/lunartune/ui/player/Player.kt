@@ -675,6 +675,7 @@ fun BottomSheetPlayer(
                                 withContext(Dispatchers.Default) {
                                     Palette
                                         .from(bitmap)
+                                        .clearFilters()
                                         .maximumColorCount(PlayerColorExtractor.Config.MAX_COLOR_COUNT)
                                         .resizeBitmapArea(PlayerColorExtractor.Config.BITMAP_AREA)
                                         .generate()

@@ -143,9 +143,7 @@ fun PlayerStyleCarousel(
         Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(playerStyleName(selected), modifier = Modifier.padding(top = 6.dp, bottom = 12.dp), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            // Leave a small vertical peek for the extended card without changing its ratio.
-            val cardHeight = maxHeight * 0.88f
-            val cardWidth = minOf(maxWidth * 0.86f, cardHeight * deviceRatio)
+            val cardWidth = minOf(maxWidth * 0.86f, maxHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -194,32 +192,23 @@ fun PlayerStyleCarousel(
                         Box(Modifier.matchParentSize().pointerInput(Unit) {
                             awaitPointerEventScope { while (true) awaitPointerEvent() }
                         })
+                        if (isSelected && cardStyle in listOf(PlayerDesignStyle.V2, PlayerDesignStyle.V4, PlayerDesignStyle.V5, PlayerDesignStyle.V6)) {
+                            FilledTonalButton(
+                                onClick = { showOptions = true },
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = Color.Black.copy(alpha = 0.65f),
+                                    contentColor = Color.White,
+                                ),
+                            ) { Text(stringResource(R.string.player_styles_customize)) }
+                        }
+
                     }
                 }
                 }
             }
         }
-        Row(Modifier.padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            families.forEachIndexed { index, _ ->
-                Box(Modifier.size(if (pager.currentPage == index) 7.dp else 5.dp).clip(CircleShape)
-                    .background(if (pager.currentPage == index) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant))
-            }
-        }
-        if (families[pager.currentPage].size > 1) {
-            Text(stringResource(R.string.player_styles_vertical_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 6.dp))
-        }
         if (saveFailed) Text(stringResource(R.string.player_styles_save_failed), color = MaterialTheme.colorScheme.error)
-        if (customizable) {
-            OutlinedButton(onClick = { showOptions = true }, modifier = Modifier.padding(bottom = 8.dp)) {
-                Text(stringResource(R.string.player_styles_customize))
-            }
-        } else {
-            Text(stringResource(R.string.player_styles_ready), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 20.dp))
-        }
     }
     if (showOptions && customizable) {
         val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.65f).dp

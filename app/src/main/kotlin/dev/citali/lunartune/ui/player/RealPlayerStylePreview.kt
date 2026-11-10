@@ -147,7 +147,8 @@ fun RealPlayerStylePreview(
                 val image = context.imageLoader.execute(ImageRequest.Builder(context)
                     .data(mediaMetadata.thumbnailUrl).size(128).allowHardware(false).build()).image
                 image?.toBitmap()?.let { bitmap ->
-                    val palette = Palette.from(bitmap)
+                    val palette = Palette.from(bitmap).clearFilters()
+                                        .clearFilters()
                         .maximumColorCount(PlayerColorExtractor.Config.MAX_COLOR_COUNT)
                         .resizeBitmapArea(PlayerColorExtractor.Config.BITMAP_AREA).generate()
                     PlayerColorExtractor.extractGradientColors(palette, fallback.toArgb())

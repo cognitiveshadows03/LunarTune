@@ -321,6 +321,10 @@ private fun materialKolorDynamicColorScheme(
     style: PaletteStyle,
 ): ColorScheme {
     val seed = keyColor.toHct()
+    // Do not inject saturated primary/tertiary hues into monochrome artwork.
+    if (seed.chroma < 4.0) {
+        return materialKolorScheme(keyColor, isDark, contrastLevel, PaletteStyle.Monochrome)
+    }
     val hue = seed.hue
     fun tone(h: Double, chroma: Double, t: Int): Color = Hct.from(h, chroma, t.toDouble()).toColor()
     fun p(t: Int) = tone(hue, maxOf(48.0, seed.chroma), t)
@@ -459,7 +463,12 @@ fun Bitmap.extractThemeColor(): Color {
             ?: palette.lightMutedSwatch
             ?: palette.darkMutedSwatch
 
-    return swatch?.rgb?.toComposeColor() ?: DefaultThemeColor
+    if (swatch != null) return swatch.rgb.toComposeColor()
+
+    // Palette's default filter drops near-black and near-white. Retry without
+    // that filter for grayscale covers instead of reusing the stock accent.
+    val unfiltered = Palette.from(this).clearFilters().maximumColorCount(16).generate()
+    return unfiltered.dominantSwatch?.rgb?.toComposeColor() ?: Color.Gray
 }
 
 fun Bitmap.extractGradientColors(): List<Color> {
