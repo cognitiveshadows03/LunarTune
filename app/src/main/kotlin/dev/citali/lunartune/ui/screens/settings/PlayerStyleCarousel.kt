@@ -114,7 +114,7 @@ fun PlayerStyleCarousel(
                 Text(stringResource(R.string.player_styles_exit))
             }
             Spacer(Modifier.weight(1f))
-            FilledButton(
+            Button(
                 enabled = !saving && !pager.isScrollInProgress && !familyPagers[pager.currentPage].isScrollInProgress,
                 onClick = {
                     val styleToApply = selected
