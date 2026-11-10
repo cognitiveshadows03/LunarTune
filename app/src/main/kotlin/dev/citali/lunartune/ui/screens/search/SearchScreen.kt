@@ -207,6 +207,33 @@ fun SearchScreen(
                 )
             }
 
+            item(key = "charts_shortcut", contentType = "charts_shortcut") {
+                Card(
+                    onClick = { navController.navigate("charts_screen") },
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .animateItem(),
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth().padding(18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Icon(painterResource(R.drawable.trending_up), contentDescription = null)
+                        Text(
+                            text = stringResource(R.string.charts),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(painterResource(R.drawable.arrow_forward), contentDescription = null)
+                    }
+                }
+            }
+
             item(
                 key = "search_tabs",
                 contentType = "search_tabs",
