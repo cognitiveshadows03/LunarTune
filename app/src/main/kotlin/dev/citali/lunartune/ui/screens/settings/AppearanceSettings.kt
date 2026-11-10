@@ -765,23 +765,11 @@ fun AppearanceSettings(navController: NavController) {
 
             PreferenceGroup(title = stringResource(R.string.player)) {
                 item {
-                    EnumListPreference(
+                    PreferenceEntry(
                         title = { Text(stringResource(R.string.player_design_style)) },
+                        description = playerStyleName(playerDesignStyle),
                         icon = { Icon(painterResource(R.drawable.palette), null) },
-                        selectedValue = playerDesignStyle,
-                        onValueSelected = onPlayerDesignStyleChange,
-                        valueText = {
-                            when (it) {
-                                PlayerDesignStyle.V2 -> stringResource(R.string.player_design_v2)
-                                PlayerDesignStyle.V4 -> stringResource(R.string.player_design_v4)
-                                PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
-                                PlayerDesignStyle.V6 -> stringResource(R.string.player_design_v6)
-                                PlayerDesignStyle.V7 -> stringResource(R.string.player_design_v7)
-                                PlayerDesignStyle.V8 -> stringResource(R.string.player_design_v8)
-                                PlayerDesignStyle.V9 -> stringResource(R.string.player_design_v9)
-                                PlayerDesignStyle.V10 -> stringResource(R.string.player_design_v10)
-                            }
-                        },
+                        onClick = { navController.navigate("settings/appearance/player_styles") },
                     )
                 }
 

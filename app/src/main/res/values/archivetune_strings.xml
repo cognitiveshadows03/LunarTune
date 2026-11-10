@@ -833,4 +833,13 @@
     <string name="recap_humour_short">A short set. Very exclusive.</string>
     <string name="recap_humour_medium">Silence had some competition.</string>
     <string name="recap_humour_long">Silence didn’t stand a chance.</string>
+    <string name="player_styles_exit">Exit</string>
+    <string name="player_styles_apply">Apply</string>
+    <string name="player_styles_customize">Customize</string>
+    <string name="player_styles_no_history">Play a song to preview your player styles. You can still select a style.</string>
+    <string name="player_styles_connecting">Waiting for the player to connect…</string>
+    <string name="player_styles_save_failed">Could not save. Please try again.</string>
+    <string name="player_styles_ready">Ready to use • Swipe to explore</string>
+    <string name="player_styles_draft_hint">Preview changes here. Nothing is saved until you tap Apply.</string>
+    <string name="player_styles_animated_glow">Animated glow</string>
 </resources>

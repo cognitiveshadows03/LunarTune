@@ -506,6 +506,11 @@ fun NavGraphBuilder.navigationBuilder(
             AppearanceSettings(navController)
         }
     }
+    composable("settings/appearance/player_styles") {
+        DrillPageContainer(pureBlack) {
+            dev.citali.lunartune.ui.screens.settings.PlayerStyleCarousel(navController)
+        }
+    }
     composable("settings/appearance/icon") {
         DrillPageContainer(pureBlack) {
             IconScreen(navController)
