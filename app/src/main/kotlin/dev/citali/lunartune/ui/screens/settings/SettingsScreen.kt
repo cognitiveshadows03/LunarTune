@@ -727,7 +727,7 @@ fun SettingsScreen(
                                 index = index,
                                 count = listItems.size,
                                 account = accountChrome,
-                                onIdentityClick = { navController.navigate("profile") },
+                                onIdentityClick = { navController.navigate("settings/account") },
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()

@@ -467,6 +467,14 @@ fun StatsScreen(
                     )
                 }
 
+                item(key = "listeningPatterns", contentType = "insights") {
+                    StatsListeningPatterns(
+                        daySlots = listeningByDayOfWeek,
+                        hourSlots = listeningByHour,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
                 item(key = "mostPlayedSongsHeader", contentType = "sectionHeader") {
                     StatsSongsHeader(
                         title = stringResource(R.string.stats_top_songs),
@@ -657,14 +665,6 @@ fun StatsScreen(
                         }
                     }
                 }
-                item(key = "listeningPatterns", contentType = "insights") {
-                    StatsListeningPatterns(
-                        daySlots = listeningByDayOfWeek,
-                        hourSlots = listeningByHour,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
                 item(key = "listeningCalendar", contentType = "insights") {
                     StatsListeningCalendar(
                         calendar = listeningCalendar,
@@ -1222,7 +1222,7 @@ private fun StatsListeningTimeHero(
                 color = foreground,
             )
             Text(
-                text = makeCompactTimeString(summary.totalTimeListened),
+                text = makeTimeString(summary.totalTimeListened) ?: "—",
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 color = foreground,
