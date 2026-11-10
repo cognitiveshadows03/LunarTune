@@ -3695,10 +3695,14 @@ private fun AccountAvatarButton(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.60f))
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
+            Box(
+                modifier = Modifier.size(42.dp).clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.60f)),
+                contentAlignment = Alignment.Center,
+            ) {
             if (!accountImageUrl.isNullOrBlank()) {
                 AsyncImage(
                     model = accountImageUrl,
@@ -3713,6 +3717,7 @@ private fun AccountAvatarButton(
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
             }
         }
     }

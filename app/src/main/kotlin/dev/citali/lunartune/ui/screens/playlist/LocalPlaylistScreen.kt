@@ -19,6 +19,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -240,7 +243,11 @@ fun LocalPlaylistScreen(
     }
 
     // System bars padding
-    val systemBarsTopPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    // Explicitly share visible insets between the search bar and its list.
+    // Material's default bar reserves hidden status-bar space; systemBars does not.
+    val playlistBarInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+    val systemBarsTopPadding = playlistBarInsets.asPaddingValues().calculateTopPadding()
 
     var isSearching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable(stateSaver = TextFieldValue.Saver) {
@@ -484,6 +491,10 @@ fun LocalPlaylistScreen(
         }
     }
     val lazyListState = rememberLazyListState()
+    LaunchedEffect(isSearching, query.text) {
+        if (isSearching) lazyListState.scrollToItem(0)
+    }
+
     var dragInfo by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     val reorderableState =
         rememberReorderableLazyListState(
@@ -1143,6 +1154,7 @@ fun LocalPlaylistScreen(
             }
 
         TopAppBar(
+            windowInsets = playlistBarInsets,
             colors = topAppBarColors,
             title = {
                 if (selection) {

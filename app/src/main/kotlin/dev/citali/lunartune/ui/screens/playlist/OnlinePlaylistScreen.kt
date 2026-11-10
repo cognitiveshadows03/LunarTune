@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -190,7 +193,11 @@ fun OnlinePlaylistScreen(
     val hideExplicit by rememberPreference(key = HideExplicitKey, defaultValue = false)
 
     // System bars padding
-    val systemBarsTopPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
+    // Explicitly share visible insets between the search bar and its list.
+    // Material's default bar reserves hidden status-bar space; systemBars does not.
+    val playlistBarInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        .only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+    val systemBarsTopPadding = playlistBarInsets.asPaddingValues().calculateTopPadding()
 
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -245,6 +252,10 @@ fun OnlinePlaylistScreen(
             downloads = currentDownloads
             downloadState = headerDownloadState(songIds, currentDownloads)
         }
+    }
+
+    LaunchedEffect(isSearching, query.text) {
+        if (isSearching) lazyListState.scrollToItem(0)
     }
 
     val showTopBarTitle by remember { derivedStateOf { lazyListState.firstVisibleItemIndex > 0 } }
@@ -833,6 +844,7 @@ fun OnlinePlaylistScreen(
             }
 
         TopAppBar(
+            windowInsets = playlistBarInsets,
             colors = topAppBarColors,
             title = {
                 if (selection) {
