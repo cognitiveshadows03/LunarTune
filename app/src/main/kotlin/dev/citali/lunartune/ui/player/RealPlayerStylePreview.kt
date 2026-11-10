@@ -10,6 +10,9 @@ package dev.citali.lunartune.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.layout.Layout
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.material3.MaterialTheme
 import dev.citali.lunartune.constants.*
@@ -24,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -90,6 +94,7 @@ fun RealPlayerStylePreview(
     if (mediaMetadata == null || playerConnection == null) return
 
     val context = LocalContext.current
+    val audioDevice by playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle()
     val (savedSliderStyle) = rememberEnumPreference(SliderStyleKey, SliderStyle.Standard)
     val (savedButtonsStyle) = rememberEnumPreference(PlayerButtonsStyleKey, PlayerButtonsStyle.DEFAULT)
     val (showVolumeBar) = rememberPreference(ShowPlayerVolumeBarKey, true)
@@ -176,8 +181,24 @@ fun RealPlayerStylePreview(
                         onSliderValueChangeFinished = {},
                         onVolumeChange = {},
                         appleMusic = style == PlayerDesignStyle.V10,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = if (style == PlayerDesignStyle.V10) 92.dp else 108.dp),
                     )
+                    if (style == PlayerDesignStyle.V10) {
+                        QueueCollapsedContentAppleMusic(
+                            textBackgroundColor = Color.White, onExpandQueue = {}, onShowLyrics = {},
+                            onDeviceClick = {}, device = audioDevice,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+                        )
+                    } else {
+                        QueueCollapsedContentV7(
+                            showCodecOnPlayer = false, currentFormat = null, textBackgroundColor = Color.White,
+                            sleepTimerEnabled = false, sleepTimerTimeLeft = 0L,
+                            onExpandQueue = {}, onShowLyrics = {}, onSleepTimerClick = {},
+                            onDeviceClick = {}, device = audioDevice,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+                        )
+                    }
+
                 }
 
                 PlayerDesignStyle.V5 -> {
@@ -199,7 +220,7 @@ fun RealPlayerStylePreview(
                         isPlaying = false, disableBlur = disableBlur,
                         backdropBlurAmount = backdropBlurAmount, label = "stylePreview",
                     )
-                    Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp)) {
+                    Column(Modifier.align(Alignment.BottomCenter).padding(top = 12.dp, bottom = 108.dp)) {
                         V8PlayerControlsContent(
                             mediaMetadata = mediaMetadata, queueTitle = "", playbackState = Player.STATE_READY,
                             isPlaying = false, isLoading = false, canSkipPrevious = true, canSkipNext = true,
@@ -210,6 +231,12 @@ fun RealPlayerStylePreview(
                             onSliderValueChange = {}, onSliderValueChangeFinished = {}, onVolumeChange = {},
                         )
                     }
+                    QueueCollapsedContentV7(
+                        showCodecOnPlayer = false, currentFormat = null, textBackgroundColor = Color.White,
+                        sleepTimerEnabled = false, sleepTimerTimeLeft = 0L,
+                        onExpandQueue = {}, onShowLyrics = {}, onSleepTimerClick = {}, onDeviceClick = {}, device = audioDevice,
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
+                    )
                 }
                 PlayerDesignStyle.V9 -> {
                     V9PlayerBackdrop(
@@ -291,7 +318,7 @@ fun RealPlayerStylePreview(
                             textButtonColor = textButtonColor,
                             iconButtonColor = iconButtonColor,
                             textBackgroundColor = textBackgroundColor,
-                            icBackgroundColor = textColor,
+                            icBackgroundColor = if (background == PlayerBackgroundStyle.DEFAULT) MaterialTheme.colorScheme.surface else Color.Black,
                             sliderPosition = null,
                             position = positionMs,
                             duration = durationMs,
@@ -324,7 +351,19 @@ private fun scaleToFit(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Layout(content = { Box(Modifier.fillMaxSize()) { content() } }, modifier = modifier) { measurables, constraints ->
+    val actualConfiguration = LocalConfiguration.current
+    val virtualConfiguration = remember(actualConfiguration) {
+        Configuration(actualConfiguration).apply {
+            screenWidthDp = 393
+            screenHeightDp = 852
+            orientation = Configuration.ORIENTATION_PORTRAIT
+        }
+    }
+    Layout(content = {
+        CompositionLocalProvider(LocalConfiguration provides virtualConfiguration) {
+            Box(Modifier.fillMaxSize()) { content() }
+        }
+    }, modifier = modifier) { measurables, constraints ->
         val designWidth = 393.dp.roundToPx()
         val designHeight = 852.dp.roundToPx()
         val width = constraints.maxWidth

@@ -3,6 +3,8 @@
  * © cognitiveshadows03 — github.com/cognitiveshadows03
  * GPL-3.0 License | Contributors: see git history
  */
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package dev.citali.lunartune.ui.screens.settings
 
 import android.os.Build
@@ -30,7 +32,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -71,6 +81,7 @@ fun PlayerStyleCarousel(
     var draftButtons by rememberSaveable { mutableStateOf(savedButtons) }
     var draftBackground by rememberSaveable { mutableStateOf(savedBackground) }
     var showOptions by rememberSaveable { mutableStateOf(false) }
+    var optionsTab by rememberSaveable { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
     var saveFailed by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -181,46 +192,99 @@ fun PlayerStyleCarousel(
         }
     }
     if (showOptions && customizable) {
-        Dialog(onDismissRequest = { showOptions = false }) {
-            Surface(
-                shape = RoundedCornerShape(32.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-            ) {
-                Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.player_styles_customize), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(R.string.player_styles_draft_hint), style = MaterialTheme.typography.bodySmall)
-                    Text(stringResource(R.string.player_slider_style), style = MaterialTheme.typography.titleSmall)
-                    SliderStyle.entries.forEach { option ->
-                        DraftChoice(sliderName(option), draftSlider == option) { draftSlider = option }
-                    }
-                    HorizontalDivider()
-                    Text(stringResource(R.string.player_buttons_style), style = MaterialTheme.typography.titleSmall)
-                    PlayerButtonsStyle.entries.forEach { option ->
-                        DraftChoice(stringResource(if (option == PlayerButtonsStyle.DEFAULT) R.string.default_style else R.string.secondary_color_style), draftButtons == option) { draftButtons = option }
-                    }
-                    HorizontalDivider()
-                    Text(stringResource(R.string.player_background_style), style = MaterialTheme.typography.titleSmall)
-                    PlayerBackgroundStyle.entries.filter {
-                        (it != PlayerBackgroundStyle.BLUR || Build.VERSION.SDK_INT >= 31) &&
-                            (it != PlayerBackgroundStyle.CUSTOM || customImage.isNotBlank())
-                    }.forEach { option ->
-                        DraftChoice(backgroundName(option), draftBackground == option) { draftBackground = option }
-                    }
-                    TextButton(onClick = { showOptions = false }, modifier = Modifier.align(Alignment.End)) {
-                        Text(stringResource(android.R.string.ok))
+        val maxSheetHeight = (LocalConfiguration.current.screenHeightDp * 0.65f).dp
+        ModalBottomSheet(
+            onDismissRequest = { showOptions = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (Build.VERSION.SDK_INT >= 31) 0.94f else 1f),
+            scrimColor = Color.Black.copy(alpha = 0.25f),
+            shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        ) {
+            Column(Modifier.fillMaxWidth().heightIn(max = maxSheetHeight).padding(horizontal = 20.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.player_styles_customize), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { showOptions = false }) { Text(stringResource(R.string.player_styles_done)) }
+                }
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(R.string.player_styles_tab_slider, R.string.player_styles_tab_buttons, R.string.player_styles_tab_background).forEachIndexed { index, title ->
+                        FilterChip(selected = optionsTab == index, onClick = { optionsTab = index },
+                            label = { Text(stringResource(title), style = MaterialTheme.typography.labelMedium) }, modifier = Modifier.weight(1f))
                     }
                 }
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when (optionsTab) {
+                        0 -> {
+                            Text(stringResource(R.string.player_slider_style), style = MaterialTheme.typography.titleSmall)
+                            LazyRow(contentPadding = PaddingValues(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                items(SliderStyle.entries.toList()) { option ->
+                                    SliderPreviewChoice(option, draftSlider == option) { draftSlider = option }
+                                }
+                            }
+                        }
+                        1 -> {
+                            Text(stringResource(R.string.player_buttons_style), style = MaterialTheme.typography.titleSmall)
+                            PlayerButtonsStyle.entries.forEach { option ->
+                                DraftChoice(stringResource(if (option == PlayerButtonsStyle.DEFAULT) R.string.default_style else R.string.secondary_color_style), draftButtons == option) { draftButtons = option }
+                            }
+                        }
+                        else -> {
+                            Text(stringResource(R.string.player_background_style), style = MaterialTheme.typography.titleSmall)
+                            PlayerBackgroundStyle.entries.forEach { option ->
+                                val supported = (option != PlayerBackgroundStyle.BLUR || Build.VERSION.SDK_INT >= 31) &&
+                                    (option != PlayerBackgroundStyle.CUSTOM || customImage.isNotBlank())
+                                DraftChoice(backgroundName(option), draftBackground == option, enabled = supported) { draftBackground = option }
+                            }
+                            if (customImage.isBlank()) Text(stringResource(R.string.player_styles_custom_image_hint), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Text(stringResource(R.string.player_styles_draft_hint), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 12.dp))
+                }
+                Spacer(Modifier.height(12.dp))
             }
         }
     }
 }
 
 @Composable
-private fun DraftChoice(label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(16.dp), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.25f)) {
+private fun SliderPreviewChoice(style: SliderStyle, selected: Boolean, onClick: () -> Unit) {
+    val tint = MaterialTheme.colorScheme.onSecondaryContainer
+    Surface(onClick = onClick, shape = RoundedCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.width(124.dp),
+    ) {
+        Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(44.dp)) {
+                val y = size.height / 2
+                if (style == SliderStyle.Circular) {
+                    drawArc(tint.copy(alpha = 0.2f), 0f, 360f, false, style = Stroke(4.dp.toPx()))
+                    drawArc(tint, -90f, 220f, false, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                } else if (style == SliderStyle.Wavy) {
+                    val path = Path()
+                    for (i in 0..60) {
+                        val x = size.width * i / 60f
+                        val wave = kotlin.math.sin(i / 60f * 6f * kotlin.math.PI.toFloat()) * 4.dp.toPx()
+                        if (i == 0) path.moveTo(x, y + wave) else path.lineTo(x, y + wave)
+                    }
+                    drawPath(path, tint, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                } else {
+                    val thickness = if (style == SliderStyle.Thick) 10.dp.toPx() else 3.dp.toPx()
+                    drawLine(tint.copy(alpha = 0.2f), Offset(0f, y), Offset(size.width, y), thickness, StrokeCap.Round)
+                    drawLine(tint, Offset(0f, y), Offset(size.width * 0.6f, y), thickness, StrokeCap.Round)
+                    if (style == SliderStyle.Standard) drawCircle(tint, 5.dp.toPx(), Offset(size.width * 0.6f, y))
+                }
+            }
+            Text(sliderName(style), style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun DraftChoice(label: String, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(16.dp), color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface.copy(alpha = 0.25f)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = selected, onClick = null)
+            RadioButton(selected = selected, onClick = null, enabled = enabled)
             Spacer(Modifier.width(10.dp))
             Text(label, style = MaterialTheme.typography.bodyMedium)
         }

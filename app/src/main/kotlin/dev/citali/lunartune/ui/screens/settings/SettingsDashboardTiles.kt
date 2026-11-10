@@ -69,7 +69,12 @@ private fun SettingsDashboardTile(
         else -> scheme.secondary
     }
     val badgeShape = settingsIconShape(item.key)
-    val surface = scheme.surfaceContainerLow
+    val container = when (item.key) {
+        "appearance", "playback", "updates" -> scheme.primaryContainer
+        "lyrics", "integration", "internet" -> scheme.tertiaryContainer
+        else -> scheme.secondaryContainer
+    }
+    val surface = lerp(scheme.surfaceContainerLow, container, 0.32f)
     val ink = scheme.onSurface
     Surface(
         onClick = item.onClick,

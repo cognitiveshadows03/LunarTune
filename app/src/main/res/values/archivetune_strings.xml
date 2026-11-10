@@ -842,4 +842,9 @@
     <string name="player_styles_ready">Ready to use • Swipe to explore</string>
     <string name="player_styles_draft_hint">Preview changes here. Nothing is saved until you tap Apply.</string>
     <string name="player_styles_animated_glow">Animated glow</string>
+    <string name="player_styles_done">Done</string>
+    <string name="player_styles_tab_slider">Slider</string>
+    <string name="player_styles_tab_buttons">Buttons</string>
+    <string name="player_styles_tab_background">Background</string>
+    <string name="player_styles_custom_image_hint">Choose a custom player image in Appearance to enable Custom. Blur requires Android 12 or later.</string>
 </resources>
