@@ -317,6 +317,7 @@ fun StatsScreen(
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
         topBar = {
             LargeFlexibleTopAppBar(
+                title = {},
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,
