@@ -55,9 +55,6 @@ import dev.citali.lunartune.constants.*
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.ui.player.RealPlayerStylePreview
 import dev.citali.lunartune.ui.theme.LunarMotion
-import coil3.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.graphics.Brush
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -209,27 +206,7 @@ fun PlayerStyleCarousel(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))) {
-                        if (verticalOffset > 0.5f && metadata != null) {
-                            // Sibling teaser: artwork wrapped in a scrim. Never the real
-                            // player UI, so the peek never shows half-clipped text.
-                            AsyncImage(
-                                model = metadata.thumbnailUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                            Box(
-                                Modifier.fillMaxSize().background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color.Black.copy(alpha = 0.15f),
-                                            Color.Black.copy(alpha = 0.35f),
-                                            Color.Black.copy(alpha = 0.85f),
-                                        ),
-                                    ),
-                                ),
-                            )
-                        } else if (metadata != null && connection != null) {
+                        if (metadata != null && connection != null) {
                             RealPlayerStylePreview(
                                 style = cardStyle, mediaMetadata = metadata, navController = navController,
                                 modifier = Modifier.fillMaxSize(), sliderOverride = draftSlider,
