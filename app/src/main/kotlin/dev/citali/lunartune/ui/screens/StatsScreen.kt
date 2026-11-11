@@ -10,6 +10,7 @@ package dev.citali.lunartune.ui.screens
 import android.content.Intent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -1198,6 +1199,8 @@ private fun ReplayRankedArtistItem(
                 )
                 ItemThumbnail(
                     thumbnailUrl = artist.artist.thumbnailUrl,
+                    isActive = false,
+                    isPlaying = false,
                     shape = CircleShape,
                     maxSizePx = 200,
                     modifier = Modifier.size(56.dp),
@@ -1496,7 +1499,7 @@ private fun ReplayTopSongCard(
     ) {
         Box(
             modifier = Modifier
-                .fillSize()
+                .fillMaxSize()
                 .background(
                     Brush.linearGradient(
                         listOf(scheme.secondaryContainer, scheme.tertiaryContainer),
@@ -1589,7 +1592,7 @@ private fun ReplayTopArtistCard(
     ) {
         Box(
             modifier = Modifier
-                .fillSize()
+                .fillMaxSize()
                 .background(
                     Brush.linearGradient(
                         listOf(scheme.tertiaryContainer, scheme.primaryContainer),
