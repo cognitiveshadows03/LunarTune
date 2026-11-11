@@ -317,20 +317,6 @@ fun StatsScreen(
                 .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
         topBar = {
             LargeFlexibleTopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.stats_replay),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                subtitle = {
-                    Text(
-                        text = periodLabel,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,
@@ -2014,20 +2000,33 @@ private fun StatsHighlightCard(
 @Composable
 private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed: Boolean, onToggleDetailed: () -> Unit) {
     val periods = listOf(
-        StatPeriod.WEEK_1.ordinal to R.string.stats_replay_weekly,
-        StatPeriod.MONTH_1.ordinal to R.string.stats_replay_monthly,
-        StatPeriod.YEAR_1.ordinal to R.string.stats_replay_yearly,
-        StatPeriod.ALL.ordinal to R.string.stats_replay_lifetime,
+        Triple(StatPeriod.WEEK_1.ordinal, R.string.stats_replay_weekly, R.drawable.history),
+        Triple(StatPeriod.MONTH_1.ordinal, R.string.stats_replay_monthly, R.drawable.calendar_today),
+        Triple(StatPeriod.YEAR_1.ordinal, R.string.stats_replay_yearly, R.drawable.update),
+        Triple(StatPeriod.ALL.ordinal, R.string.stats_replay_lifetime, R.drawable.all_inclusive),
     )
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                periods.forEach { (value, label) ->
+                periods.forEach { (value, label, iconRes) ->
+                    val isSelected = selected == value
                     Surface(onClick = { onSelect(value) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
-                        color = if (selected == value) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                        contentColor = if (selected == value) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                     ) {
-                        Text(stringResource(label), modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = painterResource(iconRes),
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(stringResource(label), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge)
+                        }
                     }
                 }
             }
