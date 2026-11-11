@@ -159,13 +159,14 @@ fun PlayerStyleCarousel(
             modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
         )
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            // Cards sit slightly smaller so a strip at the bottom stays free. Styles that
-            // ship a base and an extended version use that strip to peek the sibling
-            // card from the bottom edge; single styles simply keep the breathing room.
-            val reservedBottom = maxHeight * 0.18f
+            // HyperOS-small cards: reserve top and bottom peek strips so the sibling
+            // (base/extended) always peeks from the top or bottom edge, aligned to the
+            // same main slot. The main slot sits below the top peek strip; the sibling
+            // below peeks from the bottom, the sibling above from the top.
             val pageGap = 26.dp
-            val cardHeight = maxHeight - reservedBottom
-            val cardWidth = minOf(maxWidth * 0.76f, cardHeight * deviceRatio)
+            val topPeekHeight = maxHeight * 0.15f
+            val cardHeight = maxHeight - topPeekHeight * 2 - pageGap * 2
+            val cardWidth = minOf(maxWidth * 0.62f, cardHeight * deviceRatio)
             HorizontalPager(
                 state = pager,
                 pageSize = PageSize.Fixed(cardWidth),
@@ -176,10 +177,9 @@ fun PlayerStyleCarousel(
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
-                // Lay the family pager at the top of a clipping parent and size it to its
-                // full content height (pages + spacing), so pages always land at y = 0 of
-                // the area: the selected card sits exactly in the main slot and the sibling
-                // only ever shows as the bottom peek, even mid-drag or on restored state.
+                // Offset the family pager below the top peek strip so the selected card
+                // lands in the main slot (topPeekHeight + pageGap) and the sibling peeks
+                // from the top (previous) or bottom (next), aligned to the same slot.
                 val pageContentHeight = (cardWidth / deviceRatio) * families[page].size + pageGap * (families[page].size - 1)
                 Box(Modifier.fillMaxSize().clipToBounds()) {
                 VerticalPager(
@@ -188,7 +188,7 @@ fun PlayerStyleCarousel(
                     pageSpacing = pageGap,
                     userScrollEnabled = families[page].size > 1,
                     flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.floaty()),
-                    modifier = Modifier.fillMaxWidth().height(pageContentHeight),
+                    modifier = Modifier.fillMaxWidth().height(pageContentHeight).padding(top = topPeekHeight + pageGap),
                 ) { row ->
                 val cardStyle = families[page][row]
                 val verticalOffset = abs(familyPagers[page].currentPage - row + familyPagers[page].currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -246,7 +246,7 @@ fun PlayerStyleCarousel(
             Row(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = cardHeight + pageGap / 2 - 3.dp),
+                    .padding(top = topPeekHeight + pageGap + cardHeight + pageGap / 2 - 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
