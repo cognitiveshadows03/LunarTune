@@ -2139,7 +2139,6 @@ class MainActivity : FragmentActivity() {
                                                     AccountAvatarButton(
                                                         updateAvailable = updateAvailable,
                                                         onClick = { navController.navigate("profile") },
-                                                        onListenTogetherClick = { navController.navigate("settings/music_together") },
                                                     )
                                                 },
                                                 scrollBehavior = null,
@@ -3682,9 +3681,7 @@ private val MenuSheetShadowSpread = 6.dp
 private fun AccountAvatarButton(
     updateAvailable: Boolean,
     onClick: () -> Unit,
-    onListenTogetherClick: () -> Unit,
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
     val viewModel: HomeViewModel = hiltViewModel()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
     val accountName by viewModel.accountName.collectAsStateWithLifecycle()
@@ -3698,7 +3695,7 @@ private fun AccountAvatarButton(
             modifier = Modifier
                 .size(48.dp)
                 .clip(CircleShape)
-                .clickable { menuExpanded = true },
+                .clickable { onClick() },
             contentAlignment = Alignment.Center,
         ) {
             Box(
@@ -3722,22 +3719,6 @@ private fun AccountAvatarButton(
                 )
             }
             }
-        }
-        DropdownMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-            shape = RoundedCornerShape(24.dp),
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.music_together_short)) },
-                leadingIcon = { Icon(painterResource(R.drawable.multi_user), contentDescription = null) },
-                onClick = { menuExpanded = false; onListenTogetherClick() },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.account)) },
-                leadingIcon = { Icon(painterResource(R.drawable.account), contentDescription = null) },
-                onClick = { menuExpanded = false; onClick() },
-            )
         }
     }
 }
