@@ -12,6 +12,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.IntOffset
 
 /**
@@ -204,6 +206,25 @@ object LunarMotion {
         fadeIn(
             animationSpec = tween(durationMillis = DepthZoomPopEnterMs, easing = SpatialEnterEasing),
         )
+
+    /**
+     * Player style picker close: the whole page shrinks toward the bottom edge, sinks a
+     * little and fades, like the picker is being put away. Plain tweens, so the Android 14+
+     * predictive-back edge swipe scrubs it 1:1. Underlying screen keeps the stock pop-enter.
+     */
+    fun playerStylePickerExit(): ExitTransition =
+        fadeOut(
+            animationSpec = tween(durationMillis = 220, easing = SpatialExitEasing),
+        ) +
+            scaleOut(
+                animationSpec = tween(durationMillis = 260, easing = SpatialExitEasing),
+                targetScale = 0.90f,
+                transformOrigin = TransformOrigin(0.5f, 1f),
+            ) +
+            slideOutVertically(
+                animationSpec = tween(durationMillis = 260, easing = SpatialExitEasing),
+                targetOffsetY = { it / 12 },
+            )
 
     /** Same timing as [tabEnter] and friends, for callers that animate an IntOffset. */
     fun tabEnterSlide(): FiniteAnimationSpec<IntOffset> = tween(TabEnterMs, easing = EmphasizedDecelerate)
