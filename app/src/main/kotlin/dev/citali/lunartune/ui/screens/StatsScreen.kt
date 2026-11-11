@@ -88,7 +88,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
@@ -110,15 +110,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
-import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.request.allowHardware
-import coil3.toBitmap
-import kotlinx.coroutines.Dispatchers
+import com.materialkolor.hct.Hct
+import com.materialkolor.ktx.toColor
+import com.materialkolor.ktx.toHct
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.flowOf
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
@@ -168,7 +164,6 @@ import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
-import android.graphics.Color as AndroidColor
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -1479,58 +1474,7 @@ private fun SegmentedArtistChart(
     val segmentData = breakdown.segments
     if (segmentData.isEmpty()) return
 
-    val context = LocalContext.current
     val menuState = LocalMenuState.current
-    val photoColors = remember { mutableStateOf<Map<String, Color>>(emptyMap()) }
-    val photoSources =
-        remember(segmentData) {
-            segmentData
-                .mapNotNull { segment ->
-                    segment.artist.thumbnailUrl
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let { segment.artist.id to it }
-                }.distinctBy { it.first }
-        }
-    LaunchedEffect(photoSources) {
-        val artworkBitmaps =
-            withContext(Dispatchers.IO) {
-                val loaded = mutableListOf<Pair<String, android.graphics.Bitmap>>()
-                for ((artistId, url) in photoSources) {
-                    val bitmap =
-                        runCatching {
-                            val request =
-                                ImageRequest
-                                    .Builder(context)
-                                    .data(url)
-                                    .size(96, 96)
-                                    .allowHardware(false)
-                                    .build()
-                            context.imageLoader.execute(request).image?.toBitmap()
-                        }.getOrNull()
-                    if (bitmap != null) loaded += artistId to bitmap
-                }
-                loaded
-            }
-        photoColors.value =
-            withContext(Dispatchers.Default) {
-                artworkBitmaps.mapNotNull { (artistId, bitmap) ->
-                    val palette =
-                        runCatching {
-                            Palette
-                                .from(bitmap)
-                                .maximumColorCount(16)
-                                .resizeBitmapArea(64 * 64)
-                                .generate()
-                        }.getOrNull()
-                    val swatch =
-                        palette?.vibrantSwatch
-                            ?: palette?.lightVibrantSwatch
-                            ?: palette?.mutedSwatch
-                            ?: palette?.dominantSwatch
-                    swatch?.let { artistId to Color(it.rgb) }
-                }.toMap()
-            }
-    }
 
     val segmentKeys = remember(segmentData) { segmentData.map { it.key } }
     val selectedKey = remember(animationKey, segmentKeys) { mutableStateOf(segmentKeys.firstOrNull()) }
@@ -1545,19 +1489,17 @@ private fun SegmentedArtistChart(
     }
     val sweepProgress = sweepAnimation.value
 
+    // Material You palette from the wallpaper seed (primary), not artwork extraction:
+    // harmonious HCT hues at the primary tone so every slice matches the system theme.
     val primaryColor = MaterialTheme.colorScheme.primary
-    val fallbackColors =
-        remember(primaryColor, segmentData.size) {
-            createDistinctArtistColors(
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val segmentColors =
+        remember(primaryColor, segmentData.size, isDark) {
+            createMaterialYouArtistColors(
                 seedColor = primaryColor,
                 count = segmentData.size,
+                isDark = isDark,
             )
-        }
-    val segmentColors =
-        remember(segmentData, photoColors.value, fallbackColors) {
-            segmentData.mapIndexed { index, segment ->
-                photoColors.value[segment.key] ?: fallbackColors[index]
-            }
         }
     val trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.14f)
 
@@ -1901,24 +1843,28 @@ private fun ArtistBreakdownSheetContent(
     }
 }
 
-private fun createDistinctArtistColors(
+/**
+ * Material You palette for the artist donut: HCT hues stepped from the wallpaper
+ * seed (primary) at the primary tone, with Material You chroma levels cycling
+ * through primary/tertiary/secondary so slices stay harmonious with the system
+ * theme instead of rainbow HSV or artwork-extracted colours.
+ */
+private fun createMaterialYouArtistColors(
     seedColor: Color,
     count: Int,
+    isDark: Boolean,
 ): List<Color> {
     if (count <= 0) return emptyList()
-
-    val seedHsv = FloatArray(3)
-    AndroidColor.colorToHSV(seedColor.toArgb(), seedHsv)
-    val saturation = seedHsv[1].coerceAtLeast(0.62f)
-    val brightness = seedHsv[2].coerceIn(0.68f, 0.88f)
-    val hueStep = 360f / count
-
+    val seed = seedColor.toHct()
+    val baseHue = seed.hue
+    val tone = if (isDark) 80.0 else 40.0
+    // Primary (48), tertiary (24), secondary (16) chroma cycle — the same
+    // tonal families Material You uses for its primary/tertiary/secondary roles.
+    val chromas = doubleArrayOf(48.0, 24.0, 16.0, 36.0, 24.0, 16.0)
     return List(count) { index ->
-        Color.hsv(
-            hue = (seedHsv[0] + hueStep * index) % 360f,
-            saturation = saturation,
-            value = brightness,
-        )
+        val hue = (baseHue + index * 60.0) % 360.0
+        val chroma = chromas[index % chromas.size]
+        Hct.from(hue, chroma, tone).toColor()
     }
 }
 
