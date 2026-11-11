@@ -15,9 +15,8 @@ import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +53,10 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.*
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.ui.player.RealPlayerStylePreview
+import dev.citali.lunartune.ui.theme.LunarMotion
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberPreference
@@ -143,25 +146,12 @@ fun PlayerStyleCarousel(
                 },
             ) { Text(stringResource(R.string.player_styles_apply)) }
         }
-        Text(stringResource(R.string.player_design_style), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Crossfade(targetState = selected, animationSpec = tween(250), label = "styleName") { style ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    playerStyleName(style),
-                    modifier = Modifier.padding(top = 4.dp, bottom = 3.dp),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                )
-                Text(
-                    playerStyleDescription(style),
-                    modifier = Modifier.padding(bottom = 10.dp, start = 32.dp, end = 32.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                )
-            }
-        }
+        Text(
+            stringResource(R.string.player_design_style),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp),
+        )
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             // Cards sit slightly smaller so a strip at the bottom stays free. Styles that
             // ship a base and an extended version use that strip to peek the sibling
@@ -176,6 +166,7 @@ fun PlayerStyleCarousel(
                 contentPadding = PaddingValues(horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp)),
                 pageSpacing = 16.dp,
                 beyondViewportPageCount = 0,
+                flingBehavior = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = LunarMotion.bouncy()),
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -184,6 +175,7 @@ fun PlayerStyleCarousel(
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
                     pageSpacing = pageGap,
                     userScrollEnabled = families[page].size > 1,
+                    flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.bouncy()),
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
                 val cardStyle = families[page][row]
@@ -202,7 +194,27 @@ fun PlayerStyleCarousel(
                     color = MaterialTheme.colorScheme.surfaceContainer,
                 ) {
                     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))) {
-                        if (metadata != null && connection != null) {
+                        if (verticalOffset > 0.5f && metadata != null) {
+                            // Sibling teaser: artwork wrapped in a scrim. Never the real
+                            // player UI, so the peek never shows half-clipped text.
+                            AsyncImage(
+                                model = metadata.thumbnailUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            Box(
+                                Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color.Black.copy(alpha = 0.15f),
+                                            Color.Black.copy(alpha = 0.35f),
+                                            Color.Black.copy(alpha = 0.85f),
+                                        ),
+                                    ),
+                                ),
+                            )
+                        } else if (metadata != null && connection != null) {
                             RealPlayerStylePreview(
                                 style = cardStyle, mediaMetadata = metadata, navController = navController,
                                 modifier = Modifier.fillMaxSize(), sliderOverride = draftSlider,
@@ -323,7 +335,7 @@ fun PlayerStyleCarousel(
 private fun PageDot(active: Boolean) {
     val dotSize by animateDpAsState(
         targetValue = if (active) 7.dp else 5.dp,
-        animationSpec = tween(200),
+        animationSpec = LunarMotion.bouncy(),
         label = "pageDot",
     )
     Box(
@@ -389,18 +401,6 @@ internal fun playerStyleName(style: PlayerDesignStyle): String = stringResource(
     PlayerDesignStyle.V8 -> R.string.player_design_v8
     PlayerDesignStyle.V9 -> R.string.player_design_v9
     PlayerDesignStyle.V10 -> R.string.player_design_v10
-})
-
-@Composable
-internal fun playerStyleDescription(style: PlayerDesignStyle): String = stringResource(when (style) {
-    PlayerDesignStyle.V2 -> R.string.player_design_v2_desc
-    PlayerDesignStyle.V4 -> R.string.player_design_v4_desc
-    PlayerDesignStyle.V5 -> R.string.player_design_v5_desc
-    PlayerDesignStyle.V6 -> R.string.player_design_v6_desc
-    PlayerDesignStyle.V7 -> R.string.player_design_v7_desc
-    PlayerDesignStyle.V8 -> R.string.player_design_v8_desc
-    PlayerDesignStyle.V9 -> R.string.player_design_v9_desc
-    PlayerDesignStyle.V10 -> R.string.player_design_v10_desc
 })
 
 @Composable
