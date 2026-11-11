@@ -62,6 +62,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -168,8 +174,8 @@ private fun AboutScreenContent(
                 },
                 colors =
                     TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.8f),
                     ),
                 scrollBehavior = scrollBehavior,
             )
@@ -627,16 +633,23 @@ private fun AboutIdentityCard(
     onOpenUri: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scheme = MaterialTheme.colorScheme
+    val badgeShape = settingsIconShape("about")
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = lerp(scheme.surfaceContainerLow, scheme.primaryContainer, 0.32f),
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        BoxWithConstraints(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aboutBlob(badgeShape, scheme.primary),
+        ) {
             if (maxWidth >= AboutDimensions.HorizontalHeroBreakpoint) {
                 Row(
                     modifier =
@@ -721,7 +734,7 @@ private fun SurfaceAppIcon(modifier: Modifier = Modifier) {
     androidx.compose.material3.Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
     ) {
         Image(
             painter = painterResource(R.drawable.about_splash),
@@ -873,12 +886,14 @@ private fun TeamMemberSection(
 
 @Composable
 private fun LegalNoticeCard(modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val badgeShape = settingsIconShape("about")
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
         colors =
             CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                containerColor = lerp(scheme.surfaceContainerLow, scheme.primaryContainer, 0.32f),
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
@@ -886,6 +901,7 @@ private fun LegalNoticeCard(modifier: Modifier = Modifier) {
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .aboutBlob(badgeShape, scheme.primary)
                     .padding(AboutSpacing.md),
             verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
         ) {
@@ -974,7 +990,7 @@ private fun TeamMemberListItem(
                     Modifier
                         .size(avatarSize)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
             )
         },
         supportingContent = {
@@ -1271,6 +1287,26 @@ private object AboutSpacing {
     val sm = 16.dp
     val md = 24.dp
 }
+
+/**
+ * Settings-style blob: the "about" icon shape (Clover8Leaf) enlarged and clipped
+ * by the card surface at the bottom-right corner, accent at 6.5% alpha.
+ */
+private fun Modifier.aboutBlob(
+    badgeShape: androidx.compose.ui.graphics.Shape,
+    accent: Color,
+): Modifier =
+    drawWithCache {
+        val edge = size.minDimension * 1.25f
+        val outline = badgeShape.createOutline(Size(edge, edge), layoutDirection, this)
+        val left = size.width * 0.96f - edge / 2f
+        val top = size.height * 0.96f - edge / 2f
+        onDrawBehind {
+            withTransform({ translate(left, top) }) {
+                drawOutline(outline, accent.copy(alpha = 0.065f))
+            }
+        }
+    }
 
 private object AboutListItemDefaults {
     @Composable
