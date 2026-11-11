@@ -181,8 +181,6 @@ fun <Int> ChoiceChipsRow(
                     AssistChipDefaults.assistChipColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        leadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        trailingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
             )
 
