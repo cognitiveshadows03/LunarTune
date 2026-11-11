@@ -94,6 +94,14 @@ fun PlayerStyleCarousel(
         rememberPagerState(initialPage = family.indexOf(savedStyle).coerceAtLeast(0)) { family.size }
     }
     val pager = rememberPagerState(initialPage = families.indexOfFirst { savedStyle in it }.coerceAtLeast(0)) { families.size }
+    // rememberPagerState is saveable down to the fractional scroll offset, so a restored
+    // state can leave the selected card resting between slots. Snap back on entry.
+    LaunchedEffect(Unit) {
+        if (pager.currentPageOffsetFraction != 0f) pager.scrollToPage(pager.currentPage)
+        familyPagers.forEach { state ->
+            if (state.currentPageOffsetFraction != 0f) state.scrollToPage(state.currentPage)
+        }
+    }
     val selected = families[pager.currentPage][familyPagers[pager.currentPage].currentPage]
     var draftSlider by rememberSaveable { mutableStateOf(savedSlider) }
     var draftButtons by rememberSaveable { mutableStateOf(savedButtons) }
@@ -118,7 +126,7 @@ fun PlayerStyleCarousel(
             }
             Spacer(Modifier.weight(1f))
             Button(
-                enabled = !saving,
+                enabled = !saving && !pager.isScrollInProgress && !familyPagers[pager.currentPage].isScrollInProgress,
                 onClick = {
                     val styleToApply = selected
                     saving = true
@@ -170,14 +178,19 @@ fun PlayerStyleCarousel(
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+                // Lay the family pager at the top of a clipping parent and size it to its
+                // full content height (pages + spacing), so pages always land at y = 0 of
+                // the area: the selected card sits exactly in the main slot and the sibling
+                // only ever shows as the bottom peek, even mid-drag or on restored state.
+                val pageContentHeight = (cardWidth / deviceRatio) * families[page].size + pageGap * (families[page].size - 1)
+                Box(Modifier.fillMaxSize().clipToBounds()) {
                 VerticalPager(
                     state = familyPagers[page],
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
                     pageSpacing = pageGap,
                     userScrollEnabled = families[page].size > 1,
-                    verticalArrangement = Arrangement.Top,
                     flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.floaty()),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxWidth().height(pageContentHeight),
                 ) { row ->
                 val cardStyle = families[page][row]
                 val verticalOffset = abs(familyPagers[page].currentPage - row + familyPagers[page].currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -245,6 +258,7 @@ fun PlayerStyleCarousel(
                         }
 
                     }
+                }
                 }
                 }
             }
