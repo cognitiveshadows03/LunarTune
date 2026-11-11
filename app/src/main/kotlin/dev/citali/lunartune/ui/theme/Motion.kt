@@ -50,6 +50,13 @@ object LunarMotion {
     fun <T> bouncy() = spring<T>(dampingRatio = 0.75f, stiffness = 500f)
 
     /**
+     * Fluid, floaty glide for large surfaces that travel with a fling (pager pages).
+     * Looser than [bouncy] — longer, softer tail with only a whisper of overshoot, so
+     * cards feel carried by momentum instead of snapping into place.
+     */
+    fun <T> floaty() = spring<T>(dampingRatio = 0.72f, stiffness = 210f)
+
+    /**
      * Organic settle with zero overshoot, for progress/shape-driven motion (search morph,
      * crossfades with scale) where overshooting past the target would distort layout.
      */

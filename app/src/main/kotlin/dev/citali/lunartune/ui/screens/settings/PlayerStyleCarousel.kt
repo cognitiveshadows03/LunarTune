@@ -118,7 +118,7 @@ fun PlayerStyleCarousel(
             }
             Spacer(Modifier.weight(1f))
             Button(
-                enabled = !saving && !pager.isScrollInProgress && !familyPagers[pager.currentPage].isScrollInProgress,
+                enabled = !saving,
                 onClick = {
                     val styleToApply = selected
                     saving = true
@@ -166,7 +166,7 @@ fun PlayerStyleCarousel(
                 contentPadding = PaddingValues(horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp)),
                 pageSpacing = 16.dp,
                 beyondViewportPageCount = 0,
-                flingBehavior = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = LunarMotion.bouncy()),
+                flingBehavior = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = LunarMotion.floaty()),
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -175,7 +175,8 @@ fun PlayerStyleCarousel(
                     pageSize = PageSize.Fixed(cardWidth / deviceRatio),
                     pageSpacing = pageGap,
                     userScrollEnabled = families[page].size > 1,
-                    flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.bouncy()),
+                    verticalArrangement = Arrangement.Top,
+                    flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.floaty()),
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
                 val cardStyle = families[page][row]
@@ -335,7 +336,7 @@ fun PlayerStyleCarousel(
 private fun PageDot(active: Boolean) {
     val dotSize by animateDpAsState(
         targetValue = if (active) 7.dp else 5.dp,
-        animationSpec = LunarMotion.bouncy(),
+        animationSpec = LunarMotion.floaty(),
         label = "pageDot",
     )
     Box(
