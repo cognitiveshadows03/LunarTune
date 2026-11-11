@@ -142,6 +142,21 @@ fun <Int> ChoiceChipsRow(
                     expanded = !expanded
                     expandIconDegree -= 180
                 },
+                leadingIcon = {
+                    Icon(
+                        painter =
+                            painterResource(
+                                when (selectedOption) {
+                                    OptionStats.WEEKS -> R.drawable.history
+                                    OptionStats.MONTHS -> R.drawable.calendar_today
+                                    OptionStats.YEARS -> R.drawable.update
+                                    OptionStats.CONTINUOUS -> R.drawable.all_inclusive
+                                },
+                            ),
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
                 label = {
                     Text(
                         text =
@@ -164,8 +179,10 @@ fun <Int> ChoiceChipsRow(
                 border = null,
                 colors =
                     AssistChipDefaults.assistChipColors(
-                        containerColor = containerColor,
-                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        leadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        trailingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
             )
 
@@ -216,6 +233,8 @@ fun <Int> ChoiceChipsRow(
                         colors =
                             FilterChipDefaults.filterChipColors(
                                 containerColor = containerColor,
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
                             ),
                         onClick = { onValueUpdate(value) },
                         shape = RoundedCornerShape(16.dp),
