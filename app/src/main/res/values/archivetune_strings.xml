@@ -872,7 +872,7 @@
     <string name="remove_translation">Remove translation</string>
     <string name="remove_translation_confirm_title">Remove translation?</string>
     <string name="remove_translation_confirm_message">The original lyrics will be restored for this song. You can translate it again at any time.</string>
-    <string name="remove_translation_dont_show_again">Don't show again</string>
+    <string name="remove_translation_dont_show_again">Don\'t show again</string>
     <string name="remove_translation_action">Remove</string>
     <string name="translation_removed">Translation removed</string>
     <string name="translation_remove_failed">Could not remove translation</string>
