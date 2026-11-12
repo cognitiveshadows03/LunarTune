@@ -18,6 +18,7 @@ import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.dataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -93,7 +94,7 @@ object StreamSourceManager {
      * Try every active module in priority order. Returns the first stream found,
      * or null when no module can serve the track (caller falls back to YouTube).
      */
-    fun resolve(track: TrackQuery): SourceStream? {
+    suspend fun resolve(track: TrackQuery): SourceStream? {
         for (module in activeModules()) {
             val result = runCatching {
                 module.resolve(track, picksFor(module.info.id))
@@ -166,5 +167,5 @@ object StreamSourceManager {
     }
 
     private fun String.toMediaTypeOrNull() =
-        runCatching { okhttp3.MediaType.Companion.get(this) }.getOrNull()
+        runCatching { this.toMediaType() }.getOrNull()
 }

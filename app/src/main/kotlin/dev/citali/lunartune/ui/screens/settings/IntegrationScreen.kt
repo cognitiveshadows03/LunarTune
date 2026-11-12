@@ -235,43 +235,10 @@ fun IntegrationScreen(
                     )
                 }
 
-                orderedModules.forEachIndexed { index, module ->
-                    val (enabled, onEnabledChange) = rememberPreference(
-                        ModuleEnabledKey(module.info.id),
-                        module.info.id == dev.citali.lunartune.modules.MonochromeModule.Id,
-                    )
+                orderedModules.forEach { module ->
                     item {
-                        PreferenceEntry(
-                            title = {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Text(text = module.info.name)
-                                    // (beta) badge
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(MaterialTheme.colorScheme.tertiaryContainer)
-                                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                                    ) {
-                                        Text(
-                                            text = "beta",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            fontWeight = FontWeight.Bold,
-                                        )
-                                    }
-                                }
-                            },
-                            description = module.info.description,
-                            icon = { Icon(painterResource(R.drawable.music_note), null) },
-                            trailingContent = {
-                                Switch(
-                                    checked = enabled,
-                                    onCheckedChange = onEnabledChange,
-                                )
-                            },
+                        ModuleRow(
+                            module = module,
                             onClick = { selectedModuleId = module.info.id },
                         )
                     }
@@ -482,6 +449,50 @@ private fun SpotifyAccountIcon(avatarUrl: String?) {
 }
 
 @Composable
+private fun ModuleRow(
+    module: dev.citali.lunartune.modules.SourceModule,
+    onClick: () -> Unit,
+) {
+    val (enabled, onEnabledChange) = rememberPreference(
+        ModuleEnabledKey(module.info.id),
+        module.info.id == dev.citali.lunartune.modules.MonochromeModule.Id,
+    )
+    PreferenceEntry(
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(text = module.info.name)
+                // (beta) badge
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.tertiaryContainer)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "beta",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        },
+        description = module.info.description,
+        icon = { Icon(painterResource(R.drawable.music_note), null) },
+        trailingContent = {
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChange,
+            )
+        },
+        onClick = onClick,
+    )
+}
+
+@Composable
 private fun ModuleDetailSheet(
     module: dev.citali.lunartune.modules.SourceModule,
     onDismiss: () -> Unit,
@@ -645,11 +656,10 @@ private fun ModuleDetailSheet(
             }
 
             module.info.sourceUrl?.let { url ->
+                val context = LocalContext.current
                 TextButton(
                     onClick = {
                         onDismiss()
-                        // open in browser via intent
-                        val context = LocalContext.current
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                     },
                     shapes = ButtonDefaults.shapes(),
