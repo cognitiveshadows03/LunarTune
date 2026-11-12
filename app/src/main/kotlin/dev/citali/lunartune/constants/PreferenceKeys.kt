@@ -1110,3 +1110,10 @@ fun ModuleEnabledKey(moduleId: String) = booleanPreferencesKey("module_enabled_$
 
 /** Per-module choice picks, encoded as "choiceId=optionId;..." */
 fun ModulePicksKey(moduleId: String) = stringPreferencesKey("module_picks_$moduleId")
+
+/**
+ * Set once the user ticks "Don't show again" in the remove-translation
+ * confirmation, so later removals happen straight away.
+ */
+val LyricsRemoveTranslationSkipConfirmKey =
+    booleanPreferencesKey("lyricsRemoveTranslationSkipConfirm")

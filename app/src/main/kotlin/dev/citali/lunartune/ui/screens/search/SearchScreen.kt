@@ -229,29 +229,6 @@ fun SearchScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Card(
-                        onClick = { navController.navigate("charts_screen") },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        androidx.compose.foundation.layout.Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Icon(painterResource(R.drawable.trending_up), contentDescription = null)
-                            Text(
-                                text = stringResource(R.string.charts),
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                    Card(
                         onClick = { navController.navigate("settings/music_together") },
                         shape = RoundedCornerShape(24.dp),
                         colors = CardDefaults.cardColors(

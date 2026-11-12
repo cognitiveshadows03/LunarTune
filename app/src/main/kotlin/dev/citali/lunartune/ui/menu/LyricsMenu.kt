@@ -13,6 +13,7 @@ import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,6 +38,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +46,7 @@ import androidx.compose.material3.AlertDialogDefaults
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -75,6 +78,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -106,6 +110,7 @@ import dev.citali.lunartune.constants.AiApiValidationStatusKey
 import dev.citali.lunartune.constants.AiCustomEndpointKey
 import dev.citali.lunartune.constants.AiProvider
 import dev.citali.lunartune.constants.AiProviderKey
+import dev.citali.lunartune.constants.LyricsRemoveTranslationSkipConfirmKey
 import dev.citali.lunartune.constants.TranslatorTargetLangKey
 import dev.citali.lunartune.db.entities.LyricsEntity
 import dev.citali.lunartune.models.MediaMetadata
@@ -226,6 +231,23 @@ fun LyricsMenu(
             (aiProvider != AiProvider.CUSTOM || aiCustomEndpoint.isNotBlank()) &&
             aiValidationStatus != AiApiValidationStatus.FAILED
 
+    val (skipRemoveTranslationConfirm, onSkipRemoveTranslationConfirmChange) =
+        rememberPreference(LyricsRemoveTranslationSkipConfirmKey, false)
+    var showRemoveTranslationDialog by rememberSaveable { mutableStateOf(false) }
+    var removeTranslationDontAskAgain by rememberSaveable { mutableStateOf(false) }
+    // Only a row this app wrote as a translation can be reverted; a provider's
+    // own bilingual lyrics are not ours to strip.
+    val canRemoveTranslation =
+        lyricsProvider()?.source == LyricsEntity.Source.AI_TRANSLATION.value
+    val requestRemoveTranslation = {
+        if (skipRemoveTranslationConfirm) {
+            viewModel.removeTranslation(mediaMetadataProvider())
+        } else {
+            removeTranslationDontAskAgain = false
+            showRemoveTranslationDialog = true
+        }
+    }
+
     var translationJob by remember { mutableStateOf<Job?>(null) }
     var isStandardTranslating by remember { mutableStateOf(false) }
     var isDialogAiTranslationRunning by rememberSaveable { mutableStateOf(false) }
@@ -233,6 +255,60 @@ fun LyricsMenu(
     LaunchedEffect(Unit) {
         viewModel.aiTranslationEvents.collect { message ->
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    if (showRemoveTranslationDialog) {
+        DefaultDialog(
+            onDismiss = { showRemoveTranslationDialog = false },
+            icon = { Icon(painter = painterResource(R.drawable.delete), contentDescription = null) },
+            title = { Text(stringResource(R.string.remove_translation_confirm_title)) },
+            buttons = {
+                TextButton(
+                    onClick = { showRemoveTranslationDialog = false },
+                    shapes = ButtonDefaults.shapes(),
+                ) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+                Spacer(Modifier.width(8.dp))
+                FilledTonalButton(
+                    onClick = {
+                        if (removeTranslationDontAskAgain) {
+                            onSkipRemoveTranslationConfirmChange(true)
+                        }
+                        showRemoveTranslationDialog = false
+                        viewModel.removeTranslation(mediaMetadataProvider())
+                    },
+                    shapes = ButtonDefaults.shapes(),
+                ) {
+                    Text(stringResource(R.string.remove_translation_action))
+                }
+            },
+        ) {
+            Text(
+                text = stringResource(R.string.remove_translation_confirm_message),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { removeTranslationDontAskAgain = !removeTranslationDontAskAgain }
+                        .padding(vertical = 4.dp),
+            ) {
+                Checkbox(
+                    checked = removeTranslationDontAskAgain,
+                    onCheckedChange = { removeTranslationDontAskAgain = it },
+                )
+                Text(
+                    text = stringResource(R.string.remove_translation_dont_show_again),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 
@@ -749,6 +825,19 @@ fun LyricsMenu(
                                 text = stringResource(R.string.translate),
                                 onClick = { showTranslateDialog = true },
                                 enabled = isTranslateEnabled,
+                            ),
+                            NewAction(
+                                icon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.delete),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(28.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                },
+                                text = stringResource(R.string.remove_translation),
+                                onClick = requestRemoveTranslation,
+                                enabled = canRemoveTranslation,
                             ),
                             NewAction(
                                 icon = {

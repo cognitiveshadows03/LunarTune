@@ -2136,9 +2136,14 @@ class MainActivity : FragmentActivity() {
                                                                 latestVersionName,
                                                                 BuildConfig.VERSION_NAME,
                                                             )
-                                                    AccountAvatarButton(
+                                                    FrostedTopBarMenu(
+                                                        hazeState = hazeState,
+                                                        expanded = topBarMenuExpanded,
+                                                        onExpandedChange = { topBarMenuExpanded = it },
                                                         updateAvailable = updateAvailable,
-                                                        onClick = { navController.navigate("profile") },
+                                                        onNavigate = { route ->
+                                                            navController.navigate(route)
+                                                        },
                                                     )
                                                 },
                                                 scrollBehavior = null,
@@ -3641,29 +3646,29 @@ private fun TranslucentTopAppBarIconButton(
 }
 
 /** Corner radius of the floating top-bar sheet. */
-private val MenuSheetCorner = 24.dp
+private val MenuSheetCorner = 20.dp
 
 /** Width of the sheet's content, before the ring of room for its shadow. */
-private val MenuSheetContentWidth = 232.dp
+private val MenuSheetContentWidth = 196.dp
 
 /**
  * Upper bound for the sheet. The width used to be fixed, which ellipsised the
  * longer labels ("New release albu…") as soon as the user picked a wider font;
  * the sheet now grows to fit its longest row and stops here.
  */
-private val MenuSheetMaxWidth = 272.dp
+private val MenuSheetMaxWidth = 224.dp
 
 /** Corner radius of one standalone action bar inside the sheet. */
-private val MenuGroupCorner = 18.dp
+private val MenuGroupCorner = 15.dp
 
 /** Gap between the grouped pills, like the spacing between notification cards. */
-private val MenuGroupGap = 9.dp
+private val MenuGroupGap = 7.dp
 
 /** Ring of room kept inside the menu popup for the sheet's own shadow. */
-private val MenuSheetShadowRoom = 6.dp
+private val MenuSheetShadowRoom = 5.dp
 
 /** How far the sheet's painted shadow reaches into that ring. */
-private val MenuSheetShadowSpread = 6.dp
+private val MenuSheetShadowSpread = 5.dp
 
 /**
  * Replaces the top-bar action cluster with the grid trigger that opens one
@@ -3771,18 +3776,12 @@ private fun FrostedTopBarMenu(
     expandedStates.targetState = expanded
 
     Box {
-        TranslucentTopAppBarIconButton(onClick = { onExpandedChange(!expanded) }) {
-            BadgedBox(badge = {
-                if (updateAvailable) {
-                    Badge()
-                }
-            }) {
-                Icon(
-                    painter = painterResource(R.drawable.grid_view),
-                    contentDescription = stringResource(R.string.more_options),
-                )
-            }
-        }
+        // The signed-in avatar doubles as the menu trigger: one tap opens the
+        // sheet, and the profile card inside is what leads to the profile page.
+        AccountAvatarButton(
+            updateAvailable = updateAvailable,
+            onClick = { onExpandedChange(!expanded) },
+        )
 
         if (expandedStates.currentState || expandedStates.targetState) {
             Popup(
@@ -3852,7 +3851,7 @@ private fun FrostedTopBarMenu(
                                         MaterialTheme.colorScheme.primary.copy(alpha = 0.32f),
                                     ),
                                     sheetShape,
-                                ).padding(horizontal = 10.dp, vertical = 11.dp),
+                                ).padding(horizontal = 8.dp, vertical = 9.dp),
                     ) {
                         Column {
                             FrostedTopBarMenuAccount(
@@ -3863,12 +3862,20 @@ private fun FrostedTopBarMenu(
                                 pillColor = pillColor,
                             ) {
                                 onExpandedChange(false)
-                                onNavigate("settings/account")
+                                onNavigate("profile")
                             }
 
                             Spacer(Modifier.height(MenuGroupGap))
 
                             FrostedTopBarMenuGroup(pillColor = pillColor) {
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.stats,
+                                    label = stringResource(R.string.stats),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("stats")
+                                }
+                                FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.history,
                                     label = stringResource(R.string.history),
@@ -3878,11 +3885,11 @@ private fun FrostedTopBarMenu(
                                 }
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
-                                    iconRes = R.drawable.stats,
-                                    label = stringResource(R.string.stats),
+                                    iconRes = R.drawable.multi_user,
+                                    label = stringResource(R.string.music_together_short),
                                 ) {
                                     onExpandedChange(false)
-                                    onNavigate("stats")
+                                    onNavigate("settings/music_together")
                                 }
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
@@ -3899,16 +3906,6 @@ private fun FrostedTopBarMenu(
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("new_release")
-                                }
-                            }
-                            Spacer(Modifier.height(MenuGroupGap))
-                            FrostedTopBarMenuGroup(pillColor = pillColor) {
-                                FrostedTopBarMenuRow(
-                                    iconRes = R.drawable.multi_user,
-                                    label = stringResource(R.string.music_together_short),
-                                ) {
-                                    onExpandedChange(false)
-                                    onNavigate("settings/music_together")
                                 }
                             }
                             Spacer(Modifier.height(MenuGroupGap))
@@ -3999,7 +3996,7 @@ private fun FrostedTopBarMenuGroup(
                 .fillMaxWidth()
                 .clip(groupShape)
                 .background(pillColor)
-                .padding(vertical = 4.dp),
+                .padding(vertical = 3.dp),
         content = content,
     )
 }
@@ -4044,9 +4041,9 @@ private fun FrostedTopBarMenuAccount(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 13.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
             if (avatarModel != null) {
                 AsyncImage(
@@ -4055,7 +4052,7 @@ private fun FrostedTopBarMenuAccount(
                     contentScale = ContentScale.Crop,
                     modifier =
                         Modifier
-                            .size(38.dp)
+                            .size(32.dp)
                             .clip(CircleShape),
                 )
             } else {
@@ -4069,7 +4066,7 @@ private fun FrostedTopBarMenuAccount(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -4101,19 +4098,19 @@ private fun FrostedTopBarMenuRow(
                 // The group pill clips the ripple, so no second rounded shape
                 // is needed here: a tap fills the whole width of its card.
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 11.dp),
+                .padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(11.dp),
     ) {
         Icon(
             painter = painterResource(iconRes),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
+            modifier = Modifier.size(17.dp),
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -4127,7 +4124,7 @@ private fun FrostedTopBarMenuRow(
 @Composable
 private fun FrostedTopBarMenuDivider() {
     HorizontalDivider(
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+        modifier = Modifier.padding(horizontal = 13.dp, vertical = 1.dp),
         thickness = 0.5.dp,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f),
     )

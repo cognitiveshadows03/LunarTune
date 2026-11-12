@@ -867,4 +867,13 @@
     <string name="player_styles_tab_background">Background</string>
     <string name="player_styles_custom_image_hint">Set the image used by Custom in Appearance. Player Blur is supported on older Android versions too.</string>
     <string name="player_styles_vertical_hint">Swipe up or down for the base and extended styles</string>
+
+    <!-- Remove translation -->
+    <string name="remove_translation">Remove translation</string>
+    <string name="remove_translation_confirm_title">Remove translation?</string>
+    <string name="remove_translation_confirm_message">The original lyrics will be restored for this song. You can translate it again at any time.</string>
+    <string name="remove_translation_dont_show_again">Don't show again</string>
+    <string name="remove_translation_action">Remove</string>
+    <string name="translation_removed">Translation removed</string>
+    <string name="translation_remove_failed">Could not remove translation</string>
 </resources>

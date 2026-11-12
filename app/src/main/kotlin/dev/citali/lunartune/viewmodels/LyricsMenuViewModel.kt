@@ -43,6 +43,7 @@ import dev.citali.lunartune.db.entities.LyricsEntity
 import dev.citali.lunartune.extensions.toEnum
 import dev.citali.lunartune.lyrics.LyricsHelper
 import dev.citali.lunartune.lyrics.LyricsResult
+import dev.citali.lunartune.lyrics.LyricsTranslationBackup
 import dev.citali.lunartune.lyrics.LyricsUtils
 import dev.citali.lunartune.lyrics.LyricsUtils.displayLyricsText
 import dev.citali.lunartune.lyrics.LyricsUtils.isLineSyncedLrc
@@ -216,6 +217,9 @@ class LyricsMenuViewModel
             source: LyricsEntity.Source = LyricsEntity.Source.USER_EDIT,
         ) {
             viewModelScope.launch(Dispatchers.IO) {
+                if (source == LyricsEntity.Source.AI_TRANSLATION) {
+                    backupBeforeTranslation(mediaMetadata.id)
+                }
                 val lyricsToSave =
                     when (source) {
                         LyricsEntity.Source.REMOTE,
@@ -265,6 +269,7 @@ class LyricsMenuViewModel
                                 lyrics = lyrics,
                                 targetLanguage = targetLanguage.ifBlank { "ENGLISH" },
                             )
+                        backupBeforeTranslation(mediaMetadata.id)
                         database.query {
                             replaceLyrics(
                                 id = mediaMetadata.id,
@@ -290,6 +295,65 @@ class LyricsMenuViewModel
             aiTranslationJob?.cancel()
             aiTranslationJob = null
             isAiTranslating.value = false
+        }
+
+
+        /**
+         * AI and standard translation both overwrite the lyrics row, so the text
+         * that was there first is copied aside. Without this the original would be
+         * unrecoverable and "remove translation" could only refetch from a provider.
+         */
+        private suspend fun backupBeforeTranslation(mediaId: String) {
+            val existing = database.getLyricsById(mediaId) ?: return
+            if (existing.source == LyricsEntity.Source.AI_TRANSLATION.value) return
+            if (existing.lyrics.isBlank() || existing.lyrics == LyricsEntity.LYRICS_NOT_FOUND) return
+            LyricsTranslationBackup.save(
+                context = context,
+                mediaId = mediaId,
+                lyrics = existing.lyrics,
+                source = existing.source,
+            )
+        }
+
+        /**
+         * Puts the untranslated lyrics back. When there is no saved copy - a
+         * translation made before this was recorded, or one saved by another
+         * install - the lyrics are fetched fresh instead.
+         */
+        fun removeTranslation(mediaMetadata: MediaMetadata) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    val saved = LyricsTranslationBackup.load(context, mediaMetadata.id)
+                    if (saved != null) {
+                        val (lyrics, source) = saved
+                        database.query {
+                            replaceLyrics(
+                                id = mediaMetadata.id,
+                                lyrics = lyrics,
+                                source = source,
+                            )
+                        }
+                        LyricsTranslationBackup.clear(context, mediaMetadata.id)
+                    } else {
+                        val lyrics = lyricsHelper.getLyrics(mediaMetadata, forceRefresh = true)
+                        database.query {
+                            replaceLyrics(
+                                id = mediaMetadata.id,
+                                lyrics = lyrics,
+                                source = LyricsEntity.Source.REMOTE.value,
+                            )
+                        }
+                    }
+                    _aiTranslationEvents.emit(context.getString(R.string.translation_removed))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _aiTranslationEvents.emit(
+                        context.getString(R.string.translation_remove_failed) +
+                            ": " + (e.localizedMessage ?: e.toString()),
+                    )
+                }
+            }
         }
 
         private fun LyricsResult.toUiModel(index: Int): LyricsSearchResultUiModel {

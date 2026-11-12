@@ -113,16 +113,6 @@ fun buildSettingsGroups(
                 SettingsChild("Logout", "account_logout", listOf("logout", "log out", "sign out", "disconnect")),
             ),
         )
-    val stats =
-        SettingsItem(
-            key = "stats",
-            icon = painterResource(R.drawable.stats),
-            title = stringResource(R.string.settings_stats_title),
-            subtitle = stringResource(R.string.settings_stats_subtitle),
-            accentColor = MaterialTheme.colorScheme.primary,
-            keywords = listOf("stats", "statistics", "listening", "history", "top", "most played", "time"),
-            onClick = { navController.navigate("stats") },
-        )
     val appearance =
         SettingsItem(
             key = "appearance",
@@ -554,7 +544,7 @@ fun buildSettingsGroups(
     return listOf(
         SettingsGroup(
             title = stringResource(R.string.settings),
-            items = listOf(account, stats),
+            items = listOf(account),
         ),
         SettingsGroup(
             title = stringResource(R.string.settings_section_player_content),
