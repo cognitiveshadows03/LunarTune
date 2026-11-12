@@ -162,10 +162,10 @@ fun PlayerStyleCarousel(
             // HyperOS-small cards: the card slot is centered vertically; the sibling
             // (base/extended) peeks as a strip from the bottom edge (next) or the top
             // edge (previous), always aligned to the same slot as the selected card.
-            val pageGap = 26.dp
-            val topPeekHeight = maxHeight * 0.15f
+            val pageGap = 20.dp
+            val topPeekHeight = maxHeight * 0.10f
             val cardHeight = maxHeight - topPeekHeight * 2 - pageGap * 2
-            val cardWidth = minOf(maxWidth * 0.62f, cardHeight * deviceRatio)
+            val cardWidth = minOf(maxWidth * 0.72f, cardHeight * deviceRatio)
             val cardH = cardWidth / deviceRatio
             // Center the card slot vertically so the selected card always lands in the
             // same position and sibling peeks are symmetric strips at both edges.
@@ -199,10 +199,12 @@ fun PlayerStyleCarousel(
                 val isSelected = page == pager.currentPage && row == familyPagers[page].currentPage
                 Surface(
                     modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
-                        val squeeze = 1f - verticalOffset * 0.05f
-                        scaleX = (1f - offset * 0.055f) * squeeze
-                        scaleY = (1f - offset * 0.055f) * squeeze
-                        alpha = (1f - offset * 0.25f) * (1f - verticalOffset * 0.35f)
+                        // HyperOS-style: focused card full size, side cards and the
+                        // sibling peek shrink to ~85% like the Magazine picker.
+                        val squeeze = 1f - verticalOffset * 0.15f
+                        scaleX = (1f - offset * 0.15f) * squeeze
+                        scaleY = (1f - offset * 0.15f) * squeeze
+                        alpha = (1f - offset * 0.35f) * (1f - verticalOffset * 0.4f)
                     },
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(if (isSelected) 2.dp else 1.dp,
