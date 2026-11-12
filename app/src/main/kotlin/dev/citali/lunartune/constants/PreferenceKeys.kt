@@ -1101,3 +1101,12 @@ enum class TabTransitionStyle {
 val TabTransitionKey = stringPreferencesKey("tabTransition")
 
 val HideStatusBarKey = booleanPreferencesKey("hideStatusBar")
+
+/** Stream source modules (beta): priority order as comma-separated module ids. */
+val StreamSourceOrderKey = stringPreferencesKey("streamSourceOrder")
+
+/** Per-module enabled flag. */
+fun ModuleEnabledKey(moduleId: String) = booleanPreferencesKey("module_enabled_$moduleId")
+
+/** Per-module choice picks, encoded as "choiceId=optionId;..." */
+fun ModulePicksKey(moduleId: String) = stringPreferencesKey("module_picks_$moduleId")

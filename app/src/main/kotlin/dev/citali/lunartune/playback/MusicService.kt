@@ -214,6 +214,9 @@ import dev.citali.lunartune.db.entities.AlbumEntity
 import dev.citali.lunartune.db.entities.ArtistEntity
 import dev.citali.lunartune.db.entities.Event
 import dev.citali.lunartune.db.entities.FormatEntity
+import dev.citali.lunartune.modules.SourceStream
+import dev.citali.lunartune.modules.StreamSourceManager
+import dev.citali.lunartune.modules.TrackQuery
 import dev.citali.lunartune.db.entities.RelatedSongMap
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongEntity
@@ -8665,6 +8668,16 @@ class MusicService :
                     .withKnownStreamLength(streamContentLength)
             }
 
+        // stream source modules (beta): enabled modules get first try, in priority order;
+        // YouTube Music stays the always-active fallback behind them
+        resolveModuleStream(mediaId, storedFormat)?.let { moduleStream ->
+            val streamContentLength = extractContentLengthFromUrl(moduleStream.url) ?: knownContentLength
+            streamContentLength?.takeIf { it > 0L }?.let { contentLengthCache[mediaId] = it }
+            return dataSpec
+                .withUri(moduleStream.url.toUri())
+                .withKnownStreamLength(streamContentLength)
+        }
+
         val playbackResult: Result<YTPlayerUtils.PlaybackData> =
             runBlocking(Dispatchers.IO) {
                 withTimeoutOrNull(PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS) {
@@ -8809,6 +8822,30 @@ class MusicService :
         val remainingLength = knownContentLength - position
         if (remainingLength <= 0L) return this
         return subrange(0L, remainingLength)
+    }
+
+    /**
+     * Asks the enabled stream source modules (beta) for this track, in priority order.
+     * Returns null when no module can serve it — the caller then uses YouTube Music.
+     * Runs on the caller's thread (already a blocking IO context).
+     */
+    private fun resolveModuleStream(
+        mediaId: String,
+        storedFormat: FormatEntity?,
+    ): SourceStream? {
+        if (StreamSourceManager.activeModules().isEmpty()) return null
+        val song = runBlocking(Dispatchers.IO) { database.song(mediaId).first() } ?: return null
+        val query = TrackQuery(
+            title = song.song.title,
+            artists = song.artists.map { it.name },
+            album = song.album?.title,
+            durationMs = song.song.duration.takeIf { it > 0 }?.toLong()?.times(1000L),
+        )
+        return runBlocking(Dispatchers.IO) {
+            withTimeoutOrNull(MODULE_RESOLUTION_TIMEOUT_MS) {
+                StreamSourceManager.resolve(query)
+            }
+        }
     }
 
     private fun extractContentLengthFromUrl(url: String): Long? =
@@ -9919,6 +9956,7 @@ class MusicService :
         const val STALL_RECOVERY_RETRY_TIMEOUT_MS = 45_000L
         // Bound the full YouTube stream URL resolution, including client fallbacks.
         const val PLAYBACK_STREAM_RESOLUTION_TIMEOUT_MS = 45_000L
+        const val MODULE_RESOLUTION_TIMEOUT_MS = 12_000L
         const val CROSSFADE_MIN_BUFFER_MS = 25_000
         const val CROSSFADE_MAX_BUFFER_MS = 60_000
         const val CROSSFADE_FRAME_MS = 32L

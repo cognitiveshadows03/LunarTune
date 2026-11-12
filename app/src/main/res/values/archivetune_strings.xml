@@ -490,6 +490,11 @@
     <string name="stream_sources_web">Web clients</string>
     <string name="stream_sources_native">Native clients</string>
     <string name="stream_sources_creator">Creator clients</string>
+    <string name="stream_sources">Stream sources (beta)</string>
+    <string name="stream_sources_description">Extra audio sources tried before YouTube Music, in order. YouTube Music always stays as the fallback.</string>
+    <string name="stream_sources_fallback">YouTube Music is always available as the final fallback.</string>
+    <string name="check_connection">Check connection</string>
+    <string name="open_module_source">Open source</string>
     <string name="stream_client_web_remix_title">WEB_REMIX</string>
     <string name="stream_client_web_remix_body">Primary client. Authenticated; covers most tracks.</string>
     <string name="stream_client_tvhtml5_title">TVHTML5</string>

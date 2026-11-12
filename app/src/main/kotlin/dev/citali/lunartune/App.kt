@@ -120,6 +120,8 @@ class App :
         JapaneseLanguagePackManager.initialize(this)
         BotGuardTokenGenerator.initialize(this)
         PreferenceStore.start(this)
+        // stream source modules (beta): attach inbuilt modules with their hosts
+        dev.citali.lunartune.modules.StreamSourceManager.attachAll(this)
         runBlocking {
             PreferenceStore.awaitReady()
             // Anything the user made their own — theme colour, custom typeface —
