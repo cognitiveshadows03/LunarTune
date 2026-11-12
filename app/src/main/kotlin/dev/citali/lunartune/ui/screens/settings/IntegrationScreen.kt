@@ -455,7 +455,7 @@ private fun ModuleRow(
 ) {
     val (enabled, onEnabledChange) = rememberPreference(
         ModuleEnabledKey(module.info.id),
-        module.info.id == dev.citali.lunartune.modules.MonochromeModule.Id,
+        false,
     )
     PreferenceEntry(
         title = {
@@ -500,7 +500,7 @@ private fun ModuleDetailSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val (enabled, onEnabledChange) = rememberPreference(
         ModuleEnabledKey(module.info.id),
-        module.info.id == dev.citali.lunartune.modules.MonochromeModule.Id,
+        false,
     )
     val (picksRaw, onPicksChange) = rememberPreference(ModulePicksKey(module.info.id), "")
     val picks = remember(picksRaw) {

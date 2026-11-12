@@ -35,7 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import androidx.palette.graphics.Palette
 import coil3.imageLoader
 import coil3.request.ImageRequest
@@ -100,7 +100,7 @@ private fun NewMiniPlayer(
         key = MiniPlayerBackgroundStyleKey,
         defaultValue = MiniPlayerBackgroundStyle.THEME,
     )
-    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     var gradientColors by remember {
         mutableStateOf<List<Color>>(emptyList())
     }

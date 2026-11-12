@@ -69,7 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.collectAsState
 import androidx.media3.common.Player
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.CoroutineScope
@@ -537,13 +537,13 @@ fun NewMiniPlayerContent(
     playerConnection: PlayerConnection,
     colors: MiniPlayerContentColors,
 ) {
-    val isPlaying by playerConnection.isPlaying.collectAsStateWithLifecycle()
-    val playbackState by playerConnection.playbackState.collectAsStateWithLifecycle()
-    val mediaMetadata by playerConnection.mediaMetadata.collectAsStateWithLifecycle()
-    val togetherSessionState by playerConnection.service.togetherSessionState.collectAsStateWithLifecycle()
-    val canSkipPrevious by playerConnection.canSkipPrevious.collectAsStateWithLifecycle()
-    val canSkipNext by playerConnection.canSkipNext.collectAsStateWithLifecycle()
-    val crossfadeInProgress by playerConnection.crossfadeInProgress.collectAsStateWithLifecycle()
+    val isPlaying by playerConnection.isPlaying.collectAsState()
+    val playbackState by playerConnection.playbackState.collectAsState()
+    val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
+    val togetherSessionState by playerConnection.service.togetherSessionState.collectAsState()
+    val canSkipPrevious by playerConnection.canSkipPrevious.collectAsState()
+    val canSkipNext by playerConnection.canSkipNext.collectAsState()
+    val crossfadeInProgress by playerConnection.crossfadeInProgress.collectAsState()
 
     val isLoading = playbackState == Player.STATE_BUFFERING && !crossfadeInProgress
     val progressProvider =

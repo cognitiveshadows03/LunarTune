@@ -76,7 +76,7 @@ object StreamSourceManager {
     fun isEnabled(id: String): Boolean =
         PreferenceStore.get(ModuleEnabledKey(id)) ?: defaultEnabled(id)
 
-    private fun defaultEnabled(id: String): Boolean = id == MonochromeModule.Id
+    private fun defaultEnabled(id: String): Boolean = false
 
     /** enabled modules in priority order */
     fun activeModules(): List<SourceModule> =
