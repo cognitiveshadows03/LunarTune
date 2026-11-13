@@ -1,25 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  LunarTune (2026)
+  (c) cognitiveshadows03 - github.com/cognitiveshadows03
+  GPL-3.0 License | Contributors: see git history
+  Do not remove or alter this notice. - Per GPL-3.0 Section 4 & Section 5
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
     <path
-        android:fillColor="#0B0B0B"
+        android:fillColor="#000000"
         android:pathData="M9,0h30a9,9 0 0 1 9,9v30a9,9 0 0 1 -9,9h-30a9,9 0 0 1 -9,-9v-30a9,9 0 0 1 9,-9z" />
+    <!-- two squares, offset by half their side, with the overlap knocked out -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M10,10h12v12h-12z" />
+        android:pathData="M18,6h24v24h-24z M6,18h24v24h-24z" />
     <path
-        android:fillColor="#4A4A4A"
-        android:pathData="M26,10h12v12h-12z" />
-    <path
-        android:fillColor="#4A4A4A"
-        android:pathData="M10,26h12v12h-12z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M26,26h12v12h-12z" />
-    <path
-        android:fillColor="#0B0B0B"
-        android:pathData="M14,14h4v4h-4z" />
+        android:fillColor="#000000"
+        android:pathData="M18,18h12v12h-12z" />
 </vector>

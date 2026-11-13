@@ -1,13 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  LunarTune (2026)
+  (c) cognitiveshadows03 - github.com/cognitiveshadows03
+  GPL-3.0 License | Contributors: see git history
+  Do not remove or alter this notice. - Per GPL-3.0 Section 4 & Section 5
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
     <path
-        android:fillColor="#FF0033"
+        android:fillColor="#FF0000"
         android:pathData="M9,0h30a9,9 0 0 1 9,9v30a9,9 0 0 1 -9,9h-30a9,9 0 0 1 -9,-9v-30a9,9 0 0 1 9,-9z" />
+    <!-- the play mark: the same ring and triangle the service's own icon carries -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.8"
+        android:pathData="M13.4,24a10.6,10.6 0 1 1 21.2,0a10.6,10.6 0 1 1 -21.2,0z" />
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M19.5,14.5l15,9.5l-15,9.5z" />
+        android:pathData="M20.6,17.3L29.4,24L20.6,30.7Z" />
 </vector>
