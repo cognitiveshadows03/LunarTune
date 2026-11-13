@@ -13,6 +13,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +41,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -72,13 +74,17 @@ import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
 import dev.citali.lunartune.modules.AccountState
+import dev.citali.lunartune.modules.FieldKind
+import dev.citali.lunartune.modules.ModuleField
 import dev.citali.lunartune.modules.NO_ACCOUNT_LABEL
 import dev.citali.lunartune.modules.SourceModule
 import dev.citali.lunartune.modules.StreamSourceManager
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Tolerance slider bounds, in seconds. */
 private const val MIN_TOLERANCE = 2
@@ -263,7 +269,7 @@ private fun SourceCard(
                         .size(52.dp)
                         .clip(RoundedCornerShape(16.dp)),
             ) {
-                Icon(
+                Image(
                     painter = painterResource(iconRes),
                     contentDescription = null,
                     modifier = Modifier.size(52.dp),
@@ -443,7 +449,7 @@ private fun ModuleDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(
+                Image(
                     painter = painterResource(moduleIcon(module.info.id)),
                     contentDescription = null,
                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)),
@@ -506,7 +512,11 @@ private fun ModuleDetailSheet(
                         onClick = {
                             verifying = true
                             scope.launch {
-                                accountState = runCatching { module.verifyAccount() }.getOrNull()
+                                // network work: keep it off the main thread
+                                accountState =
+                                    withContext(Dispatchers.IO) {
+                                        runCatching { module.verifyAccount() }.getOrNull()
+                                    }
                                 verifying = false
                             }
                         },
@@ -514,6 +524,15 @@ private fun ModuleDetailSheet(
                     ) {
                         Text(stringResource(R.string.check_connection))
                     }
+                }
+            }
+
+            // settings the module asks for, e.g. Monochrome's server
+            module.fields.forEach { field ->
+                when (field.kind) {
+                    FieldKind.Text -> ModuleTextField(module = module, field = field)
+                    FieldKind.Toggle -> ModuleToggleField(module = module, field = field)
+                    FieldKind.Select -> Unit
                 }
             }
 
@@ -574,5 +593,95 @@ private fun ModuleDetailSheet(
                 }
             }
         }
+    }
+}
+
+/** A text setting (an endpoint, mostly): typed, saved with the button beside it. */
+@Composable
+private fun ModuleTextField(
+    module: SourceModule,
+    field: ModuleField,
+) {
+    var saved by remember(field.id, module) { mutableStateOf(module.fieldValue(field)) }
+    var draft by remember(field.id, module) { mutableStateOf(saved) }
+    val changed = draft.trim() != saved
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = field.label,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            singleLine = true,
+            placeholder = { Text(field.hint.ifBlank { field.default }) },
+            trailingIcon = {
+                TextButton(
+                    enabled = changed,
+                    onClick = {
+                        module.setFieldValue(field, draft)
+                        saved = draft.trim().trimEnd('/')
+                    },
+                ) {
+                    Text(stringResource(R.string.module_field_save))
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = field.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            if (saved != field.default) {
+                TextButton(
+                    onClick = {
+                        module.setFieldValue(field, null)
+                        saved = field.default
+                        draft = field.default
+                    },
+                ) {
+                    Text(stringResource(R.string.module_field_reset))
+                }
+            }
+        }
+    }
+}
+
+/** A boolean setting, saved as it is flipped. */
+@Composable
+private fun ModuleToggleField(
+    module: SourceModule,
+    field: ModuleField,
+) {
+    var checked by remember(field.id, module) {
+        mutableStateOf(module.fieldValue(field) == "true")
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = field.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (field.description.isNotBlank()) {
+                Text(
+                    text = field.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                checked = it
+                module.setFieldValue(field, it.toString())
+            },
+        )
     }
 }

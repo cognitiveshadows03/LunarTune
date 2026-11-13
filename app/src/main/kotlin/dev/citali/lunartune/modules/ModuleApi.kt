@@ -160,6 +160,19 @@ interface SourceModule {
 
     val choices: List<ModuleChoice> get() = emptyList()
 
+    /**
+     * Settings the module asks people for (an endpoint, a region). Rendered on the
+     * module's page and read back through [fieldValue] / [setFieldValue]; module
+     * code is free to ignore this and keep its own defaults.
+     */
+    val fields: List<ModuleField> get() = emptyList()
+
+    /** the value a field currently holds, already resolved against its default */
+    fun fieldValue(field: ModuleField): String = field.default
+
+    /** stores a new value; null resets the field to its default */
+    fun setFieldValue(field: ModuleField, value: String?) = Unit
+
     /** [picks]: choice id to option id, for the choices the user changed */
     suspend fun resolve(track: TrackQuery, picks: Map<String, String>): ResolveResult
 

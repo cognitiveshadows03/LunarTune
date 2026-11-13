@@ -8,6 +8,7 @@
 package dev.citali.lunartune.modules
 
 import android.content.Context
+import android.os.Looper
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -17,6 +18,7 @@ import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.dataStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -155,6 +157,19 @@ object StreamSourceManager {
         }
 
         override fun http(request: HttpRequest): HttpResponse {
+            // Module calls are suspend by contract, but a UI callback (the sheet's
+            // "Check connection", for one) can still reach a module from the main
+            // thread. A blocking socket there throws NetworkOnMainThreadException,
+            // which every module reports as "didn't answer (offline)" - so never let
+            // the call run on main.
+            return if (Looper.myLooper() == Looper.getMainLooper()) {
+                runBlocking(Dispatchers.IO) { execute(request) }
+            } else {
+                execute(request)
+            }
+        }
+
+        private fun execute(request: HttpRequest): HttpResponse {
             val builder = Request.Builder().url(request.url).method(request.method, request.body?.toRequestBody(request.contentType?.toMediaTypeOrNull()))
             request.headers.forEach { (name, value) -> builder.header(name, value) }
             httpClient.newCall(builder.build()).execute().use { response ->

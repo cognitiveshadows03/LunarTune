@@ -895,4 +895,8 @@
     <string name="sources_checking">Checking…</string>
     <string name="settings_player_sources">Sources</string>
     <string name="settings_player_sources_desc">Manage external audio providers and priority</string>
+
+    <!-- Module settings fields -->
+    <string name="module_field_save">Save</string>
+    <string name="module_field_reset">Reset</string>
 </resources>

@@ -39,6 +39,45 @@ class MonochromeModule : SourceModule {
 
     override val choices: List<ModuleChoice> = emptyList()
 
+    /** the streamer's address is the one thing that varies between installs */
+    override val fields: List<ModuleField> =
+        listOf(
+            ModuleField(
+                id = ServerField,
+                label = "Server",
+                kind = FieldKind.Text,
+                default = DefaultServer,
+                hint = DefaultServer,
+                description = "Point Monochrome at a mirror if the default one is blocked or slow.",
+            ),
+        )
+
+    override fun fieldValue(field: ModuleField): String =
+        if (field.id != ServerField) {
+            field.default
+        } else {
+            host.storage.get(ServerField)?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+                ?: DefaultServer
+        }
+
+    override fun setFieldValue(field: ModuleField, value: String?) {
+        if (field.id != ServerField) return
+        val cleaned = value?.trim()?.trimEnd('/')?.takeIf { it.isNotBlank() }
+        // the default is not worth storing, and an empty box means "go back to it"
+        host.storage.set(ServerField, cleaned?.takeIf { it != DefaultServer })
+        // a different server has a different catalog and its own idea of being down
+        matches.clear()
+        misses.clear()
+        clearDown()
+    }
+
+    /** whichever server the user settled on */
+    private val server: String
+        get() {
+            val custom = host.storage.get(ServerField)?.trim()?.trimEnd('/')
+            return custom?.takeIf { it.isNotBlank() } ?: DefaultServer
+        }
+
     // a failed server is only left alone for a while, since playback passes over a module that isn't signed in and nothing would check it again
     override fun accountState(): AccountState {
         val reason = host.storage.get(DownKey) ?: return AccountState.SignedIn(NO_ACCOUNT_LABEL)
@@ -100,7 +139,7 @@ class MonochromeModule : SourceModule {
 
         // the head of the file: it should open as flac, and its streaminfo says how fine it is
         report(DiagnosticStep("Stream", null, "Opening the stream…"))
-        val url = "$Server/track/${found.id}"
+        val url = "$server/track/${found.id}"
         val opened = host.httpOrNull(HttpRequest(url, headers = streamHeaders + HeadRange))?.takeIf { it.ok }
         if (opened == null) {
             report(DiagnosticStep("Stream", false, "Monochrome gave no stream"))
@@ -156,7 +195,7 @@ class MonochromeModule : SourceModule {
     }
 
     private fun searchRequest(query: String, limit: Int) =
-        HttpRequest("$Server/search/tracks?q=${enc(query)}&limit=$limit", headers = headers)
+        HttpRequest("$server/search/tracks?q=${enc(query)}&limit=$limit", headers = headers)
 
     private fun markDown(reason: String) {
         host.storage.set(DownKey, reason)
@@ -194,7 +233,8 @@ class MonochromeModule : SourceModule {
 
     companion object {
         const val Id = "monochrome"
-        private const val Server = "https://tracks.monochrome.st"
+        private const val ServerField = "server"
+        private const val DefaultServer = "https://tracks.monochrome.st"
         private const val DownKey = "unreachable"
         private const val DownAtKey = "unreachable_at"
         private const val SearchLimit = 8
