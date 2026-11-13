@@ -293,6 +293,15 @@ fun PlayerSettings(navController: NavController) {
 
                 item {
                     PreferenceEntry(
+                        title = { Text(stringResource(R.string.settings_player_sources)) },
+                        description = stringResource(R.string.settings_player_sources_desc),
+                        icon = { Icon(painterResource(R.drawable.link), null) },
+                        onClick = { navController.navigate("settings/player/sources") },
+                    )
+                }
+
+                item {
+                    PreferenceEntry(
                         title = { Text(stringResource(R.string.player_stream_client)) },
                         description = stringResource(R.string.player_stream_client_desc),
                         icon = { Icon(painterResource(R.drawable.integration), null) },

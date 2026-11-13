@@ -22,10 +22,8 @@ import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,11 +53,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import dev.citali.lunartune.constants.ModuleEnabledKey
-import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.ShowSpotifyPlaylistsKey
-import dev.citali.lunartune.constants.StreamSourceOrderKey
-import dev.citali.lunartune.modules.StreamSourceManager
 import dev.citali.lunartune.spotify.SpotifyAccountUiState
 import dev.citali.lunartune.spotify.SpotifyAccountViewModel
 import dev.citali.lunartune.spotify.SpotifyAuth
@@ -76,16 +70,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -123,17 +114,6 @@ fun IntegrationScreen(
     }
 
     var showListenBrainzTokenEditor = remember { mutableStateOf(false) }
-
-    // stream source modules (beta): priority order + per-module enabled/picks
-    val moduleOrder by rememberPreference(StreamSourceOrderKey, "")
-    val orderedModules = remember(moduleOrder) {
-        val saved = moduleOrder.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        val all = StreamSourceManager.allModules()
-        val known = all.map { it.info.id }
-        (saved.filter { it in known } + known.filter { it !in saved })
-            .mapNotNull { id -> all.firstOrNull { it.info.id == id } }
-    }
-    var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -225,44 +205,6 @@ fun IntegrationScreen(
                 )
             }
 
-            PreferenceGroup(title = stringResource(R.string.stream_sources)) {
-                item {
-                    Text(
-                        text = stringResource(R.string.stream_sources_description),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-
-                orderedModules.forEach { module ->
-                    item {
-                        ModuleRow(
-                            module = module,
-                            onClick = { selectedModuleId = module.info.id },
-                        )
-                    }
-                }
-
-                item {
-                    Text(
-                        text = stringResource(R.string.stream_sources_fallback),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
-            }
-        }
-    }
-
-    selectedModuleId?.let { moduleId ->
-        val module = StreamSourceManager.module(moduleId)
-        if (module != null) {
-            ModuleDetailSheet(
-                module = module,
-                onDismiss = { selectedModuleId = null },
-            )
         }
     }
 
@@ -444,229 +386,6 @@ private fun SpotifyAccountIcon(avatarUrl: String?) {
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(24.dp),
             )
-        }
-    }
-}
-
-@Composable
-private fun ModuleRow(
-    module: dev.citali.lunartune.modules.SourceModule,
-    onClick: () -> Unit,
-) {
-    val (enabled, onEnabledChange) = rememberPreference(
-        ModuleEnabledKey(module.info.id),
-        false,
-    )
-    PreferenceEntry(
-        title = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(text = module.info.name)
-                // (beta) badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.tertiaryContainer)
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                ) {
-                    Text(
-                        text = "beta",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-        },
-        description = module.info.description,
-        icon = { Icon(painterResource(R.drawable.music_note), null) },
-        trailingContent = {
-            Switch(
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-            )
-        },
-        onClick = onClick,
-    )
-}
-
-@Composable
-private fun ModuleDetailSheet(
-    module: dev.citali.lunartune.modules.SourceModule,
-    onDismiss: () -> Unit,
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val (enabled, onEnabledChange) = rememberPreference(
-        ModuleEnabledKey(module.info.id),
-        false,
-    )
-    val (picksRaw, onPicksChange) = rememberPreference(ModulePicksKey(module.info.id), "")
-    val picks = remember(picksRaw) {
-        picksRaw.split(";").mapNotNull { part ->
-            val idx = part.indexOf('=')
-            if (idx <= 0) null else part.substring(0, idx) to part.substring(idx + 1)
-        }.toMap()
-    }
-    var accountState by remember { mutableStateOf<dev.citali.lunartune.modules.AccountState?>(null) }
-    var verifying by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(module.info.id) {
-        accountState = runCatching { module.accountState() }.getOrNull()
-    }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.music_note),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(26.dp),
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = module.info.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = module.info.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(
-                    checked = enabled,
-                    onCheckedChange = onEnabledChange,
-                )
-            }
-
-            // account status
-            val stateText = when (val state = accountState) {
-                is dev.citali.lunartune.modules.AccountState.SignedIn -> state.label
-                is dev.citali.lunartune.modules.AccountState.Expired -> state.reason
-                is dev.citali.lunartune.modules.AccountState.SignedOut -> "Not connected"
-                null -> "Checking…"
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when (accountState) {
-                                is dev.citali.lunartune.modules.AccountState.SignedIn -> MaterialTheme.colorScheme.primary
-                                is dev.citali.lunartune.modules.AccountState.Expired -> MaterialTheme.colorScheme.error
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        ),
-                )
-                Text(
-                    text = stateText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                if (verifying) {
-                    CircularWavyProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    TextButton(
-                        onClick = {
-                            verifying = true
-                            scope.launch {
-                                accountState = runCatching { module.verifyAccount() }.getOrNull()
-                                verifying = false
-                            }
-                        },
-                        shapes = ButtonDefaults.shapes(),
-                    ) {
-                        Text(stringResource(R.string.check_connection))
-                    }
-                }
-            }
-
-            // choices (e.g. JioSaavn quality)
-            module.choices.forEach { choice ->
-                val selected = picks[choice.id] ?: choice.options.firstOrNull()?.id
-                Text(
-                    text = choice.label,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    choice.options.forEach { option ->
-                        val isSelected = option.id == selected
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                                .padding(horizontal = 14.dp, vertical = 8.dp)
-                                .clickable {
-                                    val updated = picks.toMutableMap().apply { put(choice.id, option.id) }
-                                    onPicksChange(updated.entries.joinToString(";") { "${it.key}=${it.value}" })
-                                },
-                        ) {
-                            Text(
-                                text = option.label,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-
-            module.info.sourceUrl?.let { url ->
-                val context = LocalContext.current
-                TextButton(
-                    onClick = {
-                        onDismiss()
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    },
-                    shapes = ButtonDefaults.shapes(),
-                ) {
-                    Text(stringResource(R.string.open_module_source))
-                }
-            }
         }
     }
 }

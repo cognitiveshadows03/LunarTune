@@ -36,6 +36,15 @@ object TrackMatcher {
 
     class Scored(val track: CatalogTrack, val score: Float)
 
+    /**
+     * How far a candidate's length may drift from the song's before the length
+     * signal drops to nothing, in seconds. Set by [StreamSourceManager] from the
+     * user's choice on the Sources page; the scoring below is written around a
+     * 10s tolerance, where a match is still perfect within 2s and dead by 15s.
+     */
+    @Volatile
+    var toleranceSeconds: Float = 10f
+
     fun best(query: TrackQuery, candidates: List<CatalogTrack>): Scored? = ranked(query, candidates).firstOrNull()
 
     /**
@@ -68,10 +77,14 @@ object TrackMatcher {
         val haveMs = song.durationMs
         val duration = if (wantMs != null && haveMs != null) {
             val diff = abs(wantMs - haveMs) / 1000f
+            // Scaled off the user's tolerance: full credit inside a fifth of it,
+            // nothing past one and a half times it, a straight ramp between.
+            val perfect = (toleranceSeconds / 5f).coerceAtLeast(0.5f)
+            val cutOff = (toleranceSeconds * 1.5f).coerceAtLeast(perfect + 1f)
             when {
-                diff <= 2f -> 1f
-                diff >= 15f -> 0f
-                else -> 1f - (diff - 2f) / 13f
+                diff <= perfect -> 1f
+                diff >= cutOff -> 0f
+                else -> 1f - (diff - perfect) / (cutOff - perfect)
             }
         } else 0.6f
 

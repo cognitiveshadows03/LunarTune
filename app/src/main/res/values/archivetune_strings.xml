@@ -876,4 +876,23 @@
     <string name="remove_translation_action">Remove</string>
     <string name="translation_removed">Translation removed</string>
     <string name="translation_remove_failed">Could not remove translation</string>
+
+    <!-- Sources page -->
+    <string name="sources_page_title">Sources</string>
+    <string name="sources_audio_sources">Audio Sources</string>
+    <string name="sources_youtube_title">YouTube Music</string>
+    <string name="sources_youtube_status">Connected (Baseline active)</string>
+    <string name="sources_always_on">Always on</string>
+    <string name="sources_module_on">On</string>
+    <string name="sources_module_off">Off</string>
+    <string name="sources_songs_chip">Songs</string>
+    <string name="sources_built_in_version">Built in · v%1$s</string>
+    <string name="sources_track_matching">Track Matching</string>
+    <string name="sources_length_tolerance">Length tolerance</string>
+    <string name="sources_length_tolerance_desc">Allowable difference between track length and candidate length</string>
+    <string name="sources_tolerance_value">±%1$d s</string>
+    <string name="sources_not_connected">Not connected</string>
+    <string name="sources_checking">Checking…</string>
+    <string name="settings_player_sources">Sources</string>
+    <string name="settings_player_sources_desc">Manage external audio providers and priority</string>
 </resources>

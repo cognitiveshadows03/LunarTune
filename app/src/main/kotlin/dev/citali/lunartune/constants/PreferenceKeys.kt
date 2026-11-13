@@ -1117,3 +1117,6 @@ fun ModulePicksKey(moduleId: String) = stringPreferencesKey("module_picks_$modul
  */
 val LyricsRemoveTranslationSkipConfirmKey =
     booleanPreferencesKey("lyricsRemoveTranslationSkipConfirm")
+
+/** How far a catalog track's length may drift from the song's, in seconds. */
+val ModuleMatchToleranceKey = intPreferencesKey("moduleMatchToleranceSeconds")

@@ -82,6 +82,7 @@ import dev.citali.lunartune.ui.screens.settings.PalettePickerScreen
 import dev.citali.lunartune.ui.screens.settings.PlayerSettings
 import dev.citali.lunartune.ui.screens.settings.PrivacySettings
 import dev.citali.lunartune.ui.screens.settings.SettingsScreen
+import dev.citali.lunartune.ui.screens.settings.SourcesSettings
 import dev.citali.lunartune.ui.screens.settings.StorageSettings
 import dev.citali.lunartune.ui.screens.settings.StreamSourcesSettings
 import dev.citali.lunartune.ui.screens.settings.ThemeCreatorScreen
@@ -567,6 +568,11 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/player") {
         DrillPageContainer(pureBlack) {
             PlayerSettings(navController)
+        }
+    }
+    composable("settings/player/sources") {
+        DrillPageContainer(pureBlack) {
+            SourcesSettings(navController)
         }
     }
     composable("settings/player/stream_sources") {

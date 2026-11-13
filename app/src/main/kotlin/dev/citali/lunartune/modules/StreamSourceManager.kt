@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dev.citali.lunartune.constants.ModuleEnabledKey
+import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
 import dev.citali.lunartune.utils.PreferenceStore
@@ -34,6 +35,9 @@ import java.util.concurrent.TimeUnit
  * always-active fallback behind every module, handled by the caller.
  */
 object StreamSourceManager {
+
+    /** matches the slider's own default, used until the user moves it */
+    private const val DEFAULT_MATCH_TOLERANCE_SECONDS = 10
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
@@ -95,6 +99,8 @@ object StreamSourceManager {
      * or null when no module can serve the track (caller falls back to YouTube).
      */
     suspend fun resolve(track: TrackQuery): SourceStream? {
+        TrackMatcher.toleranceSeconds =
+            (PreferenceStore.get(ModuleMatchToleranceKey) ?: DEFAULT_MATCH_TOLERANCE_SECONDS).toFloat()
         for (module in activeModules()) {
             val result = runCatching {
                 module.resolve(track, picksFor(module.info.id))
