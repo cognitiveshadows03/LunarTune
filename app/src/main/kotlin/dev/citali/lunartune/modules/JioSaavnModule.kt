@@ -68,6 +68,8 @@ class JioSaavnModule : SourceModule {
         }
     }
 
+    override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
+
     override fun signOut() {
         matches.clear()
         misses.clear()
@@ -122,7 +124,9 @@ class JioSaavnModule : SourceModule {
             else -> if (song.has320) 320 else 160
         }
         val stream = streamAt(given, wanted)
-        report(DiagnosticStep("Stream", true, "AAC ${stream.kbps ?: "?"} kbps"))
+        val qualityLabel = "AAC ${stream.kbps ?: "?"} kbps"
+        host.storage.set(LastQualityKey, qualityLabel)
+        report(DiagnosticStep("Stream", true, qualityLabel))
 
         return ResolveResult.Found(
             SourceStream(
@@ -130,7 +134,7 @@ class JioSaavnModule : SourceModule {
                 format = StreamFormat.Progressive,
                 headers = streamHeaders,
                 sourceLabel = "JioSaavn",
-                qualityLabel = stream.kbps?.let { "AAC $it" } ?: "AAC",
+                qualityLabel = qualityLabel,
                 codec = "AAC",
                 sampleRateHz = 44_100,
                 matched = MatchedTrack(
@@ -221,6 +225,7 @@ class JioSaavnModule : SourceModule {
         const val Option160 = "160"
         const val Option96 = "96"
         private const val Api = "https://www.jiosaavn.com/api.php"
+        private const val LastQualityKey = "last_quality"
         private const val MediaKey = "38346591"
         private const val MissMemoryMs = 30L * 60 * 1000
         private const val UnreachableRetryMs = 10L * 60 * 1000

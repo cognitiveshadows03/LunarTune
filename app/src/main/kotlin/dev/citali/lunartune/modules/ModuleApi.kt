@@ -173,6 +173,12 @@ interface SourceModule {
     /** stores a new value; null resets the field to its default */
     fun setFieldValue(field: ModuleField, value: String?) = Unit
 
+    /**
+     * What the last stream this module served looked like ("Hi-Res FLAC · 2304 kbps"),
+     * remembered so the module's page can show the quality it really gave.
+     */
+    fun lastStreamLabel(): String? = null
+
     /** [picks]: choice id to option id, for the choices the user changed */
     suspend fun resolve(track: TrackQuery, picks: Map<String, String>): ResolveResult
 

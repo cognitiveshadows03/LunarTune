@@ -899,4 +899,5 @@
     <!-- Module settings fields -->
     <string name="module_field_save">Save</string>
     <string name="module_field_reset">Reset</string>
+    <string name="sources_last_stream">Last stream</string>
 </resources>

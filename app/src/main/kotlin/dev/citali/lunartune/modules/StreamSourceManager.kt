@@ -174,7 +174,11 @@ object StreamSourceManager {
             request.headers.forEach { (name, value) -> builder.header(name, value) }
             httpClient.newCall(builder.build()).execute().use { response ->
                 val body = response.body?.bytes() ?: ByteArray(0)
-                val headers = response.headers.toMultimap().mapValues { it.value.firstOrNull().orEmpty() }
+                val headers =
+                    response.headers
+                        .toMultimap()
+                        .entries
+                        .associate { entry -> entry.key.lowercase() to entry.value.firstOrNull().orEmpty() }
                 return HttpResponse(response.code, body, headers)
             }
         }

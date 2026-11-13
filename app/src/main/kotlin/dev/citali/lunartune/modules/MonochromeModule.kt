@@ -16,6 +16,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
 
 // lossless flac from monochrome's own track streamer (tracks.monochrome.st)
 class MonochromeModule : SourceModule {
@@ -97,6 +98,8 @@ class MonochromeModule : SourceModule {
         }
     }
 
+    override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
+
     override fun signOut() {
         matches.clear()
         misses.clear()
@@ -145,11 +148,17 @@ class MonochromeModule : SourceModule {
             report(DiagnosticStep("Stream", false, "Monochrome gave no stream"))
             return ResolveResult.Unavailable("Monochrome gave no stream")
         }
-        val info = flacInfo(opened.body)
+        // the file's full size comes from the range answer, so the real bitrate can
+        // be worked out rather than guessed from the format
+        val totalBytes =
+            opened.header("content-range")?.substringAfterLast('/')?.trim()?.toLongOrNull()
+                ?: opened.header("content-length")?.trim()?.toLongOrNull()
+        val info = flacInfo(opened.body, totalBytes, found.durationMs)
         if (info == null) {
             report(DiagnosticStep("Stream", false, "Not a FLAC file"))
             return ResolveResult.Unavailable("Monochrome's stream isn't FLAC")
         }
+        host.storage.set(LastQualityKey, info.label)
         report(DiagnosticStep("Stream", true, info.label))
 
         return ResolveResult.Found(
@@ -158,7 +167,7 @@ class MonochromeModule : SourceModule {
                 format = StreamFormat.Progressive,
                 headers = streamHeaders,
                 sourceLabel = "Monochrome",
-                qualityLabel = info.shortLabel,
+                qualityLabel = info.label,
                 codec = "FLAC",
                 sampleRateHz = info.sampleRate,
                 matched = MatchedTrack(
@@ -204,25 +213,68 @@ class MonochromeModule : SourceModule {
 
     private fun clearDown() = host.storage.set(DownKey, null)
 
-    /** what a FLAC file's STREAMINFO says: its bit depth and sample rate */
-    internal class FlacInfo(val bitsPerSample: Int, val sampleRate: Int) {
+    /**
+     * What a FLAC file's STREAMINFO says: depth, rate, channels - plus the bitrate
+     * worked out from the file's real size against its length, which is what tells a
+     * 1411 kbps CD rip from a 2304 kbps hi-res file.
+     */
+    internal class FlacInfo(
+        val bitsPerSample: Int,
+        val sampleRate: Int,
+        val channels: Int = 2,
+        val kbps: Int? = null,
+    ) {
         val hiRes: Boolean get() = bitsPerSample > 16 || sampleRate > 48_000
-        private val rate: String get() = if (sampleRate % 1000 == 0) "${sampleRate / 1000}" else String.format("%.1f", sampleRate / 1000.0)
+        private val rate: String
+            get() = if (sampleRate % 1000 == 0) "${sampleRate / 1000}" else String.format("%.1f", sampleRate / 1000.0)
         val shortLabel: String get() = if (hiRes) "Hi-Res FLAC" else "FLAC"
-        val label: String get() = "$shortLabel · $bitsPerSample-bit / $rate kHz"
+
+        /** "Hi-Res FLAC · 24-bit / 96 kHz · 2304 kbps" */
+        val label: String
+            get() = buildString {
+                append(shortLabel)
+                append(" · ").append(bitsPerSample).append("-bit / ").append(rate).append(" kHz")
+                kbps?.let { append(" · ").append(it).append(" kbps") }
+            }
     }
 
     /**
-     * "fLaC", then the STREAMINFO block: 4 bytes of header, then (after the block and frame
-     * sizes, 10 bytes) 20 bits of sample rate, 3 of channels - 1, 5 of bits per sample - 1.
+     * "fLaC", then the STREAMINFO block: 4 bytes of header, then (after the block and
+     * frame sizes, 10 bytes) 20 bits of sample rate, 3 of channels - 1, 5 of bits per
+     * sample - 1, and 36 bits of total samples.
      */
-    internal fun flacInfo(bytes: ByteArray): FlacInfo? {
+    internal fun flacInfo(
+        bytes: ByteArray,
+        totalBytes: Long? = null,
+        durationMs: Long? = null,
+    ): FlacInfo? {
         if (bytes.size < 4 || bytes.copyOfRange(0, 4).decodeToString() != "fLaC") return null
         if (bytes.size < 4 + 4 + 18) return FlacInfo(16, 44_100)
         val b = bytes.copyOfRange(8, 26).map { it.toInt() and 0xff }
         val sampleRate = (b[10] shl 12) or (b[11] shl 4) or (b[12] shr 4)
+        val channels = ((b[12] shr 1) and 0x07) + 1
         val bits = (((b[12] and 0x01) shl 4) or (b[13] shr 4)) + 1
-        return if (sampleRate in 8_000..768_000 && bits in 8..32) FlacInfo(bits, sampleRate) else FlacInfo(16, 44_100)
+        if (sampleRate !in 8_000..768_000 || bits !in 8..32) return FlacInfo(16, 44_100, channels)
+
+        val totalSamples =
+            ((b[13].toLong() and 0x0FL) shl 32) or
+                (b[14].toLong() shl 24) or
+                (b[15].toLong() shl 16) or
+                (b[16].toLong() shl 8) or
+                b[17].toLong()
+        val seconds =
+            when {
+                totalSamples > 0L -> totalSamples.toDouble() / sampleRate
+                durationMs != null && durationMs > 0L -> durationMs / 1000.0
+                else -> 0.0
+            }
+        val kbps =
+            if (totalBytes != null && totalBytes > 0L && seconds > 1.0) {
+                (totalBytes * 8.0 / seconds / 1000.0).roundToInt()
+            } else {
+                null
+            }
+        return FlacInfo(bits, sampleRate, channels, kbps)
     }
 
     private fun JsonObject.string(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
@@ -235,6 +287,7 @@ class MonochromeModule : SourceModule {
         const val Id = "monochrome"
         private const val ServerField = "server"
         private const val DefaultServer = "https://tracks.monochrome.st"
+        private const val LastQualityKey = "last_quality"
         private const val DownKey = "unreachable"
         private const val DownAtKey = "unreachable_at"
         private const val SearchLimit = 8
@@ -245,6 +298,6 @@ class MonochromeModule : SourceModule {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         private val headers = mapOf("Accept" to "application/json", "User-Agent" to UserAgent)
         private val streamHeaders = mapOf("User-Agent" to UserAgent)
-        private val HeadRange = "Range" to "bytes=0-41"
+        private val HeadRange = "Range" to "bytes=0-1023"
     }
 }

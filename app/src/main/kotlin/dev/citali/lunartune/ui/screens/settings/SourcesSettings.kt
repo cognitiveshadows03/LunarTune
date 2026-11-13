@@ -213,14 +213,16 @@ private fun ModuleCard(
     module: SourceModule,
     onClick: () -> Unit,
 ) {
-    val (enabled) = rememberPreference(ModuleEnabledKey(module.info.id), false)
+    val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(module.info.id), false)
+    // what the module actually served last - the point of the feature is the
+    // fidelity, so the row says what came back rather than just "on"
+    val lastStream = remember(module) { module.lastStreamLabel() }
+    val onOff = stringResource(if (enabled) R.string.sources_module_on else R.string.sources_module_off)
+    val detail = if (enabled && lastStream != null) lastStream else NO_ACCOUNT_LABEL
     SourceCard(
         iconRes = moduleIcon(module.info.id),
         title = module.info.name,
-        subtitle =
-            stringResource(
-                if (enabled) R.string.sources_module_on else R.string.sources_module_off,
-            ) + " · " + NO_ACCOUNT_LABEL,
+        subtitle = "$onOff · $detail",
         enabled = enabled,
         showStatusDot = true,
         meta =
@@ -229,12 +231,16 @@ private fun ModuleCard(
                 stringResource(R.string.sources_built_in_version, module.info.version),
             ),
         trailing = {
-            Icon(
-                painter = painterResource(R.drawable.navigate_next),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    painter = painterResource(R.drawable.navigate_next),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         },
         onClick = onClick,
     )
@@ -533,6 +539,21 @@ private fun ModuleDetailSheet(
                     FieldKind.Text -> ModuleTextField(module = module, field = field)
                     FieldKind.Toggle -> ModuleToggleField(module = module, field = field)
                     FieldKind.Select -> Unit
+                }
+            }
+
+            remember(module) { module.lastStreamLabel() }?.let { label ->
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stringResource(R.string.sources_last_stream),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
