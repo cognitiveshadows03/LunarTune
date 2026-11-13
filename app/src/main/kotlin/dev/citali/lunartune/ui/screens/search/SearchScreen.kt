@@ -221,39 +221,6 @@ fun SearchScreen(
                 )
             }
 
-            item(key = "shortcuts", contentType = "shortcuts") {
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .animateItem(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Card(
-                        onClick = { navController.navigate("settings/music_together") },
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        ),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        androidx.compose.foundation.layout.Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Icon(painterResource(R.drawable.multi_user), contentDescription = null)
-                            Text(
-                                text = stringResource(R.string.music_together_short),
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-            }
-
             when (val currentState = state) {
                 SearchDiscoveryScreenState.Loading -> {
                     item(

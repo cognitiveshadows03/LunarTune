@@ -106,8 +106,8 @@ fun RealPlayerStylePreview(
 
     val context = LocalContext.current
     val audioDevice by playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle()
-    val (savedSliderStyle) = rememberEnumPreference(SliderStyleKey, SliderStyle.Standard)
-    val (savedButtonsStyle) = rememberEnumPreference(PlayerButtonsStyleKey, PlayerButtonsStyle.DEFAULT)
+    val savedSliderStyle = rememberSliderStyleFor(style)
+    val savedButtonsStyle = rememberButtonsStyleFor(style)
     val (showVolumeBar) = rememberPreference(ShowPlayerVolumeBarKey, true)
     val (cornerRadius) = rememberPreference(ThumbnailCornerRadiusKey, 8f)
     val (backdropBlurAmount) =
@@ -129,7 +129,7 @@ fun RealPlayerStylePreview(
 
     val sliderStyle = sliderOverride ?: savedSliderStyle
     val buttonsStyle = buttonsOverride ?: savedButtonsStyle
-    val (savedBackground) = rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
+    val savedBackground = rememberBackgroundStyleFor(style)
     val background = backgroundOverride ?: savedBackground
     val (customImage) = rememberPreference(PlayerCustomImageUriKey, "")
     val (customBlur) = rememberPreference(PlayerCustomBlurKey, 0f)

@@ -134,6 +134,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToLong
+import dev.citali.lunartune.ui.player.rememberActiveBackgroundStyle
 
 // ──────────────────────────────────────────────────────────────────────
 // Constants
@@ -216,7 +217,7 @@ fun LyricsV2(
     val fillTransitionWidth = preferences?.v2FillTransitionWidthDp ?: 8f
     val lrcBounceEnabled = preferences?.v2LrcBounceEnabled ?: true
     val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()
-    val playerBackground by rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
+    val playerBackground = rememberActiveBackgroundStyle()
 
     // ── Text colour derived from background style ──
     val textColor =

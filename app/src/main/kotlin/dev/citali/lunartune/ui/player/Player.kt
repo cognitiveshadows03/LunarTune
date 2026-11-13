@@ -414,10 +414,7 @@ fun BottomSheetPlayer(
         defaultValue = true,
     )
 
-    val storedPlayerBackground by rememberEnumPreference(
-        key = PlayerBackgroundStyleKey,
-        defaultValue = PlayerBackgroundStyle.DEFAULT,
-    )
+    val storedPlayerBackground = rememberBackgroundStyleFor(playerDesignStyle)
     val playerUsesFixedBackground =
         (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10) ||
             playerDesignStyle == PlayerDesignStyle.V9
@@ -439,10 +436,7 @@ fun BottomSheetPlayer(
     var keyboardSkipMultiplier by remember { mutableStateOf(1) }
     var lastKeyboardTapTime by remember { mutableLongStateOf(0L) }
 
-    val playerButtonsStyle by rememberEnumPreference(
-        key = PlayerButtonsStyleKey,
-        defaultValue = PlayerButtonsStyle.DEFAULT,
-    )
+    val playerButtonsStyle = rememberButtonsStyleFor(playerDesignStyle)
 
     val isSystemInDarkTheme = isSystemInDarkTheme()
     val darkTheme by rememberEnumPreference(DarkModeKey, defaultValue = DarkMode.AUTO)
@@ -503,7 +497,7 @@ fun BottomSheetPlayer(
             defaultValue = 256,
         )
 
-    val sliderStyle by rememberEnumPreference(SliderStyleKey, SliderStyle.Standard)
+    val sliderStyle = rememberSliderStyleFor(playerDesignStyle)
 
     LaunchedEffect(maxCanvasCacheSize) {
         CanvasArtworkPlaybackCache.setMaxSize(maxCanvasCacheSize)

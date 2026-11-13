@@ -324,6 +324,7 @@ import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
 import dev.citali.lunartune.ui.player.BottomSheetPlayer
+import dev.citali.lunartune.ui.player.rememberActiveBackgroundStyle
 import dev.citali.lunartune.ui.screens.LOGIN_URL_ARGUMENT
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.screens.settings.AccountBanner
@@ -1452,10 +1453,7 @@ class MainActivity : FragmentActivity() {
                         }
                     }
 
-                    val playerBackground by rememberEnumPreference(
-                        key = PlayerBackgroundStyleKey,
-                        defaultValue = PlayerBackgroundStyle.DEFAULT,
-                    )
+                    val playerBackground = rememberActiveBackgroundStyle()
                     val settingsPlayerDesignStyle by rememberEnumPreference(
                         key = PlayerDesignStyleKey,
                         defaultValue = PlayerDesignStyle.V7,

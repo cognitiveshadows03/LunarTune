@@ -131,6 +131,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+import dev.citali.lunartune.ui.player.rememberActiveBackgroundStyle
 
 // Lines flip at their exact onset so the pane does not scroll before the vocal arrives.
 private const val LRC_LEAD_MS = 0L
@@ -332,7 +333,7 @@ fun LyricsEnhanced(
 
     val lyricsFontFamily = rememberLunarTuneLyricsFontFamily()
 
-    val playerBackground by rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
+    val playerBackground = rememberActiveBackgroundStyle()
     val textColor =
         textColorOverride ?: if (playerBackground == PlayerBackgroundStyle.DEFAULT) {
             MaterialTheme.colorScheme.onBackground

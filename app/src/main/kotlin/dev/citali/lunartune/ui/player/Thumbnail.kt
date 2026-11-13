@@ -173,10 +173,7 @@ fun Thumbnail(
     val canSkipNext by playerConnection.canSkipNext.collectAsState()
 
     // Player background style for consistent theming
-    val playerBackground by rememberEnumPreference(
-        key = PlayerBackgroundStyleKey,
-        defaultValue = PlayerBackgroundStyle.DEFAULT,
-    )
+    val playerBackground = rememberActiveBackgroundStyle()
 
     val textBackgroundColor =
         when (playerBackground) {

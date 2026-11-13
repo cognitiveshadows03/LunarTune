@@ -1120,3 +1120,15 @@ val LyricsRemoveTranslationSkipConfirmKey =
 
 /** How far a catalog track's length may drift from the song's, in seconds. */
 val ModuleMatchToleranceKey = intPreferencesKey("moduleMatchToleranceSeconds")
+
+/**
+ * Per-style customisation. A blank value means "use the global key", so styles
+ * that were never customised keep following the look chosen in Appearance.
+ */
+fun SliderStyleKeyFor(designStyle: String) = stringPreferencesKey("sliderStyle_$designStyle")
+
+fun PlayerButtonsStyleKeyFor(designStyle: String) =
+    stringPreferencesKey("player_buttons_style_$designStyle")
+
+fun PlayerBackgroundStyleKeyFor(designStyle: String) =
+    stringPreferencesKey("playerBackgroundStyle_$designStyle")

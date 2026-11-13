@@ -276,7 +276,7 @@ fun LyricsScreen(
 
     val (enableHapticFeedback) = rememberPreference(EnableHapticFeedbackKey, true)
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
-    val playerBackground by rememberEnumPreference(PlayerBackgroundStyleKey, PlayerBackgroundStyle.DEFAULT)
+    val playerBackground = rememberActiveBackgroundStyle()
     val configuredLyricsBackground by rememberEnumPreference(LyricsBackgroundStyleKey, LyricsBackgroundStyle.DEFAULT)
     val resolvedLyricsBackground = configuredLyricsBackground.resolveFor(playerBackground)
     // The page is torn down while its exit animation is still running, and the
