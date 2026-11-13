@@ -1686,40 +1686,7 @@ fun PlayerControlsContent(
         showRemainingTime = playerDesignStyle == PlayerDesignStyle.V7,
         centerContent =
             if (playerDesignStyle == PlayerDesignStyle.V7 && currentFormat != null) {
-                {
-                    val codec = currentFormat.mimeType.substringAfter("/").uppercase()
-                    val label =
-                        when {
-                            codec.contains("FLAC") || codec.contains("ALAC") -> "Lossless"
-                            codec.contains("OPUS") -> codec
-                            codec.contains("AAC") -> codec
-                            codec.contains("MP4A") -> "AAC"
-                            codec.contains("VORBIS") -> "Vorbis"
-                            else -> codec
-                        }
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = textBackgroundColor.copy(alpha = 0.12f),
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.graphic_eq),
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = textBackgroundColor.copy(alpha = 0.8f),
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = textBackgroundColor.copy(alpha = 0.8f),
-                            )
-                        }
-                    }
-                }
+                { CodecBadge(format = currentFormat, tint = textBackgroundColor) }
             } else {
                 null
             },
@@ -2709,40 +2676,7 @@ private fun V8QualityChip(
     foreground: Color,
     modifier: Modifier = Modifier,
 ) {
-    val label =
-        remember(currentFormat.mimeType, currentFormat.codecs) {
-            currentFormat.codecLabel()
-        }
-
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = foreground.copy(alpha = 0.1f),
-        border =
-            androidx.compose.foundation.BorderStroke(
-                width = 1.dp,
-                color = foreground.copy(alpha = 0.13f),
-            ),
-        modifier = modifier,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.graphic_eq),
-                contentDescription = null,
-                tint = foreground.copy(alpha = 0.72f),
-                modifier = Modifier.size(15.dp),
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = foreground.copy(alpha = 0.72f),
-                maxLines = 1,
-            )
-        }
-    }
+    CodecBadge(format = currentFormat, tint = foreground, modifier = modifier)
 }
 
 @Composable

@@ -108,6 +108,8 @@ fun SourcesSettings(navController: NavController) {
                 .mapNotNull { id -> all.firstOrNull { it.info.id == id } }
         }
     var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
+    // bumped when a module's remembered stream is cleared, so its row redraws
+    var lastStreamVersion by remember { mutableStateOf(0) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -161,6 +163,7 @@ fun SourcesSettings(navController: NavController) {
                 orderedModules.forEach { module ->
                     ModuleCard(
                         module = module,
+                        lastStreamVersion = lastStreamVersion,
                         onClick = { selectedModuleId = module.info.id },
                     )
                 }
@@ -183,6 +186,7 @@ fun SourcesSettings(navController: NavController) {
             ModuleDetailSheet(
                 module = module,
                 onDismiss = { selectedModuleId = null },
+                onLastStreamCleared = { lastStreamVersion++ },
             )
         }
     }
@@ -211,12 +215,13 @@ private fun moduleIcon(id: String): Int =
 @Composable
 private fun ModuleCard(
     module: SourceModule,
+    lastStreamVersion: Int,
     onClick: () -> Unit,
 ) {
     val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(module.info.id), false)
     // what the module actually served last - the point of the feature is the
     // fidelity, so the row says what came back rather than just "on"
-    val lastStream = remember(module) { module.lastStreamLabel() }
+    val lastStream = remember(module, lastStreamVersion) { module.lastStreamLabel() }
     val onOff = stringResource(if (enabled) R.string.sources_module_on else R.string.sources_module_off)
     val detail = if (enabled && lastStream != null) lastStream else NO_ACCOUNT_LABEL
     SourceCard(
@@ -418,6 +423,7 @@ private fun TrackMatchingSection() {
 private fun ModuleDetailSheet(
     module: SourceModule,
     onDismiss: () -> Unit,
+    onLastStreamCleared: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(module.info.id), false)
@@ -431,6 +437,8 @@ private fun ModuleDetailSheet(
         }
     var accountState by remember { mutableStateOf<AccountState?>(null) }
     var verifying by remember { mutableStateOf(false) }
+    // what the module last served, kept in state so it can be cleared from here
+    var lastStream by remember(module) { mutableStateOf(module.lastStreamLabel()) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(module.info.id) {
@@ -542,18 +550,32 @@ private fun ModuleDetailSheet(
                 }
             }
 
-            remember(module) { module.lastStreamLabel() }?.let { label ->
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(R.string.sources_last_stream),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            lastStream?.let { label ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.sources_last_stream),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(
+                        onClick = {
+                            module.clearLastStream()
+                            lastStream = null
+                            onLastStreamCleared()
+                        },
+                    ) {
+                        Text(stringResource(R.string.sources_clear_last_stream))
+                    }
                 }
             }
 

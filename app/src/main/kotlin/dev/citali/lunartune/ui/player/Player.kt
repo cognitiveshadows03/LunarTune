@@ -470,7 +470,7 @@ fun BottomSheetPlayer(
     val currentSong by playerConnection.currentSong.collectAsState(initial = null)
     val currentSongLiked by playerConnection.currentSongLiked.collectAsState()
     val queueTitle by playerConnection.queueTitle.collectAsState()
-    val currentFormat by playerConnection.currentFormat.collectAsState(initial = null)
+    val currentFormat by playerConnection.displayFormat.collectAsState(initial = null)
     val queueWindows by playerConnection.queueWindows.collectAsState()
     val currentWindowIndex by playerConnection.currentWindowIndex.collectAsState()
     val deviceMusicVolumeController = rememberDeviceMusicVolumeController()

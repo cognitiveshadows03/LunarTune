@@ -70,6 +70,8 @@ class JioSaavnModule : SourceModule {
 
     override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
 
+    override fun clearLastStream() = host.storage.set(LastQualityKey, null)
+
     override fun signOut() {
         matches.clear()
         misses.clear()
@@ -137,6 +139,8 @@ class JioSaavnModule : SourceModule {
                 qualityLabel = qualityLabel,
                 codec = "AAC",
                 sampleRateHz = 44_100,
+                bitrateBps = stream.kbps?.times(1000),
+                contentLengthBytes = stream.totalBytes,
                 matched = MatchedTrack(
                     id = song.catalog.id,
                     title = song.catalog.title,
@@ -152,7 +156,7 @@ class JioSaavnModule : SourceModule {
     /** a song from the search, with what's needed to stream it */
     internal class SaavnSong(val catalog: CatalogTrack, val encryptedUrl: String, val has320: Boolean)
 
-    internal class SaavnStream(val url: String, val kbps: Int?)
+    internal class SaavnStream(val url: String, val kbps: Int?, val totalBytes: Long? = null)
 
     internal fun songsIn(text: String): List<SaavnSong> {
         val root = runCatching { json.parseToJsonElement(text) as? JsonObject }.getOrNull() ?: return emptyList()
@@ -191,9 +195,13 @@ class JioSaavnModule : SourceModule {
         val offered = rendition.groupValues[1].toInt()
         if (offered == kbps) return SaavnStream(given, offered)
         val url = given.replaceRange(rendition.range, "_$kbps.${rendition.groupValues[2]}")
-        // a file the cdn doesn't have would fail mid-queue, so it's checked with one tiny request first
-        val there = runCatching { host.http(HttpRequest(url, headers = streamHeaders + ("Range" to "bytes=0-1"))).ok }.getOrDefault(false)
-        return if (there) SaavnStream(url, kbps) else SaavnStream(given, offered)
+        // a file the cdn doesn't have would fail mid-queue, so it's checked with one tiny
+        // request first - which also reports the file's real size
+        val probe = runCatching { host.http(HttpRequest(url, headers = streamHeaders + ("Range" to "bytes=0-1"))) }.getOrNull()
+        val totalBytes =
+            probe?.header("content-range")?.substringAfterLast('/')?.trim()?.toLongOrNull()
+                ?: probe?.header("content-length")?.trim()?.toLongOrNull()
+        return if (probe?.ok == true) SaavnStream(url, kbps, totalBytes) else SaavnStream(given, offered)
     }
 
     private fun markUnreachable(reason: String) {

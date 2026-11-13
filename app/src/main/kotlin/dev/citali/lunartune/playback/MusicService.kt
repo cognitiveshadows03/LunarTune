@@ -214,6 +214,7 @@ import dev.citali.lunartune.db.entities.AlbumEntity
 import dev.citali.lunartune.db.entities.ArtistEntity
 import dev.citali.lunartune.db.entities.Event
 import dev.citali.lunartune.db.entities.FormatEntity
+import dev.citali.lunartune.modules.ModulePlaybackFormat
 import dev.citali.lunartune.modules.SourceStream
 import dev.citali.lunartune.modules.StreamSourceManager
 import dev.citali.lunartune.modules.TrackQuery
@@ -582,6 +583,12 @@ class MusicService :
             .flatMapLatest { mediaMetadata ->
                 database.format(mediaMetadata?.id)
             }.flowOn(Dispatchers.IO)
+
+    /**
+     * What a stream source module actually handed over for a media item, so the player can
+     * describe the stream that is really playing instead of the one that was catalogued.
+     */
+    val modulePlaybackFormat = MutableStateFlow<ModulePlaybackFormat?>(null)
 
     private val normalizeFactor = MutableStateFlow(1f)
     private val audioNormalizationFactorCache = ConcurrentHashMap<String, Float>()
@@ -8654,6 +8661,7 @@ class MusicService :
                 )
             }?.takeIf { storedFormat.hasDisplayablePlaybackDetails() }
             ?.let { cachedStream ->
+                clearModulePlayback(mediaId)
                 scope.launch(Dispatchers.IO) { recoverSong(mediaId) }
                 val streamContentLength = extractContentLengthFromUrl(cachedStream.url) ?: knownContentLength
                 val streamItag = extractItagFromUrl(cachedStream.url) ?: storedFormat?.itag
@@ -8671,12 +8679,18 @@ class MusicService :
         // stream source modules (beta): enabled modules get first try, in priority order;
         // YouTube Music stays the always-active fallback behind them
         resolveModuleStream(mediaId, storedFormat)?.let { moduleStream ->
-            val streamContentLength = extractContentLengthFromUrl(moduleStream.url) ?: knownContentLength
-            streamContentLength?.takeIf { it > 0L }?.let { contentLengthCache[mediaId] = it }
+            // the module's own file size only: the cache lengths above belong to YouTube's
+            // stream of the same song, and mixing the two up would mislabel the next fetch
+            val moduleLength =
+                moduleStream.contentLengthBytes ?: extractContentLengthFromUrl(moduleStream.url)
+            modulePlaybackFormat.value =
+                moduleStream.asPlaybackFormat(mediaId, storedFormat, moduleLength)
             return dataSpec
                 .withUri(moduleStream.url.toUri())
-                .withKnownStreamLength(streamContentLength)
+                .withKnownStreamLength(moduleLength)
         }
+        // no module could serve it, so YouTube's own format describes the stream again
+        clearModulePlayback(mediaId)
 
         val playbackResult: Result<YTPlayerUtils.PlaybackData> =
             runBlocking(Dispatchers.IO) {
@@ -8843,9 +8857,59 @@ class MusicService :
         )
         return runBlocking(Dispatchers.IO) {
             withTimeoutOrNull(MODULE_RESOLUTION_TIMEOUT_MS) {
-                StreamSourceManager.resolve(query)
+                StreamSourceManager.resolve(query, mediaId)
             }
         }
+    }
+
+    private fun clearModulePlayback(mediaId: String) {
+        if (modulePlaybackFormat.value?.mediaId == mediaId) modulePlaybackFormat.value = null
+    }
+
+    /** describes a module's stream in the shape the player already reads formats in */
+    private fun SourceStream.asPlaybackFormat(
+        mediaId: String,
+        storedFormat: FormatEntity?,
+        contentLength: Long?,
+    ): ModulePlaybackFormat {
+        val codecName = codec?.uppercase().orEmpty()
+        val mimeType =
+            when {
+                codecName.contains("FLAC") -> "audio/flac"
+                codecName.contains("ALAC") -> "audio/mp4"
+                codecName.contains("AAC") -> "audio/mp4"
+                codecName.contains("OPUS") -> "audio/opus"
+                codecName.contains("VORBIS") -> "audio/ogg"
+                else -> "audio/mpeg"
+            }
+        val codecs =
+            when {
+                codecName.contains("FLAC") -> "flac"
+                codecName.contains("ALAC") -> "alac"
+                codecName.contains("AAC") -> "AAC"
+                codecName.contains("OPUS") -> "opus"
+                codecName.contains("VORBIS") -> "vorbis"
+                else -> codecName.lowercase()
+            }
+        return ModulePlaybackFormat(
+            mediaId = mediaId,
+            sourceLabel = sourceLabel,
+            catalogueId = matched.id,
+            qualityLabel = qualityLabel,
+            format =
+                FormatEntity(
+                    id = mediaId,
+                    itag = 0,
+                    mimeType = mimeType,
+                    codecs = codecs,
+                    bitrate = bitrateBps ?: 0,
+                    sampleRate = sampleRateHz,
+                    contentLength = contentLength ?: 0L,
+                    loudnessDb = storedFormat?.loudnessDb,
+                    perceptualLoudnessDb = storedFormat?.perceptualLoudnessDb,
+                    playbackUrl = storedFormat?.playbackUrl,
+                ),
+        )
     }
 
     private fun extractContentLengthFromUrl(url: String): Long? =

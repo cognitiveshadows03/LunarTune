@@ -890,27 +890,42 @@ private fun AppleMusicProgress(
                 modifier = Modifier.align(Alignment.CenterStart),
             )
             if (currentFormat != null) {
-                val label =
-                    remember(
-                        currentFormat.mimeType,
-                        currentFormat.codecs,
-                        currentFormat.bitrate,
-                        currentFormat.sampleRate,
-                    ) {
-                        listOfNotNull(
-                            currentFormat.codecLabel().takeIf { it.isNotBlank() },
-                            currentFormat.formattedBitrate(),
-                            currentFormat.formattedSampleRate(),
-                        ).joinToString(" • ")
-                    }
-                Text(
-                    text = label,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = dimmed,
-                    maxLines = 1,
-                    modifier = Modifier.align(Alignment.Center),
-                )
+                // the badge says what is playing by default; the full reading - bitrate and
+                // sample rate as well - is what the codec setting adds
+                val (showCodecInfo) =
+                    rememberPreference(
+                        androidx.datastore.preferences.core.booleanPreferencesKey("show_codec_on_player"),
+                        false,
+                    )
+                if (showCodecInfo) {
+                    val label =
+                        remember(
+                            currentFormat.mimeType,
+                            currentFormat.codecs,
+                            currentFormat.bitrate,
+                            currentFormat.sampleRate,
+                        ) {
+                            listOfNotNull(
+                                currentFormat.codecLabel().takeIf { it.isNotBlank() },
+                                currentFormat.formattedBitrate(),
+                                currentFormat.formattedSampleRate(),
+                            ).joinToString(" • ")
+                        }
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = dimmed,
+                        maxLines = 1,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                } else {
+                    CodecBadge(
+                        format = currentFormat,
+                        tint = dimmed,
+                        modifier = Modifier.align(Alignment.Center),
+                    )
+                }
             }
             Text(
                 text =

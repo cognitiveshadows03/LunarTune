@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.modules
 
+import dev.citali.lunartune.db.entities.FormatEntity
 import java.io.File
 
 /**
@@ -130,6 +131,23 @@ data class SourceStream(
     val codec: String? = null,
     /** the audio's sample rate, when the module knows it */
     val sampleRateHz: Int? = null,
+    /** the stream's average bitrate, when the module knows it */
+    val bitrateBps: Int? = null,
+    /** the whole file's size, when the module knows it */
+    val contentLengthBytes: Long? = null,
+)
+
+/**
+ * What a module actually served, kept beside the media item it was served for so the
+ * player can describe the stream that is really playing.
+ */
+data class ModulePlaybackFormat(
+    val mediaId: String,
+    val sourceLabel: String,
+    /** the service's own id for the recording it matched */
+    val catalogueId: String,
+    val qualityLabel: String,
+    val format: FormatEntity,
 )
 
 sealed interface ResolveResult {
@@ -178,6 +196,9 @@ interface SourceModule {
      * remembered so the module's page can show the quality it really gave.
      */
     fun lastStreamLabel(): String? = null
+
+    /** forgets the remembered stream, so the module's page goes back to empty */
+    fun clearLastStream() = Unit
 
     /** [picks]: choice id to option id, for the choices the user changed */
     suspend fun resolve(track: TrackQuery, picks: Map<String, String>): ResolveResult

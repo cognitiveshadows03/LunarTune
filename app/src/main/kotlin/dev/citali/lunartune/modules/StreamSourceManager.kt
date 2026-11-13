@@ -100,7 +100,7 @@ object StreamSourceManager {
      * Try every active module in priority order. Returns the first stream found,
      * or null when no module can serve the track (caller falls back to YouTube).
      */
-    suspend fun resolve(track: TrackQuery): SourceStream? {
+    suspend fun resolve(track: TrackQuery, mediaId: String? = null): SourceStream? {
         TrackMatcher.toleranceSeconds =
             (PreferenceStore.get(ModuleMatchToleranceKey) ?: DEFAULT_MATCH_TOLERANCE_SECONDS).toFloat()
         for (module in activeModules()) {
@@ -111,11 +111,19 @@ object StreamSourceManager {
             }.getOrNull() ?: continue
             when (result) {
                 is ResolveResult.Found -> {
+                    val stream = result.stream
+                    // media id and the service's own id side by side, so a log line can be
+                    // followed from LunarTune's item to the record that was matched
                     Timber.tag("StreamSource").i(
-                        "Module %s served %s (confidence %.2f)",
-                        module.info.id, track.title, result.stream.matched.confidence,
+                        "Module %s served \"%s\" | media %s -> catalogue %s | %s | confidence %.2f",
+                        module.info.id,
+                        track.title,
+                        mediaId ?: "?",
+                        stream.matched.id,
+                        stream.qualityLabel,
+                        stream.matched.confidence,
                     )
-                    return result.stream
+                    return stream
                 }
                 is ResolveResult.NotFound -> Timber.tag("StreamSource").d(
                     "Module %s: %s", module.info.id, result.reason,

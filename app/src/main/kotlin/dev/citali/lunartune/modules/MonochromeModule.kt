@@ -100,6 +100,8 @@ class MonochromeModule : SourceModule {
 
     override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
 
+    override fun clearLastStream() = host.storage.set(LastQualityKey, null)
+
     override fun signOut() {
         matches.clear()
         misses.clear()
@@ -170,6 +172,8 @@ class MonochromeModule : SourceModule {
                 qualityLabel = info.label,
                 codec = "FLAC",
                 sampleRateHz = info.sampleRate,
+                bitrateBps = info.kbps?.times(1000),
+                contentLengthBytes = totalBytes,
                 matched = MatchedTrack(
                     id = found.id,
                     title = found.title,

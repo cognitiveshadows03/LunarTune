@@ -24,6 +24,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,10 +43,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import dev.citali.lunartune.canvas.models.CanvasArtwork
 import dev.citali.lunartune.db.MusicDatabase
+import dev.citali.lunartune.db.entities.FormatEntity
 import dev.citali.lunartune.extensions.currentMetadata
 import dev.citali.lunartune.extensions.getCurrentQueueIndex
 import dev.citali.lunartune.extensions.getQueueWindows
 import dev.citali.lunartune.models.MediaMetadata
+import dev.citali.lunartune.modules.ModulePlaybackFormat
 import dev.citali.lunartune.models.QueueFilter
 import dev.citali.lunartune.playback.MusicService.MusicBinder
 import dev.citali.lunartune.playback.queues.Queue
@@ -193,6 +196,18 @@ class PlayerConnection(
     val currentFormat =
         mediaMetadata.flatMapLatest { mediaMetadata ->
             database.format(mediaMetadata?.id)
+        }
+
+    /** what a stream source module actually served, for the media item it served it for */
+    val modulePlaybackFormat: StateFlow<ModulePlaybackFormat?> = service.modulePlaybackFormat
+
+    /**
+     * The format worth showing: a module's own stream when one is playing this track, and
+     * the catalogued one otherwise. Everything that labels the stream reads this.
+     */
+    val displayFormat: Flow<FormatEntity?> =
+        combine(mediaMetadata, currentFormat, modulePlaybackFormat) { metadata, stored, module ->
+            if (module != null && module.mediaId == metadata?.id) module.format else stored
         }
 
     val queueTitle = MutableStateFlow<String?>(null)

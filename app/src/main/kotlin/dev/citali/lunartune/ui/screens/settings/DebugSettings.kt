@@ -419,7 +419,7 @@ private fun DebugTimestampItem(
 private fun NerdStatsSection(playerConnection: dev.citali.lunartune.playback.PlayerConnection?) {
     if (playerConnection == null) return
 
-    val currentFormat by playerConnection.currentFormat.collectAsState(initial = null)
+    val currentFormat by playerConnection.displayFormat.collectAsState(initial = null)
     val mediaMetadata by playerConnection.mediaMetadata.collectAsState()
     val player = playerConnection.player
 
