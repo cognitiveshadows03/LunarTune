@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
+    // the opt-in :benchmark module; declaring it here puts AGP on the build classpath with a
+    // known version, which is what a subproject needs to request the plugin by alias
+    alias(libs.plugins.android.test) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.jvm) apply false
     alias(libs.plugins.compose.compiler) apply false
