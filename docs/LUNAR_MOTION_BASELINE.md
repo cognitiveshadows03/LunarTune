@@ -142,6 +142,35 @@ Measured, not aspirational:
 A 60 Hz mid-range device will never hit "0 % slow". These are the numbers to beat, and every
 future change has to be compared against this table, not against a 120 Hz flagship.
 
+## 2b. Run 2 — same device, blur gate shipped (`acd9ffd`)
+
+| | run 1 | run 2 |
+|---|---|---|
+| Haze RenderScript frames | storm for ~5 s, twice | **zero** (`Adreno-RS` / `RenderScript` / `NdkImageReader`: 0 lines) |
+| worst animation frame | 650 ms | **383 ms** |
+| heaviest cluster | 48.9 % slow | 34.7 % slow |
+| GC cycles / collector time | ~1–2 per 5 s, 100–560 ms each | 65 cycles, **12.2 s of collector time** in 106 s |
+| JIT compiles mid-animation | 5–15 MB each | `Compiler allocated 12MB`, `14MB`, then 4–6 MB each, several per second |
+
+Read honestly: the blur gate removed the *tail*. Nothing in run 2 stalls for half a second
+during an animation any more, and the RenderScript storm is simply gone. What it did not
+remove is the *sustained* cost — three stretches still run at 21 %, 33 % and 35 % slow frames,
+with 33–66 ms frames (two to four vsyncs each) rather than 100–650 ms ones.
+
+Two numbers explain those stretches, and neither is an animation curve:
+
+- **GC**: 3 850 ms of collector time inside the 33 % cluster, 3 118 ms inside the 35 % one.
+  That is roughly 150 ms of GC per second while the UI is animating, with heap swinging
+  ±15–35 MB in five-second windows. The churn did not go away with the blur, so the blur was
+  not its main source.
+- **JIT**: the collapse windows are full of `Compiler allocated 12MB to compile void yu8.e(...)`
+  — Compose UI methods being compiled while the user is looking at them. There is still no
+  Baseline Profile, and this was a fresh install, so this is the worst case it will ever be.
+
+Caveat worth keeping: run 1 and run 2 are not the same session shape (15.6 % vs 9.6 % overall
+is not a regression — run 2 spent far more of its length inside the heavy interactions). The
+per-cluster comparison above is the one that means something.
+
 ### 2.1 One open question
 
 Which of the five journeys is segment C? The log says the collapse ends in
