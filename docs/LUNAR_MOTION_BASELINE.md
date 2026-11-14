@@ -242,8 +242,10 @@ Job to add at the same time: a `workflow_dispatch`-only workflow that runs
 
 ### Baseline Profile (generated and committed)
 
-`app/src/main/baseline-prof.txt` is in the tree: **22,118 rules**, generated on an API 33
-x86_64 emulator by the `Baseline Profile` workflow on 2026-11-14. AGP packages it into every
+`app/src/main/baseline-prof.txt` is in the tree: **22,262 rules**, regenerated on an API 33
+x86_64 emulator after the journeys were widened to the primary tabs, a drill and the player
+(the first run covered Home only: 22,118 rules, and run 4 showed library and account methods
+still being compiled at runtime). AGP packages it into every
 APK, and ART compiles those methods ahead of time at install, which is what the JIT lines in
 run 2 were paying for repeatedly.
 
