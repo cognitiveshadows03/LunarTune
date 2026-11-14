@@ -60,7 +60,12 @@ jobs:
           disable-animations: false
           emulator-boot-timeout: 900
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: ./gradlew -Pbenchmark :benchmark:connectedBenchmarkAndroidTest
+          # connectedBenchmarkAndroidTest builds and installs the *test* APK but not the app
+          # under test, so the app goes on first, explicitly.
+          script: |
+            set -e
+            ./gradlew -Pbenchmark :app:installGmsMobileUniversalProfileable
+            ./gradlew -Pbenchmark :benchmark:connectedBenchmarkAndroidTest
 
       - name: Locate the generated profile
         id: profile

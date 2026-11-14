@@ -90,9 +90,10 @@ class BaselineProfileGenerator {
 
     private companion object {
         /**
-         * The benchmark build type targets the app's `profileable` flavour of this package, so
-         * the id is the release one - not the `.debug` suffixed build.
+         * The app's `profileable` build type carries an `applicationIdSuffix`, so the installed
+         * package is the suffixed one. Targeting the bare id fails with "Unable to find target
+         * package ... is it installed?" even when the APK is right there.
          */
-        const val TargetPackage = "dev.citali.lunartune"
+        const val TargetPackage = "dev.citali.lunartune.profileable"
     }
 }
