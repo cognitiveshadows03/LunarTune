@@ -56,6 +56,10 @@ Do each one on a clean run of the app, with the switch on, and note the summary 
 5. **Sheet drag** — drag the player up and let it go, catch it mid-flight and drag it back.
    (Interruption quality; the phase 4 work is judged here.)
 
+**Write down the clock time at the start of each journey.** Run 1 had to be split into
+segments by guessing from other log lines, which is why segment C still has no name. A
+timestamp per journey costs nothing and makes the next run directly attributable.
+
 ### The table to fill
 
 One row per journey per device. Re-run the whole table after any motion change; that's what
