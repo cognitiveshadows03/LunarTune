@@ -1,6 +1,7 @@
 plugins {
+    // AGP 9 has Kotlin support built in; adding org.jetbrains.kotlin.android here is an error,
+    // which is why the app module doesn't apply it either.
     alias(libs.plugins.android.test)
-    alias(libs.plugins.kotlin.android)
 }
 
 /*
