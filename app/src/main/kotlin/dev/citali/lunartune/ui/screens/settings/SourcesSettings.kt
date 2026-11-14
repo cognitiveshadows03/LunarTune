@@ -83,10 +83,15 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Tolerance slider bounds, in seconds. */
+// how often the page re-reads what each module last said about itself
+private const val MODULE_STATE_REFRESH_MS = 10_000L
+// how often a module's own page re-checks a module that isn't answering
+private const val MODULE_RECHECK_MS = 15_000L
 private const val MIN_TOLERANCE = 2
 private const val MAX_TOLERANCE = 20
 private const val DEFAULT_TOLERANCE = 10
@@ -110,6 +115,19 @@ fun SourcesSettings(navController: NavController) {
     var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
     // bumped when a module's remembered stream is cleared, so its row redraws
     var lastStreamVersion by remember { mutableStateOf(0) }
+    // what each module last said about itself, re-read on a timer so a module that comes
+    // back is shown as back without anyone having to open it or press anything
+    var moduleStates by remember { mutableStateOf<Map<String, AccountState>>(emptyMap()) }
+    LaunchedEffect(orderedModules) {
+        while (true) {
+            moduleStates =
+                orderedModules
+                    .mapNotNull { module ->
+                        runCatching { module.accountState() }.getOrNull()?.let { module.info.id to it }
+                    }.toMap()
+            delay(MODULE_STATE_REFRESH_MS)
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -163,6 +181,7 @@ fun SourcesSettings(navController: NavController) {
                 orderedModules.forEach { module ->
                     ModuleCard(
                         module = module,
+                        state = moduleStates[module.info.id],
                         lastStreamVersion = lastStreamVersion,
                         onClick = { selectedModuleId = module.info.id },
                     )
@@ -215,6 +234,7 @@ private fun moduleIcon(id: String): Int =
 @Composable
 private fun ModuleCard(
     module: SourceModule,
+    state: AccountState?,
     lastStreamVersion: Int,
     onClick: () -> Unit,
 ) {
@@ -223,13 +243,21 @@ private fun ModuleCard(
     // fidelity, so the row says what came back rather than just "on"
     val lastStream = remember(module, lastStreamVersion) { module.lastStreamLabel() }
     val onOff = stringResource(if (enabled) R.string.sources_module_on else R.string.sources_module_off)
-    val detail = if (enabled && lastStream != null) lastStream else NO_ACCOUNT_LABEL
+    // a module that stopped answering says so on its row too, not only on its own page
+    val down = state as? AccountState.Expired
+    val detail =
+        when {
+            down != null -> down.reason
+            enabled && lastStream != null -> lastStream
+            else -> NO_ACCOUNT_LABEL
+        }
     SourceCard(
         iconRes = moduleIcon(module.info.id),
         title = module.info.name,
         subtitle = "$onOff · $detail",
         enabled = enabled,
         showStatusDot = true,
+        healthy = down == null,
         meta =
             listOf(
                 stringResource(R.string.sources_songs_chip),
@@ -258,6 +286,7 @@ private fun SourceCard(
     subtitle: String,
     enabled: Boolean,
     showStatusDot: Boolean,
+    healthy: Boolean = true,
     meta: List<String> = emptyList(),
     trailing: @Composable () -> Unit,
     onClick: (() -> Unit)? = null,
@@ -304,10 +333,10 @@ private fun SourceCard(
                                     .size(6.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (enabled) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        when {
+                                            !healthy -> MaterialTheme.colorScheme.error
+                                            enabled -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                         },
                                     ),
                         )
@@ -442,7 +471,19 @@ private fun ModuleDetailSheet(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(module.info.id) {
-        accountState = runCatching { module.accountState() }.getOrNull()
+        // the page keeps itself current: a module that stopped answering is asked again on
+        // its own, so it comes back on the page without anyone pressing anything
+        while (true) {
+            val stored =
+                withContext(Dispatchers.IO) { runCatching { module.accountState() }.getOrNull() }
+            if (stored != null) accountState = stored
+            if (stored is AccountState.Expired) {
+                val probed =
+                    withContext(Dispatchers.IO) { runCatching { module.verifyAccount() }.getOrNull() }
+                if (probed != null) accountState = probed
+            }
+            delay(MODULE_RECHECK_MS)
+        }
     }
 
     ModalBottomSheet(

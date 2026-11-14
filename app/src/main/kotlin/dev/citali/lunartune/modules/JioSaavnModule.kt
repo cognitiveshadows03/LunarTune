@@ -68,6 +68,13 @@ class JioSaavnModule : SourceModule {
         }
     }
 
+    /** true while a recent failure still stands: playback is not held up by it */
+    private fun isCoolingDown(): Boolean {
+        if (host.storage.get("unreachable") == null) return false
+        val markedAt = host.storage.get("unreachable_at")?.toLongOrNull() ?: return false
+        return System.currentTimeMillis() - markedAt < SkipAfterFailureMs
+    }
+
     override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
 
     override fun clearLastStream() = host.storage.set(LastQualityKey, null)
@@ -81,6 +88,10 @@ class JioSaavnModule : SourceModule {
         diagnose(track, picks) {}
 
     override suspend fun diagnose(track: TrackQuery, picks: Map<String, String>, report: (DiagnosticStep) -> Unit): ResolveResult {
+        if (isCoolingDown()) {
+            report(DiagnosticStep("Find the song", null, "JioSaavn didn't answer a moment ago"))
+            return ResolveResult.Unavailable("JioSaavn didn't answer a moment ago")
+        }
         val key = "${track.title}|${track.artists.joinToString(",")}"
         val missedAt = misses[key]
         if (missedAt != null && System.currentTimeMillis() - missedAt < MissMemoryMs) {
@@ -237,6 +248,7 @@ class JioSaavnModule : SourceModule {
         private const val MediaKey = "38346591"
         private const val MissMemoryMs = 30L * 60 * 1000
         private const val UnreachableRetryMs = 10L * 60 * 1000
+        private const val SkipAfterFailureMs = 60L * 1000
         private val RenditionPattern = Regex("_(12|48|96|160|320)\\.(mp4|m4a|aac|mp3)(?=[?#]|$)", RegexOption.IGNORE_CASE)
         private const val UserAgent =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"

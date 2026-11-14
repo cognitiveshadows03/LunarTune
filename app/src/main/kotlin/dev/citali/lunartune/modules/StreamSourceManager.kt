@@ -43,9 +43,12 @@ object StreamSourceManager {
 
     private val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(6, TimeUnit.SECONDS)
+            .writeTimeout(6, TimeUnit.SECONDS)
+            // the whole call, not just each read: a module that hangs must give up while the
+            // song is still about to start, not after the fallback has been waited for twice
+            .callTimeout(5, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .followRedirects(true)
             .followSslRedirects(true)
@@ -178,6 +181,18 @@ object StreamSourceManager {
         }
 
         private fun execute(request: HttpRequest): HttpResponse {
+            val startedAt = System.currentTimeMillis()
+            return try {
+                executeOnce(request)
+            } catch (e: java.io.IOException) {
+                // a call that fails straight away is usually a stale socket rather than a
+                // server that has gone away, so one quick second try is worth it
+                if (System.currentTimeMillis() - startedAt > TransientRetryWindowMs) throw e
+                executeOnce(request)
+            }
+        }
+
+        private fun executeOnce(request: HttpRequest): HttpResponse {
             val builder = Request.Builder().url(request.url).method(request.method, request.body?.toRequestBody(request.contentType?.toMediaTypeOrNull()))
             request.headers.forEach { (name, value) -> builder.header(name, value) }
             httpClient.newCall(builder.build()).execute().use { response ->
@@ -198,6 +213,9 @@ object StreamSourceManager {
         override val folder: File
             get() = File(context.cacheDir, "modules/$moduleId").apply { mkdirs() }
     }
+
+    /** how soon a failed call has to have failed to be worth retrying at once */
+    private const val TransientRetryWindowMs = 1_500L
 
     private fun String.toMediaTypeOrNull() =
         runCatching { this.toMediaType() }.getOrNull()

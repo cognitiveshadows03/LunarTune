@@ -98,6 +98,13 @@ class MonochromeModule : SourceModule {
         }
     }
 
+    /** true while a recent failure still stands: playback is not held up by it */
+    private fun isCoolingDown(): Boolean {
+        if (host.storage.get(DownKey) == null) return false
+        val markedAt = host.storage.get(DownAtKey)?.toLongOrNull() ?: return false
+        return System.currentTimeMillis() - markedAt < SkipAfterFailureMs
+    }
+
     override fun lastStreamLabel(): String? = host.storage.get(LastQualityKey)
 
     override fun clearLastStream() = host.storage.set(LastQualityKey, null)
@@ -111,6 +118,12 @@ class MonochromeModule : SourceModule {
         diagnose(track, picks) {}
 
     override suspend fun diagnose(track: TrackQuery, picks: Map<String, String>, report: (DiagnosticStep) -> Unit): ResolveResult {
+        // a server that just failed would only cost this song the same wait again, so it
+        // is left out of this one attempt and tried again on the next
+        if (isCoolingDown()) {
+            report(DiagnosticStep("Find the song", null, "Monochrome didn't answer a moment ago"))
+            return ResolveResult.Unavailable("Monochrome didn't answer a moment ago")
+        }
         val key = "${track.title}|${track.artists.joinToString(",")}"
         val missedAt = misses[key]
         if (missedAt != null && System.currentTimeMillis() - missedAt < MissMemoryMs) {
@@ -296,8 +309,11 @@ class MonochromeModule : SourceModule {
         private const val DownAtKey = "unreachable_at"
         private const val SearchLimit = 8
         private const val MissMemoryMs = 30L * 60 * 1000
-        // how long a server that didn't answer is left alone before it's tried again
+        // how long a failure stays on the module's page before it reads as clean again
         private const val UnreachableRetryMs = 10L * 60 * 1000
+        // how long playback leaves the server alone first, so one bad answer doesn't
+        // cost every song its own wait before the fallback starts
+        private const val SkipAfterFailureMs = 60L * 1000
         private const val UserAgent =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         private val headers = mapOf("Accept" to "application/json", "User-Agent" to UserAgent)
