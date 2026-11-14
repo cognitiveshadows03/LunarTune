@@ -71,6 +71,7 @@ import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
+import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.player.CustomisablePlayerStyles
 import dev.citali.lunartune.ui.player.StyleOverrides
@@ -320,14 +321,23 @@ fun PlayerStyleCarousel(
                     .fillMaxWidth()
                     .heightIn(max = maxSheetHeight)
                     .clip(sheetShape)
-                    .hazeBlur(
-                        input = HazeInput.Sources(hazeState),
-                        style =
-                            frostedTopMenuStyle(
-                                scrim = sheetScrim,
-                                fallbackScrim = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
-                            ),
-                        performanceMode = HazePerformanceMode.Performance,
+                    .then(
+                        if (HazeLiveBlurSupported) {
+                            Modifier.hazeBlur(
+                                input = HazeInput.Sources(hazeState),
+                                style =
+                                    frostedTopMenuStyle(
+                                        scrim = sheetScrim,
+                                        fallbackScrim =
+                                            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
+                                    ),
+                                performanceMode = HazePerformanceMode.Performance,
+                            )
+                        } else {
+                            Modifier.background(
+                                MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.97f),
+                            )
+                        },
                     )
                     .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.22f))
                     .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)), sheetShape),

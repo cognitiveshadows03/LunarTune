@@ -207,7 +207,10 @@ work:
 1. **Blur off the flight path** (was Phase 5). The single biggest number in the table: 48.9 %
    of frames dropped, five consecutive windows at 33–68 %, lined up with RenderScript and a
    250 ms GC. This is the one change that can plausibly move segment C from 49 % to single
-   digits.
+   digits. **Shipped:** `HazeLiveBlurSupported` — below Android 12 the frost is drawn (scrim,
+   rim glow, palette tint) instead of computed, and the `hazeBlur` modifier is not attached at
+   all, so nothing is captured. Above 12 nothing changes. Measured on the next run, not
+   claimed here.
 2. **Allocation churn** (was Phase 5). 15–26 MB freed every few seconds is a GC pump; find
    what allocates it and stop it. Blur is the known contributor; the rest needs a quick hunt.
 3. **Baseline Profile** (was Phase 0's second half). The JIT compiles are *in* the worst

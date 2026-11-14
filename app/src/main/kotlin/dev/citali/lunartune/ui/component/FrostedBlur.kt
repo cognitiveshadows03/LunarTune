@@ -7,6 +7,7 @@
 
 package dev.citali.lunartune.ui.component
 
+import android.os.Build
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.datastore.preferences.core.floatPreferencesKey
@@ -43,12 +44,30 @@ val FrostedBgGlowKey = floatPreferencesKey("frostedBgGlow")
 const val FrostedFallbackAlpha = 0.92f
 
 /**
+ * Whether live frosted blur is worth running on this device.
+ *
+ * Haze blurs a captured frame. On Android 12+ that capture and blur happen on the GPU
+ * through [android.graphics.RenderEffect]. Below 12 there is no RenderEffect, and Haze
+ * falls back to a native (RenderScript) path that re-captures and re-blurs the region on
+ * every frame — measured on a Snapdragon 636 at 60 Hz as 49 % dropped frames for the whole
+ * duration of an animation, plus a 250 ms GC, because each pass allocates a fresh set of
+ * full-frame buffers.
+ *
+ * So below 12 the frost is drawn, not computed: the surfaces keep their scrim, their rim
+ * glow and their palette tint, and give up the refracted background. Call sites skip the
+ * [dev.chrisbanes.haze.blur.hazeBlur] modifier entirely rather than attaching it with
+ * blur disabled, because not attaching it is the only way to be certain nothing is
+ * captured at all.
+ */
+val HazeLiveBlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+/**
  * AniDash-style frosted blur for the navigation bar: a small live-blur radius
  * over a 50% surface scrim. The radius stays tiny on purpose — a small kernel
  * over a small pill is what keeps this at full fps on weak GPUs.
  *
- * blurEnabled(true) forces Haze's RenderScript path on Android 11 and below
- * (Haze's default there is a static scrim with no blur).
+ * [HazeLiveBlurSupported] gates the live blur: below Android 12 this style still supplies
+ * the scrim, glow and tint, but nothing is captured or blurred.
  *
  * @param bgGlow 0-1 background-item glow: adds extra blur plus a brightening
  * tint over the content behind the bar, so background items glow as it rises.
@@ -61,7 +80,7 @@ fun frostedNavBarStyle(
 ): HazeBlurStyle {
     val glow = bgGlow.coerceIn(0f, 1f)
     return HazeBlurStyle {
-        blurEnabled(true)
+        blurEnabled(HazeLiveBlurSupported)
         blurRadius(
             (blurRadiusDp.coerceIn(0f, FrostedBlurMax) + glow * FrostedBgGlowExtraBlur).dp,
         )
@@ -87,7 +106,7 @@ fun frostedMiniPlayerStyle(
     fallbackScrim: Color,
 ): HazeBlurStyle =
     HazeBlurStyle {
-        blurEnabled(true)
+        blurEnabled(HazeLiveBlurSupported)
         blurRadius(14.dp)
         backgroundColor(scrim)
         colorEffects(emptyList())
@@ -106,7 +125,7 @@ fun frostedTopMenuStyle(
     fallbackScrim: Color,
 ): HazeBlurStyle =
     HazeBlurStyle {
-        blurEnabled(true)
+        blurEnabled(HazeLiveBlurSupported)
         blurRadius(18.dp)
         backgroundColor(scrim)
         colorEffects(emptyList())

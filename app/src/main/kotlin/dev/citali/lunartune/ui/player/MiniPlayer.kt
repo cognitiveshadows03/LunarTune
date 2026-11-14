@@ -46,6 +46,7 @@ import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
+import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
 import dev.citali.lunartune.ui.component.frostedMiniPlayerStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -361,7 +362,7 @@ private fun MiniPlayerBackground(
             Box(
                 modifier =
                     modifier.then(
-                        if (hazeState != null && frostedStyle != null) {
+                        if (HazeLiveBlurSupported && hazeState != null && frostedStyle != null) {
                             Modifier.hazeBlur(
                                 input = HazeInput.Sources(hazeState),
                                 style = frostedStyle,

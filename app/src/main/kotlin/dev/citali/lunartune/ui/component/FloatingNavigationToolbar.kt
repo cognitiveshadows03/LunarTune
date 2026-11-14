@@ -294,7 +294,11 @@ fun FloatingNavigationToolbar(
                                 .matchParentSize()
                                 .clip(navigationShape)
                                 .then(
-                                    if (!staticFrost && hazeState != null && frostedStyle != null) {
+                                    if (!staticFrost &&
+                                        HazeLiveBlurSupported &&
+                                        hazeState != null &&
+                                        frostedStyle != null
+                                    ) {
                                         Modifier.hazeBlur(
                                             input = HazeInput.Sources(hazeState),
                                             style = frostedStyle,

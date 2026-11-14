@@ -98,6 +98,7 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.PreferenceEntry
 import dev.citali.lunartune.ui.component.PreferenceGroup
 import dev.citali.lunartune.ui.component.SwitchPreference
+import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
 import dev.citali.lunartune.ui.component.frostedNavBarStyle
 import dev.citali.lunartune.ui.screens.Screens
 import dev.citali.lunartune.ui.utils.backToMain
@@ -745,10 +746,16 @@ private fun NavBarPreview(
                             Modifier
                                 .matchParentSize()
                                 .clip(shape)
-                                .hazeBlur(
-                                    input = HazeInput.Sources(previewHazeState),
-                                    style = previewFrostedStyle,
-                                    performanceMode = HazePerformanceMode.Performance,
+                                .then(
+                                    if (HazeLiveBlurSupported) {
+                                        Modifier.hazeBlur(
+                                            input = HazeInput.Sources(previewHazeState),
+                                            style = previewFrostedStyle,
+                                            performanceMode = HazePerformanceMode.Performance,
+                                        )
+                                    } else {
+                                        Modifier
+                                    },
                                 )
                                 .background(
                                     baseColor.copy(alpha = dim),

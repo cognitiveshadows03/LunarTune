@@ -319,6 +319,7 @@ import dev.citali.lunartune.ui.component.NetworkStatusBanner
 import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
 import dev.citali.lunartune.ui.component.TvNavigationRail
+import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.component.navBarLiveBlurSource
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
@@ -3831,17 +3832,26 @@ private fun FrostedTopBarMenu(
                                         shade = sheetShadow,
                                     )
                                 }.clip(sheetShape)
-                                .hazeBlur(
-                                    input = HazeInput.Sources(hazeState),
-                                    style =
-                                        frostedTopMenuStyle(
-                                            // Light enough that the blur from the screen behind
-                                            // actually reads through the panel: the frost lives in the
-                                            // gaps between the bars, and an opaque fill hid all of it.
-                                            scrim = barColor.copy(alpha = 0.50f),
-                                            fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
-                                        ),
-                                    performanceMode = HazePerformanceMode.Performance,
+                                .then(
+                                    if (HazeLiveBlurSupported) {
+                                        Modifier.hazeBlur(
+                                            input = HazeInput.Sources(hazeState),
+                                            style =
+                                                frostedTopMenuStyle(
+                                                    // Light enough that the blur from the screen
+                                                    // behind actually reads through the panel: the
+                                                    // frost lives in the gaps between the bars, and an
+                                                    // opaque fill hid all of it.
+                                                    scrim = barColor.copy(alpha = 0.50f),
+                                                    fallbackScrim = barColor.copy(alpha = FrostedFallbackAlpha),
+                                                ),
+                                            performanceMode = HazePerformanceMode.Performance,
+                                        )
+                                    } else {
+                                        // No live blur below 12: the panel paints the frost's
+                                        // fallback scrim itself so the labels stay readable.
+                                        Modifier.background(barColor.copy(alpha = FrostedFallbackAlpha))
+                                    },
                                 )
                                 // A single palette tint over the frost, dimmed just enough for the
                                 // white labels to stay readable on bright artwork behind the sheet.
