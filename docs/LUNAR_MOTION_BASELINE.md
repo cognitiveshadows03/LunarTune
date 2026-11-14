@@ -205,7 +205,28 @@ Job to add at the same time: a `workflow_dispatch`-only workflow that runs
 `:benchmark:connectedBenchmarkAndroidTest` on an emulator and uploads the JSON — never on
 `push`, so the APK build stays the only automatic gate.
 
-### Baseline Profile
+### Baseline Profile (generated and committed)
+
+`app/src/main/baseline-prof.txt` is in the tree: **22,118 rules**, generated on an API 33
+x86_64 emulator by the `Baseline Profile` workflow on 2026-11-14. AGP packages it into every
+APK, and ART compiles those methods ahead of time at install, which is what the JIT lines in
+run 2 were paying for repeatedly.
+
+To regenerate after the startup or scrolling composables change: Actions → **Baseline
+Profile** → Run workflow, then commit the uploaded `baseline-prof.txt` over the existing one.
+`includeInStartupProfile` is on, so the profile carries startup rules too.
+
+Four things had to be right before the job could produce it, each of which failed once and
+reads like the next one's symptom:
+
+| Failure | Cause |
+|---|---|
+| `Timeout waiting for emulator to boot` | No KVM: the runner falls back to software x86 emulation |
+| `Error resolving plugin com.android.test ... unknown version` | The root has to declare the plugin `apply false` for a subproject to request it by alias |
+| `The org.jetbrains.kotlin.android plugin is no longer required since AGP 9.0` | AGP 9 supplies Kotlin; the app doesn't apply it either |
+| `Unable to find target package dev.citali.lunartune` | `connectedBenchmarkAndroidTest` doesn't install the app, **and** the profileable build type carries an `.profileable` application id suffix |
+
+### Why the profile matters here
 
 The profile is where the "free startup/scroll win" actually comes from, and it needs one
 artifact: `BaselineProfileRule` (in `benchmark-macro-junit4`) collecting startup + scroll, its
