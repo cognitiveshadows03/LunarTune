@@ -278,6 +278,26 @@ transition is *scrubbed* by the gesture, not played to completion. Consequences:
 
 ---
 
+## 7b. The player sheet handoff (Phase 2, first slice)
+
+The player is one full-screen container translated up and down (`BottomSheet.kt`), with the
+mini player as a separate overlay that fades out and the expanded content fading in from 25 %
+of the drag. There is no second destination, so a `SharedTransitionLayout` + `sharedBounds`
+refactor would mean re-shaping the player into two animated-visibility scopes — a large change
+to the most-used screen, which is not something to land blind.
+
+What did land is the cheap half of the same idea, entirely in the draw phase:
+
+| Before | After |
+|---|---|
+| Row fades out where it stands | Row scales up 6 % as it fades (`leave`) |
+| Sheet content pops in at full scale | Content grows 0.94 → 1.0 and rises the last 18 dp as it fades in |
+
+Both read from the same `state.progress`, so they arrive on one clock, and because they're
+`graphicsLayer` blocks nothing re-lays out. This buys "one thing arriving" without pretending
+to be true shared-element continuity — the artwork itself still does not fly between the two
+layouts. That remains the step change for the phase, and it needs a device to verify.
+
 ## 8. Checklist for new motion
 
 Before the checklist: a motion change is judged against numbers, not against how it looks

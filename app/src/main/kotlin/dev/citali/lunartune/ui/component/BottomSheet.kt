@@ -181,7 +181,19 @@ fun BottomSheet(
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = ((state.progress - 0.25f) * 4).coerceIn(0f, 1f)
+                            // The handoff. The expanded content used to pop in at full
+                            // scale on the same frame the row began fading, which reads as
+                            // two different things swapping. Growing from 0.94 while it
+                            // rises the last 18dp makes it one thing arriving - and because
+                            // this is the draw phase, it costs no layout. Build the scale
+                            // from the same reveal the sheet's backdrop uses, so the two
+                            // arrive on one clock.
+                            val reveal = ((state.progress - 0.25f) * 4).coerceIn(0f, 1f)
+                            alpha = reveal
+                            val grow = 0.94f + (0.06f * reveal)
+                            scaleX = grow
+                            scaleY = grow
+                            translationY = (1f - reveal) * 18.dp.toPx()
                         },
                 content = content,
             )
@@ -198,7 +210,14 @@ fun BottomSheet(
                             // footprint on top of the sheet's own dip.
                             val progress = state.progress.coerceIn(0f, 1f)
                             translationY = collapsedOffsetPx() * (1f - progress)
-                            alpha = 1f - (progress * 4).coerceAtMost(1f)
+                            val leave = (progress * 4).coerceAtMost(1f)
+                            alpha = 1f - leave
+                            // It grows a touch on the way out, so the row reads as the
+                            // content the sheet is taking over rather than something
+                            // dissolving in place beside it.
+                            val grow = 1f + (0.06f * leave)
+                            scaleX = grow
+                            scaleY = grow
                         }.then(
                             if (collapsedGesturesEnabled) {
                                 Modifier.clickable(
