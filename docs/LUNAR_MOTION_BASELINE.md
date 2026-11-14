@@ -181,14 +181,15 @@ Either way the fix is the same, so the work can start before the answer arrives.
 
 ---
 
-## 3. Macrobenchmark harness (spec'd, not built yet)
+## 3. Macrobenchmark harness (built, opt-in)
 
-Deliberately deferred, for one reason: it changes the Gradle project graph, and nothing in
-this repo can currently prove the change configures cleanly (no local Android SDK, and the
-APK workflow doesn't build benchmark code). Shipping an unvalidated module that could break
-every APK build is a worse trade than shipping the instrument above.
+The module now exists as `:benchmark`, behind a property guard: `settings.gradle.kts` includes
+it only when `-Pbenchmark` is passed, so a shipping build is not able to fail because of it.
+The job that drives it is `.github/workflows/baseline_profile.yml`, `workflow_dispatch` only —
+it boots an emulator, runs `:benchmark:connectedBenchmarkAndroidTest`, and uploads the
+resulting `baseline-prof.txt` for committing to `app/src/main/baseline-prof.txt`.
 
-When it's added, here is exactly what it has to account for — read from this project:
+What it had to account for, read from this project:
 
 | Constraint | Why |
 |---|---|

@@ -1,0 +1,86 @@
+name: Baseline Profile
+
+# Manual only, on purpose. This job boots an emulator, installs the app, drives it for a few
+# minutes and writes baseline-prof.txt. It is not a gate: the APK build is the only automatic
+# check, and a profile is an artifact someone looks at before committing.
+#
+# Run it when the app's startup or scrolling composables change, then commit the produced
+# app/src/main/baseline-prof.txt. AGP packages that file into every APK automatically.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate baseline profile
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set Up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-cleanup: on-success
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Software rendering + a snapshot-less boot keeps the run reproducible. The emulator is
+      # slower than the reference device, which is fine: a profile records which methods run,
+      # not how fast they ran.
+      - name: Generate the profile on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: ./gradlew -Pbenchmark :benchmark:connectedBenchmarkAndroidTest
+
+      - name: Locate the generated profile
+        id: profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          found="$(find benchmark -name 'baseline-prof.txt' -not -path '*/build/intermediates/*' | head -n 1 || true)"
+          if [ -z "$found" ]; then
+            echo "No baseline-prof.txt was produced. Full tree:"
+            find benchmark -name '*prof*' || true
+            exit 1
+          fi
+          echo "Found $found ($(wc -l < "$found") rules)"
+          cp "$found" app/src/main/baseline-prof.txt
+          echo "lines=$(wc -l < app/src/main/baseline-prof.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-prof
+          path: app/src/main/baseline-prof.txt
+          if-no-files-found: error
+
+      - name: Job summary
+        shell: bash
+        run: |
+          {
+            echo "### Baseline profile generated"
+            echo ""
+            echo "- rules: ${{ steps.profile.outputs.lines }}"
+            echo "- artifact: \`baseline-prof\`"
+            echo ""
+            echo "Commit the uploaded \`baseline-prof.txt\` to \`app/src/main/baseline-prof.txt\`."
+          } >> "$GITHUB_STEP_SUMMARY"

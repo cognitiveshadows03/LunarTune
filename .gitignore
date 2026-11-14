@@ -115,3 +115,5 @@ core.*
 /string_cleaner.py
 /.codexignore
 /android_resource_cleaner.py
+# Baseline Profile output written by the opt-in :benchmark module
+benchmark/src/main/generated/

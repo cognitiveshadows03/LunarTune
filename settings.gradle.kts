@@ -94,6 +94,13 @@ include(":shazamkit")
 include(":spotifycore")
 include(":morideobfuscator")
 
+// Opt-in macrobenchmark module: it exists to generate and check Baseline Profiles on a device
+// or emulator, and a shipping build must never be able to fail because of it. Without
+// -Pbenchmark it is not part of the build at all.
+if (gradle.startParameter.projectProperties.containsKey("benchmark")) {
+    include(":benchmark")
+}
+
 // Use a local copy of NewPipe Extractor by uncommenting the lines below.
 // We assume, that LunarTune and NewPipe Extractor have the same parent directory.
 // If this is not the case, please change the path in includeBuild().
