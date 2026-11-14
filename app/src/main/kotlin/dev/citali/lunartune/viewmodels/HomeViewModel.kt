@@ -315,6 +315,14 @@ class HomeViewModel
 
         private var wasLoggedIn = false
 
+        /**
+         * The cookie flow emits immediately on collect, so the first emission is never a
+         * "just logged in" event - it is just the value that was already stored. Without this
+         * the app ran a full sync on every cold start, which the frame timer caught colliding
+         * with the first painted frames.
+         */
+        private var hasObservedInitialCookie = false
+
         private fun filterHomeChips(chips: List<HomePage.Chip>?): List<HomePage.Chip>? =
             chips?.filterNot {
                 it.title.contains("podcasts", ignoreCase = true)
@@ -968,8 +976,10 @@ class HomeViewModel
                     .collect { cookie ->
                         try {
                             val isLoggedIn = hasYouTubeLoginCookie(cookie)
-                            val loginTransition = isLoggedIn && !wasLoggedIn
+                            val loginTransition =
+                                isLoggedIn && !wasLoggedIn && hasObservedInitialCookie
                             wasLoggedIn = isLoggedIn
+                            hasObservedInitialCookie = true
 
                             if (isLoggedIn && cookie != null && cookie.isNotEmpty()) {
                                 if (!prepareYouTubeAccount(cookie)) {
@@ -987,7 +997,8 @@ class HomeViewModel
                                     launch {
                                         try {
                                             if (context.dataStore.get(YtmSyncKey, true)) {
-                                                syncUtils.performFullSync()
+                                                // a login sync can ride along after a recent one
+                                                syncUtils.performFullSync(skipIfFresh = true)
                                             }
                                         } catch (e: Exception) {
                                             Timber.e(e, "Error during login-triggered sync")

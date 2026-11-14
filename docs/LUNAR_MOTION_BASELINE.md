@@ -181,6 +181,41 @@ Either way the fix is the same, so the work can start before the answer arrives.
 
 ---
 
+## 2c. Run 3 — with the Baseline Profile (`d772be6`)
+
+| | run 2 | run 3 |
+|---|---|---|
+| frames / windows | 6330 / 29 | 4512 / 21 |
+| slow | 15.6 % | **14.5 %** |
+| JIT + compiler lines per window | 1.28 | **0.71** (about 45 % fewer) |
+| biggest compile | 12–14 MB | 8.8 MB, and the same method twice |
+| GC cycles / collector time | 65 / 12.2 s | 50 / 10.8 s |
+| worst frame | 633 ms | 949 ms (one cold-start stall) |
+
+The owner's read on the build was "felt smoother", which matches the JIT line: fewer
+runtime compiles, smaller ones, and the profile is doing what a profile is for.
+
+What did *not* change is the reason the remaining stretches still drop frames. The first
+thirty seconds of run 3 are 15 %, 9 %, 43 %, 62 %, 18 %, 30 % slow, and the log says what was
+running underneath them:
+
+```
+20:10:10  syncLikedSongs / syncLibrarySongs: remote=127
+20:10:15  syncPlaylist: Fetched 14 songs
+20:10:19  syncPlaylist: Fetched 191 songs
+20:10:12  Choreographer: Skipped 33 frames!
+         GC freed 10-26MB every 1-2 s throughout
+```
+
+A full sync — liked songs, library, saved playlists and every auto-sync playlist — was
+running on top of the first painted frames, on every cold start, because the login-cookie flow
+emits its already-stored value on first collect and that was being read as "just logged in".
+
+**Shipped:** the sync now records when it last finished (`LastFullSyncAtKey`) and a
+login-triggered sync skips itself if that was under 30 minutes ago; the first cookie emission
+is no longer treated as a login (and a manual pull-to-refresh still always syncs). Untested on
+the next run, so treat it as a hypothesis with evidence, not a result.
+
 ## 3. Macrobenchmark harness (built, opt-in)
 
 The module now exists as `:benchmark`, behind a property guard: `settings.gradle.kts` includes

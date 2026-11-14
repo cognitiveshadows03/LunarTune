@@ -30,7 +30,9 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import androidx.datastore.preferences.core.edit
 import dev.citali.lunartune.constants.InnerTubeCookieKey
+import dev.citali.lunartune.constants.LastFullSyncAtKey
 import dev.citali.lunartune.constants.SelectedYtmPlaylistsKey
 import dev.citali.lunartune.constants.YtmSyncKey
 import dev.citali.lunartune.db.MusicDatabase
@@ -58,6 +60,15 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * How long a completed full sync stays fresh enough that opening the app again should not
+ * repeat it. A full sync pulls the liked songs, the library and every auto-sync playlist - 330
+ * songs in the reference device's log - and the frame timer caught it running underneath the
+ * first painted frames: 43-62% of frames dropped for the first half minute after launch, with
+ * GC freeing 10-26MB every one to two seconds.
+ */
+private const val FullSyncFreshMs = 30 * 60_000L
 
 @Singleton
 class SyncUtils
@@ -91,7 +102,10 @@ class SyncUtils
             }
         }
 
-        suspend fun performFullSync(authoritative: Boolean = false) =
+        suspend fun performFullSync(
+            authoritative: Boolean = false,
+            skipIfFresh: Boolean = false,
+        ) =
             withContext(Dispatchers.IO) {
                 if (authoritative) {
                     syncGeneration.incrementAndGet()
@@ -110,6 +124,14 @@ class SyncUtils
                         Timber.w("Skipping full sync - sync disabled")
                         return@withContext
                     }
+                    if (skipIfFresh && !authoritative) {
+                        val lastSyncAt = context.dataStore[LastFullSyncAtKey] ?: 0L
+                        val ageMs = System.currentTimeMillis() - lastSyncAt
+                        if (lastSyncAt > 0L && ageMs in 0 until FullSyncFreshMs) {
+                            Timber.d("Skipping full sync - last one finished ${ageMs / 1000}s ago")
+                            return@withContext
+                        }
+                    }
 
                     supervisorScope {
                         syncLikedSongs(authoritative = authoritative)
@@ -125,6 +147,10 @@ class SyncUtils
                             syncAutoSyncPlaylists()
                         }
                     }
+
+                    // stamped only when the sync actually got through, so a failed or
+                    // cancelled one doesn't earn the next launch a skip
+                    context.dataStore.edit { it[LastFullSyncAtKey] = System.currentTimeMillis() }
                 } catch (e: Exception) {
                     Timber.e(e, "Error during full sync")
                 } finally {
