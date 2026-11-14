@@ -280,6 +280,11 @@ transition is *scrubbed* by the gesture, not played to completion. Consequences:
 
 ## 8. Checklist for new motion
 
+Before the checklist: a motion change is judged against numbers, not against how it looks
+paused. `docs/LUNAR_MOTION_BASELINE.md` has the five journeys and the log lines to compare —
+turn on Debug → log slow frames, run the journey, and compare `slow %` and `worst` with the
+last recorded run.
+
 - [ ] Spec added to `LunarMotion` (or reuses an existing one)
 - [ ] Correct tool chosen (spring vs tween — decision tree §2)
 - [ ] Enter decelerates / exit accelerates / exit ≤ enter in duration
@@ -302,4 +307,6 @@ transition is *scrubbed* by the gesture, not played to completion. Consequences:
 | `ui/component/IconButton.kt`, `CapsuleNavigationBar.kt` | `press()` / `bouncy()` consumers |
 | `ui/component/NetworkStatusBanner.kt` | `MaxStretch` drag-stretch reference |
 | `ui/screens/settings/PlayerStyleCarousel.kt` | Crossfade, dots, pager graphicsLayer motion, the picker close route config |
+| `ui/utils/MotionFrames.kt` | In-app frame timing (Debug → log slow frames) |
 | `docs/LUNAR_MOTION.md` | This document |
+| `docs/LUNAR_MOTION_BASELINE.md` | How motion is measured: journeys, log format, baseline table |

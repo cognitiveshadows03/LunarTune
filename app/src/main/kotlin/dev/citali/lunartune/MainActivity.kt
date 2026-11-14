@@ -245,6 +245,7 @@ import dev.citali.lunartune.constants.FontPreferenceKey
 import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.HasPressedStarKey
 import dev.citali.lunartune.constants.LaunchCountKey
+import dev.citali.lunartune.constants.LogSlowFramesKey
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyle
 import dev.citali.lunartune.constants.MiniPlayerBackgroundStyleKey
 import dev.citali.lunartune.constants.MiniPlayerBottomSpacing
@@ -349,6 +350,7 @@ import dev.citali.lunartune.ui.utils.appBarScrollBehavior
 import dev.citali.lunartune.ui.utils.AppMotion
 import dev.citali.lunartune.ui.utils.backToMain
 import dev.citali.lunartune.ui.utils.resetHeightOffset
+import dev.citali.lunartune.utils.MotionFrames
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.SyncUtils
 import dev.citali.lunartune.utils.Updater
@@ -861,6 +863,14 @@ class MainActivity : FragmentActivity() {
                 defaultValue = true,
             )
             ApplyForcedRefreshRate(enabled = forceHighRefreshRate)
+            // frame timing for judging motion: on only while the debug switch is, since it
+            // costs a callback per frame
+            val logSlowFrames by rememberPreference(LogSlowFramesKey, defaultValue = false)
+            val frameContext = LocalContext.current.applicationContext
+            DisposableEffect(logSlowFrames) {
+                if (logSlowFrames) MotionFrames.start(frameContext) else MotionFrames.stop()
+                onDispose { MotionFrames.stop() }
+            }
             val fontPreference by rememberEnumPreference(FontPreferenceKey, defaultValue = AppFontPreference.DEFAULT)
             val customFontUri by rememberPreference(CustomFontUriKey, defaultValue = "")
             val legacyUseSystemFont by rememberPreference(UseSystemFontKey, defaultValue = false)

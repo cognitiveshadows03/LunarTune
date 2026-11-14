@@ -901,4 +901,6 @@
     <string name="module_field_reset">Reset</string>
     <string name="sources_last_stream">Last stream</string>
     <string name="sources_clear_last_stream">Clear</string>
+    <string name="log_slow_frames">Log slow frames</string>
+    <string name="description_log_slow_frames">Times every frame against this screen\'s refresh rate and writes the slow ones, plus a running summary, to Debug Logs under the Motion tag. Leave off unless you are tuning motion: it costs one callback per frame while on.</string>
 </resources>
