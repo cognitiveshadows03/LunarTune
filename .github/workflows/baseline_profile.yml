@@ -67,19 +67,24 @@ jobs:
             ./gradlew -Pbenchmark :app:installGmsMobileUniversalProfileable
             ./gradlew -Pbenchmark :benchmark:connectedBenchmarkAndroidTest
 
-      - name: Locate the generated profile
+      # BaselineProfileRule names its output after what it collected - a baseline profile, a
+      # startup profile, or both - and that naming has moved between versions. Rather than pin
+      # one name, take every profile the run produced and merge them: the format is line-based,
+      # so de-duplicating the union is exactly the profile we want, and a startup-only profile
+      # is still valid ART input if that's all a future version emits.
+      - name: Collect the generated profiles
         id: profile
         shell: bash
         run: |
           set -euo pipefail
-          found="$(find benchmark -name 'baseline-prof.txt' -not -path '*/build/intermediates/*' | head -n 1 || true)"
-          if [ -z "$found" ]; then
-            echo "No baseline-prof.txt was produced. Full tree:"
+          mapfile -t files < <(find benchmark -name '*prof*.txt' -path '*additional_output*' | sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No profile files were produced. Full tree:"
             find benchmark -name '*prof*' || true
             exit 1
           fi
-          echo "Found $found ($(wc -l < "$found") rules)"
-          cp "$found" app/src/main/baseline-prof.txt
+          printf 'Found %s\n' "${files[@]}"
+          cat "${files[@]}" | sort -u > app/src/main/baseline-prof.txt
           echo "lines=$(wc -l < app/src/main/baseline-prof.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Upload the profile
