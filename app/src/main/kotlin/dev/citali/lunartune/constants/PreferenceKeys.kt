@@ -696,11 +696,6 @@ enum class PreferredLyricsProvider {
     MEGALOBIZ,
     SIMPMUSIC,
     UNISON,
-    PAXSENIX_APPLE_MUSIC,
-    PAXSENIX_NETEASE,
-    PAXSENIX_SPOTIFY,
-    PAXSENIX_MUSIXMATCH,
-    PAXSENIX_YOUTUBE,
 }
 
 val DefaultLyricsProviderOrder =
@@ -713,11 +708,6 @@ val DefaultLyricsProviderOrder =
         PreferredLyricsProvider.MEGALOBIZ,
         PreferredLyricsProvider.SIMPMUSIC,
         PreferredLyricsProvider.UNISON,
-        PreferredLyricsProvider.PAXSENIX_APPLE_MUSIC,
-        PreferredLyricsProvider.PAXSENIX_NETEASE,
-        PreferredLyricsProvider.PAXSENIX_SPOTIFY,
-        PreferredLyricsProvider.PAXSENIX_MUSIXMATCH,
-        PreferredLyricsProvider.PAXSENIX_YOUTUBE,
     )
 
 fun deserializeLyricsProviderOrder(orderStr: String?): List<PreferredLyricsProvider> {

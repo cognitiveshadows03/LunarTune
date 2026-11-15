@@ -616,68 +616,11 @@ fun LyricsSettings(
                 )
             }
 
-            item {
-                SwitchPreference(
-                    title = { Text(stringResource(R.string.enable_paxsenix_lyrics)) },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixLyrics,
-                    onCheckedChange = onEnablePaxsenixLyricsChange,
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                PreferenceEntry(
-                    title = { Text(stringResource(R.string.paxsenix_stats)) },
-                    icon = { Icon(painterResource(R.drawable.stats), null) },
-                    onClick = { showPaxsenixStatsDialog = true },
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                SwitchPreference(
-                    title = { Text("Paxsenix: Apple Music") },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixAppleMusicLyrics,
-                    onCheckedChange = onEnablePaxsenixAppleMusicLyricsChange,
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                SwitchPreference(
-                    title = { Text("Paxsenix: NetEase") },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixNeteaseLyrics,
-                    onCheckedChange = onEnablePaxsenixNeteaseLyricsChange,
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                SwitchPreference(
-                    title = { Text("Paxsenix: Spotify") },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixSpotifyLyrics,
-                    onCheckedChange = onEnablePaxsenixSpotifyLyricsChange,
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                SwitchPreference(
-                    title = { Text("Paxsenix: Musixmatch") },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixMusixmatchLyrics,
-                    onCheckedChange = onEnablePaxsenixMusixmatchLyricsChange,
-                )
-            }
-
-            item(visible = enablePaxsenixLyrics) {
-                SwitchPreference(
-                    title = { Text("Paxsenix: YouTube") },
-                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
-                    checked = enablePaxsenixYouTubeLyrics,
-                    onCheckedChange = onEnablePaxsenixYouTubeLyricsChange,
-                )
-            }
-
+            // The Paxsenix sources used to sit here. Their API answered every request with
+            // 502 on the documented host and asks for a key it no longer issues on the
+            // current one, so five providers were making ten doomed requests per song and
+            // never returning a single line. They are out of the chain entirely rather than
+            // left as switches that cannot do anything.
             item {
                 PreferenceEntry(
                     title = { Text(stringResource(R.string.set_first_lyrics_provider)) },
@@ -835,11 +778,6 @@ private fun PreferredLyricsProvider.displayName(): String =
         PreferredLyricsProvider.BETTER_LYRICS_PORTATO -> "BetterLyrics Portato"
         PreferredLyricsProvider.YOULY_PLUS -> "YouLyPlus"
         PreferredLyricsProvider.SIMPMUSIC -> "SimpMusic"
-        PreferredLyricsProvider.PAXSENIX_APPLE_MUSIC -> "Paxsenix: Apple Music"
-        PreferredLyricsProvider.PAXSENIX_NETEASE -> "Paxsenix: NetEase"
-        PreferredLyricsProvider.PAXSENIX_SPOTIFY -> "Paxsenix: Spotify"
-        PreferredLyricsProvider.PAXSENIX_MUSIXMATCH -> "Paxsenix: Musixmatch"
-        PreferredLyricsProvider.PAXSENIX_YOUTUBE -> "Paxsenix: YouTube"
         PreferredLyricsProvider.UNISON -> "Unison"
     }
 
