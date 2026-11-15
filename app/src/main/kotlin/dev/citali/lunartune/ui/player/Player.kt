@@ -922,80 +922,72 @@ fun BottomSheetPlayer(
         mutableStateOf(false)
     }
 
-    LaunchedEffect(mediaMetadata?.id, playbackState, isPlaying, isUserSeeking, sliderPosition != null, aodModeEnabled) {
+    // The mini player's clock. Ported from upstream, which is one loop over one state.
+    //
+    // This fork had grown two position states and a set of guards, and the guard that hurt
+    // was the sheet's: it skipped every tick unless the sheet was cleanly collapsed,
+    // expanded or dismissed, so a sheet resting between anchors - which the drag can leave
+    // behind - kept the loop spinning at 50ms and never once wrote a position. The row then
+    // sat frozen while the music played on, and it looked like the mini player had stopped
+    // observing anything.
+    //
+    // Upstream's version is unconditional: while the player is ready, read the position
+    // every 100ms and write it. Two states are still written here only because the expanded
+    // sheet and the collapsed row read separate ones in this fork; they always hold the same
+    // number now, which is the point.
+    LaunchedEffect(mediaMetadata?.id, playbackState, aodModeEnabled) {
         val startTime = SystemClock.elapsedRealtime()
-        fun syncOnce(updateExpanded: Boolean) {
-            val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
-            val currentPlayerPosition = playerConnection.player.currentPosition
-            val currentPlayerDuration = playerConnection.player.duration
+        if (playbackState == STATE_READY) {
+            while (isActive) {
+                delay(if (aodModeEnabled) 500L else 100L)
+                val isTransitioning = playerConnection.player.currentMediaItem?.mediaId != mediaMetadata?.id
+                val currentPlayerPosition = playerConnection.player.currentPosition
+                val currentPlayerDuration = playerConnection.player.duration
 
-            if (isTransitioning) {
-                val elapsedSinceStart = SystemClock.elapsedRealtime() - startTime
-                miniPositionState.longValue = elapsedSinceStart
-                if (updateExpanded) {
+                if (isTransitioning) {
+                    // The queue moved on but the service has not published the new song yet:
+                    // counting from the transition keeps the row from showing the previous
+                    // track's position while the metadata catches up.
+                    val elapsedSinceStart = SystemClock.elapsedRealtime() - startTime
+                    miniPositionState.longValue = elapsedSinceStart
                     expandedPositionState.longValue = elapsedSinceStart
-                }
-                mediaMetadata?.let {
-                    val metaDuration = it.duration.toLong() * 1000
-                    duration = if (metaDuration > 0) metaDuration else 0L
-                }
-            } else {
-                miniPositionState.longValue = currentPlayerPosition
-                if (updateExpanded) {
-                    expandedPositionState.longValue = currentPlayerPosition
-                }
-                if (currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET) {
-                    duration = currentPlayerDuration
-                } else if (duration <= 0L || duration == C.TIME_UNSET) {
                     mediaMetadata?.let {
-                        val metadataDuration = it.duration.toLong() * 1000
-                        if (metadataDuration > 0L) duration = metadataDuration
+                        val metaDuration = it.duration.toLong() * 1000
+                        duration = if (metaDuration > 0) metaDuration else 0L
                     }
-                }
-                if (!isUserSeeking) {
-                    sliderPosition?.let { targetPosition ->
-                        val clampedTargetPosition =
-                            when {
-                                currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET -> {
-                                    targetPosition.coerceIn(0L, currentPlayerDuration)
-                                }
+                } else {
+                    miniPositionState.longValue = currentPlayerPosition
+                    expandedPositionState.longValue = currentPlayerPosition
+                    if (currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET) {
+                        duration = currentPlayerDuration
+                    } else if (duration <= 0L || duration == C.TIME_UNSET) {
+                        mediaMetadata?.let {
+                            val metadataDuration = it.duration.toLong() * 1000
+                            if (metadataDuration > 0L) duration = metadataDuration
+                        }
+                    }
+                    if (!isUserSeeking) {
+                        sliderPosition?.let { targetPosition ->
+                            val clampedTargetPosition =
+                                when {
+                                    currentPlayerDuration > 0L && currentPlayerDuration != C.TIME_UNSET -> {
+                                        targetPosition.coerceIn(0L, currentPlayerDuration)
+                                    }
 
-                                else -> {
-                                    targetPosition.coerceAtLeast(0L)
+                                    else -> {
+                                        targetPosition.coerceAtLeast(0L)
+                                    }
                                 }
+                            if (abs(currentPlayerPosition - clampedTargetPosition) <= SeekbarSettleToleranceMs) {
+                                sliderPosition = null
                             }
-                        if (abs(currentPlayerPosition - clampedTargetPosition) <= SeekbarSettleToleranceMs) {
-                            sliderPosition = null
                         }
                     }
                 }
             }
-        }
-
-        if (playbackState == STATE_READY) {
-            syncOnce(updateExpanded = state.isExpandedOrExpanding)
-            if (isPlaying || isUserSeeking || sliderPosition != null) {
-                while (isActive) {
-                    val isSheetTransitioning = !state.isCollapsed && !state.isExpanded && !state.isDismissed
-                    if (isSheetTransitioning) {
-                        delay(50L)
-                        continue
-                    }
-                    val expanded = state.isExpanded
-                    delay(
-                        when {
-                            aodModeEnabled -> 500L
-                            expanded -> 100L
-                            else -> 250L
-                        },
-                    )
-                    if (!state.isCollapsed && !state.isExpanded && !state.isDismissed) {
-                        continue
-                    }
-                    syncOnce(updateExpanded = state.isExpanded)
-                }
-            }
         } else {
+            // Buffering, ended, idle: no clock to read, so show where the queue stands
+            // instead of leaving the last written value on screen.
             mediaMetadata?.let {
                 val metaDuration = it.duration.toLong() * 1000
                 duration = if (metaDuration > 0) metaDuration else 0L
