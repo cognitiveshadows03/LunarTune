@@ -44,6 +44,7 @@ class LyricsHelper
                 LrcLibLyricsProvider,
                 KuGouLyricsProvider,
                 MegalobizLyricsProvider,
+                MusixmatchLyricsProvider,
                 SimpMusicLyricsProvider,
                 UnisonLyricsProvider,
                 YouTubeSubtitleLyricsProvider,
@@ -234,6 +235,7 @@ class LyricsHelper
                     PreferredLyricsProvider.BETTER_LYRICS_PORTATO to BetterLyricsPortatoProvider,
                     PreferredLyricsProvider.YOULY_PLUS to YouLyPlusLyricsProvider,
                     PreferredLyricsProvider.SIMPMUSIC to SimpMusicLyricsProvider,
+                    PreferredLyricsProvider.MUSIXMATCH to MusixmatchLyricsProvider,
                     PreferredLyricsProvider.UNISON to UnisonLyricsProvider,
                 )
             val userOrdered = orderedEnums.mapNotNull { providerMap[it] }

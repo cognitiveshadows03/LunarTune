@@ -77,6 +77,7 @@ import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.constants.EnableKugouKey
 import dev.citali.lunartune.constants.EnableLrcLibKey
 import dev.citali.lunartune.constants.EnableMegalobizLyricsKey
+import dev.citali.lunartune.constants.EnableMusixmatchLyricsKey
 import dev.citali.lunartune.constants.EnablePaxsenixAppleMusicLyricsKey
 import dev.citali.lunartune.constants.EnablePaxsenixLyricsKey
 import dev.citali.lunartune.constants.EnablePaxsenixMusixmatchLyricsKey
@@ -190,6 +191,7 @@ fun LyricsSettings(
         rememberPreference(key = EnableYouLyPlusLyricsKey, defaultValue = true)
     val (enableSimpMusicLyrics, onEnableSimpMusicLyricsChange) = rememberPreference(key = EnableSimpMusicLyricsKey, defaultValue = true)
     val (enableMegalobizLyrics, onEnableMegalobizLyricsChange) = rememberPreference(key = EnableMegalobizLyricsKey, defaultValue = true)
+    val (enableMusixmatchLyrics, onEnableMusixmatchLyricsChange) = rememberPreference(key = EnableMusixmatchLyricsKey, defaultValue = true)
     val (enablePaxsenixLyrics, onEnablePaxsenixLyricsChange) = rememberPreference(key = EnablePaxsenixLyricsKey, defaultValue = true)
     val (enablePaxsenixAppleMusicLyrics, onEnablePaxsenixAppleMusicLyricsChange) =
         rememberPreference(
@@ -609,6 +611,15 @@ fun LyricsSettings(
 
             item {
                 SwitchPreference(
+                    title = { Text(stringResource(R.string.enable_musixmatch_lyrics)) },
+                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
+                    checked = enableMusixmatchLyrics,
+                    onCheckedChange = onEnableMusixmatchLyricsChange,
+                )
+            }
+
+            item {
+                SwitchPreference(
                     title = { Text(stringResource(R.string.enable_megalobiz_lyrics)) },
                     icon = { Icon(painterResource(R.drawable.lyrics), null) },
                     checked = enableMegalobizLyrics,
@@ -774,6 +785,7 @@ private fun PreferredLyricsProvider.displayName(): String =
         PreferredLyricsProvider.LRCLIB -> "LrcLib"
         PreferredLyricsProvider.KUGOU -> "KuGou"
         PreferredLyricsProvider.MEGALOBIZ -> "Megalobiz"
+        PreferredLyricsProvider.MUSIXMATCH -> "Musixmatch"
         PreferredLyricsProvider.BETTER_LYRICS -> "BetterLyrics"
         PreferredLyricsProvider.BETTER_LYRICS_PORTATO -> "BetterLyrics Portato"
         PreferredLyricsProvider.YOULY_PLUS -> "YouLyPlus"

@@ -379,6 +379,7 @@ dependencies {
     implementation(project(":lyrics:betterlyrics"))
     implementation(project(":lyrics:unison"))
     implementation(project(":lyrics:youlyplus"))
+    implementation(project(":lyrics:musixmatch"))
     implementation(project(":lastfm"))
     implementation(project(":canvas"))
     implementation(project(":shazamkit"))

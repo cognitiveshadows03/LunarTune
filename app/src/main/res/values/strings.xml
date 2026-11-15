@@ -559,6 +559,7 @@
     <string name="stream_bypass_proxy">Bypass proxy for streams</string>
     <string name="stream_bypass_proxy_desc">Use your direct IP for stream playback to avoid IP mismatch</string>
     <string name="enable_betterlyrics">Enable BetterLyrics</string>
+    <string name="enable_musixmatch_lyrics">Enable Musixmatch</string>
     <string name="betterlyrics_api_key">BetterLyrics API key</string>
     <string name="betterlyrics_api_key_desc">Songs the API has already cached need no key. A song it has never seen returns "401" without one, and keys are issued only to the Better Lyrics browser extension.</string>
     <string name="betterlyrics_api_key_hint">API key (optional)</string>

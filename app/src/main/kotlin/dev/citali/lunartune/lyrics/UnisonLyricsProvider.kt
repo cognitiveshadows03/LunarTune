@@ -33,13 +33,22 @@ object UnisonLyricsProvider : LyricsProvider {
         album: String?,
         duration: Int,
     ): Result<String> =
+        // The client now answers with the whole entry rather than just the text, so the
+        // format and sync type stay available for the log instead of being flattened here.
         Unison.getLyrics(
             videoId = id,
             title = title,
             artist = artist,
             album = album,
             durationSeconds = duration,
-        )
+        ).map { entry ->
+            GlobalLog.append(
+                Log.INFO,
+                "Unison",
+                "using ${entry.format ?: "unknown"} (${entry.syncType ?: "unknown sync"})",
+            )
+            entry.lyrics
+        }
 
     override suspend fun getAllLyrics(
         id: String,
@@ -55,7 +64,7 @@ object UnisonLyricsProvider : LyricsProvider {
             artist = artist,
             album = album,
             durationSeconds = duration,
-            callback = callback,
+            callback = { entry -> callback(entry.lyrics) },
         )
     }
 }

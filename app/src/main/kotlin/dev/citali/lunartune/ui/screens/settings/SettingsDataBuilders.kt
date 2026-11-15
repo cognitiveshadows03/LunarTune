@@ -238,6 +238,7 @@ fun buildSettingsGroups(
                 SettingsChild("Unison Lyrics", "unison_lyrics", listOf("unison", "unison lyrics", "unison provider")),
                 SettingsChild("Simpmusic Lyrics", "simpmusic_lyrics", listOf("simpmusic", "simpmusic lyrics", "simpmusic provider")),
                 SettingsChild("Megalobiz Lyrics", "megalobiz_lyrics", listOf("megalobiz", "megalobiz lyrics", "megalobiz provider")),
+                SettingsChild("Musixmatch Lyrics", "musixmatch_lyrics", listOf("musixmatch", "musixmatch lyrics", "musixmatch provider", "rich sync", "word sync")),
                 SettingsChild("First lyrics provider", "first_lyrics_provider", listOf("first lyrics", "lyrics priority", "primary lyrics provider", "lyrics order")),
             ),
         )
