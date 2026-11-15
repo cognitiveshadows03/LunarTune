@@ -77,23 +77,29 @@ object LunarMotion {
     /**
      * The style carousel's settle, when a card takes the centre slot.
      *
-     * Looser than [floaty] on purpose. The carousel's transform used to clamp its pager
-     * offset to 0..1, which threw away the overshoot [floaty] was already producing - the
-     * spring bounced, and the drawing code quietly clipped the bounce off. Now that the
-     * overshoot reaches the screen, the damping comes down: a card lands, goes fractionally
-     * past its slot, and comes back.
+     * This is the mini player's collapse spring, deliberately. The carousel once used a
+     * looser spring (0.62 over 175) reasoning that its drawing code had been clipping the
+     * overshoot off... and then stopped clipping it, so the full bounce arrived on screen.
+     * On a card this large that reads as a wobble: the whole preview swings past the slot,
+     * the side cards swing with it, and the eye keeps catching the tail.
+     *
+     * The value that feels right here is the one the sheet already uses for its collapse.
+     * 0.85 damping is a single overshoot of roughly half a percent - enough that the card
+     * lands rather than stopping dead, small enough that the side cards barely register it.
+     * The higher stiffness also cuts the settle to about a quarter of a second, so the
+     * carousel is ready to be grabbed again almost as soon as the finger leaves.
      */
-    fun <T> carouselSnap() = spring<T>(dampingRatio = 0.62f, stiffness = 175f)
+    fun <T> carouselSnap() = spring<T>(dampingRatio = 0.85f, stiffness = 600f)
 
     /**
      * The chosen card's pop as it takes the slot: 0..1, read in the draw phase and mapped to
-     * a couple of percent of scale. Light damping so it overshoots once instead of easing up
-     * to full size and stopping.
+     * a little over a percent of scale. Rides the same overshoot budget as [carouselSnap] -
+     * a hint that the card settled, not a second bounce stacked on top of the first.
      */
-    fun carouselFocus() = spring<Float>(dampingRatio = 0.5f, stiffness = 420f)
+    fun carouselFocus() = spring<Float>(dampingRatio = 0.85f, stiffness = 420f)
 
     /** The indicator pill travelling to the new page: quick, with one small bounce. */
-    fun <T> carouselDot() = spring<T>(dampingRatio = 0.5f, stiffness = 700f)
+    fun <T> carouselDot() = spring<T>(dampingRatio = 0.8f, stiffness = 700f)
 
     /** Tactile press bounce for [dev.citali.lunartune.ui.component.IconButton]. */
     fun press() = spring<Float>(dampingRatio = 0.62f, stiffness = 900f)
