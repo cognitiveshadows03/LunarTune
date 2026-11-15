@@ -35,6 +35,7 @@ object BetterLyricsPortatoProvider : LyricsProvider {
         val results =
             BetterLyricsClient.fetch(
                 title = title,
+                album = album,
                 artist = artist,
                 durationSeconds = duration,
                 endpoints = BetterLyricsClient.portatoEndpoints,
@@ -55,6 +56,7 @@ object BetterLyricsPortatoProvider : LyricsProvider {
             .fetch(
                 title = title,
                 artist = artist,
+                album = album,
                 durationSeconds = duration,
                 endpoints = BetterLyricsClient.portatoEndpoints,
             ).forEach(callback)

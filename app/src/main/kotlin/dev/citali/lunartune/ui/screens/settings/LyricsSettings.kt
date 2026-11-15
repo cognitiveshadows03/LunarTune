@@ -37,6 +37,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +61,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -69,6 +71,7 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackState
+import dev.citali.lunartune.constants.BetterLyricsApiKeyKey
 import dev.citali.lunartune.constants.EnableBetterLyricsKey
 import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.constants.EnableKugouKey
@@ -176,6 +179,7 @@ fun LyricsSettings(
     val (lyricsScroll, onLyricsScrollChange) = rememberPreference(LyricsScrollKey, defaultValue = true)
     val (lyricsTextSize, onLyricsTextSizeChange) = rememberPreference(LyricsTextSizeKey, defaultValue = 26f)
     val (lyricsLineSpacing, onLyricsLineSpacingChange) = rememberPreference(LyricsLineSpacingKey, defaultValue = 1.3f)
+    val (betterLyricsApiKey, onBetterLyricsApiKeyChange) = rememberPreference(BetterLyricsApiKeyKey, defaultValue = "")
     val (lyricsMode, onLyricsModeChange) = rememberEnumPreference(LyricsModeKey, defaultValue = LyricsMode.ENHANCED)
     val (enableLrclib, onEnableLrclibChange) = rememberPreference(key = EnableLrcLibKey, defaultValue = true)
     val (enableKugou, onEnableKugouChange) = rememberPreference(key = EnableKugouKey, defaultValue = true)
@@ -259,6 +263,59 @@ fun LyricsSettings(
             .padding(bottom = SettingsDimensions.ScreenBottomPadding),
     ) {
         var showLyricsTextSizeDialog by rememberSaveable { mutableStateOf(false) }
+        var showBetterLyricsKeyDialog by rememberSaveable { mutableStateOf(false) }
+
+        if (showBetterLyricsKeyDialog) {
+            var tempKey by remember { mutableStateOf(betterLyricsApiKey) }
+
+            DefaultDialog(
+                onDismiss = { showBetterLyricsKeyDialog = false },
+                buttons = {
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    TextButton(
+                        onClick = { showBetterLyricsKeyDialog = false },
+                        shapes = ButtonDefaults.shapes(),
+                    ) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                    TextButton(
+                        onClick = {
+                            onBetterLyricsApiKeyChange(tempKey.trim())
+                            showBetterLyricsKeyDialog = false
+                        },
+                        shapes = ButtonDefaults.shapes(),
+                    ) {
+                        Text(stringResource(android.R.string.ok))
+                    }
+                },
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.betterlyrics_api_key),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.betterlyrics_api_key_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
+                    OutlinedTextField(
+                        value = tempKey,
+                        onValueChange = { tempKey = it },
+                        label = { Text(stringResource(R.string.betterlyrics_api_key_hint)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
 
         if (showLyricsTextSizeDialog) {
             var tempTextSize by remember { mutableFloatStateOf(lyricsTextSize) }
@@ -474,6 +531,26 @@ fun LyricsSettings(
                     checked = enableBetterLyrics,
                     onCheckedChange = onEnableBetterLyricsChange,
                 )
+            }
+
+            if (enableBetterLyrics) {
+                item {
+                    // Only useful to someone who has a key, which is why it sits behind a
+                    // dialog instead of a visible field: the description says plainly what
+                    // not having one means, so nobody goes hunting for a setting that would
+                    // not help them.
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.betterlyrics_api_key)) },
+                        description =
+                            if (betterLyricsApiKey.isBlank()) {
+                                stringResource(R.string.betterlyrics_api_key_unset)
+                            } else {
+                                "\u2022\u2022\u2022\u2022" + betterLyricsApiKey.takeLast(4)
+                            },
+                        icon = { Icon(painterResource(R.drawable.password), null) },
+                        onClick = { showBetterLyricsKeyDialog = true },
+                    )
+                }
             }
 
             item {

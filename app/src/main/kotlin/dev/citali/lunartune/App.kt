@@ -48,6 +48,7 @@ import moe.rukamori.archivetune.innertube.YouTube
 import moe.rukamori.archivetune.innertube.models.YouTubeLocale
 import moe.rukamori.archivetune.kugou.KuGou
 import dev.citali.lunartune.lastfm.LastFM
+import dev.citali.lunartune.lyrics.BetterLyricsClient
 import dev.citali.lunartune.lyrics.JapaneseLanguagePackManager
 import moe.rukamori.archivetune.morideobfuscator.MoriCipherConfig
 import moe.rukamori.archivetune.morideobfuscator.MoriCipherRuntime
@@ -245,8 +246,10 @@ class App :
             try {
                 val prefs = dataStore.data.first()
 
-                // Uncached BetterLyrics queries need a key; without one only cached
-                // results are served. Allow an optional user-supplied key.
+                // Uncached BetterLyrics queries need a key the project does not hand out;
+                // without one only cached results are served. A user-supplied key is applied
+                // here, at startup, so it is in place before any lyrics request goes out.
+                BetterLyricsClient.apiKey = prefs[BetterLyricsApiKeyKey]
 
                 prefs[ContentCountryKey]?.takeIf { it != SYSTEM_DEFAULT }?.let { country ->
                     YouTube.locale = YouTube.locale.copy(gl = country)
@@ -284,6 +287,16 @@ class App :
                 Timber.e(e, "Error during deferred initialization")
                 reportException(e)
             }
+        }
+
+        applicationScope.launch(Dispatchers.IO) {
+            // A key typed into Lyrics settings has to be tried on the very next request,
+            // not after the next cold start. The client's setter drops the 401 backoff when
+            // the value actually changes, so the new credential is used immediately.
+            dataStore.data
+                .map { it[BetterLyricsApiKeyKey] }
+                .distinctUntilChanged()
+                .collect { BetterLyricsClient.apiKey = it }
         }
 
         applicationScope.launch(Dispatchers.IO) {

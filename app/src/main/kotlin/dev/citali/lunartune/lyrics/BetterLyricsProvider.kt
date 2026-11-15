@@ -31,7 +31,7 @@ object BetterLyricsProvider : LyricsProvider {
         album: String?,
         duration: Int,
     ): Result<String> {
-        val results = BetterLyricsClient.fetch(title = title, artist = artist, durationSeconds = duration)
+        val results = BetterLyricsClient.fetch(title = title, artist = artist, album = album, durationSeconds = duration)
         val first = results.firstOrNull() ?: return Result.failure(IllegalStateException("Lyrics unavailable"))
         return Result.success(first)
     }
@@ -45,7 +45,7 @@ object BetterLyricsProvider : LyricsProvider {
         callback: (String) -> Unit,
     ) {
         BetterLyricsClient
-            .fetch(title = title, artist = artist, durationSeconds = duration)
+            .fetch(title = title, artist = artist, album = album, durationSeconds = duration)
             .forEach(callback)
     }
 }

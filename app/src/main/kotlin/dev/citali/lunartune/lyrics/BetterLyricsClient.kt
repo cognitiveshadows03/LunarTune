@@ -35,9 +35,14 @@ import kotlinx.serialization.json.contentOrNull
  *
  * Three things follow from that, all measured against the live API:
  *
- * 1. **Album is not sent.** The docs say to always send `al`, but the cache is populated
- *    without it: `Tum Hi Ho` and `Shape of You` return 200 bare and 401 when `al` is
- *    present. Sending album can only turn a hit into a miss.
+ * 1. **Album is tried second.** The docs say to always send `al` because the cache key
+ *    includes it, while measurement says the opposite for some entries (`Tum Hi Ho` and
+ *    `Shape of You` hit bare and miss with `al`). Both are true - the cache key contains the
+ *    album, so an entry stored with one is invisible to a query without it, and vice versa.
+ *    The query therefore goes out in the order least likely to waste a request and retries
+ *    the other way only after a 401: bare first with no key (a bare hit is the common case),
+ *    album first with a key (a miss is then a real fetch, and the album is what makes it
+ *    accurate). A retry costs one request, and only on a miss.
  * 2. **Duration is always sent when known.** Duration is tolerated within a small
  *    tolerance (200 and 201 both hit), and having it present is what lets the server
  *    match an entry at all in most cases.
@@ -116,70 +121,94 @@ internal object BetterLyricsClient {
     suspend fun fetch(
         title: String,
         artist: String,
+        album: String? = null,
         durationSeconds: Int,
         endpoints: List<String> = allEndpoints,
     ): List<String> {
         val cleanTitle = title.trim()
         val cleanArtist = artist.trim()
+        val cleanAlbum = album?.trim()?.takeIf { it.isNotBlank() }
         if (cleanTitle.isBlank() || cleanArtist.isBlank()) return emptyList()
 
         val results = mutableListOf<String>()
         for (endpoint in endpoints) {
             if (isBlocked(endpoint)) continue
-            val lyrics = fetchEndpoints(endpoint, cleanTitle, cleanArtist, durationSeconds)
+            val lyrics = fetchEndpoints(endpoint, cleanTitle, cleanArtist, cleanAlbum, durationSeconds)
             if (lyrics != null) results += lyrics
             // Keep going: the next endpoint maintains its own cache and may still have a hit.
         }
         return results
     }
 
+    /**
+     * One endpoint, asked at most twice.
+     *
+     * The two queries differ only in whether the album rides along, and the order follows
+     * [fetch]'s reasoning: the cheap/likely one first, the other only after a 401. A 401 on
+     * every attempt is what pauses the endpoint; a 200 with an unparseable body just moves to
+     * the next attempt, because a different cache entry can decode where another does not.
+     */
     private suspend fun fetchEndpoints(
         endpoint: String,
         title: String,
         artist: String,
+        album: String?,
         durationSeconds: Int,
-    ): String? =
-        try {
-            GlobalLog.append(
-                Log.INFO,
-                LOG_TAG,
-                "Sending request to $BASE_URL$endpoint (s=$title, a=$artist, d=$durationSeconds)",
-            )
+    ): String? {
+        val attempts = if (apiKey == null) listOf(null, album) else listOf(album, null)
+        var sawUnauthorized = false
+        // A blank album makes both attempts identical, so run it once.
+        for (attemptAlbum in attempts.distinct()) {
+            try {
+                GlobalLog.append(
+                    Log.INFO,
+                    LOG_TAG,
+                    "Sending request to $BASE_URL$endpoint (s=$title, a=$artist, " +
+                        "al=${attemptAlbum ?: "-"}, d=$durationSeconds)",
+                )
 
-            val response =
-                client.get(BASE_URL + endpoint) {
-                    parameter("s", title)
-                    parameter("a", artist)
-                    // Album deliberately omitted - see the class comment.
-                    if (durationSeconds > 0) parameter("d", durationSeconds)
-                    apiKey?.let { header("X-API-Key", it) }
+                val response =
+                    client.get(BASE_URL + endpoint) {
+                        parameter("s", title)
+                        parameter("a", artist)
+                        attemptAlbum?.let { parameter("al", it) }
+                        if (durationSeconds > 0) parameter("d", durationSeconds)
+                        apiKey?.let { header("X-API-Key", it) }
+                    }
+
+                val status = response.status.value
+                GlobalLog.append(Log.INFO, LOG_TAG, "$endpoint response status: $status")
+
+                if (status == 401) {
+                    sawUnauthorized = true
+                    continue
+                }
+                if (status !in 200..299) {
+                    GlobalLog.append(Log.INFO, LOG_TAG, "$endpoint request failed with status: $status")
+                    return null
                 }
 
-            val status = response.status.value
-            GlobalLog.append(Log.INFO, LOG_TAG, "$endpoint response status: $status")
-
-            if (status == 401) {
-                blockedUntil[endpoint] = System.currentTimeMillis() + AUTH_BACKOFF_MS
-                GlobalLog.append(
-                    Log.WARN,
-                    LOG_TAG,
-                    "$endpoint is serving cached lyrics only; pausing that endpoint for " +
-                        "${AUTH_BACKOFF_MS / 60_000} minutes (the other endpoints stay live)",
-                )
+                val payload = decode(response.bodyAsText())
+                if (payload != null) return payload
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                GlobalLog.append(Log.WARN, LOG_TAG, "$endpoint error fetching lyrics: ${e.message}")
                 return null
             }
-            if (status !in 200..299) {
-                GlobalLog.append(Log.INFO, LOG_TAG, "$endpoint request failed with status: $status")
-                return null
-            }
-
-            decode(response.bodyAsText())
-        } catch (cancellation: CancellationException) {
-            throw cancellation
-        } catch (e: Exception) {
-            GlobalLog.append(Log.WARN, LOG_TAG, "$endpoint error fetching lyrics: ${e.message}")
-            null
         }
+
+        if (sawUnauthorized) {
+            blockedUntil[endpoint] = System.currentTimeMillis() + AUTH_BACKOFF_MS
+            GlobalLog.append(
+                Log.WARN,
+                LOG_TAG,
+                "$endpoint is serving cached lyrics only; pausing that endpoint for " +
+                    "${AUTH_BACKOFF_MS / 60_000} minutes (the other endpoints stay live)",
+            )
+        }
+        return null
+    }
 
     /**
      * Unwrap a response to the lyric payload.
