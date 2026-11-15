@@ -36,6 +36,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -101,6 +103,7 @@ class DownloadUtil
         private val sessionFailedSongIds = Collections.newSetFromMap(ConcurrentHashMap<String, Boolean>())
         private val lastAutoRetryAtMs = AtomicLong(0L)
         private val downloadExecutor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS)
+        private val artworkFetchLimiter = Semaphore(MAX_CONCURRENT_ARTWORK_FETCHES)
 
         private val mediaOkHttpClient: OkHttpClient by lazy {
             OkHttpClient
@@ -351,20 +354,27 @@ class DownloadUtil
          */
         private fun cacheDownloadedArtwork(songId: String) {
             downloadScope.launch {
-                runCatching {
-                    val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
-                    if (artworkUrl.isNullOrBlank()) return@runCatching
-                    if (DownloadedArtwork.localFile(appContext, artworkUrl) != null) return@runCatching
-                    val request = Request.Builder().url(artworkUrl).build()
-                    mediaOkHttpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) return@use
-                        val body = response.body ?: return@use
-                        val bytes = DownloadedArtwork.readBounded(body.byteStream())
-                            ?: return@use
-                        DownloadedArtwork.save(appContext, artworkUrl, bytes)
+                // A bulk download finishes its songs in clumps, so without this every cover
+                // in the clump was fetched at once - each with its own response body and a
+                // ByteArrayOutputStream that grows to the image size - on top of the audio
+                // traffic. Two at a time keeps the covers arriving without that spike, and
+                // the limiter only ever queues cover work: it is never held by a download.
+                artworkFetchLimiter.withPermit {
+                    runCatching {
+                        val artworkUrl = database.getSongByIdBlocking(songId)?.song?.thumbnailUrl
+                        if (artworkUrl.isNullOrBlank()) return@runCatching
+                        if (DownloadedArtwork.localFile(appContext, artworkUrl) != null) return@runCatching
+                        val request = Request.Builder().url(artworkUrl).build()
+                        mediaOkHttpClient.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) return@use
+                            val body = response.body ?: return@use
+                            val bytes = DownloadedArtwork.readBounded(body.byteStream())
+                                ?: return@use
+                            DownloadedArtwork.save(appContext, artworkUrl, bytes)
+                        }
+                    }.onFailure { error ->
+                        Timber.w(error, "Failed to persist album art for %s", songId)
                     }
-                }.onFailure { error ->
-                    Timber.w(error, "Failed to persist album art for %s", songId)
                 }
             }
         }
@@ -432,13 +442,31 @@ class DownloadUtil
             val activeDownloads = downloadManager.currentDownloads
             if (activeDownloads.isEmpty()) return
             downloads.update { current ->
-                current.toMutableMap().apply {
-                    activeDownloads.forEach { download ->
-                        set(download.request.id, download.toProgressSnapshot())
+                // Returns `current` untouched when nothing actually moved, so a stalled or
+                // queued download stops re-emitting once a second. StateFlow compares by
+                // value, so handing back the same map is the cheapest possible no-op: no
+                // new map, no new snapshots, no recomposition of the download list.
+                var changed = false
+                val merged = current.toMutableMap()
+                activeDownloads.forEach { download ->
+                    val snapshot = download.toProgressSnapshot()
+                    val previous = merged[download.request.id]
+                    if (previous == null || !previous.matchesProgressOf(snapshot)) {
+                        merged[download.request.id] = snapshot
+                        changed = true
                     }
                 }
+                if (changed) merged else current
             }
         }
+
+        /** True when [other] carries the same progress, so emitting it would change nothing. */
+        private fun Download.matchesProgressOf(other: Download): Boolean =
+            state == other.state &&
+                bytesDownloaded == other.bytesDownloaded &&
+                percentDownloaded == other.percentDownloaded &&
+                failureReason == other.failureReason &&
+                stopReason == other.stopReason
 
         private fun invalidateResolvedStreamUrl(url: String) {
             songUrlCache.entries.forEach { (cacheKey, cached) ->
@@ -576,10 +604,16 @@ class DownloadUtil
             // resumes the missing tail instead of wedging a download slot for minutes.
             private const val DOWNLOAD_READ_TIMEOUT_SECONDS = 60L
             private const val DOWNLOAD_PROGRESS_REFRESH_INTERVAL_MS = 1_000L
+            private const val MAX_CONCURRENT_ARTWORK_FETCHES = 2
             private const val DOWNLOAD_CONNECTION_KEEP_ALIVE_MINUTES = 10L
-            // 4 MB batches saturate local storage writes; 16 MB x 12 parallel (4nx3b
-            // verbatim) would transiently hold ~192 MB of heap on low-RAM devices.
-            private const val DOWNLOAD_WRITE_BUFFER_SIZE = 4 * 1024 * 1024
+            // This buffer is per concurrent download and lives for the whole transfer, so
+            // its cost is concurrency x size: 4 MB x 12 slots held 48 MB of heap permanently
+            // while a bulk download ran. Reports of the app lagging mid-download on low-RAM
+            // phones are that arithmetic. The sink only feeds a local file write (the bytes
+            // arrive from PrefetchDataSource's temp file, already on disk behind the page
+            // cache), so a big buffer buys almost nothing: 512 KB x 12 is 6 MB, and the
+            // per-write syscall count is still small next to the per-span sync that follows.
+            private const val DOWNLOAD_WRITE_BUFFER_SIZE = 512 * 1024
             private const val DOWNLOAD_FRAGMENT_SIZE = 128L * 1024 * 1024
             private val STREAM_REFRESH_RESPONSE_CODES = setOf(403, 404, 410, 416)
         }

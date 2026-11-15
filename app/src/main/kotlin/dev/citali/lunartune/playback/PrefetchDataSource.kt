@@ -80,6 +80,17 @@ class PrefetchDataSource(
     private var bytesRemaining: Long = 0
     private var openKey: String? = null
 
+    /**
+     * Scratch space for the disk copy, reused for the life of this instance.
+     *
+     * ExoPlayer opens a fresh data source per read window and per resume, so allocating the
+     * copy buffer inside the fetch meant a 256 KB allocation every time a download restarted
+     * - and with twelve slots resuming after a stall that is megabytes of short-lived garbage
+     * at exactly the moment the device is already busy. One buffer per source, 64 KB, is
+     * enough: reads go to a file write, not to an in-memory sink.
+     */
+    private val copyBuffer = ByteArray(COPY_BUFFER_SIZE)
+
     @Throws(IOException::class)
     override fun open(dataSpec: DataSpec): Long {
         transferInitializing(dataSpec)
@@ -222,7 +233,7 @@ class PrefetchDataSource(
             val startMs = SystemClock.elapsedRealtime()
             body.byteStream().use { input ->
                 FileOutputStream(temp).use { output ->
-                    val buffer = ByteArray(COPY_BUFFER_SIZE)
+                    val buffer = copyBuffer
                     while (true) {
                         if (SystemClock.elapsedRealtime() - startMs > FETCH_DEADLINE_MS) {
                             throw IOException(
@@ -312,7 +323,7 @@ class PrefetchDataSource(
 
         private const val TEMP_DIR_NAME = "dl_prefetch"
         private const val TEMP_FILE_PREFIX = "fetch_"
-        private const val COPY_BUFFER_SIZE = 256 * 1024
+        private const val COPY_BUFFER_SIZE = 64 * 1024
         private const val FETCH_DEADLINE_MS = 10 * 60 * 1000L
     }
 }
