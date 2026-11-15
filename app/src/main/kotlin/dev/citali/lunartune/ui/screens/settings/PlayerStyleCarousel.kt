@@ -18,6 +18,7 @@ import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,6 +64,7 @@ import dev.citali.lunartune.viewmodels.PlayerStylePreviewViewModel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.pow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
@@ -199,35 +201,72 @@ fun PlayerStyleCarousel(
                 contentPadding = PaddingValues(horizontal = ((maxWidth - cardWidth) / 2).coerceAtLeast(0.dp)),
                 pageSpacing = 16.dp,
                 beyondViewportPageCount = 0,
-                flingBehavior = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = LunarMotion.floaty()),
+                flingBehavior = PagerDefaults.flingBehavior(state = pager, snapAnimationSpec = LunarMotion.carouselSnap()),
                 modifier = Modifier.fillMaxSize(),
             ) { page ->
-                val offset = abs(pager.currentPage - page + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+                // No offset is computed here on purpose. This used to read
+                // `pager.currentPageOffsetFraction` while composing, which meant every
+                // frame of a drag recomposed this page - and the page is a live player
+                // preview. The transform now reads the pager inside graphicsLayer, in the
+                // draw phase, so dragging only invalidates a layer.
+                val familyState = familyPagers[page]
                 // Full-size pager with symmetric content padding: the selected card
                 // always lands in the centered slot, the sibling peeks as a clean
                 // strip from the bottom (next) or top (previous) edge, and no card
                 // is ever clipped mid-way.
                 Box(Modifier.fillMaxSize().clipToBounds()) {
                 VerticalPager(
-                    state = familyPagers[page],
+                    state = familyState,
                     pageSize = PageSize.Fixed(cardH),
                     pageSpacing = pageGap,
                     contentPadding = PaddingValues(top = slotPadding, bottom = slotPadding),
                     userScrollEnabled = families[page].size > 1,
-                    flingBehavior = PagerDefaults.flingBehavior(state = familyPagers[page], snapAnimationSpec = LunarMotion.floaty()),
+                    flingBehavior = PagerDefaults.flingBehavior(state = familyState, snapAnimationSpec = LunarMotion.carouselSnap()),
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
                 val cardStyle = families[page][row]
-                val verticalOffset = abs(familyPagers[page].currentPage - row + familyPagers[page].currentPageOffsetFraction).coerceIn(0f, 1f)
-                val isSelected = page == pager.currentPage && row == familyPagers[page].currentPage
+                val isSelected = page == pager.currentPage && row == familyState.currentPage
+                // The slot's own state, not the pager's: a card that has just taken
+                // the centre pops once as it lands, and every card dips a hair while
+                // a finger is on the pager, so grabbing the carousel feels like
+                // picking something up rather than sliding a picture past a window.
+                val focus by animateFloatAsState(
+                    targetValue = if (isSelected) 1f else 0f,
+                    animationSpec = LunarMotion.carouselFocus(),
+                    label = "styleCardFocus",
+                )
+                val grabbed by animateFloatAsState(
+                    targetValue = if (pager.isScrollInProgress || familyState.isScrollInProgress) 1f else 0f,
+                    animationSpec = LunarMotion.smooth(),
+                    label = "styleCardGrab",
+                )
                 Surface(
                     modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
-                        // HyperOS-style: focused card full size, side cards and the
-                        // sibling peek shrink to ~85% like the Magazine picker.
-                        val squeeze = 1f - verticalOffset * 0.15f
-                        scaleX = (1f - offset * 0.15f) * squeeze
-                        scaleY = (1f - offset * 0.15f) * squeeze
-                        alpha = (1f - offset * 0.35f) * (1f - verticalOffset * 0.4f)
+                        // Signed and NOT clamped to 0..1. A spring settling into its slot
+                        // overshoots it slightly, and the previous `abs(...).coerceIn(0f, 1f)`
+                        // flattened that overshoot to zero on the way in - the carousel was
+                        // landing with its bounce clipped off. Reading horizontally as
+                        // `page - currentPage` keeps the sign, so the tiny negative value at
+                        // the end of a settle still reaches this block as "a touch past the
+                        // slot" and shows up as a card pushed fractionally larger.
+                        val horizontal = page - pager.currentPage - pager.currentPageOffsetFraction
+                        val vertical = row - familyState.currentPage - familyState.currentPageOffsetFraction
+                        // Eased, so a card does most of its shrinking early and then creeps.
+                        // A linear mapping spreads the change evenly, and at 60 Hz the eye
+                        // reads that as a crossfade rather than as depth.
+                        val depthX = easedDepth(horizontal)
+                        val depthY = easedDepth(vertical)
+                        val lift = 0.965f + 0.035f * focus
+                        val scale = (1f - 0.20f * depthX) * (1f - 0.16f * depthY) * lift * (1f - 0.012f * grabbed)
+                        scaleX = scale
+                        scaleY = scale
+                        // Side cards tuck under the centred one and tilt toward it: a stack
+                        // with depth, instead of three cards side by side at three sizes.
+                        translationX = -26.dp.toPx() * depthX
+                        translationY = 10.dp.toPx() * depthY
+                        rotationY = -9f * depthX
+                        cameraDistance = 32f * density
+                        alpha = ((1f - 0.5f * abs(depthX)) * (1f - 0.42f * abs(depthY))).coerceIn(0f, 1f)
                     },
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(if (isSelected) 2.dp else 1.dp,
@@ -549,16 +588,35 @@ private fun StyleOptionCard(
     }
 }
 
+/**
+ * Shapes a pager fraction into the carousel's depth curve.
+ *
+ * Clamped asymmetrically: 1 is a card a full slot away, and the only negative value that
+ * ever arrives is a settling spring's overshoot - a few percent - so it is held at -0.35 to
+ * stop a fast fling scaling a card absurdly. The exponent is what makes the motion read as
+ * depth: most of the shrink happens in the first third of the travel and then it creeps, so
+ * the eye sees a card fall back rather than a rectangle fade.
+ */
+private fun easedDepth(fraction: Float): Float {
+    val clamped = fraction.coerceIn(-0.35f, 1f)
+    val magnitude = abs(clamped).pow(1.6f)
+    return if (clamped < 0f) -magnitude else magnitude
+}
+
 @Composable
 private fun PageDot(active: Boolean) {
-    val dotSize by animateDpAsState(
-        targetValue = if (active) 7.dp else 5.dp,
-        animationSpec = LunarMotion.floaty(),
-        label = "pageDot",
+    // A pill rather than a bigger dot: the indicator travels between pages, so its
+    // length is what the eye follows - and a low-damping spring gives it one small
+    // bounce as it arrives instead of resizing in place.
+    val width by animateDpAsState(
+        targetValue = if (active) 18.dp else 5.dp,
+        animationSpec = LunarMotion.carouselDot(),
+        label = "pageDotWidth",
     )
     Box(
         Modifier
-            .size(dotSize)
+            .width(width)
+            .height(5.dp)
             .clip(CircleShape)
             .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
     )

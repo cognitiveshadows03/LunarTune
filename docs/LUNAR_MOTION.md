@@ -291,6 +291,31 @@ player is one full-screen translated container with the mini row as a separate o
 real `SharedTransitionLayout` + `sharedBounds` change would mean re-shaping that screen into
 two animated-visibility scopes. That remains unbuilt on purpose.
 
+## 7c. The player style carousel
+
+Three things made it read as flat and fast, and none of them was the spring value.
+
+**The bounce was being clipped.** The card transform clamped its pager fraction with
+`abs(...).coerceIn(0f, 1f)`. A spring settling into a slot overshoots it slightly — that is
+what a spring is — and that clamp threw the overshoot away before it ever reached the screen.
+The fraction is now signed and only clamped asymmetrically (`-0.35..1`), so a landing card
+goes fractionally past its slot and comes back.
+
+**The mapping was linear.** At 60 Hz an evenly-spread scale change reads as a crossfade,
+because there is no moment where the eye can see a card fall back. `easedDepth` puts the
+change on a 1.6 exponent: most of the shrink happens early, then it creeps.
+
+**The transform was computed while composing.** Reading `currentPageOffsetFraction` in
+composition recomposed the page — which contains a live player preview — on every frame of a
+drag. It is now read inside `graphicsLayer`, in the draw phase, so a drag invalidates a layer
+and nothing else. This is a large part of "fluid": the old version was doing the most
+expensive work possible to draw the cheapest change.
+
+On top: side cards tuck under the centred card and tilt 9° toward it, the landing card pops a
+couple of percent (`carouselFocus`, damping 0.5), every card dips 1.2 % while a finger is on
+the pager, and the indicator is a pill that springs between pages instead of a dot that
+resizes.
+
 ## 8. Checklist for new motion
 
 Before the checklist: a motion change is judged against numbers, not against how it looks

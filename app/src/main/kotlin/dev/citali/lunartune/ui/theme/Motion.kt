@@ -74,6 +74,27 @@ object LunarMotion {
      */
     fun <T> glide() = spring<T>(dampingRatio = 0.88f, stiffness = 350f)
 
+    /**
+     * The style carousel's settle, when a card takes the centre slot.
+     *
+     * Looser than [floaty] on purpose. The carousel's transform used to clamp its pager
+     * offset to 0..1, which threw away the overshoot [floaty] was already producing - the
+     * spring bounced, and the drawing code quietly clipped the bounce off. Now that the
+     * overshoot reaches the screen, the damping comes down: a card lands, goes fractionally
+     * past its slot, and comes back.
+     */
+    fun <T> carouselSnap() = spring<T>(dampingRatio = 0.62f, stiffness = 175f)
+
+    /**
+     * The chosen card's pop as it takes the slot: 0..1, read in the draw phase and mapped to
+     * a couple of percent of scale. Light damping so it overshoots once instead of easing up
+     * to full size and stopping.
+     */
+    fun carouselFocus() = spring<Float>(dampingRatio = 0.5f, stiffness = 420f)
+
+    /** The indicator pill travelling to the new page: quick, with one small bounce. */
+    fun <T> carouselDot() = spring<T>(dampingRatio = 0.5f, stiffness = 700f)
+
     /** Tactile press bounce for [dev.citali.lunartune.ui.component.IconButton]. */
     fun press() = spring<Float>(dampingRatio = 0.62f, stiffness = 900f)
 
