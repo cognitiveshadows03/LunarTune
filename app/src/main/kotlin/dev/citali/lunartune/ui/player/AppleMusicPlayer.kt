@@ -1402,19 +1402,39 @@ private fun AppleMusicQueuePane(
                                             },
                                         ).padding(horizontal = AppleMusicGutter, vertical = 7.dp),
                             ) {
-                                androidx.compose.animation.AnimatedVisibility(visible = selecting) {
+                                // Play triangle (when not selecting) or checkbox (when selecting)
+                                if (selecting) {
+                                    androidx.compose.animation.AnimatedVisibility(visible = selecting) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier =
+                                                Modifier
+                                                        .padding(end = 12.dp)
+                                                        .size(22.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (selected) Color.White else Color.White.copy(alpha = 0.15f)),
+                                        ) {
+                                            if (selected) {
+                                                Icon(painterResource(R.drawable.check), null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                            }
+                                        }
+                                    }
+                                } else {
                                     Box(
                                         contentAlignment = Alignment.Center,
                                         modifier =
                                             Modifier
-                                                .padding(end = 12.dp)
-                                                .size(22.dp)
-                                                .clip(CircleShape)
-                                                .background(if (selected) Color.White else Color.White.copy(alpha = 0.15f)),
+                                                    .padding(end = 12.dp)
+                                                    .size(32.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White.copy(alpha = 0.15f)),
                                     ) {
-                                        if (selected) {
-                                            Icon(painterResource(R.drawable.check), null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                        }
+                                        Icon(
+                                            painterResource(R.drawable.play),
+                                            null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp),
+                                        )
                                     }
                                 }
                                 AsyncImage(
@@ -1432,8 +1452,14 @@ private fun AppleMusicQueuePane(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
+                                    val artistText = meta?.artists?.joinToString { it.name }.orEmpty()
+                                    val subtitle = if (!selecting && meta != null) {
+                                        "$artistText • ${makeTimeString(meta.duration * 1000L)}"
+                                    } else {
+                                        artistText
+                                    }
                                     Text(
-                                        meta?.artists?.joinToString { it.name }.orEmpty(),
+                                        subtitle,
                                         color = Color.White.copy(alpha = 0.55f),
                                         fontSize = 14.sp,
                                         maxLines = 1,
