@@ -1402,39 +1402,15 @@ private fun AppleMusicQueuePane(
                                             },
                                         ).padding(horizontal = AppleMusicGutter, vertical = 7.dp),
                             ) {
-                                // Play triangle (when not selecting) or checkbox (when selecting)
+                                // Checkbox when selecting; nothing otherwise (no blank space)
                                 if (selecting) {
-                                    androidx.compose.animation.AnimatedVisibility(visible = selecting) {
-                                        Box(
-                                            contentAlignment = Alignment.Center,
-                                            modifier =
-                                                Modifier
-                                                        .padding(end = 12.dp)
-                                                        .size(22.dp)
-                                                        .clip(CircleShape)
-                                                        .background(if (selected) Color.White else Color.White.copy(alpha = 0.15f)),
-                                        ) {
-                                            if (selected) {
-                                                Icon(painterResource(R.drawable.check), null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                            }
-                                        }
-                                    }
-                                } else {
                                     Box(
                                         contentAlignment = Alignment.Center,
-                                        modifier =
-                                            Modifier
-                                                    .padding(end = 12.dp)
-                                                    .size(32.dp)
-                                                    .clip(CircleShape)
-                                                    .background(Color.White.copy(alpha = 0.15f)),
+                                        modifier = Modifier.size(22.dp),
                                     ) {
-                                        Icon(
-                                            painterResource(R.drawable.play),
-                                            null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(20.dp),
-                                        )
+                                        if (selected) {
+                                            Icon(painterResource(R.drawable.check), null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                        }
                                     }
                                 }
                                 AsyncImage(
