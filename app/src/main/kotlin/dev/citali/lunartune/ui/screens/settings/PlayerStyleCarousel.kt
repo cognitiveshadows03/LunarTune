@@ -242,35 +242,34 @@ fun PlayerStyleCarousel(
                 )
                 Surface(
                     modifier = Modifier.width(cardWidth).aspectRatio(deviceRatio).graphicsLayer {
-                        // Signed and NOT clamped to 0..1. A spring settling into its slot
-                        // overshoots it slightly, and the previous `abs(...).coerceIn(0f, 1f)`
-                        // flattened that overshoot to zero on the way in - the carousel was
-                        // landing with its bounce clipped off. Reading horizontally as
-                        // `page - currentPage` keeps the sign, so the tiny negative value at
-                        // the end of a settle still reaches this block as "a touch past the
-                        // slot" and shows up as a card pushed fractionally larger.
                         val horizontal = page - pager.currentPage - pager.currentPageOffsetFraction
                         val vertical = row - familyState.currentPage - familyState.currentPageOffsetFraction
-                        // Eased, so a card does most of its shrinking early and then creeps.
-                        // A linear mapping spreads the change evenly, and at 60 Hz the eye
-                        // reads that as a crossfade rather than as depth.
+                        // Distance from the slot, unsigned. Every use below is a shrink, and
+                        // a shrink driven by a signed number shrinks on one side of the slot
+                        // and grows on the other: the neighbour to the left arrives as -1, and
+                        // `1 - 0.15 * -1` is 1.15 - a peek a sixth LARGER than the card being
+                        // chosen, running off the screen edge. The sign said which side a card
+                        // sat on, never how deep it was.
+                        //
+                        // Eased, so a card does most of its shrinking early and then creeps. A
+                        // linear mapping spreads the change evenly, and at 60 Hz the eye reads
+                        // that as a crossfade rather than as depth.
                         val depthX = easedDepth(horizontal)
                         val depthY = easedDepth(vertical)
                         val lift = 0.965f + 0.035f * focus
-                        // 15% off per axis, so a neighbour on one side is the same size as
-                        // the neighbour on the other and both sit at ~85% - the squeeze the
-                        // picker used before the depth curve arrived. Anything deeper read as
-                        // a second row of cards rather than as the one you are choosing.
+                        // 15% off per axis, so both peeks sit at ~85% - the squeeze the picker
+                        // used before the depth curve arrived, and the size at which a side
+                        // card reads as "the next one" instead of as a competitor.
                         val scale = (1f - 0.15f * depthX) * (1f - 0.15f * depthY) * lift * (1f - 0.012f * grabbed)
                         scaleX = scale
                         scaleY = scale
-                        // Side cards tuck under the centred one and tilt toward it: a stack
-                        // with depth, instead of three cards side by side at three sizes.
-                        translationX = -26.dp.toPx() * depthX
-                        translationY = 10.dp.toPx() * depthY
-                        rotationY = -9f * depthX
-                        cameraDistance = 32f * density
-                        alpha = ((1f - 0.35f * abs(depthX)) * (1f - 0.40f * abs(depthY))).coerceIn(0f, 1f)
+                        // No tuck and no tilt. Both were applied with the signed depth, so the
+                        // two peeks swung in opposite directions - one tucked under the centred
+                        // card, the other pushed away from it - and on a strip that is already
+                        // clipped by the screen edge the tilt reads as a card skidding out of
+                        // frame rather than as depth. Equal, upright, smaller: nothing here
+                        // should be doing anything the eye has to resolve.
+                        alpha = ((1f - 0.35f * depthX) * (1f - 0.40f * depthY)).coerceIn(0f, 1f)
                     },
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(if (isSelected) 2.dp else 1.dp,
@@ -595,21 +594,18 @@ private fun StyleOptionCard(
 /**
  * Shapes a pager fraction into the carousel's depth curve.
  *
- * Symmetric on purpose. The range used to be clamped asymmetrically, to -0.35 ... 1, on the
- * assumption that the only negative value reaching here would be a settling spring's
- * overshoot. That assumption was wrong: the fraction is signed by which side of the slot a
- * card sits on, so the card one slot to the *left* arrives as -1 and got clamped to -0.35 -
- * a depth of a fifth. It rendered almost full size while the card on the right shrank, and
- * the two peeks stopped matching. Only the top of the range needed a guard, and a card
- * further than one slot away is not on screen anyway.
+ * Returns magnitude only. The pager's fraction is signed by which side of the slot a card
+ * sits on, and that sign was being read as depth: the range used to be clamped to
+ * -0.35 ... 1, so the card one slot to the *left* (-1) arrived as a fifth of a slot deep and
+ * rendered at nearly full size while the one on the right shrank. Anything that consumes
+ * this is a shrink or a dim, and neither has a direction, so the sign stops here.
  *
  * The exponent is what makes the motion read as depth: most of the shrink happens in the
  * first third of the travel and then it creeps, so the eye sees a card fall back rather than
  * a rectangle fade.
  */
 private fun easedDepth(fraction: Float): Float {
-    val magnitude = abs(fraction).coerceAtMost(1f).pow(1.6f)
-    return if (fraction < 0f) -magnitude else magnitude
+    return abs(fraction).coerceAtMost(1f).pow(1.6f)
 }
 
 @Composable
