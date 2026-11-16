@@ -257,7 +257,6 @@ import dev.citali.lunartune.constants.NavigationBarAnimationSpec
 import dev.citali.lunartune.constants.NavigationBarBottomPadding
 import dev.citali.lunartune.constants.NavigationBarHeight
 import dev.citali.lunartune.constants.NavigationBarHeightKey
-import dev.citali.lunartune.constants.NavigationBarLegacyLiveBlurKey
 import dev.citali.lunartune.constants.NavigationBarHorizontalPadding
 import dev.citali.lunartune.constants.NavigationBarStyle
 import dev.citali.lunartune.constants.NavigationBarStyleKey
@@ -314,14 +313,12 @@ import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.LocalBottomSheetPageState
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.component.MarkdownText
-import dev.citali.lunartune.ui.component.NavBarBlurState
 import dev.citali.lunartune.ui.component.NetworkStatusBanner
 import dev.citali.lunartune.ui.component.TapAnchor
 import dev.citali.lunartune.ui.component.TopSearch
 import dev.citali.lunartune.ui.component.TvNavigationRail
 import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
 import dev.citali.lunartune.ui.component.frostedTopMenuStyle
-import dev.citali.lunartune.ui.component.navBarLiveBlurSource
 import dev.citali.lunartune.ui.component.rememberBottomSheetState
 import dev.citali.lunartune.ui.component.shimmer.ShimmerTheme
 import dev.citali.lunartune.ui.menu.YouTubeSongMenu
@@ -1225,22 +1222,6 @@ class MainActivity : FragmentActivity() {
                     val isMiniPlayerFrosted = miniPlayerBackgroundStyle == MiniPlayerBackgroundStyle.FROSTED
                     val hazeState = rememberHazeState()
                     val isFrostedNavBar = navigationBarStyle == NavigationBarStyle.FROSTED
-                    // The capsule bar has no RenderEffect path of its own, on any version, so it
-                    // blurs by sampling the content behind it and computing the blur - opt-in,
-                    // because that work is real even when it is small.
-                    val (legacyNavBarBlurEnabled, _) =
-                        rememberPreference(NavigationBarLegacyLiveBlurKey, defaultValue = false)
-                    val capsuleLiveBlurWanted =
-                        legacyNavBarBlurEnabled && navigationBarStyle == NavigationBarStyle.CAPSULE
-                    val navBarBlurState = remember { NavBarBlurState() }
-                    val capsuleLiveBlurSource = if (capsuleLiveBlurWanted) navBarBlurState else null
-                    // The bar only stops being solid once there is actually a sample to show,
-                    // so a device where the capture could not be set up keeps the plain capsule
-                    // instead of turning into a hole. This flips exactly once.
-                    val hasNavBarSample by
-                        remember { derivedStateOf { navBarBlurState.image != null } }
-                    val capsuleLiveBlur =
-                        if (capsuleLiveBlurWanted && hasNavBarSample) navBarBlurState else null
                     // The top-bar menu owns its frost: while it is open the content source
                     // is attached just for the menu, and the (static) blur runs on every
                     // API level instead of only Android 12+.
@@ -2533,7 +2514,7 @@ class MainActivity : FragmentActivity() {
                                                         else -> Unit
                                                     }
                                                 },
-                                                liveBlur = capsuleLiveBlur,
+                                                liveBlur = null,
                                             )
                                         }
 
@@ -2700,11 +2681,7 @@ class MainActivity : FragmentActivity() {
                                                     Modifier
                                                 },
                                             ).then(
-                                                if (capsuleLiveBlurSource != null) {
-                                                    Modifier.navBarLiveBlurSource(capsuleLiveBlurSource)
-                                                } else {
-                                                    Modifier
-                                                },
+                                                Modifier
                                             ),
                                 ) {
                                     PrimaryTabsHost(
