@@ -255,7 +255,131 @@
     update();
   }
 
+  /* ---------------- MOBILE MENU ---------------- */
+
+  var toggle = document.querySelector(".nav-toggle");
+  var mobileMenu = document.getElementById("mobile-menu");
+  var backdrop = document.getElementById("mobile-backdrop");
+  var closeBtn = document.querySelector(".nav-close");
+  var mobileLinks = mobileMenu.querySelectorAll("a");
+
+  function openMenu() {
+    mobileMenu.classList.add("open");
+    backdrop.classList.add("visible");
+    toggle.setAttribute("aria-expanded", "true");
+  }
+
+  function closeMenu() {
+    mobileMenu.classList.remove("open");
+    backdrop.classList.remove("visible");
+    toggle.setAttribute("aria-expanded", "false");
+  }
+
+  toggle.addEventListener("click", openMenu);
+  closeBtn.addEventListener("click", closeMenu);
+  backdrop.addEventListener("click", closeMenu);
+  for (var m = 0; m < mobileLinks.length; m++) {
+    mobileLinks[m].addEventListener("click", closeMenu);
+  }
+
+  /* ---------------- SCROLL SPY (active nav link) ---------------- */
+
+  var sectionIds = ["#features", "#screens", "#download", "#faq"];
+  var navLinks = document.querySelectorAll(".topbar nav a[href^='#']");
+
+  function onScroll() {
+    var scrollY = window.pageYOffset;
+    var current = null;
+    for (var i = 0; i < sectionIds.length; i++) {
+      var sec = document.querySelector(sectionIds[i]);
+      if (sec && sec.offsetTop <= scrollY + 120) current = sectionIds[i];
+    }
+    for (var n = 0; n < navLinks.length; n++) {
+      navLinks[n].classList.toggle("active", navLinks[n].getAttribute("href") === current);
+    }
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  /* ---------------- BACK TO TOP ---------------- */
+
+  var topBtn = document.getElementById("back-to-top");
+
+  function toggleBackToTop() {
+    if (window.pageYOffset > 400) {
+      topBtn.classList.add("visible");
+    } else {
+      topBtn.classList.remove("visible");
+    }
+  }
+  topBtn.addEventListener("click", function () {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  window.addEventListener("scroll", toggleBackToTop, { passive: true });
+
+  /* ---------------- LIVE STATS WITH RETRY ---------------- */
+
+  function fetchWithRetry(url, attempts, delayMs) {
+    return new Promise(function (resolve, reject) {
+      function tryFetch(remaining) {
+        fetch(url)
+          .then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+          .then(resolve)
+          .catch(function (err) {
+            if (remaining <= 1) { reject(err); return; }
+            setTimeout(function () { tryFetch(remaining - 1); }, delayMs);
+          });
+      }
+      tryFetch(attempts);
+    });
+  }
+
+  function loadStats() {
+    var starsEl = document.getElementById("stat-stars");
+    var dlEl = document.getElementById("stat-downloads");
+    var verEl = document.getElementById("dl-version");
+    var dlBtns = document.querySelectorAll(".dl-card .btn");
+
+    function compact(n) {
+      if (typeof n !== "number" || isNaN(n)) return "···";
+      if (n < 1000) return String(n);
+      var units = ["K", "M", "B"];
+      var u = -1;
+      var v = n;
+      while (v >= 1000 && u < units.length - 1) { v /= 1000; u++; }
+      return (v >= 100 ? Math.round(v) : v.toFixed(1).replace(/\.0$/, "")) + units[u];
+    }
+
+    fetchWithRetry(API, 3, 800)
+      .then(function (repo) { starsEl.textContent = compact(repo.stargazers_count); })
+      .catch(function () { starsEl.textContent = "—"; });
+
+    fetchWithRetry(API + "/releases?per_page=100", 3, 800)
+      .then(function (releases) {
+        var total = 0;
+        var stable = null;
+        for (var i = 0; i < releases.length; i++) {
+          var rel = releases[i];
+          if (rel.draft) continue;
+          var assets = rel.assets || [];
+          for (var j = 0; j < assets.length; j++) {
+            total += assets[j].download_count || 0;
+          }
+          if (!stable && /^v\d/.test(rel.tag_name || "")) stable = rel;
+        }
+        dlEl.textContent = compact(total);
+        if (stable) {
+          verEl.textContent = stable.tag_name.toUpperCase() + " STABLE";
+          for (var k = 0; k < dlBtns.length; k++) {
+            dlBtns[k].href = stable.html_url;
+          }
+        }
+      })
+      .catch(function () { dlEl.textContent = "—"; });
+  }
+
   initCascade();
   runBoot();
   loadStats();
+  onScroll();
+  toggleBackToTop();
 })();

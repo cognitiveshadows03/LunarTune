@@ -10,6 +10,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <!-- Open Graph / social preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cognitiveshadows03.github.io/LunarTune/">
+  <meta property="og:title" content="LunarTune — Open-Source Music Client for Android">
+  <meta property="og:description" content="Free, open-source, zero ads. Frosted glass UI, synced lyrics, lossless audio on Android.">
+  <meta property="og:image" content="assets/icon-hero.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LunarTune — Open-Source Music Client for Android">
+  <meta name="twitter:description" content="Free, open-source, zero ads. Frosted glass UI, synced lyrics, lossless audio on Android.">
+  <meta name="twitter:image" content="assets/icon-hero.png">
 </head>
 <body>
 
@@ -27,6 +40,11 @@
         <img src="assets/icon-hero.png" alt="LunarTune" width="28" height="28">
         <span>LUNARTUNE</span>
       </a>
+      <button class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="mobile-menu">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+      </button>
       <nav>
         <a href="#features">FEATURES</a>
         <a href="#screens">SCREENS</a>
@@ -35,6 +53,16 @@
         <a href="https://github.com/cognitiveshadows03/LunarTune" target="_blank" rel="noopener">GITHUB</a>
         <a class="nav-cta" href="#download">GET APK</a>
       </nav>
+      <div id="mobile-menu" class="mobile-menu" role="menu">
+        <a href="#features">FEATURES</a>
+        <a href="#screens">SCREENS</a>
+        <a href="#download">DOWNLOAD</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/cognitiveshadows03/LunarTune" target="_blank" rel="noopener">GITHUB</a>
+        <a class="nav-cta" href="#download">GET APK</a>
+        <button class="nav-close" aria-label="Close menu"></button>
+      </div>
+      <div class="mobile-menu-backdrop" id="mobile-backdrop"></div>
     </header>
 
     <main id="top">
@@ -288,5 +316,7 @@
   </div><!-- /#site -->
 
   <script src="app.js"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a44b9ce64f7ba84f',t:'MTc5MTAyNzAwNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+
+  <button id="back-to-top" aria-label="Back to top">↑ TOP</button>
+</body>
 </html>
