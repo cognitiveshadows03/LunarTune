@@ -257,7 +257,11 @@ fun PlayerStyleCarousel(
                         val depthX = easedDepth(horizontal)
                         val depthY = easedDepth(vertical)
                         val lift = 0.965f + 0.035f * focus
-                        val scale = (1f - 0.20f * depthX) * (1f - 0.16f * depthY) * lift * (1f - 0.012f * grabbed)
+                        // 15% off per axis, so a neighbour on one side is the same size as
+                        // the neighbour on the other and both sit at ~85% - the squeeze the
+                        // picker used before the depth curve arrived. Anything deeper read as
+                        // a second row of cards rather than as the one you are choosing.
+                        val scale = (1f - 0.15f * depthX) * (1f - 0.15f * depthY) * lift * (1f - 0.012f * grabbed)
                         scaleX = scale
                         scaleY = scale
                         // Side cards tuck under the centred one and tilt toward it: a stack
@@ -266,7 +270,7 @@ fun PlayerStyleCarousel(
                         translationY = 10.dp.toPx() * depthY
                         rotationY = -9f * depthX
                         cameraDistance = 32f * density
-                        alpha = ((1f - 0.5f * abs(depthX)) * (1f - 0.42f * abs(depthY))).coerceIn(0f, 1f)
+                        alpha = ((1f - 0.35f * abs(depthX)) * (1f - 0.40f * abs(depthY))).coerceIn(0f, 1f)
                     },
                     shape = RoundedCornerShape(28.dp),
                     border = BorderStroke(if (isSelected) 2.dp else 1.dp,
@@ -591,16 +595,21 @@ private fun StyleOptionCard(
 /**
  * Shapes a pager fraction into the carousel's depth curve.
  *
- * Clamped asymmetrically: 1 is a card a full slot away, and the only negative value that
- * ever arrives is a settling spring's overshoot - a few percent - so it is held at -0.35 to
- * stop a fast fling scaling a card absurdly. The exponent is what makes the motion read as
- * depth: most of the shrink happens in the first third of the travel and then it creeps, so
- * the eye sees a card fall back rather than a rectangle fade.
+ * Symmetric on purpose. The range used to be clamped asymmetrically, to -0.35 ... 1, on the
+ * assumption that the only negative value reaching here would be a settling spring's
+ * overshoot. That assumption was wrong: the fraction is signed by which side of the slot a
+ * card sits on, so the card one slot to the *left* arrives as -1 and got clamped to -0.35 -
+ * a depth of a fifth. It rendered almost full size while the card on the right shrank, and
+ * the two peeks stopped matching. Only the top of the range needed a guard, and a card
+ * further than one slot away is not on screen anyway.
+ *
+ * The exponent is what makes the motion read as depth: most of the shrink happens in the
+ * first third of the travel and then it creeps, so the eye sees a card fall back rather than
+ * a rectangle fade.
  */
 private fun easedDepth(fraction: Float): Float {
-    val clamped = fraction.coerceIn(-0.35f, 1f)
-    val magnitude = abs(clamped).pow(1.6f)
-    return if (clamped < 0f) -magnitude else magnitude
+    val magnitude = abs(fraction).coerceAtMost(1f).pow(1.6f)
+    return if (fraction < 0f) -magnitude else magnitude
 }
 
 @Composable
