@@ -9,7 +9,10 @@ package dev.citali.lunartune.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import kotlin.math.roundToInt
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
@@ -63,6 +66,7 @@ import dev.citali.lunartune.constants.SliderStyle
 import dev.citali.lunartune.constants.ShowPlayerVolumeBarKey
 import dev.citali.lunartune.constants.SliderStyleKey
 import dev.citali.lunartune.constants.ThumbnailCornerRadiusKey
+import dev.citali.lunartune.models.ActiveOutputDevice
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.ui.component.BottomSheetPageState
 import dev.citali.lunartune.ui.component.MenuState
@@ -86,10 +90,12 @@ import dev.citali.lunartune.utils.rememberPreference
  * The selector places a passive hit-test shield over each preview. The shield
  * leaves swipes available to the pager without exposing player click handlers.
  *
- * Layout is done at true device size and scaled down by [scaleToFit], because
+ * Layout is done at true device size in dp and scaled down by [scaleToFit], because
  * these styles adapt to phone-sized constraints (`maxHeight < 760.dp` and
  * friends); handing them a 260dp card would drop them all into their most
- * cramped branch and stop looking like the player at all.
+ * cramped branch and stop looking like the player at all. The dp layout is exact
+ * while the pixels behind it are cut to the size the card is drawn at, so the
+ * styles look right without being rasterised at full screen resolution.
  */
 @Composable
 fun RealPlayerStylePreview(
@@ -100,12 +106,17 @@ fun RealPlayerStylePreview(
     sliderOverride: SliderStyle? = null,
     buttonsOverride: PlayerButtonsStyle? = null,
     backgroundOverride: PlayerBackgroundStyle? = null,
+    // The carousel resolves the output device once and hands it to every card. Each
+    // card collecting the flow itself meant one subscriber per visible preview for a
+    // value they all render identically.
+    audioDevice: ActiveOutputDevice? = null,
 ) {
     val playerConnection = LocalPlayerConnection.current
     if (mediaMetadata == null || playerConnection == null) return
 
     val context = LocalContext.current
-    val audioDevice by playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle()
+    val resolvedAudioDevice =
+        audioDevice ?: playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle().value
     val savedSliderStyle = rememberSliderStyleFor(style)
     val savedButtonsStyle = rememberButtonsStyleFor(style)
     val (showVolumeBar) = rememberPreference(ShowPlayerVolumeBarKey, true)
@@ -141,22 +152,47 @@ fun RealPlayerStylePreview(
     val positionMs = (durationMs * 0.35f).toLong()
 
     val fallback = MaterialTheme.colorScheme.primary
-    val colors by produceState(initialValue = listOf(fallback), mediaMetadata.thumbnailUrl, fallback) {
+    // Only V9 and the styles that fall through to the shared background read the
+    // extracted gradient. Cinematic, Little, Modern and Expressive paint their own
+    // backdrops, so for them the decode and the Palette run are skipped outright -
+    // and a carousel page shows three or more cards at once.
+    val paintsFromPalette =
+        style != PlayerDesignStyle.V5 &&
+            style != PlayerDesignStyle.V7 &&
+            style != PlayerDesignStyle.V8 &&
+            style != PlayerDesignStyle.V10
+    val extractedColors by produceState(
+        initialValue = PreviewColorCache.None,
+        mediaMetadata.thumbnailUrl,
+        fallback,
+        paintsFromPalette,
+    ) {
+        if (!paintsFromPalette) return@produceState
+        val url = mediaMetadata.thumbnailUrl ?: return@produceState
+        // The same artwork is behind every card, so one extraction serves the page
+        // instead of one per card.
+        PreviewColorCache.get(url)?.let {
+            value = it
+            return@produceState
+        }
         val extracted = runCatching {
             withContext(Dispatchers.IO) {
                 val image = context.imageLoader.execute(ImageRequest.Builder(context)
-                    .data(mediaMetadata.thumbnailUrl).size(128).allowHardware(false).build()).image
+                    .data(url).size(128).allowHardware(false).build()).image
                 image?.toBitmap()?.let { bitmap ->
                     val palette = Palette.from(bitmap).clearFilters()
-                                        .clearFilters()
                         .maximumColorCount(PlayerColorExtractor.Config.MAX_COLOR_COUNT)
                         .resizeBitmapArea(PlayerColorExtractor.Config.BITMAP_AREA).generate()
                     PlayerColorExtractor.extractGradientColors(palette, fallback.toArgb())
                 }
             }
-        }.getOrNull()
-        value = extracted?.takeIf { it.isNotEmpty() } ?: listOf(fallback)
+        }.getOrNull()?.takeIf { it.isNotEmpty() }
+        if (extracted != null) {
+            PreviewColorCache.put(url, extracted)
+            value = extracted
+        }
     }
+    val colors = extractedColors.ifEmpty { listOf(fallback) }
     val dominant = colors.firstOrNull() ?: fallback
     val dark = MaterialTheme.colorScheme.surface.let { (it.red + it.green + it.blue) / 3f < 0.5f }
     val v9Text = remember(dominant, dark) {
@@ -218,12 +254,13 @@ fun RealPlayerStylePreview(
                         onSliderValueChangeFinished = {},
                         onVolumeChange = {},
                         appleMusic = style == PlayerDesignStyle.V10,
+                        previewMode = true,
                         modifier = Modifier.fillMaxSize().padding(top = 12.dp, bottom = if (style == PlayerDesignStyle.V10) 92.dp else 108.dp),
                     )
                     if (style == PlayerDesignStyle.V10) {
                         QueueCollapsedContentAppleMusic(
                             textBackgroundColor = Color.White, onExpandQueue = {}, onShowLyrics = {},
-                            onDeviceClick = {}, device = audioDevice,
+                            onDeviceClick = {}, device = resolvedAudioDevice,
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
                         )
                     } else {
@@ -231,7 +268,7 @@ fun RealPlayerStylePreview(
                             showCodecOnPlayer = false, currentFormat = null, textBackgroundColor = Color.White,
                             sleepTimerEnabled = false, sleepTimerTimeLeft = 0L,
                             onExpandQueue = {}, onShowLyrics = {}, onSleepTimerClick = {},
-                            onDeviceClick = {}, device = audioDevice,
+                            onDeviceClick = {}, device = resolvedAudioDevice,
                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
                         )
                     }
@@ -271,7 +308,7 @@ fun RealPlayerStylePreview(
                     QueueCollapsedContentV7(
                         showCodecOnPlayer = false, currentFormat = null, textBackgroundColor = Color.White,
                         sleepTimerEnabled = false, sleepTimerTimeLeft = 0L,
-                        onExpandQueue = {}, onShowLyrics = {}, onSleepTimerClick = {}, onDeviceClick = {}, device = audioDevice,
+                        onExpandQueue = {}, onShowLyrics = {}, onSleepTimerClick = {}, onDeviceClick = {}, device = resolvedAudioDevice,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 20.dp),
                     )
                 }
@@ -386,6 +423,29 @@ fun RealPlayerStylePreview(
 }
 
 /**
+ * The gradient behind the card, memoised by artwork URL.
+ *
+ * Every card on the carousel draws the same song, so without this each one decoded
+ * the artwork and ran the Palette quantiser for an identical result. Bounded and
+ * insertion-ordered, so a few songs' worth of colours live here and no more.
+ */
+private object PreviewColorCache {
+    val None: List<Color> = emptyList()
+    private const val MaxEntries = 6
+    private val entries =
+        object : LinkedHashMap<String, List<Color>>(8, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Color>>?): Boolean =
+                size > MaxEntries
+        }
+
+    fun get(url: String): List<Color>? = synchronized(entries) { entries[url] }
+
+    fun put(url: String, colors: List<Color>) {
+        synchronized(entries) { entries[url] = colors }
+    }
+}
+
+/**
  * Renders [content] at phone size and scales it to fit the space it is given.
  *
  * The width is the only thing that matters for the scale: a card keeps the phone's
@@ -405,21 +465,40 @@ private fun scaleToFit(
             orientation = Configuration.ORIENTATION_PORTRAIT
         }
     }
-    Layout(content = {
-        CompositionLocalProvider(LocalConfiguration provides virtualConfiguration) {
-            Box(Modifier.fillMaxSize()) { content() }
-        }
-    }, modifier = modifier) { measurables, constraints ->
-        val designWidth = virtualConfiguration.screenWidthDp.dp.roundToPx()
-        val designHeight = virtualConfiguration.screenHeightDp.dp.roundToPx()
+    val density = LocalDensity.current
+    SubcomposeLayout(modifier = modifier) { constraints ->
         val width = constraints.maxWidth
         val height = constraints.maxHeight
-        val scale = minOf(width.toFloat() / designWidth, height.toFloat() / designHeight)
-        val child = measurables.single().measure(Constraints.fixed(designWidth, designHeight))
+        val designWidthDp = virtualConfiguration.screenWidthDp.coerceAtLeast(1)
+        val designHeightDp = virtualConfiguration.screenHeightDp.coerceAtLeast(1)
+        val designWidthPx = designWidthDp * density.density
+        // Rasterise at the size the card is actually drawn at instead of at full device
+        // size and shrinking the result. The styles adapt to dp, so the layout stays the
+        // same either way - but the pixels do not: a card a little under three quarters
+        // of the screen wide was paying for a full-screen-size layer, and the blurred
+        // backdrops are priced in pixels, so every visible card was blurring frames of a
+        // 1080p surface to show them at 700px. Supersampling keeps text crisp once the
+        // layer is scaled back up, and the floor keeps a tiny card legible.
+        val rasterScale =
+            ((width / designWidthPx) * PreviewSupersample)
+                .coerceIn(PreviewMinRasterScale, 1f)
+        val rasterDensity = Density(density.density * rasterScale, density.fontScale)
+        val childWidth = (designWidthDp * rasterDensity.density).roundToInt().coerceAtLeast(1)
+        val childHeight = (designHeightDp * rasterDensity.density).roundToInt().coerceAtLeast(1)
+        val child =
+            subcompose(Unit) {
+                CompositionLocalProvider(
+                    LocalConfiguration provides virtualConfiguration,
+                    LocalDensity provides rasterDensity,
+                ) {
+                    Box(Modifier.fillMaxSize()) { content() }
+                }
+            }.first().measure(Constraints.fixed(childWidth, childHeight))
         layout(width, height) {
+            val scale = minOf(width.toFloat() / childWidth, height.toFloat() / childHeight)
             child.placeWithLayer(
-                ((width - designWidth * scale) / 2).toInt(),
-                ((height - designHeight * scale) / 2).toInt(),
+                ((width - childWidth * scale) / 2).roundToInt(),
+                ((height - childHeight * scale) / 2).roundToInt(),
             ) {
                 scaleX = scale
                 scaleY = scale
@@ -428,3 +507,9 @@ private fun scaleToFit(
         }
     }
 }
+
+/** Extra resolution over the drawn size, so scaled text stays sharp. */
+private const val PreviewSupersample = 1.15f
+
+/** Below this the card would rasterise visibly soft, whatever the savings. */
+private const val PreviewMinRasterScale = 0.5f

@@ -91,6 +91,11 @@ fun PlayerStyleCarousel(
         .collectAsStateWithLifecycle(initialValue = null)
     val lastSong by viewModel.lastPlayedSong.collectAsStateWithLifecycle()
     val metadata = currentMetadata ?: lastSong?.toMediaMetadata()
+    // One subscriber for the output device, handed to every preview: each card used to
+    // collect it separately to render the same speaker pill.
+    val audioDevice by remember(connection) {
+        connection?.service?.activeAudioDevice ?: flowOf(null)
+    }.collectAsStateWithLifecycle(initialValue = null)
     val (savedStyle) = rememberEnumPreference(PlayerDesignStyleKey, PlayerDesignStyle.V7)
     val (savedSlider) = rememberEnumPreference(SliderStyleKey, SliderStyle.Standard)
     val (savedButtons) = rememberEnumPreference(PlayerButtonsStyleKey, PlayerButtonsStyle.DEFAULT)
@@ -222,6 +227,9 @@ fun PlayerStyleCarousel(
                     contentPadding = PaddingValues(top = slotPadding, bottom = slotPadding),
                     userScrollEnabled = families[page].size > 1,
                     flingBehavior = PagerDefaults.flingBehavior(state = familyState, snapAnimationSpec = LunarMotion.carouselSnap()),
+                    // Each page is a live player: keep the pager to the pages that can
+                    // actually be on screen rather than speculatively composing more.
+                    beyondViewportPageCount = 0,
                     modifier = Modifier.fillMaxSize(),
                 ) { row ->
                 val cardStyle = families[page][row]
@@ -284,6 +292,7 @@ fun PlayerStyleCarousel(
                                 sliderOverride = if (isSelected) draftSlider else null,
                                 buttonsOverride = if (isSelected) draftButtons else null,
                                 backgroundOverride = if (isSelected) draftBackground else null,
+                                audioDevice = audioDevice,
                             )
                         } else {
                             Text(

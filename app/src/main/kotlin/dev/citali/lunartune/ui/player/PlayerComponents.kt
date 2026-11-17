@@ -1912,6 +1912,9 @@ fun V8PlayerContent(
     onLyricsSyncOffsetChange: (Int) -> Unit = {},
     onCloseLyrics: () -> Unit = {},
     lyricsRenderViewModel: LyricsRenderViewModel? = null,
+    // Forwarded from the style carousel: the card is a thumbnail, so the lyrics
+    // machinery the full player needs is not started for it.
+    previewMode: Boolean = false,
 ) {
     val foreground = Color.White
     val secondaryForeground = foreground.copy(alpha = 0.72f)
@@ -2033,7 +2036,9 @@ fun V8PlayerContent(
             onSliderValueChangeFinished = onSliderValueChangeFinished,
             onVolumeChange = onVolumeChange,
             modifier = modifier,
-            lyricsRenderViewModel = lyricsRenderViewModel ?: hiltViewModel(),
+            // No view model in a preview: one per card would outlive the card.
+            lyricsRenderViewModel = lyricsRenderViewModel ?: if (previewMode) null else hiltViewModel(),
+            previewMode = previewMode,
         )
     } else {
         V8PortraitContent(
