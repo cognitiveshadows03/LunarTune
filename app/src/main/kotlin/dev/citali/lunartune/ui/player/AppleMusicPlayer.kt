@@ -690,10 +690,14 @@ internal fun AppleMusicPortraitContent(
                 AppleMusicQueuePane(
                     navController = navController,
                     playerSheetState = playerSheetState,
+                    // Stop at the progress row, not at the top of the whole controls block.
+                    // controlsHeight still counts the title/artist row, which is faded out and
+                    // inert once the queue opens, so reserving all of it left a dead band
+                    // between the last queue row and the controls.
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .padding(top = miniHeaderHeight, bottom = controlsHeight),
+                            .padding(top = miniHeaderHeight, bottom = controlsReserve),
                 )
             }
         }
@@ -730,6 +734,9 @@ internal fun AppleMusicPortraitContent(
                         onToggleLike = onToggleLike,
                         onTitleClick = onTitleClick,
                         onArtistClick = onArtistClick,
+                        // Once faded out the row is invisible but would still swallow taps in
+                        // the strip the queue now extends into, so it stops listening.
+                        interactive = collapse < 0.5f,
                     )
                 }
                 Spacer(Modifier.height(if (compactHeight) 10.dp else 14.dp))
@@ -775,6 +782,7 @@ private fun AppleMusicMetadataRow(
     onToggleLike: () -> Unit,
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
+    interactive: Boolean = true,
 ) {
     val haptic = LocalHapticFeedback.current
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -790,6 +798,7 @@ private fun AppleMusicMetadataRow(
                     Modifier
                         .basicMarquee()
                         .clickable(
+                            enabled = interactive,
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null,
                             onClick = onTitleClick,
@@ -805,6 +814,7 @@ private fun AppleMusicMetadataRow(
                     Modifier
                         .basicMarquee()
                         .clickable(
+                            enabled = interactive,
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null,
                         ) { artists.firstOrNull()?.id?.let(onArtistClick) },
@@ -818,12 +828,14 @@ private fun AppleMusicMetadataRow(
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onToggleLike()
             },
+            enabled = interactive,
         )
         AppleMusicPlainIcon(
             iconRes = R.drawable.more_horiz,
             tint = foreground.copy(alpha = 0.8f),
             iconSize = 24.dp,
             onClick = onMenuClick,
+            enabled = interactive,
         )
     }
 }
@@ -1443,15 +1455,23 @@ private fun AppleMusicQueuePane(
                                     )
                                 }
                                 if (!selecting) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier =
-                                            Modifier
-                                                .size(40.dp)
-                                                .clip(CircleShape)
-                                                .clickable {
-                                                    if (meta == null) return@clickable
-                                                menuState.show {
+                                    // Ellipsis and grip share one trailing line: same 40dp touch
+                                    // target, same 20dp glyph, both centred, so the pair reads as
+                                    // a single row of controls at the end of the item rather than
+                                    // two icons stepping down the row.
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    ) {
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier =
+                                                Modifier
+                                                    .size(40.dp)
+                                                    .clip(CircleShape)
+                                                    .clickable {
+                                                        if (meta == null) return@clickable
+                                                        menuState.show {
                                                             dev.citali.lunartune.ui.menu.PlayerMenu(
                                                                 mediaMetadata = meta,
                                                                 navController = navController,
@@ -1472,21 +1492,39 @@ private fun AppleMusicQueuePane(
                                                                 onDismiss = menuState::dismiss,
                                                             )
                                                         }
-                                                        },
-                                    ) {
-                                        Icon(painterResource(R.drawable.more_horiz), null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
-                                    }
-                                    androidx.compose.animation.AnimatedVisibility(visible = !locked) {
-                                        Icon(
-                                            painterResource(R.drawable.drag_handle),
-                                            null,
-                                            tint = Color.White.copy(alpha = 0.45f),
+                                                    },
+                                        ) {
+                                            Icon(painterResource(R.drawable.more_horiz), null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                                        }
+                                        // The grip keeps its slot while the queue is locked, so
+                                        // the lock fades it in and out without nudging the
+                                        // ellipsis sideways.
+                                        Box(
+                                            contentAlignment = Alignment.Center,
                                             modifier =
                                                 Modifier
                                                     .size(40.dp)
-                                                    .padding(8.dp)
-                                                    .draggableHandle(onDragStarted = { dragStartKey = itemKey }),
-                                        )
+                                                    .then(
+                                                        if (locked) {
+                                                            Modifier
+                                                        } else {
+                                                            Modifier.draggableHandle(onDragStarted = { dragStartKey = itemKey })
+                                                        },
+                                                    ),
+                                        ) {
+                                            androidx.compose.animation.AnimatedVisibility(
+                                                visible = !locked,
+                                                enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(150)),
+                                                exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(150)),
+                                            ) {
+                                                Icon(
+                                                    painterResource(R.drawable.drag_handle),
+                                                    null,
+                                                    tint = Color.White.copy(alpha = 0.45f),
+                                                    modifier = Modifier.size(20.dp),
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
