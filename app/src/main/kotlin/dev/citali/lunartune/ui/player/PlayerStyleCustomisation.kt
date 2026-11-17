@@ -30,7 +30,6 @@ import dev.citali.lunartune.utils.rememberPreference
  */
 val CustomisablePlayerStyles: Set<PlayerDesignStyle> =
     setOf(
-        PlayerDesignStyle.V2,
         PlayerDesignStyle.V4,
         PlayerDesignStyle.V5,
         PlayerDesignStyle.V6,

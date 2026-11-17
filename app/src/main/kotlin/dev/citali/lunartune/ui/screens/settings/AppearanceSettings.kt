@@ -772,7 +772,7 @@ fun AppearanceSettings(navController: NavController) {
                         onValueSelected = onPlayerDesignStyleChange,
                         valueText = {
                             when (it) {
-                                PlayerDesignStyle.V2 -> stringResource(R.string.player_design_v2)
+                                PlayerDesignStyle.ZINE -> stringResource(R.string.player_design_zine)
                                 PlayerDesignStyle.V4 -> stringResource(R.string.player_design_v4)
                                 PlayerDesignStyle.V5 -> stringResource(R.string.player_design_v5)
                                 PlayerDesignStyle.V6 -> stringResource(R.string.player_design_v6)
