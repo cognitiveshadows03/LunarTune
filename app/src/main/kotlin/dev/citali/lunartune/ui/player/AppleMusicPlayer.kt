@@ -181,6 +181,7 @@ import dev.citali.lunartune.utils.makeTimeString
 import dev.citali.lunartune.utils.rememberEnumPreference
 import dev.citali.lunartune.utils.rememberLowDataModeActive
 import dev.citali.lunartune.utils.rememberPreference
+import dev.citali.lunartune.viewmodels.LyricsRenderScreenState
 import dev.citali.lunartune.viewmodels.LyricsRenderViewModel
 import kotlinx.coroutines.delay
 import me.saket.squiggles.SquigglySlider
@@ -242,7 +243,12 @@ internal fun AppleMusicPortraitContent(
     onTitleClick: () -> Unit,
     onArtistClick: (artistId: String) -> Unit,
     modifier: Modifier = Modifier,
-    lyricsRenderViewModel: LyricsRenderViewModel = hiltViewModel(),
+    lyricsRenderViewModel: LyricsRenderViewModel? = hiltViewModel(),
+    // Set by the style carousel, which renders this layout as a thumbnail. The lyrics
+    // machinery below (the prefetch, the render view model, the offscreen shaping
+    // prewarm) exists to make opening the lyrics page instant, and a preview never
+    // opens it: on the carousel it was running once per visible card, for nothing.
+    previewMode: Boolean = false,
 ) {
     // Inline lyrics layout: the artwork collapses into a 56dp mini header thumbnail beside the
     // credits, the word-synced lyrics (LyricsEnhanced / LyricsV2, per the lyrics mode setting)
@@ -283,30 +289,43 @@ internal fun AppleMusicPortraitContent(
     // Lyrics menu + the lyrics-controls preferences it toggles (same keys as the lyrics page).
     val playerConnection = LocalPlayerConnection.current
     val menuState = LocalMenuState.current
-    val currentLyrics by (
-        playerConnection?.currentLyrics ?: kotlinx.coroutines.flow.MutableStateFlow(null)
-    ).collectAsStateWithLifecycle(initialValue = null)
+    // Skipped in previews: lyrics arriving would recompose every visible card, and a
+    // card never shows them.
+    val lyricsStateHolder =
+        if (previewMode) {
+            null
+        } else {
+            (playerConnection?.currentLyrics ?: kotlinx.coroutines.flow.MutableStateFlow(null))
+                .collectAsStateWithLifecycle(initialValue = null)
+        }
+    val currentLyrics = lyricsStateHolder?.value
     // The inline lyrics page has no LyricsScreen to fetch lyrics, and fetches tied to the page's own
     // composition got cancelled and restarted whenever it opened/closed. Fetch here instead, keyed only
     // on the song, so lyrics are already loading (or ready) by the time the page is opened.
     val amContext = androidx.compose.ui.platform.LocalContext.current
     val amDatabase = dev.citali.lunartune.LocalDatabase.current
     val amLyricsHelper =
-        remember(amContext) {
-            dagger.hilt.android.EntryPointAccessors
-                .fromApplication(amContext.applicationContext, dev.citali.lunartune.di.LyricsHelperEntryPoint::class.java)
-                .lyricsHelper()
+        if (previewMode) {
+            null
+        } else {
+            remember(amContext) {
+                dagger.hilt.android.EntryPointAccessors
+                    .fromApplication(amContext.applicationContext, dev.citali.lunartune.di.LyricsHelperEntryPoint::class.java)
+                    .lyricsHelper()
+            }
         }
     val hasLyrics = currentLyrics != null
     // Same method as the other players' LyricsScreen: fetch while the lyrics page is shown,
     // keyed on the song and the current lyrics.
     // Prefetch for the currently playing song only, even while the lyrics page is hidden.
     LaunchedEffect(mediaMetadata.id, currentLyrics?.lyrics) {
+        if (previewMode) return@LaunchedEffect
         if (currentLyrics != null) return@LaunchedEffect
         try {
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 if (amDatabase.lyrics(mediaMetadata.id).first() != null) return@withContext
-                val fetched = amLyricsHelper.getLyricsWithSource(mediaMetadata)
+                val fetched =
+                    amLyricsHelper?.getLyricsWithSource(mediaMetadata) ?: return@withContext
                 amDatabase.query {
                     insertLyricsIfAbsent(id = mediaMetadata.id, lyrics = fetched.lyrics, source = fetched.providerName)
                 }
@@ -339,10 +358,15 @@ internal fun AppleMusicPortraitContent(
     val thumbTop = 16.dp
     val miniHeaderHeight = statusTop + thumbTop + thumb + 8.dp
     val lyricsMode by rememberEnumPreference(LyricsModeKey, LyricsMode.ENHANCED)
-    val lyricsRenderState by lyricsRenderViewModel.state.collectAsStateWithLifecycle()
+    // A preview has no view model, so it collects a single idle flow instead of
+    // subscribing to a controller it will never drive.
+    val idleLyricsRenderState =
+        remember { kotlinx.coroutines.flow.MutableStateFlow<LyricsRenderScreenState>(LyricsRenderScreenState.Loading) }
+    val lyricsRenderState by (lyricsRenderViewModel?.state ?: idleLyricsRenderState)
+        .collectAsStateWithLifecycle()
     val lyricsDurationMs = duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L
     LaunchedEffect(mediaMetadata.id, lyricsDurationMs) {
-        lyricsRenderViewModel.bind(mediaMetadata.id, lyricsDurationMs)
+        lyricsRenderViewModel?.bind(mediaMetadata.id, lyricsDurationMs)
     }
     // AnimatedVisibility removes the lyrics composable when the page closes. Keep its list states
     // in this always-composed parent so reopening the same song resumes where the reader left off.
@@ -541,7 +565,9 @@ internal fun AppleMusicPortraitContent(
                 listOf((maxWidth - (AppleMusicGutter - 16.dp) * 2).coerceAtLeast(1.dp))
             }
         val latestInlinePosition = androidx.compose.runtime.rememberUpdatedState(sliderPosition ?: position)
-        if (playerSheetState.isExpandedOrExpanding && lyricsMode == LyricsMode.ENHANCED) {
+        // A preview never opens the lyrics page, so pre-shaping its first frame offscreen
+        // would be pure cost: measured text shaping, once per card, on every carousel open.
+        if (!previewMode && playerSheetState.isExpandedOrExpanding && lyricsMode == LyricsMode.ENHANCED) {
             PrewarmLyricsSceneEffect(
                 lyricsState = lyricsRenderState,
                 textColor = Color.White,
@@ -646,31 +672,35 @@ internal fun AppleMusicPortraitContent(
                         .padding(horizontal = AppleMusicGutter - 16.dp),
             ) {
                 val provider = androidx.compose.runtime.rememberUpdatedState(sliderPosition)
-                when (lyricsMode) {
-                    LyricsMode.V2 ->
-                        LyricsV2(
-                            lyricsState = lyricsRenderState,
-                            sliderPositionProvider = { provider.value },
-                            lyricsSyncOffset = lyricsSyncOffset,
-                            modifier = Modifier.fillMaxSize(),
-                            // Always on the dark blurred backdrop, so ignore light theme colours.
-                            textColorOverride = Color.White,
-                            rememberedListState = v2LyricsListState,
-                            lyricsRenderViewModel = lyricsRenderViewModel,
-                            isActive = isInlineLyricsActive,
-                        )
-                    LyricsMode.ENHANCED ->
-                        LyricsEnhanced(
-                            lyricsState = lyricsRenderState,
-                            sliderPositionProvider = { provider.value },
-                            lyricsSyncOffset = lyricsSyncOffset,
-                            modifier = Modifier.fillMaxSize(),
-                            // Always on the dark blurred backdrop, so ignore light theme colours.
-                            textColorOverride = Color.White,
-                            rememberedKaraokeListState = enhancedLyricsListState,
-                            lyricsRenderViewModel = lyricsRenderViewModel,
-                            isActive = isInlineLyricsActive,
-                        )
+                // Null only in previews, where this pane is never reachable.
+                val lyricsViewModel = lyricsRenderViewModel
+                if (lyricsViewModel != null) {
+                    when (lyricsMode) {
+                        LyricsMode.V2 ->
+                            LyricsV2(
+                                lyricsState = lyricsRenderState,
+                                sliderPositionProvider = { provider.value },
+                                lyricsSyncOffset = lyricsSyncOffset,
+                                modifier = Modifier.fillMaxSize(),
+                                // Always on the dark blurred backdrop, so ignore light theme colours.
+                                textColorOverride = Color.White,
+                                rememberedListState = v2LyricsListState,
+                                lyricsRenderViewModel = lyricsViewModel,
+                                isActive = isInlineLyricsActive,
+                            )
+                        LyricsMode.ENHANCED ->
+                            LyricsEnhanced(
+                                lyricsState = lyricsRenderState,
+                                sliderPositionProvider = { provider.value },
+                                lyricsSyncOffset = lyricsSyncOffset,
+                                modifier = Modifier.fillMaxSize(),
+                                // Always on the dark blurred backdrop, so ignore light theme colours.
+                                textColorOverride = Color.White,
+                                rememberedKaraokeListState = enhancedLyricsListState,
+                                lyricsRenderViewModel = lyricsViewModel,
+                                isActive = isInlineLyricsActive,
+                            )
+                    }
                 }
             }
         }
