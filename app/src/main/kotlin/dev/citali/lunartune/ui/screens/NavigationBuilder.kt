@@ -507,19 +507,6 @@ fun NavGraphBuilder.navigationBuilder(
             AppearanceSettings(navController)
         }
     }
-    composable(
-        route = "settings/appearance/player_styles",
-        exitTransition = {
-            if (disableAnimations) fadeOut(tween(0)) else LunarMotion.playerStylePickerExit()
-        },
-        popExitTransition = {
-            if (disableAnimations) fadeOut(tween(0)) else LunarMotion.playerStylePickerExit()
-        },
-    ) {
-        DrillPageContainer(pureBlack) {
-            dev.citali.lunartune.ui.screens.settings.PlayerStyleCarousel(navController)
-        }
-    }
     composable("settings/appearance/icon") {
         DrillPageContainer(pureBlack) {
             IconScreen(navController)
