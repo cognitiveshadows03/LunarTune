@@ -7,7 +7,6 @@
 
 package dev.citali.lunartune.ui.screens
 
-import android.content.Intent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -131,6 +130,7 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.LocalPlayerConnection
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.StatPeriod
+import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.ListeningSummary
 import dev.citali.lunartune.db.entities.Song
@@ -328,35 +328,6 @@ fun StatsScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = {
-                            val topSongTitle = mostPlayedSongsStats.firstOrNull()?.title ?: ""
-                            val topArtistName = mostPlayedArtists.firstOrNull()?.artist?.name ?: ""
-                            val minutes = makeTimeString(listeningSummary.totalTimeListened) ?: ""
-                            val shareText = context.getString(
-                                R.string.stats_replay_share_text,
-                                periodLabel,
-                                minutes,
-                                topSongTitle,
-                                topArtistName,
-                            )
-                            context.startActivity(
-                                Intent.createChooser(
-                                    Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, shareText)
-                                    },
-                                    context.getString(R.string.share),
-                                ),
-                            )
-                        },
-                        onLongClick = {},
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.share),
-                            contentDescription = stringResource(R.string.share),
-                        )
-                    }
-                    IconButton(
                         onClick = viewModel::showYearPicker,
                         onLongClick = {},
                     ) {
@@ -475,9 +446,15 @@ fun StatsScreen(
                     ReplayHeroPager(
                         totalTimeListened = listeningSummary.totalTimeListened,
                         firstEventTimestamp = firstEvent?.event?.timestamp,
+                        previousPeriodTimeListened = data.previousPeriodTimeListened,
+                        comparisonLabelResId = data.comparisonLabelResId,
+                        isWeekly =
+                            selectedOption == OptionStats.WEEKS ||
+                                (selectedOption == OptionStats.CONTINUOUS && indexChips == StatPeriod.WEEK_1.ordinal),
                         topSong = topSongStat,
                         topSongEntity = topSongEntity,
                         topArtist = topArtist,
+                        topAlbum = mostPlayedAlbums.firstOrNull(),
                         onTopSongClick = {
                             topSongStat?.let { song ->
                                 songsById[song.id]?.let { entity ->
@@ -487,6 +464,9 @@ fun StatsScreen(
                         },
                         onTopArtistClick = {
                             topArtist?.let { navController.navigate("artist/${it.id}") }
+                        },
+                        onTopAlbumClick = {
+                            mostPlayedAlbums.firstOrNull()?.let { navController.navigate("album/${it.id}") }
                         },
                         modifier = Modifier.animateItem(),
                     )
@@ -526,30 +506,6 @@ fun StatsScreen(
                 item(key = "overview", contentType = "overview") {
                     StatsSummarySection(
                         summary = listeningSummary,
-                        previousPeriodTimeListened = data.previousPeriodTimeListened,
-                        comparisonLabelResId = data.comparisonLabelResId,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "spotlights", contentType = "spotlights") {
-                    val topSong = mostPlayedSongsStats.firstOrNull()
-                    StatsHighlightsSection(
-                        topAlbum = mostPlayedAlbums.firstOrNull(),
-                        onTopSongClick = {
-                            mostPlayedSongsStats.firstOrNull()?.let { song ->
-                                songsById[song.id]?.let { entity ->
-                                    playerConnection?.playQueue(YouTubeQueue(endpoint = WatchEndpoint(song.id), preloadItem = entity.toMediaMetadata()))
-                                }
-                            }
-                        },
-                        topArtist = mostPlayedArtists.firstOrNull(),
-                        topSong = topSong,
-                        topSongEntity =
-                            topSong?.let { rankedSong ->
-                                mostPlayedSongs.firstOrNull { it.id == rankedSong.id }
-                            },
-                        navController = navController,
                         modifier = Modifier.animateItem(),
                     )
                 }
@@ -1339,14 +1295,19 @@ private fun ReplayHeader(periodLabel: String, modifier: Modifier = Modifier) {
 private fun ReplayHeroPager(
     totalTimeListened: Long,
     firstEventTimestamp: java.time.LocalDateTime?,
+    previousPeriodTimeListened: Long?,
+    comparisonLabelResId: Int?,
+    isWeekly: Boolean,
     topSong: SongWithStats?,
     topSongEntity: Song?,
     topArtist: Artist?,
+    topAlbum: Album?,
     onTopSongClick: () -> Unit,
     onTopArtistClick: () -> Unit,
+    onTopAlbumClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scheme = MaterialTheme.colorScheme
     Column(
         modifier = modifier
@@ -1365,17 +1326,17 @@ private fun ReplayHeroPager(
             val scale = 1f - 0.06f * abs(pageOffset)
             val alpha = 1f - 0.25f * abs(pageOffset)
             Box(
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        this.alpha = alpha
-                    },
+                modifier = Modifier.graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                },
             ) {
                 when (page) {
                     0 -> ReplayMinutesCard(
                         totalTimeListened = totalTimeListened,
                         firstEventTimestamp = firstEventTimestamp,
+                        isWeekly = isWeekly,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     1 -> ReplayTopSongCard(
@@ -1389,15 +1350,25 @@ private fun ReplayHeroPager(
                         onClick = onTopArtistClick,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    3 -> ReplayTopAlbumCard(
+                        topAlbum = topAlbum,
+                        onClick = onTopAlbumClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }
+        ReplayTrendLine(
+            totalTimeListened = totalTimeListened,
+            previousPeriodTimeListened = previousPeriodTimeListened,
+            comparisonLabelResId = comparisonLabelResId,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            repeat(3) { index ->
+            repeat(4) { index ->
                 val selected = pagerState.currentPage == index
                 Box(
                     modifier = Modifier
@@ -1414,13 +1385,50 @@ private fun ReplayHeroPager(
 }
 
 @Composable
+private fun ReplayTrendLine(
+    totalTimeListened: Long,
+    previousPeriodTimeListened: Long?,
+    comparisonLabelResId: Int?,
+) {
+    if (comparisonLabelResId == null) return
+
+    val comparisonLabel = stringResource(comparisonLabelResId)
+    val trendText = when {
+        previousPeriodTimeListened == null -> stringResource(R.string.stats_trend_no_comparison)
+        previousPeriodTimeListened <= 0L -> stringResource(R.string.stats_trend_no_previous_listening)
+        else -> {
+            val percentChange =
+                ((totalTimeListened.toDouble() - previousPeriodTimeListened.toDouble()) /
+                    previousPeriodTimeListened.toDouble() * 100.0).roundToInt()
+            when {
+                percentChange > 0 -> stringResource(R.string.stats_trend_increase, percentChange, comparisonLabel)
+                percentChange < 0 -> stringResource(R.string.stats_trend_decrease, -percentChange, comparisonLabel)
+                else -> stringResource(R.string.stats_trend_unchanged, comparisonLabel)
+            }
+        }
+    }
+    Text(
+        text = trendText,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+    )
+}
+
+@Composable
 private fun ReplayMinutesCard(
     totalTimeListened: Long,
     firstEventTimestamp: java.time.LocalDateTime?,
+    isWeekly: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val minutes = (totalTimeListened / 60000L).toInt()
+    val totalMinutes = (totalTimeListened.coerceAtLeast(0L) / 60_000L)
+    val timeValue = if (isWeekly) formatReplayDuration(totalTimeListened) else totalMinutes.toString()
+    val timeLabel =
+        stringResource(
+            if (isWeekly) R.string.stats_total_time_listened else R.string.stats_replay_minutes_listened,
+        )
     val memberSince = firstEventTimestamp?.let {
         DateTimeFormatter.ofPattern("yyyy", Locale.getDefault()).format(it)
     } ?: "—"
@@ -1433,9 +1441,7 @@ private fun ReplayMinutesCard(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
-                    Brush.linearGradient(
-                        listOf(scheme.primaryContainer, scheme.secondaryContainer),
-                    ),
+                    Brush.linearGradient(listOf(scheme.primaryContainer, scheme.secondaryContainer)),
                 )
                 .padding(24.dp),
         ) {
@@ -1444,15 +1450,23 @@ private fun ReplayMinutesCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = stringResource(R.string.stats_replay_minutes_listened),
+                    text = timeLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
                 )
                 Text(
-                    text = minutes.toString(),
-                    style = MaterialTheme.typography.displayLarge,
+                    text = timeValue,
+                    style = MaterialTheme.typography.displayLarge.copy(
+                        fontSize = if (timeValue.length > 5) {
+                            MaterialTheme.typography.displayMedium.fontSize
+                        } else {
+                            MaterialTheme.typography.displayLarge.fontSize
+                        },
+                    ),
                     fontWeight = FontWeight.Bold,
                     color = scheme.onPrimaryContainer,
+                    maxLines = 1,
+                    softWrap = false,
                 )
                 Text(
                     text = stringResource(R.string.stats_replay_member_since),
@@ -1467,6 +1481,18 @@ private fun ReplayMinutesCard(
                 )
             }
         }
+    }
+}
+
+private fun formatReplayDuration(durationMillis: Long): String {
+    val totalMinutes = durationMillis.coerceAtLeast(0L) / 60_000L
+    val days = totalMinutes / (24 * 60)
+    val hours = (totalMinutes % (24 * 60)) / 60
+    val minutes = totalMinutes % 60
+    return buildString {
+        if (days > 0) append("${days}d ")
+        if (hours > 0 || days > 0) append("${hours}h ")
+        append("${minutes}m")
     }
 }
 
@@ -1651,6 +1677,80 @@ private fun ReplayTopArtistCard(
 }
 
 @Composable
+private fun ReplayTopAlbumCard(
+    topAlbum: Album?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val palette = dev.citali.lunartune.ui.theme.rememberProfileCardColors(topAlbum?.thumbnailUrl)
+    val accent = palette.accent ?: scheme.primaryContainer
+    val deep = palette.deep ?: scheme.secondaryContainer
+    val foreground = if (deep.luminance() > 0.55f) Color.Black else Color.White
+
+    Surface(
+        onClick = onClick,
+        modifier = modifier.aspectRatio(1.55f),
+        shape = RoundedCornerShape(28.dp),
+        color = deep,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.linearGradient(listOf(accent, deep)))
+                .padding(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = stringResource(R.string.stats_favourite_album),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = foreground.copy(alpha = 0.85f),
+                )
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    AsyncImage(
+                        model = topAlbum?.thumbnailUrl,
+                        contentDescription = topAlbum?.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(96.dp).clip(RoundedCornerShape(16.dp)),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = topAlbum?.title ?: "—",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = foreground,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = topAlbum?.artists?.joinToString { it.name }.orEmpty(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = foreground.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = makeTimeString(topAlbum?.timeListened),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = foreground.copy(alpha = 0.75f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ReplayActions(
     enabled: Boolean,
     onPlay: () -> Unit,
@@ -1752,144 +1852,35 @@ private fun StatsYearPickerDialog(
 @Composable
 private fun StatsSummarySection(
     summary: ListeningSummary,
-    previousPeriodTimeListened: Long?,
-    comparisonLabelResId: Int?,
     modifier: Modifier = Modifier,
 ) {
     if (summary.totalPlayCount == 0) return
 
     Surface(
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        BoxWithConstraints(modifier = Modifier.padding(20.dp)) {
-            val expanded = maxWidth >= 680.dp
-            if (expanded) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    StatsListeningTimeHero(
-                        summary = summary,
-                        previousPeriodTimeListened = previousPeriodTimeListened,
-                        comparisonLabelResId = comparisonLabelResId,
-                        modifier = Modifier.weight(1.2f),
-                    )
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_total_plays),
-                            value = summary.totalPlayCount.toString(),
-                        )
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_unique_songs),
-                            value = summary.uniqueSongsCount.toString(),
-                        )
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_unique_artists),
-                            value = summary.uniqueArtistsCount.toString(),
-                        )
-                    }
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    StatsListeningTimeHero(
-                        summary = summary,
-                        previousPeriodTimeListened = previousPeriodTimeListened,
-                        comparisonLabelResId = comparisonLabelResId,
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_total_plays),
-                            value = summary.totalPlayCount.toString(),
-                            modifier = Modifier.weight(1f),
-                        )
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_unique_songs),
-                            value = summary.uniqueSongsCount.toString(),
-                            modifier = Modifier.weight(1f),
-                        )
-                        StatMetricCard(
-                            label = stringResource(R.string.stats_unique_artists),
-                            value = summary.uniqueArtistsCount.toString(),
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatsListeningTimeHero(
-    summary: ListeningSummary,
-    previousPeriodTimeListened: Long?,
-    comparisonLabelResId: Int?,
-    modifier: Modifier = Modifier,
-) {
-    val foreground = MaterialTheme.colorScheme.onPrimaryContainer
-    val comparisonLabel =
-        if (comparisonLabelResId != null) {
-            stringResource(comparisonLabelResId)
-        } else {
-            null
-        }
-    val trendText =
-        when {
-            comparisonLabel == null -> stringResource(R.string.stats_trend_all_time)
-            previousPeriodTimeListened == null -> stringResource(R.string.stats_trend_no_comparison)
-            previousPeriodTimeListened <= 0L -> stringResource(R.string.stats_trend_no_previous_listening)
-            else -> {
-                val percentChange =
-                    (
-                        (summary.totalTimeListened.toDouble() - previousPeriodTimeListened.toDouble()) /
-                            previousPeriodTimeListened.toDouble() * 100.0
-                    ).roundToInt()
-                when {
-                    percentChange > 0 ->
-                        stringResource(R.string.stats_trend_increase, percentChange, comparisonLabel)
-
-                    percentChange < 0 ->
-                        stringResource(R.string.stats_trend_decrease, -percentChange, comparisonLabel)
-
-                    else -> stringResource(R.string.stats_trend_unchanged, comparisonLabel)
-                }
-            }
-        }
-
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.primaryContainer,
-    ) {
-        Column(
-            modifier = Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.secondaryContainer))).padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        Row(
+            modifier = Modifier.padding(20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                text = stringResource(R.string.stats_total_time_listened),
-                style = MaterialTheme.typography.labelLarge,
-                color = foreground,
+            StatMetricCard(
+                label = stringResource(R.string.stats_total_plays),
+                value = summary.totalPlayCount.toString(),
+                modifier = Modifier.weight(1f),
             )
-            Text(
-                text = makeTimeString(summary.totalTimeListened) ?: "—",
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Bold,
-                color = foreground,
+            StatMetricCard(
+                label = stringResource(R.string.stats_unique_songs),
+                value = summary.uniqueSongsCount.toString(),
+                modifier = Modifier.weight(1f),
             )
-            Text(
-                text = trendText,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = foreground,
+            StatMetricCard(
+                label = stringResource(R.string.stats_unique_artists),
+                value = summary.uniqueArtistsCount.toString(),
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -1918,83 +1909,6 @@ private fun StatMetricCard(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-    }
-}
-
-@Composable
-private fun StatsHighlightsSection(
-    topArtist: Artist?,
-    topSong: SongWithStats?,
-    topSongEntity: Song?,
-    topAlbum: dev.citali.lunartune.db.entities.Album?,
-    onTopSongClick: () -> Unit,
-    navController: NavController,
-    modifier: Modifier = Modifier,
-) {
-    if (topArtist == null && topSong == null && topAlbum == null) return
-    Column(modifier.padding(vertical = 12.dp)) {
-        StatsSectionHeader(title = stringResource(R.string.stats_your_favourites), supportingText = "")
-        BoxWithConstraints {
-            val cardWidth = (maxWidth * 0.82f).coerceAtMost(340.dp)
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (topSong != null && topSongEntity != null) item(key = "song") {
-                    StatsHighlightCard(stringResource(R.string.stats_favourite_song), topSong.title,
-                        joinByBullet(topSongEntity.artists.joinToString { it.name }, makeTimeString(topSong.timeListened)),
-                        topSong.thumbnailUrl, false, onTopSongClick, Modifier.width(cardWidth))
-                }
-                if (topArtist != null) item(key = "artist") {
-                    StatsHighlightCard(stringResource(R.string.stats_favourite_artist), topArtist.artist.name,
-                        makeTimeString(topArtist.timeListened?.toLong()) ?: "—", topArtist.artist.thumbnailUrl,
-                        true, { navController.navigate("artist/${topArtist.id}") }, Modifier.width(cardWidth))
-                }
-                if (topAlbum != null) item(key = "album") {
-                    StatsHighlightCard(stringResource(R.string.stats_favourite_album), topAlbum.title,
-                        joinByBullet(topAlbum.artists.joinToString { it.name }, makeTimeString(topAlbum.timeListened)),
-                        topAlbum.thumbnailUrl, false, { navController.navigate("album/${topAlbum.id}") }, Modifier.width(cardWidth))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatsHighlightCard(
-    title: String,
-    mainText: String,
-    subText: String,
-    imageUrl: String?,
-    useCircleShape: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val palette = dev.citali.lunartune.ui.theme.rememberProfileCardColors(imageUrl)
-    val accent = palette.accent ?: MaterialTheme.colorScheme.primary
-    val base = MaterialTheme.colorScheme.surfaceContainerHigh
-    ElevatedCard(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.elevatedCardColors(containerColor = base),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().heightIn(min = 320.dp)
-                .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.23f), Color.Transparent)))
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AsyncImage(
-                model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.size(if (useCircleShape) 160.dp else 148.dp)
-                    .align(Alignment.CenterHorizontally)
-                    .clip(if (useCircleShape) CircleShape else RoundedCornerShape(18.dp)),
-            )
-            Text(mainText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(subText, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 
