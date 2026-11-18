@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
@@ -39,9 +40,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.rememberPagerState
@@ -65,6 +68,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
@@ -74,7 +78,6 @@ import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -100,7 +103,6 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -307,39 +309,9 @@ fun StatsScreen(
         }
     } ?: stringResource(R.string.stats_period_all)
     var showDetailedPeriods by remember { mutableStateOf(false) }
-    val topAppBarScrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    var showAllArtists by remember(selectedOption, indexChips) { mutableStateOf(false) }
 
-    Scaffold(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
-        topBar = {
-            LargeFlexibleTopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(
-                        onClick = navController::navigateUp,
-                        onLongClick = navController::backToMain,
-                    ) {
-                        Icon(painterResource(R.drawable.arrow_back), contentDescription = null)
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = viewModel::showYearPicker,
-                        onLongClick = {},
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.auto_awesome),
-                            contentDescription = stringResource(R.string.year_in_music),
-                        )
-                    }
-                },
-                scrollBehavior = topAppBarScrollBehavior,
-            )
-        },
-    ) { scaffoldPadding ->
+    Scaffold(modifier = Modifier.fillMaxSize()) { scaffoldPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             ReplayBackground(modifier = Modifier.fillMaxSize())
             LazyColumn(
@@ -353,7 +325,7 @@ fun StatsScreen(
                         .fillMaxHeight()
                         .fillMaxWidth()
                         .align(Alignment.TopCenter)
-                        .padding(top = scaffoldPadding.calculateTopPadding()),
+                        .padding(top = scaffoldPadding.calculateTopPadding() + 64.dp),
             ) {
                 item(key = "rangeControls", contentType = "controls") {
                     Column(Modifier.animateItem()) {
@@ -447,9 +419,6 @@ fun StatsScreen(
                         firstEventTimestamp = firstEvent?.event?.timestamp,
                         previousPeriodTimeListened = data.previousPeriodTimeListened,
                         comparisonLabelResId = data.comparisonLabelResId,
-                        isWeekly =
-                            selectedOption == OptionStats.WEEKS ||
-                                (selectedOption == OptionStats.CONTINUOUS && indexChips == StatPeriod.WEEK_1.ordinal),
                         topSong = topSongStat,
                         topSongEntity = topSongEntity,
                         topArtist = topArtist,
@@ -548,6 +517,58 @@ fun StatsScreen(
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 4.dp),
                             )
+                        }
+                    }
+                }
+
+                item(key = "mostPlayedAlbumsHeader", contentType = "sectionHeader") {
+                    StatsSectionHeader(
+                        title = stringResource(R.string.stats_replay_top_albums),
+                        supportingText = mostPlayedAlbums.size.toString(),
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
+                item(key = "albumsRow", contentType = "albums_row") {
+                    if (mostPlayedAlbums.isNotEmpty()) {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            itemsIndexed(
+                                items = mostPlayedAlbums,
+                                key = { _, album -> album.id },
+                                contentType = { _, _ -> "album_grid" },
+                            ) { index, album ->
+                                val playCount = album.songCountListened ?: 0
+                                LocalAlbumsGrid(
+                                    title = "${index + 1}. ${album.album.title}",
+                                    subtitle =
+                                        joinByBullet(
+                                            pluralStringResource(R.plurals.n_time, playCount, playCount),
+                                            makeTimeString(album.timeListened?.toLong()),
+                                        ),
+                                    thumbnailUrl = album.album.thumbnailUrl,
+                                    isActive = album.id == mediaMetadata?.album?.id,
+                                    isPlaying = isPlaying,
+                                    modifier =
+                                        Modifier
+                                            .width(172.dp)
+                                            .combinedClickable(
+                                                onClick = { navController.navigate("album/${album.id}") },
+                                                onLongClick = {
+                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    menuState.show {
+                                                        AlbumMenu(
+                                                            originalAlbum = album,
+                                                            navController = navController,
+                                                            onDismiss = menuState::dismiss,
+                                                        )
+                                                    }
+                                                },
+                                            ).animateItem(),
+                                )
+                            }
                         }
                     }
                 }
@@ -652,15 +673,16 @@ fun StatsScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
+                    val visibleArtists = if (showAllArtists) mostPlayedArtists else mostPlayedArtists.take(10)
                     itemsIndexed(
-                        items = mostPlayedArtists,
+                        items = visibleArtists,
                         key = { _, artist -> "all_artist_${artist.id}" },
                         contentType = { _, _ -> "all_artist" },
                     ) { index, artist ->
                         ReplayRankedArtistItem(
                             artist = artist,
                             rank = index + 1,
-                            count = mostPlayedArtists.size,
+                            count = visibleArtists.size,
                             onClick = { navController.navigate("artist/${artist.id}") },
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -675,60 +697,72 @@ fun StatsScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
-                }
-
-                item(key = "mostPlayedAlbumsHeader", contentType = "sectionHeader") {
-                    StatsSectionHeader(
-                        title = stringResource(R.string.albums),
-                        supportingText = mostPlayedAlbums.size.toString(),
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "albumsRow", contentType = "albums_row") {
-                    if (mostPlayedAlbums.isNotEmpty()) {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            itemsIndexed(
-                                items = mostPlayedAlbums,
-                                key = { _, album -> album.id },
-                                contentType = { _, _ -> "album_grid" },
-                            ) { index, album ->
-                                val playCount = album.songCountListened ?: 0
-                                LocalAlbumsGrid(
-                                    title = "${index + 1}. ${album.album.title}",
-                                    subtitle =
-                                        joinByBullet(
-                                            pluralStringResource(R.plurals.n_time, playCount, playCount),
-                                            makeTimeString(album.timeListened?.toLong()),
-                                        ),
-                                    thumbnailUrl = album.album.thumbnailUrl,
-                                    isActive = album.id == mediaMetadata?.album?.id,
-                                    isPlaying = isPlaying,
-                                    modifier =
-                                        Modifier
-                                            .width(172.dp)
-                                            .combinedClickable(
-                                                onClick = { navController.navigate("album/${album.id}") },
-                                                onLongClick = {
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    menuState.show {
-                                                        AlbumMenu(
-                                                            originalAlbum = album,
-                                                            navController = navController,
-                                                            onDismiss = menuState::dismiss,
-                                                        )
-                                                    }
-                                                },
-                                            ).animateItem(),
+                    if (mostPlayedArtists.size > 10) {
+                        item(key = "artistListExpansion", contentType = "sectionAction") {
+                            TextButton(
+                                onClick = { showAllArtists = !showAllArtists },
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        .animateItem(),
+                            ) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (showAllArtists) R.drawable.expand_less else R.drawable.expand_more,
+                                    ),
+                                    contentDescription = null,
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text =
+                                        if (showAllArtists) {
+                                            stringResource(R.string.stats_show_top_artists)
+                                        } else {
+                                            stringResource(R.string.stats_show_all_artists, mostPlayedArtists.size)
+                                        },
                                 )
                             }
                         }
                     }
                 }
 
+
+
+            }
+
+            Row(
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val floatingButtonColors =
+                    IconButtonDefaults.iconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    )
+                IconButton(
+                    onClick = navController::navigateUp,
+                    onLongClick = navController::backToMain,
+                    colors = floatingButtonColors,
+                ) {
+                    Icon(painterResource(R.drawable.arrow_back), contentDescription = stringResource(R.string.back_button_desc))
+                }
+                IconButton(
+                    onClick = viewModel::showYearPicker,
+                    onLongClick = {},
+                    colors = floatingButtonColors,
+                ) {
+                    Icon(
+                        painterResource(R.drawable.auto_awesome),
+                        contentDescription = stringResource(R.string.year_in_music),
+                    )
+                }
             }
 
             if (isYearPickerOpen) {
@@ -1249,7 +1283,6 @@ private fun ReplayHeroPager(
     firstEventTimestamp: java.time.LocalDateTime?,
     previousPeriodTimeListened: Long?,
     comparisonLabelResId: Int?,
-    isWeekly: Boolean,
     topSong: SongWithStats?,
     topSongEntity: Song?,
     topArtist: Artist?,
@@ -1288,7 +1321,6 @@ private fun ReplayHeroPager(
                     0 -> ReplayMinutesCard(
                         totalTimeListened = totalTimeListened,
                         firstEventTimestamp = firstEventTimestamp,
-                        isWeekly = isWeekly,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     1 -> ReplayTopSongCard(
@@ -1371,16 +1403,11 @@ private fun ReplayTrendLine(
 private fun ReplayMinutesCard(
     totalTimeListened: Long,
     firstEventTimestamp: java.time.LocalDateTime?,
-    isWeekly: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val totalMinutes = (totalTimeListened.coerceAtLeast(0L) / 60_000L)
-    val timeValue = if (isWeekly) formatReplayDuration(totalTimeListened) else totalMinutes.toString()
-    val timeLabel =
-        stringResource(
-            if (isWeekly) R.string.stats_total_time_listened else R.string.stats_replay_minutes_listened,
-        )
+    val totalMinutes = totalTimeListened.coerceAtLeast(0L) / 60_000L
+    val timeValue = totalMinutes.toString()
     val memberSince = firstEventTimestamp?.let {
         DateTimeFormatter.ofPattern("yyyy", Locale.getDefault()).format(it)
     } ?: "—"
@@ -1402,7 +1429,7 @@ private fun ReplayMinutesCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = timeLabel,
+                    text = stringResource(R.string.stats_replay_minutes_listened),
                     style = MaterialTheme.typography.labelLarge,
                     color = scheme.onPrimaryContainer.copy(alpha = 0.85f),
                 )
@@ -1433,18 +1460,6 @@ private fun ReplayMinutesCard(
                 )
             }
         }
-    }
-}
-
-private fun formatReplayDuration(durationMillis: Long): String {
-    val totalMinutes = durationMillis.coerceAtLeast(0L) / 60_000L
-    val days = totalMinutes / (24 * 60)
-    val hours = (totalMinutes % (24 * 60)) / 60
-    val minutes = totalMinutes % 60
-    return buildString {
-        if (days > 0) append("${days}d ")
-        if (hours > 0 || days > 0) append("${hours}h ")
-        append("${minutes}m")
     }
 }
 

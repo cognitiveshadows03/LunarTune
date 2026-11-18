@@ -602,6 +602,8 @@
     <string name="stats_top_songs">Top songs</string>
     <string name="stats_show_all_songs">Show all %1$d songs</string>
     <string name="stats_show_top_songs">Show top 5</string>
+    <string name="stats_show_all_artists">Show all %1$d artists</string>
+    <string name="stats_show_top_artists">Show top 10 artists</string>
     <string name="stats_empty_title">No listening stats yet</string>
     <string name="stats_empty_message">Songs you play will appear here with listening trends and rankings.</string>
     <string name="stats_period_empty_title">No plays in this time range</string>
@@ -846,6 +848,7 @@
     <string name="stats_replay_details">Details</string>
     <string name="stats_replay_top_songs">Top Songs</string>
     <string name="stats_replay_top_artists">Top Artists</string>
+    <string name="stats_replay_top_albums">Top Albums</string>
     <string name="stats_replay_share_text">My Replay %1$s — %2$s listened, top song %3$s, top artist %4$s</string>
     <string name="stats_listening_rhythm">Your listening rhythm</string>
     <string name="stats_favourite_album">Your top album</string>
