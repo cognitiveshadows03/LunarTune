@@ -55,7 +55,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -529,6 +529,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold,
                         )
                     },
+                    titleHorizontalAlignment = Alignment.CenterHorizontally,
                     navigationIcon = {
                         IconButton(
                             onClick = navController::navigateUp,
@@ -753,7 +754,7 @@ fun SettingsScreen(
             exit = fadeOut(tween(160)) + slideOutVertically(tween(220)) { -it },
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 modifier = Modifier.excludeDotTexture(),
                 title = {
                     Text(

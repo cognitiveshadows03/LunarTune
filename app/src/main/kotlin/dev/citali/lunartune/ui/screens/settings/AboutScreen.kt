@@ -52,7 +52,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
@@ -161,6 +161,7 @@ private fun AboutScreenContent(
                         fontWeight = FontWeight.Bold,
                     )
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateUp,
@@ -321,7 +322,7 @@ private fun AboutFullScreenDialog(
             containerColor = MaterialTheme.colorScheme.surface,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                TopAppBar(
+                CenterAlignedTopAppBar(
                     title = {
                         Text(
                             text = title,

@@ -69,7 +69,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -1060,7 +1060,7 @@ fun PalettePickerScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.color_palette)) },
                 navigationIcon = {
                     IconButton(
@@ -1245,7 +1245,7 @@ fun ThemeCreatorScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(text = stringResource(R.string.theme_creator_title)) },
                 navigationIcon = {
                     IconButton(

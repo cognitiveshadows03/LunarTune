@@ -390,6 +390,7 @@ fun DiscordSettings(navController: NavController) {
                         fontWeight = FontWeight.Bold,
                     )
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,

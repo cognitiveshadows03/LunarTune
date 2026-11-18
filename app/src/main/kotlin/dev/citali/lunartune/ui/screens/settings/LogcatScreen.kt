@@ -345,6 +345,7 @@ private fun LogcatTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         },
+        titleHorizontalAlignment = Alignment.CenterHorizontally,
         navigationIcon = {
             LunarTuneIconButton(
                 onClick = onNavigateBack,

@@ -78,7 +78,7 @@ fun ChangelogScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.changelog)) },
                 navigationIcon = {
                     IconButton(

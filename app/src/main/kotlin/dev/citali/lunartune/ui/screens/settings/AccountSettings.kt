@@ -407,6 +407,7 @@ fun AccountSettings(
                         )
                     }
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,

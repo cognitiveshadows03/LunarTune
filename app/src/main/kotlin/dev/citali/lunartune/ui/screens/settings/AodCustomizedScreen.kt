@@ -299,6 +299,7 @@ fun AodCustomizedScreen(navController: NavController) {
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,

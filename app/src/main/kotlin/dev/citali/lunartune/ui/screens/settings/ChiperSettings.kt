@@ -139,6 +139,7 @@ private fun ChiperSettingsContent(
                 subtitle = {
                     Text(stringResource(R.string.mori_cipher_settings_description))
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateUp,

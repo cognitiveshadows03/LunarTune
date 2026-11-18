@@ -153,6 +153,7 @@ fun CustomizeBackground(navController: NavController) {
                 subtitle = {
                     Text(text = stringResource(R.string.custom_background_subtitle))
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,
