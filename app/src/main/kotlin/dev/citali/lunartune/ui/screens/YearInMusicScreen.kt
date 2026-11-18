@@ -49,6 +49,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.toShape
+import androidx.graphics.shapes.RoundedPolygon
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,9 +71,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -509,6 +515,11 @@ private fun RecapCardFrame(
                     .background(Brush.verticalGradient(gradient)),
         ) {
             RecapNoiseOverlay(modifier = Modifier.fillMaxSize())
+            RecapAtmosphere(
+                accent = recapAccentFor(card),
+                polygon = recapPolygonFor(card),
+                modifier = Modifier.fillMaxSize(),
+            )
 
             when (card) {
                 is YearInMusicRecapCard.Empty -> {
@@ -1533,12 +1544,13 @@ private fun RankNumber(
     rank: Int,
     color: Color,
 ) {
+    val rankShape = MaterialShapes.Cookie6Sided.toShape()
     Box(
         modifier =
             Modifier
-                .size(34.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.18f)),
+                .size(40.dp)
+                .clip(rankShape)
+                .background(color.copy(alpha = 0.22f)),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -1638,6 +1650,69 @@ private fun IconBadge(
             tint = tint,
             modifier = Modifier.size(24.dp),
         )
+    }
+}
+
+@Composable
+private fun recapAccentFor(card: YearInMusicRecapCard): Color =
+    when (card) {
+        is YearInMusicRecapCard.Empty -> RecapRed
+        is YearInMusicRecapCard.Intro -> RecapRed
+        is YearInMusicRecapCard.Totals -> RecapYellow
+        is YearInMusicRecapCard.ListeningOrbit -> RecapBlue
+        is YearInMusicRecapCard.TopSong -> RecapPink
+        is YearInMusicRecapCard.RankedArtists -> RecapGreen
+        is YearInMusicRecapCard.RankedAlbums -> RecapLime
+        is YearInMusicRecapCard.Summary -> RecapPurple
+    }
+
+private fun recapPolygonFor(card: YearInMusicRecapCard): RoundedPolygon =
+    when (card) {
+        is YearInMusicRecapCard.Empty -> MaterialShapes.Cookie9Sided
+        is YearInMusicRecapCard.Intro -> MaterialShapes.Cookie9Sided
+        is YearInMusicRecapCard.Totals -> MaterialShapes.Sunny
+        is YearInMusicRecapCard.ListeningOrbit -> MaterialShapes.Clover8Leaf
+        is YearInMusicRecapCard.TopSong -> MaterialShapes.Clover4Leaf
+        is YearInMusicRecapCard.RankedArtists -> MaterialShapes.Cookie6Sided
+        is YearInMusicRecapCard.RankedAlbums -> MaterialShapes.Puffy
+        is YearInMusicRecapCard.Summary -> MaterialShapes.Cookie12Sided
+    }
+
+/** Soft accent glow plus one large, faint Material expressive shape behind card content. */
+@Composable
+private fun RecapAtmosphere(
+    accent: Color,
+    polygon: RoundedPolygon,
+    modifier: Modifier = Modifier,
+) {
+    val shape = polygon.toShape()
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        if (w <= 0f || h <= 0f) return@Canvas
+
+        val glowCenter = Offset(w * 0.85f, h * 0.12f)
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(accent.copy(alpha = 0.34f), accent.copy(alpha = 0.08f), Color.Transparent),
+                    center = glowCenter,
+                    radius = w * 0.9f,
+                ),
+            radius = w * 0.9f,
+            center = glowCenter,
+        )
+
+        val side = w * 0.95f
+        val outline = shape.createOutline(Size(side, side), layoutDirection, this)
+        if (outline is Outline.Generic) {
+            withTransform({
+                translate(left = -w * 0.18f, top = h * 0.55f)
+                rotate(degrees = 16f, pivot = Offset(side / 2f, side / 2f))
+            }) {
+                drawPath(outline.path, accent.copy(alpha = 0.12f))
+            }
+        }
     }
 }
 
