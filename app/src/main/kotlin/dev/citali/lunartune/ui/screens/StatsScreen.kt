@@ -98,6 +98,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -1211,10 +1212,10 @@ private fun ReplayBackground(modifier: Modifier = Modifier) {
             translate(left = w * 0.42f, top = -h * 0.06f + floatOffset * 10f)
             rotate(degrees = floatOffset * 14f, pivot = Offset(cookieSide / 2f, cookieSide / 2f))
         }) {
-            drawOutline(
-                outline = cookieShape.createOutline(Size(cookieSide, cookieSide), layoutDirection, this),
-                color = scheme.primaryContainer.copy(alpha = 0.7f * t),
-            )
+            val cookieOutline = cookieShape.createOutline(Size(cookieSide, cookieSide), layoutDirection, this)
+            if (cookieOutline is Outline.Generic) {
+                drawPath(cookieOutline.path, scheme.primaryContainer.copy(alpha = 0.7f * t))
+            }
         }
 
         // Shape 2 — four-leaf clover, lower-left, tertiary container tone.
@@ -1223,10 +1224,10 @@ private fun ReplayBackground(modifier: Modifier = Modifier) {
             translate(left = -w * 0.22f, top = h * 0.58f - floatOffset * 12f)
             rotate(degrees = -floatOffset * 18f, pivot = Offset(cloverSide / 2f, cloverSide / 2f))
         }) {
-            drawOutline(
-                outline = cloverShape.createOutline(Size(cloverSide, cloverSide), layoutDirection, this),
-                color = scheme.tertiaryContainer.copy(alpha = 0.55f * t),
-            )
+            val cloverOutline = cloverShape.createOutline(Size(cloverSide, cloverSide), layoutDirection, this)
+            if (cloverOutline is Outline.Generic) {
+                drawPath(cloverOutline.path, scheme.tertiaryContainer.copy(alpha = 0.55f * t))
+            }
         }
     }
 }
