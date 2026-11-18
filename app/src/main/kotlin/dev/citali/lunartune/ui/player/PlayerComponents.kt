@@ -289,7 +289,7 @@ fun PlayerTopActions(
     val shuffleModeEnabled by playerConnection.shuffleModeEnabled.collectAsState()
 
     when (playerDesignStyle) {
-        PlayerDesignStyle.ZINE -> {
+        PlayerDesignStyle.V2 -> {
             val shareShape =
                 RoundedCornerShape(
                     topStart = 50.dp,
@@ -886,7 +886,7 @@ fun PlayerPlaybackControls(
     )
 
     when (playerDesignStyle) {
-        PlayerDesignStyle.ZINE -> {
+        PlayerDesignStyle.V2 -> {
             BoxWithConstraints(
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -1905,7 +1905,6 @@ fun V8PlayerContent(
     modifier: Modifier = Modifier,
     landscape: Boolean = false,
     appleMusic: Boolean = false,
-    zine: Boolean = false,
     appleMusicLyricsOpen: Boolean = false,
     appleMusicQueueOpen: Boolean = false,
     onCloseAppleMusicQueue: () -> Unit = {},
@@ -1988,33 +1987,6 @@ fun V8PlayerContent(
             onSliderValueChange = onSliderValueChange,
             onSliderValueChangeFinished = onSliderValueChangeFinished,
             onVolumeChange = onVolumeChange,
-            modifier = modifier,
-        )
-    } else if (zine) {
-        // Zine prints its own page, so it takes the whole surface and owns its colours
-        // instead of inheriting white-on-dark from the themes above.
-        ZinePortraitContent(
-            mediaMetadata = mediaMetadata,
-            artworkUrl = artworkUrl,
-            isPlaying = isPlaying,
-            isLoading = isLoading,
-            position = position,
-            duration = duration,
-            currentSongLiked = currentSongLiked,
-            dominantHint = null,
-            onToggleLike = playerConnection::toggleLike,
-            onMenuClick = onMenuClick,
-            onPreviousClick = playerConnection::seekToPrevious,
-            onNextClick = playerConnection::seekToNext,
-            onPlayPauseClick = {
-                if (playbackState == STATE_ENDED) {
-                    playerConnection.player.seekTo(0, 0)
-                    playerConnection.player.playWhenReady = true
-                } else {
-                    playerConnection.togglePlayPause()
-                }
-            },
-            onSeekFinished = onSliderValueChange,
             modifier = modifier,
         )
     } else if (appleMusic) {

@@ -758,11 +758,7 @@ fun BottomSheetPlayer(
     )
 
     val TextBackgroundColor =
-        if (playerDesignStyle == PlayerDesignStyle.ZINE) {
-            // Zine always prints on paper, in both themes, so the collapsed queue bar
-            // and its icons read as ink rather than following the surface colour.
-            androidx.compose.ui.graphics.Color(0xFF1A1512)
-        } else if (playerDesignStyle == PlayerDesignStyle.V9) {
+        if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicTextColor
         } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
             Color.White
@@ -780,9 +776,7 @@ fun BottomSheetPlayer(
         }
 
     val icBackgroundColor =
-        if (playerDesignStyle == PlayerDesignStyle.ZINE) {
-            androidx.compose.ui.graphics.Color(0xFFF4F1EA)
-        } else if (playerDesignStyle == PlayerDesignStyle.V9) {
+        if (playerDesignStyle == PlayerDesignStyle.V9) {
             dynamicBgColor
         } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
             Color.Black
@@ -816,9 +810,7 @@ fun BottomSheetPlayer(
                 }
             }
         }.let { (tb, ib) ->
-            if (playerDesignStyle == PlayerDesignStyle.ZINE) {
-                Pair(androidx.compose.ui.graphics.Color(0xFF1A1512), androidx.compose.ui.graphics.Color(0xFFF4F1EA))
-            } else if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
+            if (playerDesignStyle == PlayerDesignStyle.V7 || (playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
                 Pair(Color.White, Color.Black)
             } else if (playerDesignStyle == PlayerDesignStyle.V9) {
                 Pair(dynamicAccentColor, dynamicIconButtonColor)
@@ -1667,7 +1659,7 @@ fun BottomSheetPlayer(
                             Spacer(Modifier.height(16.dp))
                         }
                     }
-                } else if ((playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10 || playerDesignStyle == PlayerDesignStyle.ZINE)) {
+                } else if ((playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -1709,9 +1701,6 @@ fun BottomSheetPlayer(
                                 onSliderValueChange = onSliderValueChange,
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
-                                // Landscape has no dedicated Zine layout yet: it prints the
-                                // portrait page rather than silently falling back to V8.
-                                zine = playerDesignStyle == PlayerDesignStyle.ZINE,
                                 landscape = true,
                                 modifier =
                                     Modifier
@@ -1946,7 +1935,7 @@ fun BottomSheetPlayer(
                             Spacer(Modifier.height(24.dp))
                         }
                     }
-                } else if ((playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10 || playerDesignStyle == PlayerDesignStyle.ZINE)) {
+                } else if ((playerDesignStyle == PlayerDesignStyle.V8 || playerDesignStyle == PlayerDesignStyle.V10)) {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -1957,12 +1946,10 @@ fun BottomSheetPlayer(
                                 lowDataMode = lowDataModeActive,
                                 isMusicVideo = mediaMetadata?.isMusicVideo ?: false,
                             )
-                        if (playerDesignStyle != PlayerDesignStyle.ZINE) {
-                            V8PlayerBackdrop(
-                                thumbnailUrl = v8SwapState.displayUrl,
-                                backdropBlurAmount = if (playerDesignStyle == PlayerDesignStyle.V10) 100 else backdropBlurAmount,
-                            )
-                        }
+                        V8PlayerBackdrop(
+                            thumbnailUrl = v8SwapState.displayUrl,
+                            backdropBlurAmount = if (playerDesignStyle == PlayerDesignStyle.V10) 100 else backdropBlurAmount,
+                        )
 
                         enrichedMetadata?.let { metadata ->
                             V8PlayerContent(
@@ -1991,7 +1978,6 @@ fun BottomSheetPlayer(
                                 onSliderValueChangeFinished = onSliderValueChangeFinished,
                                 onVolumeChange = onPlayerVolumeChange,
                                 appleMusic = playerDesignStyle == PlayerDesignStyle.V10,
-                                zine = playerDesignStyle == PlayerDesignStyle.ZINE,
                                 // Short-circuit so the Immersive (V8) player never reads the lyrics flag:
                                 // reading it made the whole player recompose on the same frame the lyrics
                                 // page was being built, so the page's opening animation was dropped.
@@ -2008,7 +1994,7 @@ fun BottomSheetPlayer(
                                         .padding(bottom = queueSheetState.collapsedBound)
                                         .windowInsetsPadding(
                                             WindowInsets.systemBars.only(
-                                                if (playerDesignStyle == PlayerDesignStyle.V10 || playerDesignStyle == PlayerDesignStyle.ZINE) WindowInsetsSides.Horizontal else WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
+                                                if (playerDesignStyle == PlayerDesignStyle.V10) WindowInsetsSides.Horizontal else WindowInsetsSides.Top + WindowInsetsSides.Horizontal,
                                             ),
                                         ).nestedScroll(state.preUpPostDownNestedScrollConnection),
                             )

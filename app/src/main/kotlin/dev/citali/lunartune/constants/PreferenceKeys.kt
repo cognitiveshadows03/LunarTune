@@ -746,12 +746,7 @@ enum class PlayerButtonsStyle {
 }
 
 enum class PlayerDesignStyle {
-    /**
-     * Risograph zine: two inks on paper, halftone artwork, a printer's colour bar where the
-     * progress line used to be. Replaces the old plain "Modern" layout, which had nothing of
-     * its own to say.
-     */
-    ZINE,
+    V2,
     V4,
     V5,
     V6,
@@ -765,11 +760,10 @@ enum class PlayerDesignStyle {
      * Styles that draw their own chrome edge to edge and expect the status bar
      * out of the way: Immersive (V7) and the full-bleed artwork style (V10).
      * Immersive Extended (V8) keeps the normal status bar - it lays out against
-     * the system bars rather than painting through them. Zine is printed edge to edge,
-     * paper under the notch included.
+     * the system bars rather than painting through them.
      */
     val hidesStatusBar: Boolean
-        get() = this == V7 || this == V10 || this == ZINE
+        get() = this == V7 || this == V10
 }
 
 enum class PlayerBackgroundStyle {

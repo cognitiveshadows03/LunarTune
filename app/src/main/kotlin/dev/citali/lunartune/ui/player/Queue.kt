@@ -444,6 +444,47 @@ fun Queue(
         },
         collapsedContent = {
             when (playerDesignStyle) {
+                PlayerDesignStyle.V2 -> {
+                    QueueCollapsedContentV2(
+                        showCodecOnPlayer = showCodecOnPlayer,
+                        currentFormat = currentFormat,
+                        textBackgroundColor = TextBackgroundColor,
+                        textButtonColor = textButtonColor,
+                        iconButtonColor = iconButtonColor,
+                        sleepTimerEnabled = sleepTimerEnabled,
+                        sleepTimerTimeLeft = sleepTimerTimeLeft,
+                        repeatMode = repeatMode,
+                        mediaMetadata = mediaMetadata,
+                        onExpandQueue = openQueue,
+                        onSleepTimerClick = {
+                            if (sleepTimerEnabled) {
+                                playerConnection.service.sleepTimer.clear()
+                            } else {
+                                showSleepTimerDialog = true
+                            }
+                        },
+                        onShowLyrics = onShowLyrics,
+                        onRepeatModeClick = { playerConnection.player.toggleRepeatMode() },
+                        onMenuClick = {
+                            menuState.show {
+                                PlayerMenu(
+                                    mediaMetadata = mediaMetadata,
+                                    navController = navController,
+                                    playerBottomSheetState = playerBottomSheetState,
+                                    onShowDetailsDialog = {
+                                        mediaMetadata?.id?.let {
+                                            bottomSheetPageState.show {
+                                                ShowMediaInfo(it)
+                                            }
+                                        }
+                                    },
+                                    onDismiss = menuState::dismiss,
+                                )
+                            }
+                        },
+                    )
+                }
+
                 PlayerDesignStyle.V5 -> {
                     QueueCollapsedContentCompact(
                         showCodecOnPlayer = showCodecOnPlayer,
@@ -565,7 +606,7 @@ fun Queue(
                     )
                 }
 
-                PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10, PlayerDesignStyle.ZINE -> {
+                PlayerDesignStyle.V7, PlayerDesignStyle.V8, PlayerDesignStyle.V10 -> {
                     val audioDevice by playerConnection.service.activeAudioDevice.collectAsStateWithLifecycle()
 
                     val view = LocalView.current
