@@ -146,7 +146,6 @@ import dev.citali.lunartune.ui.component.ChoiceChipsRow
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ItemThumbnail
 import dev.citali.lunartune.ui.component.LocalAlbumsGrid
-import dev.citali.lunartune.ui.component.LocalArtistsGrid
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.menu.AlbumMenu
 import dev.citali.lunartune.ui.menu.ArtistMenu
@@ -518,6 +517,41 @@ fun StatsScreen(
                     )
                 }
 
+                item(key = "listeningCalendar", contentType = "insights") {
+                    StatsListeningCalendar(
+                        calendar = listeningCalendar,
+                        selectedRange = selectedCalendarRange,
+                        onRangeSelected = viewModel::onCalendarRangeSelected,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+
+                item(key = "artistDistribution", contentType = "insights") {
+                    if (mostPlayedArtists.isNotEmpty()) {
+                        val rankedArtistCount = mostPlayedArtists.count { (it.timeListened ?: 0) > 0 }
+                        Column(modifier = Modifier.animateItem()) {
+                            StatsSectionHeader(
+                                title = stringResource(R.string.stats_artist_breakdown),
+                                supportingText =
+                                    pluralStringResource(
+                                        R.plurals.stats_artist_count,
+                                        rankedArtistCount,
+                                        rankedArtistCount,
+                                    ),
+                            )
+                            SegmentedArtistChart(
+                                artists = mostPlayedArtists,
+                                totalTimeListened = listeningSummary.totalTimeListened,
+                                animationKey = selectedOption to indexChips,
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                }
+
                 item(key = "mostPlayedSongsHeader", contentType = "sectionHeader") {
                     StatsSongsHeader(
                         title = stringResource(R.string.stats_top_songs),
@@ -610,70 +644,23 @@ fun StatsScreen(
                     }
                 }
 
-                item(key = "mostPlayedArtists", contentType = "sectionHeader") {
-                    StatsSectionHeader(
-                        title = stringResource(R.string.artists),
-                        supportingText = mostPlayedArtists.size.toString(),
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "artistsShelf", contentType = "artists_shelf") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(
-                            items = mostPlayedArtists,
-                            key = { artist -> artist.id },
-                            contentType = { "artist" },
-                        ) { artist ->
-                            LocalArtistsGrid(
-                                title = artist.artist.name,
-                                subtitle =
-                                    joinByBullet(
-                                        pluralStringResource(R.plurals.n_time, artist.songCount, artist.songCount),
-                                        makeTimeString(artist.timeListened?.toLong()),
-                                    ),
-                                thumbnailUrl = artist.artist.thumbnailUrl,
-                                modifier =
-                                    Modifier
-                                        .width(164.dp)
-                                        .combinedClickable(
-                                            onClick = { navController.navigate("artist/${artist.id}") },
-                                            onLongClick = {
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                menuState.show {
-                                                    ArtistMenu(
-                                                        originalArtist = artist,
-                                                        coroutineScope = coroutineScope,
-                                                        onDismiss = menuState::dismiss,
-                                                    )
-                                                }
-                                            },
-                                        ),
-                            )
-                        }
-                    }
-                }
-
                 if (mostPlayedArtists.isNotEmpty()) {
                     item(key = "replayTopArtistsHeader", contentType = "sectionHeader") {
                         StatsSectionHeader(
-                            title = stringResource(R.string.stats_replay_top_artists),
+                            title = stringResource(R.string.all_artists_filter),
                             supportingText = mostPlayedArtists.size.toString(),
                             modifier = Modifier.animateItem(),
                         )
                     }
                     itemsIndexed(
-                        items = mostPlayedArtists.take(10),
-                        key = { _, artist -> "replay_artist_${artist.id}" },
-                        contentType = { _, _ -> "replay_artist" },
+                        items = mostPlayedArtists,
+                        key = { _, artist -> "all_artist_${artist.id}" },
+                        contentType = { _, _ -> "all_artist" },
                     ) { index, artist ->
                         ReplayRankedArtistItem(
                             artist = artist,
                             rank = index + 1,
-                            count = mostPlayedArtists.take(10).size,
+                            count = mostPlayedArtists.size,
                             onClick = { navController.navigate("artist/${artist.id}") },
                             onLongClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -741,41 +728,6 @@ fun StatsScreen(
                         }
                     }
                 }
-                item(key = "listeningCalendar", contentType = "insights") {
-                    StatsListeningCalendar(
-                        calendar = listeningCalendar,
-                        selectedRange = selectedCalendarRange,
-                        onRangeSelected = viewModel::onCalendarRangeSelected,
-                        modifier = Modifier.animateItem(),
-                    )
-                }
-
-                item(key = "artistDistribution", contentType = "insights") {
-                    if (mostPlayedArtists.isNotEmpty()) {
-                        val rankedArtistCount = mostPlayedArtists.count { (it.timeListened ?: 0) > 0 }
-                        Column(modifier = Modifier.animateItem()) {
-                            StatsSectionHeader(
-                                title = stringResource(R.string.stats_artist_breakdown),
-                                supportingText =
-                                    pluralStringResource(
-                                        R.plurals.stats_artist_count,
-                                        rankedArtistCount,
-                                        rankedArtistCount,
-                                    ),
-                            )
-                            SegmentedArtistChart(
-                                artists = mostPlayedArtists,
-                                totalTimeListened = listeningSummary.totalTimeListened,
-                                animationKey = selectedOption to indexChips,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                            )
-                        }
-                    }
-                }
-
 
             }
 
