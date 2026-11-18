@@ -9,6 +9,7 @@ package dev.citali.lunartune.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -72,8 +73,10 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.toShape
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -1160,6 +1163,7 @@ private fun ReplayRankedArtistItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ReplayBackground(modifier: Modifier = Modifier) {
     val scheme = MaterialTheme.colorScheme
@@ -1175,82 +1179,54 @@ private fun ReplayBackground(modifier: Modifier = Modifier) {
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 10000, easing = LinearEasing),
+            animation = tween(durationMillis = 12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse,
         ),
         label = "replayBgFloatOffset",
     )
+    // Two Material 3 Expressive shapes (same family used in settings icons), slowly rotating.
+    val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+    val cloverShape = MaterialShapes.Clover4Leaf.toShape()
     Canvas(modifier = modifier) {
         val w = size.width
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
         val t = entryProgress.value
-        // Curved sweep axis: shapes travel along an arc from top-right to bottom-left.
-        val arcT = t * t * (3f - 2f * t)
-        val sweepX = w * (1.15f - 0.65f * arcT)
-        val sweepY = h * (0.08f + 0.42f * arcT) + floatOffset * 12f
-        // Blob 1 — primary, large soft shape.
-        val blob1Center = Offset(sweepX, sweepY)
-        val blob1Radius = w * 0.62f
-        drawCircle(
-            brush = Brush.radialGradient(
+
+        // Base: soft vertical wash from the primary container down into the surface.
+        drawRect(
+            brush = Brush.verticalGradient(
                 colors = listOf(
-                    scheme.primary.copy(alpha = 0.16f * t),
-                    scheme.primary.copy(alpha = 0.06f * t),
-                    Color.Transparent,
+                    scheme.primaryContainer.copy(alpha = 0.45f * t),
+                    scheme.surface,
                 ),
-                center = blob1Center,
-                radius = blob1Radius,
+                startY = 0f,
+                endY = h * 0.6f,
             ),
-            radius = blob1Radius,
-            center = blob1Center,
         )
-        // Blob 2 — secondary, offset along the curve.
-        val blob2Center = Offset(sweepX - w * 0.28f, sweepY + h * 0.18f - floatOffset * 8f)
-        val blob2Radius = w * 0.48f
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(
-                    scheme.secondary.copy(alpha = 0.14f * t),
-                    scheme.secondary.copy(alpha = 0.05f * t),
-                    Color.Transparent,
-                ),
-                center = blob2Center,
-                radius = blob2Radius,
-            ),
-            radius = blob2Radius,
-            center = blob2Center,
-        )
-        // Arc stroke — tertiary, thin curved line following the sweep.
-        val arcColor = scheme.tertiary.copy(alpha = 0.18f * t)
-        val arcPath = Path().apply {
-            moveTo(w * 1.1f, h * 0.02f)
-            cubicTo(
-                w * 0.85f, h * 0.18f,
-                w * 0.55f, h * 0.32f,
-                w * 0.15f, h * 0.55f,
+
+        // Shape 1 — large cookie, top-right, primary container tone.
+        val cookieSide = w * 0.95f
+        withTransform({
+            translate(left = w * 0.42f, top = -h * 0.06f + floatOffset * 10f)
+            rotate(degrees = floatOffset * 14f, pivot = Offset(cookieSide / 2f, cookieSide / 2f))
+        }) {
+            drawOutline(
+                outline = cookieShape.createOutline(Size(cookieSide, cookieSide), layoutDirection, this),
+                color = scheme.primaryContainer.copy(alpha = 0.7f * t),
             )
         }
-        drawPath(arcPath, arcColor, style = Stroke(width = 2.5f))
-        // Faint guilloche texture — sine waves, 6-8% alpha.
-        val guillocheColor = scheme.onSurface.copy(alpha = 0.07f * t)
-        val stroke = Stroke(width = 0.7f)
-        val amplitude = h * 0.06f
-        val rows = 7
-        val segments = 28
-        var row = 0
-        var y = -amplitude
-        val step = h / rows.toFloat()
-        while (y < h + amplitude) {
-            val phase = (row.toFloat() / rows) * (PI / 3).toFloat()
-            val line = Path()
-            for (segment in 0..segments) {
-                val x = w * segment / segments
-                val wave = (sin(x / w * 2f * PI.toFloat() + phase) * amplitude)
-                if (segment == 0) line.moveTo(x, y + wave) else line.lineTo(x, y + wave)
-            }
-            drawPath(line, guillocheColor, style = stroke)
-            y += step
-            row++
+
+        // Shape 2 — four-leaf clover, lower-left, tertiary container tone.
+        val cloverSide = w * 0.72f
+        withTransform({
+            translate(left = -w * 0.22f, top = h * 0.58f - floatOffset * 12f)
+            rotate(degrees = -floatOffset * 18f, pivot = Offset(cloverSide / 2f, cloverSide / 2f))
+        }) {
+            drawOutline(
+                outline = cloverShape.createOutline(Size(cloverSide, cloverSide), layoutDirection, this),
+                color = scheme.tertiaryContainer.copy(alpha = 0.55f * t),
+            )
         }
     }
 }
