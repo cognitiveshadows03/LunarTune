@@ -57,7 +57,7 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -343,7 +343,7 @@ fun AiIntegrationSettings(
         }
     }
 
-    TopAppBar(
+    CenterAlignedTopAppBar(
         title = { Text(stringResource(R.string.ai_integration)) },
         navigationIcon = {
             IconButton(

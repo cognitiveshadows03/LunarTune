@@ -1462,7 +1462,7 @@ private fun AppleMusicQueuePane(
                                     modifier = Modifier.size(46.dp).clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.08f)),
                                 )
                                 Spacer(Modifier.width(12.dp))
-                                Column {
+                                Column(Modifier.weight(1f)) {
                                     Text(
                                         meta?.title ?: window.mediaItem.mediaMetadata.title?.toString().orEmpty(),
                                         color = Color.White,

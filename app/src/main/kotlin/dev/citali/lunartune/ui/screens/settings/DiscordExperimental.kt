@@ -93,7 +93,7 @@ fun DiscordExperimental(navController: NavController) {
 
     Scaffold { inner ->
         Column(Modifier.fillMaxSize()) {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = { Text(stringResource(R.string.experiment_settings)) },
                 navigationIcon = {
                     IconButton(onClick = navController::navigateUp) {

@@ -167,6 +167,7 @@ fun MusicTogetherScreen(
         topBar = {
             LargeFlexibleTopAppBar(
                 title = { Text(stringResource(R.string.music_together)) },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     AtIconButton(
                         onClick = navController::navigateUp,

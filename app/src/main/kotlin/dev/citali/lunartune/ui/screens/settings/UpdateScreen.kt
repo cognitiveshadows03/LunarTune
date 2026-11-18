@@ -488,6 +488,7 @@ fun UpdateScreen(
                         overflow = TextOverflow.Ellipsis,
                     )
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,

@@ -205,6 +205,7 @@ private fun IconScreenContent(
                 subtitle = {
                     Text(text = stringResource(R.string.app_icon_subtitle))
                 },
+                titleHorizontalAlignment = Alignment.CenterHorizontally,
                 navigationIcon = {
                     IconButton(
                         onClick = onNavigateUp,
