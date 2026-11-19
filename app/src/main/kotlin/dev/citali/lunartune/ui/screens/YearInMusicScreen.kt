@@ -74,6 +74,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,6 +89,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -239,7 +241,6 @@ private fun YearInMusicRecapScreen(
         )
 
         RecapCardPager(
-            onRewatch = { coroutineScope.launch { pagerState.scrollToPage(0) } },
             onBack = { navController.navigateUp() },
             cards = cards,
             pagerState = pagerState,
@@ -426,22 +427,28 @@ private fun RecapCardPager(
     onCardBoundsChanged: (Rect) -> Unit,
     onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
-    onRewatch: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val coroutineScope = rememberCoroutineScope()
     val verticalPadding = if (isShareCaptureMode) RecapTokens.ShareVerticalPadding else 0.dp
     val storyProgress = remember { Animatable(0f) }
-    // The reel's own index. Scrolls run in the composition scope rather than inside the timer,
-    // so restarting the timer can never cancel a scroll halfway between two cards.
+    // The reel's index is the single source of truth for which card is active. Taps, the timer,
+    // and rewatch only ever write this value; the pager follows it below.
     var storyIndex by remember { mutableIntStateOf(0) }
     val goTo: (Int) -> Unit = { target ->
-        storyIndex = target
-        coroutineScope.launch { pagerState.animateScrollToPage(target) }
+        if (target in cards.indices) storyIndex = target
     }
     LaunchedEffect(cards.firstOrNull()?.id) {
         storyIndex = 0
+    }
+    LaunchedEffect(cards.size) {
+        if (storyIndex !in cards.indices) storyIndex = cards.lastIndex.coerceAtLeast(0)
+    }
+    // Pager driver. It is keyed only on the reel index, so the story timer restarting can never
+    // interrupt a scroll. A scroll is only cancelled when a newer target replaces it, and that
+    // newer scroll then runs to completion, so the pager can no longer stop halfway between cards.
+    LaunchedEffect(storyIndex, cards.size) {
+        if (cards.isNotEmpty()) pagerState.animateScrollToPage(storyIndex)
     }
     // Story timer: the current card fills its progress segment, then the reel moves on.
     // The finale never auto-advances, and share capture freezes the reel.
@@ -471,13 +478,14 @@ private fun RecapCardPager(
             card = card,
             pageIndex = page,
             pageCount = cards.size,
-            progress = if (isCurrent) storyProgress.value else 0f,
+            // Read lazily so the per-frame timer only redraws the progress bar, not the whole card.
+            progress = { if (isCurrent) storyProgress.value else 0f },
             isCurrent = isCurrent,
             applySafeContentInsets = !isShareCaptureMode,
             onCardClick = {},
             onTopSongLongClick = onTopSongLongClick,
             onTopArtistLongClick = onTopArtistLongClick,
-            onRewatch = onRewatch,
+            onRewatch = { goTo(0) },
             onBack = onBack,
             onTapZone = { previous ->
                 if (!isShareCaptureMode) {
@@ -509,7 +517,7 @@ private fun RecapCardFrame(
     card: YearInMusicRecapCard,
     pageIndex: Int,
     pageCount: Int,
-    progress: Float,
+    progress: () -> Float,
     isCurrent: Boolean,
     applySafeContentInsets: Boolean,
     onCardClick: () -> Unit,
@@ -521,6 +529,8 @@ private fun RecapCardFrame(
     modifier: Modifier = Modifier,
 ) {
     val enter = remember(card.id) { Animatable(1f) }
+    // pointerInput is keyed on card.id, so read the latest tap handler through a state holder.
+    val latestOnTapZone by rememberUpdatedState(onTapZone)
     LaunchedEffect(isCurrent) {
         if (isCurrent) {
             enter.snapTo(0f)
@@ -548,7 +558,7 @@ private fun RecapCardFrame(
             modifier =
                 modifier.pointerInput(card.id) {
                     detectTapGestures { offset ->
-                        onTapZone(offset.x < size.width / 3f)
+                        latestOnTapZone(offset.x < size.width / 3f)
                     }
                 },
             color = RecapBlack,
@@ -665,7 +675,7 @@ private fun RecapCardFrame(
 private fun RecapStoryProgress(
     current: Int,
     count: Int,
-    progress: Float,
+    progress: () -> Float,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -675,12 +685,6 @@ private fun RecapStoryProgress(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         repeat(count) { index ->
-            val fraction =
-                when {
-                    index < current -> 1f
-                    index == current -> progress.coerceIn(0f, 1f)
-                    else -> 0f
-                }
             Box(
                 modifier =
                     Modifier
@@ -692,9 +696,16 @@ private fun RecapStoryProgress(
                 Box(
                     modifier =
                         Modifier
-                            .fillMaxWidth(fraction)
-                            .fillMaxHeight()
-                            .background(accent),
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                transformOrigin = TransformOrigin(0f, 0.5f)
+                                scaleX =
+                                    when {
+                                        index < current -> 1f
+                                        index == current -> progress().coerceIn(0f, 1f)
+                                        else -> 0f
+                                    }
+                            }.background(accent),
                 )
             }
         }
