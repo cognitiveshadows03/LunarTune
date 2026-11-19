@@ -1120,3 +1120,5 @@ fun PlayerButtonsStyleKeyFor(designStyle: String) =
 
 fun PlayerBackgroundStyleKeyFor(designStyle: String) =
     stringPreferencesKey("playerBackgroundStyle_$designStyle")
+
+val RecapStoriesUnlockedKey = booleanPreferencesKey("recapStoriesUnlocked")
