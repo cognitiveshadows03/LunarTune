@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
@@ -532,6 +533,7 @@ private fun RecapCardFrame(
                 is YearInMusicRecapCard.RankedAlbums -> listOf(Color(0xFF3A3806), Color(0xFF191806), RecapBlack)
                 is YearInMusicRecapCard.Summary -> listOf(Color(0xFFE9B4FF), Color(0xFFD7E7FF), Color(0xFFFF8CA1))
                 is YearInMusicRecapCard.ListeningOrbit -> listOf(Color(0xFF1B3A4A), Color(0xFF0C1A22), RecapBlack)
+                is YearInMusicRecapCard.Finale -> listOf(Color(0xFF1F2A6E), Color(0xFF0E1433), RecapBlack)
             }
         }
     val accent = recapAccentFor(card)
@@ -1811,6 +1813,7 @@ private fun recapAccentFor(card: YearInMusicRecapCard): Color =
         is YearInMusicRecapCard.Intro -> RecapRed
         is YearInMusicRecapCard.Totals -> RecapYellow
         is YearInMusicRecapCard.ListeningOrbit -> RecapBlue
+        is YearInMusicRecapCard.Finale -> RecapBlue
         is YearInMusicRecapCard.TopSong -> RecapPink
         is YearInMusicRecapCard.RankedArtists -> RecapGreen
         is YearInMusicRecapCard.RankedAlbums -> RecapLime
@@ -1823,6 +1826,7 @@ private fun recapPolygonFor(card: YearInMusicRecapCard): RoundedPolygon =
         is YearInMusicRecapCard.Intro -> MaterialShapes.Cookie9Sided
         is YearInMusicRecapCard.Totals -> MaterialShapes.Sunny
         is YearInMusicRecapCard.ListeningOrbit -> MaterialShapes.Clover8Leaf
+        is YearInMusicRecapCard.Finale -> MaterialShapes.Cookie9Sided
         is YearInMusicRecapCard.TopSong -> MaterialShapes.Clover4Leaf
         is YearInMusicRecapCard.RankedArtists -> MaterialShapes.Cookie6Sided
         is YearInMusicRecapCard.RankedAlbums -> MaterialShapes.Puffy
