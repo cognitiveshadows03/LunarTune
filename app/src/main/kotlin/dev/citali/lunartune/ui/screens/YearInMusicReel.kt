@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -41,8 +42,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,13 +54,21 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,18 +83,17 @@ import java.text.NumberFormat
 
 /*
  * Highlight reel: a tap-driven story over the Year in Music stats.
- * UI and motion are ported in spirit from ArchiveTune's recap stories.
- * Data is currently read from the LunarTune stats in [YearInMusicUiState.Content].
+ * Layout and motion are LunarTune's own; data comes from [YearInMusicUiState.Content].
  */
 
 private val ReelBlack = Color(0xFF070707)
 private val ReelRed = Color(0xFFFF0033)
 private val ReelCream = Color(0xFFFFF7F2)
 
-/** Chapter-local motion clock in ms. It only advances while the reel is playing, so holding to pause freezes the motion. */
+/** Chapter-local motion clock in ms. It only advances while the reel is playing, so pausing freezes the motion. */
 private val LocalReelClock = compositionLocalOf<() -> Float> { { Float.MAX_VALUE } }
 
-private enum class ReelChapter { INTRO, TOTALS, TOP_SONG, ARTISTS, ALBUMS, END }
+private enum class ReelChapter { INTRO, TOTALS, TOP_SONG, ARTISTS, ALBUMS, SUMMARY, END }
 
 private fun reelChapters(content: YearInMusicUiState.Content): List<ReelChapter> =
     buildList {
@@ -94,6 +102,7 @@ private fun reelChapters(content: YearInMusicUiState.Content): List<ReelChapter>
         if (content.topSongsStats.isNotEmpty()) add(ReelChapter.TOP_SONG)
         if (content.topArtists.isNotEmpty()) add(ReelChapter.ARTISTS)
         if (content.topAlbums.isNotEmpty()) add(ReelChapter.ALBUMS)
+        add(ReelChapter.SUMMARY)
         add(ReelChapter.END)
     }
 
@@ -101,6 +110,7 @@ private fun reelChapters(content: YearInMusicUiState.Content): List<ReelChapter>
 private fun reelDurationMs(chapter: ReelChapter): Long =
     when (chapter) {
         ReelChapter.INTRO, ReelChapter.END -> 0L
+        ReelChapter.SUMMARY -> 9_000L
         else -> 7_000L
     }
 
@@ -111,6 +121,7 @@ private fun reelAccent(chapter: ReelChapter): Color =
         ReelChapter.TOP_SONG -> Color(0xFF9B7BFF)
         ReelChapter.ARTISTS -> Color(0xFF2DD4BF)
         ReelChapter.ALBUMS -> Color(0xFFFFC53D)
+        ReelChapter.SUMMARY -> Color(0xFFFF5C8A)
     }
 
 @Composable
@@ -121,8 +132,10 @@ internal fun YearInMusicReel(
     val chapters = remember(content) { reelChapters(content) }
     val lastIndex = chapters.lastIndex
     var index by remember(content) { mutableIntStateOf(0) }
-    var paused by remember { mutableStateOf(false) }
+    var pressing by remember { mutableStateOf(false) }
+    var manualPaused by remember { mutableStateOf(false) }
     var elapsed by remember(content) { mutableFloatStateOf(0f) }
+    val paused = pressing || manualPaused
 
     val chapter = chapters.getOrElse(index) { ReelChapter.END }
     val duration = reelDurationMs(chapter)
@@ -150,7 +163,7 @@ internal fun YearInMusicReel(
 
     BackHandler(onBack = onClose)
 
-    // Auto-advance timer. Press-and-hold pauses it; resuming keeps the elapsed time.
+    // Shared timer. It runs while the reel is playing; intro and end only wait for the user.
     LaunchedEffect(index, paused) {
         if (paused) return@LaunchedEffect
         var lastFrame = withFrameNanos { it }
@@ -169,14 +182,13 @@ internal fun YearInMusicReel(
 
     Box(modifier = Modifier.fillMaxSize().background(ReelBlack)) {
         // 1. Visuals only, no pointer input.
-        RecapBackdrop(enabled = !disableBlur, modifier = Modifier.fillMaxSize())
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.35f), ReelBlack.copy(alpha = 0.7f), ReelBlack.copy(alpha = 0.9f)),
+                            listOf(accent.copy(alpha = 0.4f), ReelBlack.copy(alpha = 0.75f), ReelBlack.copy(alpha = 0.92f)),
                         ),
                     ),
         )
@@ -196,7 +208,7 @@ internal fun YearInMusicReel(
             }
         }
 
-        // 2. Full-screen tap zone: left third goes back, the rest goes forward, hold pauses.
+        // 2. Full-screen tap zone: left third goes back, the rest goes forward, holding pauses.
         Box(
             modifier =
                 Modifier
@@ -204,9 +216,9 @@ internal fun YearInMusicReel(
                     .pointerInput(index) {
                         detectTapGestures(
                             onPress = {
-                                paused = true
+                                pressing = true
                                 tryAwaitRelease()
-                                paused = false
+                                pressing = false
                             },
                             onTap = { offset ->
                                 if (offset.x < size.width / 3f) prev() else next()
@@ -233,7 +245,7 @@ internal fun YearInMusicReel(
             )
         }
 
-        // 4. Top bar: progress segments, brand, close.
+        // 4. Top bar: pause and close, progress segments, labels.
         Column(
             modifier =
                 Modifier
@@ -241,6 +253,18 @@ internal fun YearInMusicReel(
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReelIconButton(onClick = { manualPaused = !manualPaused }) {
+                    if (manualPaused) drawReelPlay() else drawReelPauseBars()
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                ReelIconButton(onClick = onClose) { drawReelClose() }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 chapters.indices.forEach { i ->
                     val fraction =
@@ -267,25 +291,69 @@ internal fun YearInMusicReel(
                     }
                 }
             }
+            Spacer(modifier = Modifier.height(10.dp))
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
+                Text(
+                    text = "${stringResource(R.string.year_in_music)} ${content.selectedYear}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = ReelCream,
+                )
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.labelLarge,
-                    color = ReelCream,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(
-                    text = "\u2715",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = ReelCream,
-                    modifier = Modifier.clickable(onClick = onClose).padding(8.dp),
+                    color = ReelCream.copy(alpha = 0.7f),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ReelIconButton(
+    onClick: () -> Unit,
+    icon: DrawScope.() -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(ReelCream.copy(alpha = 0.16f))
+                .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.size(16.dp)) { icon() }
+    }
+}
+
+private fun DrawScope.drawReelPauseBars() {
+    val w = size.width
+    val h = size.height
+    val radius = CornerRadius(w * 0.12f)
+    drawRoundRect(ReelCream, topLeft = Offset(0f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
+    drawRoundRect(ReelCream, topLeft = Offset(w * 0.7f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
+}
+
+private fun DrawScope.drawReelPlay() {
+    val w = size.width
+    val h = size.height
+    val path =
+        Path().apply {
+            moveTo(w * 0.1f, 0f)
+            lineTo(w, h / 2f)
+            lineTo(w * 0.1f, h)
+            close()
+        }
+    drawPath(path, ReelCream)
+}
+
+private fun DrawScope.drawReelClose() {
+    val stroke = 2.5.dp.toPx()
+    drawLine(ReelCream, Offset(0f, 0f), Offset(size.width, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
+    drawLine(ReelCream, Offset(size.width, 0f), Offset(0f, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
 }
 
 @Composable
@@ -336,13 +404,19 @@ private fun ReelChapterBody(
     content: YearInMusicUiState.Content,
     accent: Color,
 ) {
+    // List chapters sit low on the card, like the reference layout; the rest centre vertically.
+    val arrangement =
+        when (chapter) {
+            ReelChapter.ARTISTS, ReelChapter.ALBUMS -> Arrangement.Bottom
+            else -> Arrangement.Center
+        }
     Column(
         modifier =
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 24.dp, end = 24.dp, top = 88.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.Center,
+                .padding(start = 24.dp, end = 24.dp, top = 120.dp, bottom = 120.dp),
+        verticalArrangement = arrangement,
         horizontalAlignment = Alignment.Start,
     ) {
         when (chapter) {
@@ -351,6 +425,7 @@ private fun ReelChapterBody(
             ReelChapter.TOP_SONG -> ReelTopSongBody(content, accent)
             ReelChapter.ARTISTS -> ReelArtistsBody(content, accent)
             ReelChapter.ALBUMS -> ReelAlbumsBody(content, accent)
+            ReelChapter.SUMMARY -> ReelSummaryBody(content, accent)
             ReelChapter.END -> ReelEndBody(accent)
         }
     }
@@ -402,30 +477,54 @@ private fun ReelTotalsBody(
     content: YearInMusicUiState.Content,
     accent: Color,
 ) {
-    ReelHeading(R.string.year_in_music_totals_title, accent)
+    val clock = LocalReelClock.current
+    val ease = FastOutSlowInEasing.transform(reelProgress(clock(), delayMs = 150, durationMs = 1_400f))
+    val minutes = (content.totalListeningTime / 60_000L * ease).toLong()
+    val faded = ReelCream.copy(alpha = 0.55f)
+    val statement =
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = faded)) { append("You listened for ") }
+            withStyle(SpanStyle(color = ReelCream, fontWeight = FontWeight.Bold)) {
+                append(NumberFormat.getIntegerInstance().format(minutes))
+            }
+            withStyle(SpanStyle(color = faded)) { append(" minutes in ") }
+            withStyle(SpanStyle(color = ReelCream, fontWeight = FontWeight.Bold)) {
+                append(content.selectedYear.toString())
+            }
+            withStyle(SpanStyle(color = faded)) { append(".") }
+        }
+    ReelReveal(delayMs = 0) {
+        Text(
+            text = statement,
+            style = MaterialTheme.typography.displaySmall,
+        )
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    ReelReveal(delayMs = 350) {
+        Text(
+            text =
+                "${NumberFormat.getIntegerInstance().format(content.totalSongsPlayed)} ${stringResource(R.string.year_in_music_plays_label)}" +
+                    "  \u00b7  ${content.activeDays} ${stringResource(R.string.year_in_music_active_days)}",
+            style = MaterialTheme.typography.bodyLarge,
+            color = accent,
+        )
+    }
     Spacer(modifier = Modifier.height(32.dp))
-    ReelReveal(delayMs = 150) {
-        ReelStat(
-            value = content.totalListeningTime / 60_000L,
-            label = stringResource(R.string.year_in_music_minutes_label),
-            accent = accent,
-        )
-    }
-    Spacer(modifier = Modifier.height(24.dp))
-    ReelReveal(delayMs = 400) {
-        ReelStat(
-            value = content.totalSongsPlayed,
-            label = stringResource(R.string.year_in_music_plays_label),
-            accent = accent,
-        )
-    }
-    Spacer(modifier = Modifier.height(24.dp))
-    ReelReveal(delayMs = 650) {
-        ReelStat(
-            value = content.activeDays.toLong(),
-            label = stringResource(R.string.year_in_music_active_days),
-            accent = accent,
-        )
+    val tiles = content.topSongsStats.take(6)
+    tiles.chunked(3).forEachIndexed { row, rowItems ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            rowItems.forEachIndexed { col, song ->
+                ReelReveal(delayMs = 500 + (row * 3 + col) * 110, fromScale = 0.8f) {
+                    AsyncImage(
+                        model = song.thumbnailUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(96.dp).clip(RoundedCornerShape(16.dp)),
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
@@ -509,15 +608,116 @@ private fun ReelAlbumsBody(
 }
 
 @Composable
-private fun ReelEndBody(accent: Color) {
-    ReelReveal(delayMs = 0) {
-        Text(
-            text = stringResource(R.string.year_in_music_finale_title),
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
-            color = accent,
-            textAlign = TextAlign.Start,
+private fun ReelSummaryBody(
+    content: YearInMusicUiState.Content,
+    accent: Color,
+) {
+    val top = content.topSongsStats.firstOrNull()
+    val topSong = content.topSongs.firstOrNull { it.id == top?.id }
+    val topArtist = content.topArtists.firstOrNull()
+    val minutes = content.totalListeningTime / 60_000L
+    ReelReveal(delayMs = 0, fromScale = 0.92f) {
+        AsyncImage(
+            model = top?.thumbnailUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(170.dp).clip(RoundedCornerShape(24.dp)),
         )
+    }
+    Spacer(modifier = Modifier.height(20.dp))
+    ReelReveal(delayMs = 150) {
+        Text(
+            text = content.selectedYear.toString(),
+            style = MaterialTheme.typography.displayMedium,
+            fontWeight = FontWeight.Bold,
+            color = ReelCream,
+        )
+    }
+    Spacer(modifier = Modifier.height(16.dp))
+    Row(modifier = Modifier.fillMaxWidth()) {
+        ReelReveal(delayMs = 300, fromX = (-24).dp, modifier = Modifier.weight(1f)) {
+            ReelFact(
+                label = stringResource(R.string.year_in_music_summary_top_song),
+                value = top?.title ?: "-",
+                detail = topSong?.artists?.joinToString { it.name }.orEmpty(),
+                accent = accent,
+            )
+        }
+        ReelReveal(delayMs = 380, fromX = 24.dp, modifier = Modifier.weight(1f)) {
+            ReelFact(
+                label = stringResource(R.string.year_in_music_minutes_label),
+                value = NumberFormat.getIntegerInstance().format(minutes),
+                detail = "",
+                accent = accent,
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(20.dp))
+    Row(modifier = Modifier.fillMaxWidth()) {
+        ReelReveal(delayMs = 460, fromX = (-24).dp, modifier = Modifier.weight(1f)) {
+            ReelFact(
+                label = stringResource(R.string.year_in_music_summary_top_artist),
+                value = topArtist?.artist?.name ?: "-",
+                detail = "",
+                accent = accent,
+            )
+        }
+        ReelReveal(delayMs = 540, fromX = 24.dp, modifier = Modifier.weight(1f)) {
+            ReelFact(
+                label = stringResource(R.string.year_in_music_plays_label),
+                value = NumberFormat.getIntegerInstance().format(content.totalSongsPlayed),
+                detail = "",
+                accent = accent,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReelFact(
+    label: String,
+    value: String,
+    detail: String,
+    accent: Color,
+) {
+    Column {
+        Text(text = label, style = MaterialTheme.typography.labelLarge, color = accent)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = ReelCream,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (detail.isNotBlank()) {
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ReelCream.copy(alpha = 0.6f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReelEndBody(accent: Color) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        ReelReveal(delayMs = 0) {
+            Text(
+                text = stringResource(R.string.year_in_music_finale_title),
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -534,41 +734,6 @@ private fun ReelHeading(
             color = accent,
         )
     }
-}
-
-@Composable
-private fun ReelStat(
-    value: Long,
-    label: String,
-    accent: Color,
-) {
-    Column {
-        ReelCountUp(
-            target = value,
-            color = accent,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            color = ReelCream.copy(alpha = 0.7f),
-        )
-    }
-}
-
-@Composable
-private fun ReelCountUp(
-    target: Long,
-    color: Color,
-) {
-    val clock = LocalReelClock.current
-    val progress = reelProgress(clock(), delayMs = 0, durationMs = 1_400f)
-    val shown = target * FastOutSlowInEasing.transform(progress)
-    Text(
-        text = NumberFormat.getIntegerInstance().format(shown.toLong()),
-        style = MaterialTheme.typography.displayMedium,
-        fontWeight = FontWeight.Bold,
-        color = color,
-    )
 }
 
 @Composable
@@ -647,6 +812,7 @@ private fun reelProgress(nowMs: Float, delayMs: Int, durationMs: Float): Float =
 @Composable
 private fun ReelReveal(
     delayMs: Int,
+    modifier: Modifier = Modifier,
     fromX: Dp = 0.dp,
     fromScale: Float = 0.94f,
     content: @Composable () -> Unit,
@@ -657,7 +823,7 @@ private fun ReelReveal(
     val travelX = with(density) { fromX.toPx() }
     Box(
         modifier =
-            Modifier.graphicsLayer {
+            modifier.graphicsLayer {
                 val p = FastOutSlowInEasing.transform(reelProgress(clock(), delayMs, 550f))
                 alpha = p
                 translationY = (1f - p) * travel

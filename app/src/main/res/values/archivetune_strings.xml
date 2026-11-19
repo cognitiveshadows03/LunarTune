@@ -912,4 +912,6 @@
     <string name="year_in_music_tap_begin">Tap to begin</string>
     <string name="recap_stories_unlocked">Year in Music story unlocked</string>
     <string name="year_in_music_highlight_reel">Highlight reel</string>
+    <string name="year_in_music_summary_top_song">Top song</string>
+    <string name="year_in_music_summary_top_artist">Top artist</string>
 </resources>

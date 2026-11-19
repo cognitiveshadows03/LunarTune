@@ -296,7 +296,7 @@ private fun YearInMusicRecapScreen(
             )
         }
 
-        if (canShare) {
+        if (canShare && !showReel) {
             Box(modifier = Modifier.align(Alignment.BottomEnd)) {
                 RecapShareButton(
                     isGenerating = isGeneratingImage,
