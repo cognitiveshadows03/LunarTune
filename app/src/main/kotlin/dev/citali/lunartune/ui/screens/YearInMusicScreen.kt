@@ -120,6 +120,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.DisableBlurKey
+import dev.citali.lunartune.constants.RecapStoriesUnlockedKey
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.Song
@@ -205,6 +206,8 @@ private fun YearInMusicRecapScreen(
     val coroutineScope = rememberCoroutineScope()
     val content = uiState as YearInMusicUiState.Content
     val (disableBlur) = rememberPreference(DisableBlurKey, false)
+    val (recapUnlocked) = rememberPreference(RecapStoriesUnlockedKey, false)
+    var showReel by remember { mutableStateOf(false) }
 
     var isGeneratingImage by remember { mutableStateOf(false) }
     var isShareCaptureMode by remember { mutableStateOf(false) }
@@ -270,6 +273,28 @@ private fun YearInMusicRecapScreen(
                 Modifier
                     .fillMaxSize(),
         )
+
+        if (recapUnlocked && content.hasData && !isShareCaptureMode && !showReel) {
+            Box(modifier = Modifier.align(Alignment.BottomStart)) {
+                TextButton(
+                    onClick = { showReel = true },
+                    modifier =
+                        Modifier
+                            .windowInsetsPadding(
+                                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
+                            ).padding(start = 16.dp, bottom = 16.dp),
+                ) {
+                    Text(stringResource(R.string.year_in_music_highlight_reel))
+                }
+            }
+        }
+
+        if (showReel) {
+            YearInMusicReel(
+                content = content,
+                onClose = { showReel = false },
+            )
+        }
 
         if (canShare) {
             Box(modifier = Modifier.align(Alignment.BottomEnd)) {
