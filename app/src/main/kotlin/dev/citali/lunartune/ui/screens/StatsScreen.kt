@@ -98,7 +98,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -323,19 +322,9 @@ fun StatsScreen(
             // scrolling content passes under the header instead of being cut off at a hard edge.
             LazyColumn(
                 contentPadding =
-                    run {
-                        val insetPadding =
-                            LocalPlayerAwareWindowInsets.current
-                                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-                                .asPaddingValues()
-                        val direction = LocalLayoutDirection.current
-                        PaddingValues(
-                            start = insetPadding.calculateStartPadding(direction),
-                            top = scaffoldPadding.calculateTopPadding() + 64.dp,
-                            end = insetPadding.calculateEndPadding(direction),
-                            bottom = insetPadding.calculateBottomPadding(),
-                        )
-                    },
+                    LocalPlayerAwareWindowInsets.current
+                        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                        .asPaddingValues(),
                 modifier =
                     Modifier
                         .widthIn(max = 1040.dp)
@@ -343,6 +332,10 @@ fun StatsScreen(
                         .fillMaxWidth()
                         .align(Alignment.TopCenter),
             ) {
+                // Reserves the header height inside the list, so content can scroll beneath the header.
+                item(key = "headerSpacer", contentType = "spacer") {
+                    Spacer(modifier = Modifier.height(scaffoldPadding.calculateTopPadding() + 64.dp))
+                }
                 item(key = "rangeControls", contentType = "controls") {
                     Column(Modifier.animateItem()) {
                         StatsReplayPeriods(
