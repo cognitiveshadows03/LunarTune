@@ -318,18 +318,20 @@ fun StatsScreen(
     Scaffold(modifier = Modifier.fillMaxSize()) { scaffoldPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             ReplayBackground(modifier = Modifier.fillMaxSize())
+            // The list spans the full height and only pads its first item below the header, so
+            // scrolling content passes under the header instead of being cut off at a hard edge.
             LazyColumn(
                 contentPadding =
                     LocalPlayerAwareWindowInsets.current
                         .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                        .add(WindowInsets(top = scaffoldPadding.calculateTopPadding() + 64.dp))
                         .asPaddingValues(),
                 modifier =
                     Modifier
                         .widthIn(max = 1040.dp)
                         .fillMaxHeight()
                         .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .padding(top = scaffoldPadding.calculateTopPadding() + 64.dp),
+                        .align(Alignment.TopCenter),
             ) {
                 item(key = "rangeControls", contentType = "controls") {
                     Column(Modifier.animateItem()) {
