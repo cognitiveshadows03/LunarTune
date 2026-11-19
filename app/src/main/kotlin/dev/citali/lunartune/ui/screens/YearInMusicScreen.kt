@@ -61,6 +61,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +79,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -134,6 +137,9 @@ private val RecapBlue = Color(0xFF7CB7FF)
 private val RecapPink = Color(0xFFFF8BDE)
 private val RecapLime = Color(0xFFDFFF3E)
 private val RecapInk = Color(0xFF151515)
+
+/** Accent colour of the recap card currently being drawn; badges and rows read it. */
+private val LocalRecapAccent = compositionLocalOf { RecapRed }
 
 private object RecapTokens {
     val ItemRadius = 18.dp
@@ -450,6 +456,8 @@ private fun RecapCardPager(
         val canAdvance = !isShareCaptureMode && page == pagerState.currentPage && page < cards.lastIndex
         RecapCardFrame(
             card = card,
+            pageIndex = page,
+            pageCount = cards.size,
             applySafeContentInsets = !isShareCaptureMode,
             onCardClick = {
                 if (canAdvance) {
@@ -483,6 +491,8 @@ private fun RecapCardPager(
 @Composable
 private fun RecapCardFrame(
     card: YearInMusicRecapCard,
+    pageIndex: Int,
+    pageCount: Int,
     applySafeContentInsets: Boolean,
     onCardClick: () -> Unit,
     canAdvance: Boolean,
@@ -494,93 +504,137 @@ private fun RecapCardFrame(
         remember(card.id) {
             when (card) {
                 is YearInMusicRecapCard.Empty -> listOf(RecapSurfaceHigh, RecapBlack)
-                is YearInMusicRecapCard.Intro -> listOf(Color(0xFF43131D), RecapBlack, Color(0xFF17121B))
-                is YearInMusicRecapCard.Totals -> listOf(Color(0xFF32100F), RecapBlack, Color(0xFF171217))
-                is YearInMusicRecapCard.TopSong -> listOf(RecapBlack, Color(0xFF251015), RecapBlack)
-                is YearInMusicRecapCard.RankedArtists -> listOf(Color(0xFF101D18), RecapBlack, Color(0xFF101714))
-                is YearInMusicRecapCard.RankedAlbums -> listOf(Color(0xFF231B0A), RecapBlack, Color(0xFF17140D))
+                is YearInMusicRecapCard.Intro -> listOf(Color(0xFF5A1426), Color(0xFF1A0B12), RecapBlack)
+                is YearInMusicRecapCard.Totals -> listOf(Color(0xFF4A2A05), Color(0xFF1A1206), RecapBlack)
+                is YearInMusicRecapCard.TopSong -> listOf(Color(0xFF4A0F2A), Color(0xFF1A0812), RecapBlack)
+                is YearInMusicRecapCard.RankedArtists -> listOf(Color(0xFF0C3A2A), Color(0xFF0A1A14), RecapBlack)
+                is YearInMusicRecapCard.RankedAlbums -> listOf(Color(0xFF3A3806), Color(0xFF191806), RecapBlack)
                 is YearInMusicRecapCard.Summary -> listOf(Color(0xFFE9B4FF), Color(0xFFD7E7FF), Color(0xFFFF8CA1))
-                is YearInMusicRecapCard.ListeningOrbit -> listOf(Color(0xFF263A2A), RecapBlack, Color(0xFF21150E))
+                is YearInMusicRecapCard.ListeningOrbit -> listOf(Color(0xFF1B3A4A), Color(0xFF0C1A22), RecapBlack)
             }
         }
+    val accent = recapAccentFor(card)
 
-    Surface(
-        modifier = modifier.clickable(enabled = canAdvance, onClick = onCardClick),
-        color = RecapBlack,
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(gradient)),
+    CompositionLocalProvider(LocalRecapAccent provides accent) {
+        Surface(
+            modifier = modifier.clickable(enabled = canAdvance, onClick = onCardClick),
+            color = RecapBlack,
         ) {
-            RecapNoiseOverlay(modifier = Modifier.fillMaxSize())
-            RecapAtmosphere(
-                accent = recapAccentFor(card),
-                polygon = recapPolygonFor(card),
-                modifier = Modifier.fillMaxSize(),
-            )
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(gradient)),
+            ) {
+                RecapNoiseOverlay(modifier = Modifier.fillMaxSize())
+                RecapAtmosphere(
+                    accent = accent,
+                    polygon = recapPolygonFor(card),
+                    modifier = Modifier.fillMaxSize(),
+                )
 
-            when (card) {
-                is YearInMusicRecapCard.Empty -> {
-                    EmptyRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                    when (card) {
+                        is YearInMusicRecapCard.Empty -> {
+                            EmptyRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
 
-                is YearInMusicRecapCard.Intro -> {
-                    IntroRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                        is YearInMusicRecapCard.Intro -> {
+                            IntroRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
 
-                is YearInMusicRecapCard.Totals -> {
-                    TotalsRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                        is YearInMusicRecapCard.Totals -> {
+                            TotalsRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
 
-                is YearInMusicRecapCard.TopSong -> {
-                    TopSongRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                        onClick = onCardClick,
-                        onLongClick = { card.originalSong?.let(onTopSongLongClick) },
-                    )
-                }
+                        is YearInMusicRecapCard.TopSong -> {
+                            TopSongRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                                onClick = onCardClick,
+                                onLongClick = { card.originalSong?.let(onTopSongLongClick) },
+                            )
+                        }
 
-                is YearInMusicRecapCard.RankedArtists -> {
-                    RankedArtistsRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                        onArtistLongClick = onTopArtistLongClick,
-                    )
-                }
+                        is YearInMusicRecapCard.RankedArtists -> {
+                            RankedArtistsRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                                onArtistLongClick = onTopArtistLongClick,
+                            )
+                        }
 
-                is YearInMusicRecapCard.RankedAlbums -> {
-                    RankedAlbumsRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                        is YearInMusicRecapCard.RankedAlbums -> {
+                            RankedAlbumsRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
 
-                is YearInMusicRecapCard.Summary -> {
-                    SummaryRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                        is YearInMusicRecapCard.Summary -> {
+                            SummaryRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
 
-                is YearInMusicRecapCard.ListeningOrbit -> {
-                    ListeningOrbitRecapCard(
-                        card = card,
-                        applySafeContentInsets = applySafeContentInsets,
-                    )
-                }
+                        is YearInMusicRecapCard.ListeningOrbit -> {
+                            ListeningOrbitRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                            )
+                        }
+                    }
+
+                RecapStoryProgress(
+                    current = pageIndex,
+                    count = pageCount,
+                    accent = accent,
+                    modifier =
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .then(
+                                if (applySafeContentInsets) {
+                                    Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                                } else {
+                                    Modifier
+                                },
+                            ).padding(top = 12.dp),
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun RecapStoryProgress(
+    current: Int,
+    count: Int,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (count <= 1) return
+    Row(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        repeat(count) { index ->
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(if (index <= current) accent else RecapCream.copy(alpha = 0.22f)),
+            )
         }
     }
 }
@@ -1522,15 +1576,20 @@ private fun RankedRowContainer(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val accent = LocalRecapAccent.current
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(RecapTokens.ItemRadius))
-                .background(RecapSurfaceHigh.copy(alpha = 0.82f))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(accent.copy(alpha = 0.20f), RecapSurfaceHigh.copy(alpha = 0.82f)),
+                    ),
+                )
                 .border(
                     width = 1.dp,
-                    color = RecapCream.copy(alpha = 0.08f),
+                    color = accent.copy(alpha = 0.22f),
                     shape = RoundedCornerShape(RecapTokens.ItemRadius),
                 ).padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1599,14 +1658,15 @@ private fun RecapChip(
 
 @Composable
 private fun RecapBadge(text: String) {
+    val accent = LocalRecapAccent.current
     Row(
         modifier =
             Modifier
                 .clip(RoundedCornerShape(999.dp))
-                .background(RecapCream.copy(alpha = 0.14f))
+                .background(accent.copy(alpha = 0.22f))
                 .border(
                     width = 1.dp,
-                    color = RecapCream.copy(alpha = 0.16f),
+                    color = accent.copy(alpha = 0.45f),
                     shape = RoundedCornerShape(999.dp),
                 ).padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1617,7 +1677,7 @@ private fun RecapBadge(text: String) {
                 Modifier
                     .size(8.dp)
                     .clip(CircleShape)
-                    .background(RecapRed),
+                    .background(accent),
         )
         Text(
             text = text,
@@ -1678,7 +1738,7 @@ private fun recapPolygonFor(card: YearInMusicRecapCard): RoundedPolygon =
         is YearInMusicRecapCard.Summary -> MaterialShapes.Cookie12Sided
     }
 
-/** Soft accent glow plus one large, faint Material expressive shape behind card content. */
+/** Layered accent glows, one large filled expressive shape and an outlined ring behind content. */
 @Composable
 private fun RecapAtmosphere(
     accent: Color,
@@ -1691,26 +1751,50 @@ private fun RecapAtmosphere(
         val h = size.height
         if (w <= 0f || h <= 0f) return@Canvas
 
-        val glowCenter = Offset(w * 0.85f, h * 0.12f)
+        val glowCenter = Offset(w * 0.9f, h * 0.1f)
         drawCircle(
             brush =
                 Brush.radialGradient(
-                    colors = listOf(accent.copy(alpha = 0.34f), accent.copy(alpha = 0.08f), Color.Transparent),
+                    colors = listOf(accent.copy(alpha = 0.42f), accent.copy(alpha = 0.10f), Color.Transparent),
                     center = glowCenter,
-                    radius = w * 0.9f,
+                    radius = w * 0.95f,
                 ),
-            radius = w * 0.9f,
+            radius = w * 0.95f,
             center = glowCenter,
         )
+        val lowerGlow = Offset(0f, h)
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(accent.copy(alpha = 0.22f), Color.Transparent),
+                    center = lowerGlow,
+                    radius = w * 0.8f,
+                ),
+            radius = w * 0.8f,
+            center = lowerGlow,
+        )
 
-        val side = w * 0.95f
-        val outline = shape.createOutline(Size(side, side), layoutDirection, this)
-        if (outline is Outline.Generic) {
+        // Filled hero shape, top-right, very soft.
+        val heroSide = w * 1.05f
+        val heroOutline = shape.createOutline(Size(heroSide, heroSide), layoutDirection, this)
+        if (heroOutline is Outline.Generic) {
             withTransform({
-                translate(left = -w * 0.18f, top = h * 0.55f)
-                rotate(degrees = 16f, pivot = Offset(side / 2f, side / 2f))
+                translate(left = w * 0.38f, top = -h * 0.05f)
+                rotate(degrees = 12f, pivot = Offset(heroSide / 2f, heroSide / 2f))
             }) {
-                drawPath(outline.path, accent.copy(alpha = 0.12f))
+                drawPath(heroOutline.path, accent.copy(alpha = 0.16f))
+            }
+        }
+
+        // Outlined ring, lower-left.
+        val ringSide = w * 0.78f
+        val ringOutline = shape.createOutline(Size(ringSide, ringSide), layoutDirection, this)
+        if (ringOutline is Outline.Generic) {
+            withTransform({
+                translate(left = -w * 0.22f, top = h * 0.66f)
+                rotate(degrees = -10f, pivot = Offset(ringSide / 2f, ringSide / 2f))
+            }) {
+                drawPath(ringOutline.path, accent.copy(alpha = 0.32f), style = Stroke(width = 2.dp.toPx()))
             }
         }
     }
