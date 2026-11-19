@@ -60,6 +60,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -140,6 +148,8 @@ private val RecapInk = Color(0xFF151515)
 
 /** Accent colour of the recap card currently being drawn; badges and rows read it. */
 private val LocalRecapAccent = compositionLocalOf { RecapRed }
+
+private const val RecapStoryDurationMs = 6_000
 
 private object RecapTokens {
     val ItemRadius = 18.dp
@@ -227,6 +237,8 @@ private fun YearInMusicRecapScreen(
         )
 
         RecapCardPager(
+            onRewatch = { coroutineScope.launch { pagerState.scrollToPage(0) } },
+            onBack = { navController.navigateUp() },
             cards = cards,
             pagerState = pagerState,
             isShareCaptureMode = isShareCaptureMode,
@@ -340,6 +352,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
     val summaryLabel = stringResource(R.string.share_summary)
     val orbitLabel = stringResource(R.string.year_in_music_orbit_title)
     val emptyLabel = stringResource(R.string.no_listening_data)
+    val finaleLabel = stringResource(R.string.year_in_music_finale_title)
 
     return remember(
         content.selectedYear,
@@ -358,6 +371,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
         summaryLabel,
         orbitLabel,
         emptyLabel,
+        finaleLabel,
     ) {
         if (!content.hasData) {
             listOf(YearInMusicRecapCard.Empty(content.selectedYear, emptyLabel))
@@ -378,15 +392,6 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         label = totalsLabel,
                     ),
                 )
-                add(
-                    YearInMusicRecapCard.ListeningOrbit(
-                        year = content.selectedYear,
-                        totalListeningTime = content.totalListeningTime,
-                        totalSongsPlayed = content.totalSongsPlayed,
-                        activeDays = content.activeDays,
-                        label = orbitLabel,
-                    ),
-                )
                 content.topSongsStats.firstOrNull()?.let { topSong ->
                     add(
                         YearInMusicRecapCard.TopSong(
@@ -404,25 +409,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         ),
                     )
                 }
-                if (content.topAlbums.isNotEmpty()) {
-                    add(
-                        YearInMusicRecapCard.RankedAlbums(
-                            albums = content.topAlbums,
-                            label = albumsLabel,
-                        ),
-                    )
-                }
-                add(
-                    YearInMusicRecapCard.Summary(
-                        year = content.selectedYear,
-                        totalListeningTime = content.totalListeningTime,
-                        totalSongsPlayed = content.totalSongsPlayed,
-                        topSongs = content.topSongsStats,
-                        topArtists = content.topArtists,
-                        topAlbums = content.topAlbums,
-                        label = summaryLabel,
-                    ),
-                )
+                add(YearInMusicRecapCard.Finale(year = content.selectedYear, label = finaleLabel))
             }
         }
     }
@@ -437,15 +424,31 @@ private fun RecapCardPager(
     onCardBoundsChanged: (Rect) -> Unit,
     onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
+    onRewatch: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val verticalPadding = if (isShareCaptureMode) RecapTokens.ShareVerticalPadding else 0.dp
+    val currentPage = pagerState.currentPage
+    val storyProgress = remember { Animatable(0f) }
+
+    // Story timer: the current card fills its progress segment, then the reel moves on.
+    // The finale never auto-advances, and share capture freezes the reel.
+    LaunchedEffect(currentPage, cards.size, isShareCaptureMode) {
+        storyProgress.snapTo(0f)
+        val card = cards.getOrNull(currentPage) ?: return@LaunchedEffect
+        if (isShareCaptureMode || card is YearInMusicRecapCard.Finale) return@LaunchedEffect
+        storyProgress.animateTo(1f, tween(durationMillis = RecapStoryDurationMs, easing = LinearEasing))
+        if (currentPage < cards.lastIndex) {
+            pagerState.animateScrollToPage(currentPage + 1)
+        }
+    }
 
     HorizontalPager(
         state = pagerState,
         key = { index -> cards.getOrNull(index)?.id ?: "stale_year_in_music_page_$index" },
-        userScrollEnabled = !isShareCaptureMode,
+        userScrollEnabled = false,
         modifier = modifier.padding(vertical = verticalPadding),
     ) { page ->
         val card = cards.getOrNull(page)
@@ -453,22 +456,29 @@ private fun RecapCardPager(
             Box(modifier = Modifier.fillMaxSize())
             return@HorizontalPager
         }
-        val canAdvance = !isShareCaptureMode && page == pagerState.currentPage && page < cards.lastIndex
+        val isCurrent = page == currentPage
         RecapCardFrame(
             card = card,
             pageIndex = page,
             pageCount = cards.size,
+            progress = if (isCurrent) storyProgress.value else 0f,
+            isCurrent = isCurrent,
             applySafeContentInsets = !isShareCaptureMode,
-            onCardClick = {
-                if (canAdvance) {
+            onCardClick = {},
+            onTopSongLongClick = onTopSongLongClick,
+            onTopArtistLongClick = onTopArtistLongClick,
+            onRewatch = onRewatch,
+            onBack = onBack,
+            onTapZone = { previous ->
+                if (!isShareCaptureMode) {
                     coroutineScope.launch {
-                        pagerState.animateScrollToPage(page + 1)
+                        val target = if (previous) page - 1 else page + 1
+                        if (target in cards.indices) {
+                            pagerState.animateScrollToPage(target)
+                        }
                     }
                 }
             },
-            canAdvance = canAdvance,
-            onTopSongLongClick = onTopSongLongClick,
-            onTopArtistLongClick = onTopArtistLongClick,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -493,13 +503,24 @@ private fun RecapCardFrame(
     card: YearInMusicRecapCard,
     pageIndex: Int,
     pageCount: Int,
+    progress: Float,
+    isCurrent: Boolean,
     applySafeContentInsets: Boolean,
     onCardClick: () -> Unit,
-    canAdvance: Boolean,
     onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
+    onRewatch: () -> Unit,
+    onBack: () -> Unit,
+    onTapZone: (previous: Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val enter = remember(card.id) { Animatable(1f) }
+    LaunchedEffect(isCurrent) {
+        if (isCurrent) {
+            enter.snapTo(0f)
+            enter.animateTo(1f, tween(durationMillis = 500))
+        }
+    }
     val gradient =
         remember(card.id) {
             when (card) {
@@ -517,14 +538,24 @@ private fun RecapCardFrame(
 
     CompositionLocalProvider(LocalRecapAccent provides accent) {
         Surface(
-            modifier = modifier.clickable(enabled = canAdvance, onClick = onCardClick),
+            modifier =
+                modifier.pointerInput(card.id) {
+                    detectTapGestures { offset ->
+                        onTapZone(offset.x < size.width / 3f)
+                    }
+                },
             color = RecapBlack,
         ) {
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(gradient)),
+                        .graphicsLayer {
+                            val scale = 0.96f + 0.04f * enter.value
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = enter.value
+                        }.background(Brush.verticalGradient(gradient)),
             ) {
                 RecapNoiseOverlay(modifier = Modifier.fillMaxSize())
                 RecapAtmosphere(
@@ -592,10 +623,19 @@ private fun RecapCardFrame(
                                 applySafeContentInsets = applySafeContentInsets,
                             )
                         }
+                        is YearInMusicRecapCard.Finale -> {
+                            FinaleRecapCard(
+                                card = card,
+                                applySafeContentInsets = applySafeContentInsets,
+                                onRewatch = onRewatch,
+                                onBack = onBack,
+                            )
+                        }
                     }
 
                 RecapStoryProgress(
                     current = pageIndex,
+                    progress = progress,
                     count = pageCount,
                     accent = accent,
                     modifier =
@@ -618,6 +658,7 @@ private fun RecapCardFrame(
 private fun RecapStoryProgress(
     current: Int,
     count: Int,
+    progress: Float,
     accent: Color,
     modifier: Modifier = Modifier,
 ) {
@@ -627,14 +668,64 @@ private fun RecapStoryProgress(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         repeat(count) { index ->
+            val fraction =
+                when {
+                    index < current -> 1f
+                    index == current -> progress.coerceIn(0f, 1f)
+                    else -> 0f
+                }
             Box(
                 modifier =
                     Modifier
                         .weight(1f)
                         .height(4.dp)
                         .clip(CircleShape)
-                        .background(if (index <= current) accent else RecapCream.copy(alpha = 0.22f)),
-            )
+                        .background(RecapCream.copy(alpha = 0.22f)),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(accent),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinaleRecapCard(
+    card: YearInMusicRecapCard.Finale,
+    applySafeContentInsets: Boolean,
+    onRewatch: () -> Unit,
+    onBack: () -> Unit,
+) {
+    RecapCardContent(
+        badge = stringResource(R.string.year_in_music_recap),
+        footer = joinByBullet(stringResource(R.string.app_name), card.year.toString()),
+        verticalArrangement = Arrangement.Center,
+        applySafeContentInsets = applySafeContentInsets,
+    ) {
+        Text(
+            text = stringResource(R.string.year_in_music_finale_title),
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            color = RecapCream,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(modifier = Modifier.height(28.dp))
+        Button(
+            onClick = onRewatch,
+            colors = ButtonDefaults.buttonColors(containerColor = RecapCream, contentColor = RecapInk),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(text = stringResource(R.string.year_in_music_rewatch), fontWeight = FontWeight.Bold)
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            Text(text = stringResource(R.string.year_in_music_back_to_year), color = RecapCream.copy(alpha = 0.7f))
         }
     }
 }
@@ -1986,5 +2077,12 @@ private sealed interface YearInMusicRecapCard {
         override val label: String,
     ) : YearInMusicRecapCard {
         override val id: String = "listening_orbit_$year"
+    }
+
+    data class Finale(
+        val year: Int,
+        override val label: String,
+    ) : YearInMusicRecapCard {
+        override val id: String = "finale_$year"
     }
 }
