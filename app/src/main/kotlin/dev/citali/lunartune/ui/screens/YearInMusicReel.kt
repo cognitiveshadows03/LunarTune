@@ -367,7 +367,7 @@ private fun ReelIntroBody(
         )
     }
     Spacer(modifier = Modifier.height(40.dp))
-    ReelReveal(delayMs = 400) { ReelEqualizer(accent = accent) }
+    ReelReveal(delayMs = 400) { ReelEqualizer(color = accent) }
     Spacer(modifier = Modifier.height(40.dp))
     ReelReveal(delayMs = 600) {
         Text(
