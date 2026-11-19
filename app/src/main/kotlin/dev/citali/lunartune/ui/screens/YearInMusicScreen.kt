@@ -104,6 +104,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -905,53 +907,46 @@ private fun TotalsRecapCard(
     card: YearInMusicRecapCard.Totals,
     applySafeContentInsets: Boolean,
 ) {
+    val timeText = makeTimeString(card.totalListeningTime)
+    val playsText = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed)
+    val timeSentence = stringResource(R.string.year_in_music_totals_sentence, timeText)
+    val playsSentence = stringResource(R.string.year_in_music_plays_sentence, playsText)
     RecapCardContent(
         badge = stringResource(R.string.total_listening_time),
         footer = stringResource(R.string.year_in_music_totals_title),
-        verticalArrangement = Arrangement.SpaceBetween,
+        verticalArrangement = Arrangement.Center,
         applySafeContentInsets = applySafeContentInsets,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                text = stringResource(
-                    when {
-                        card.totalListeningTime < 60L * 60_000L -> R.string.recap_humour_short
-                        card.totalListeningTime < 1_000L * 60_000L -> R.string.recap_humour_medium
-                        else -> R.string.recap_humour_long
-                    },
-                ),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-                color = RecapCream,
-                lineHeight = 32.sp,
-            )
-            Text(
-                text = makeTimeString(card.totalListeningTime),
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = 58.sp),
-                fontWeight = FontWeight.Black,
-                color = RecapYellow,
-                lineHeight = 58.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
-                style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Black,
-                color = RecapCream,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(R.string.year_in_music_plays_label),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = RecapCream.copy(alpha = 0.7f),
-            )
-        }
+        // Sentence-first layout: the numbers are the only bold, bright parts of the card.
+        Text(
+            text =
+                buildAnnotatedString {
+                    append(timeSentence)
+                    val start = timeSentence.indexOf(timeText)
+                    if (start >= 0) {
+                        addStyle(SpanStyle(fontWeight = FontWeight.Black, color = RecapYellow), start, start + timeText.length)
+                    }
+                },
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Medium,
+            color = RecapCream.copy(alpha = 0.72f),
+            lineHeight = 46.sp,
+        )
+        Spacer(modifier = Modifier.height(28.dp))
+        Text(
+            text =
+                buildAnnotatedString {
+                    append(playsSentence)
+                    val start = playsSentence.indexOf(playsText)
+                    if (start >= 0) {
+                        addStyle(SpanStyle(fontWeight = FontWeight.Black, color = RecapCream), start, start + playsText.length)
+                    }
+                },
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Medium,
+            color = RecapCream.copy(alpha = 0.72f),
+            lineHeight = 34.sp,
+        )
     }
 }
 
@@ -1061,7 +1056,6 @@ private fun RankedArtistsRecapCard(
 ) {
     val standout = card.artists.firstOrNull()
     val accent = LocalRecapAccent.current
-    val heroShape = MaterialShapes.Cookie9Sided.toShape()
     RecapCardContent(
         badge = stringResource(R.string.top_artists),
         footer = stringResource(R.string.year_in_music_ranked_artists),
@@ -1069,6 +1063,7 @@ private fun RankedArtistsRecapCard(
         applySafeContentInsets = applySafeContentInsets,
     ) {
         if (standout != null) {
+            val minutes = (standout.timeListened?.toLong() ?: 0L) / 60_000L
             Column(
                 modifier =
                     Modifier
@@ -1078,39 +1073,44 @@ private fun RankedArtistsRecapCard(
                             onLongClick = { onArtistLongClick(standout) },
                         ),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(212.dp)
-                            .clip(heroShape)
-                            .background(RecapSurfaceHigh),
-                ) {
+                // Concentric rings framing the portrait, in the spirit of a wrapped story.
+                Box(modifier = Modifier.size(260.dp), contentAlignment = Alignment.Center) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        listOf(128.dp, 114.dp, 100.dp).forEachIndexed { i, radius ->
+                            drawCircle(
+                                color = accent.copy(alpha = 0.3f + i * 0.2f),
+                                radius = radius.toPx(),
+                                center = center,
+                                style = Stroke(width = 1.5.dp.toPx()),
+                            )
+                        }
+                    }
                     AsyncImage(
                         model = rememberShareSafeImageRequest(standout.artist.thumbnailUrl),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.size(196.dp).clip(CircleShape).background(RecapSurfaceHigh),
                     )
                 }
                 Text(
-                    text = standout.artist.name,
-                    style = MaterialTheme.typography.headlineLarge,
+                    text = stringResource(R.string.year_in_music_artist_headline, standout.artist.name),
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Black,
                     color = RecapCream,
                     textAlign = TextAlign.Center,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 36.sp,
+                    lineHeight = 34.sp,
                 )
                 Text(
-                    text = makeTimeString(standout.timeListened?.toLong()),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = accent,
+                    text = stringResource(
+                        R.string.year_in_music_artist_sentence,
+                        NumberFormat.getIntegerInstance().format(minutes),
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = RecapCream.copy(alpha = 0.78f),
                     textAlign = TextAlign.Center,
-                    maxLines = 1,
                 )
             }
         }

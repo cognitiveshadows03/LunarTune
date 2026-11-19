@@ -914,4 +914,8 @@
     <string name="year_in_music_highlight_reel">Highlight reel</string>
     <string name="year_in_music_summary_top_song">Top song</string>
     <string name="year_in_music_summary_top_artist">Top artist</string>
+    <string name="year_in_music_totals_sentence">You listened for %1$s of music.</string>
+    <string name="year_in_music_plays_sentence">You played %1$s songs.</string>
+    <string name="year_in_music_artist_headline">%1$s is your top artist.</string>
+    <string name="year_in_music_artist_sentence">You spent %1$s minutes with them.</string>
 </resources>
