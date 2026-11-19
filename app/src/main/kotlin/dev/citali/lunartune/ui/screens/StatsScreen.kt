@@ -98,6 +98,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -322,10 +323,19 @@ fun StatsScreen(
             // scrolling content passes under the header instead of being cut off at a hard edge.
             LazyColumn(
                 contentPadding =
-                    LocalPlayerAwareWindowInsets.current
-                        .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
-                        .add(WindowInsets(top = scaffoldPadding.calculateTopPadding() + 64.dp))
-                        .asPaddingValues(),
+                    run {
+                        val insetPadding =
+                            LocalPlayerAwareWindowInsets.current
+                                .only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+                                .asPaddingValues()
+                        val direction = LocalLayoutDirection.current
+                        PaddingValues(
+                            start = insetPadding.calculateStartPadding(direction),
+                            top = scaffoldPadding.calculateTopPadding() + 64.dp,
+                            end = insetPadding.calculateEndPadding(direction),
+                            bottom = insetPadding.calculateBottomPadding(),
+                        )
+                    },
                 modifier =
                     Modifier
                         .widthIn(max = 1040.dp)
