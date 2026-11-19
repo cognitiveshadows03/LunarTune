@@ -1942,7 +1942,7 @@ private fun RecapAtmosphere(
 }
 
 @Composable
-private fun RecapBackdrop(
+internal fun RecapBackdrop(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {

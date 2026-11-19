@@ -3,11 +3,9 @@ package dev.citali.lunartune.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -42,6 +40,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -63,12 +63,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
+import dev.citali.lunartune.constants.DisableBlurKey
+import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.YearInMusicUiState
 import java.text.NumberFormat
-import kotlinx.coroutines.delay
 
 /*
  * Highlight reel: a tap-driven story over the Year in Music stats.
@@ -79,6 +81,9 @@ import kotlinx.coroutines.delay
 private val ReelBlack = Color(0xFF070707)
 private val ReelRed = Color(0xFFFF0033)
 private val ReelCream = Color(0xFFFFF7F2)
+
+/** Chapter-local motion clock in ms. It only advances while the reel is playing, so holding to pause freezes the motion. */
+private val LocalReelClock = compositionLocalOf<() -> Float> { { Float.MAX_VALUE } }
 
 private enum class ReelChapter { INTRO, TOTALS, TOP_SONG, ARTISTS, ALBUMS, END }
 
@@ -147,28 +152,31 @@ internal fun YearInMusicReel(
 
     // Auto-advance timer. Press-and-hold pauses it; resuming keeps the elapsed time.
     LaunchedEffect(index, paused) {
-        if (paused || duration == 0L) return@LaunchedEffect
+        if (paused) return@LaunchedEffect
         var lastFrame = withFrameNanos { it }
-        while (elapsed < duration.toFloat()) {
+        while (true) {
             val now = withFrameNanos { it }
             elapsed += (now - lastFrame) / 1_000_000f
             lastFrame = now
+            if (duration > 0L && elapsed >= duration.toFloat()) break
         }
         next()
     }
 
+    val (disableBlur) = rememberPreference(DisableBlurKey, false)
     val accent by animateColorAsState(reelAccent(chapter), tween(600), label = "reelAccent")
     val progress = if (duration > 0L) (elapsed / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
     Box(modifier = Modifier.fillMaxSize().background(ReelBlack)) {
         // 1. Visuals only, no pointer input.
+        RecapBackdrop(enabled = !disableBlur, modifier = Modifier.fillMaxSize())
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.45f), ReelBlack, ReelBlack),
+                            listOf(accent.copy(alpha = 0.35f), ReelBlack.copy(alpha = 0.7f), ReelBlack.copy(alpha = 0.9f)),
                         ),
                     ),
         )
@@ -178,11 +186,14 @@ internal fun YearInMusicReel(
             label = "reelChapter",
             modifier = Modifier.fillMaxSize(),
         ) { i ->
-            ReelChapterBody(
-                chapter = chapters.getOrElse(i) { ReelChapter.END },
-                content = content,
-                accent = accent,
-            )
+            val clock: () -> Float = { if (i == index) elapsed else Float.MAX_VALUE }
+            CompositionLocalProvider(LocalReelClock provides clock) {
+                ReelChapterBody(
+                    chapter = chapters.getOrElse(i) { ReelChapter.END },
+                    content = content,
+                    accent = accent,
+                )
+            }
         }
 
         // 2. Full-screen tap zone: left third goes back, the rest goes forward, hold pauses.
@@ -350,7 +361,7 @@ private fun ReelIntroBody(
     content: YearInMusicUiState.Content,
     accent: Color,
 ) {
-    ReelReveal(delayMs = 0) {
+    ReelReveal(delayMs = 0, fromScale = 0.86f) {
         Text(
             text = content.selectedYear.toString(),
             style = MaterialTheme.typography.displayLarge,
@@ -427,7 +438,7 @@ private fun ReelTopSongBody(
     val minutes = (top.timeListened ?: 0L) / 60_000L
     ReelHeading(R.string.year_in_music_top_track, accent)
     Spacer(modifier = Modifier.height(24.dp))
-    ReelReveal(delayMs = 200) {
+    ReelReveal(delayMs = 200, fromScale = 0.84f) {
         AsyncImage(
             model = top.thumbnailUrl,
             contentDescription = null,
@@ -463,7 +474,7 @@ private fun ReelArtistsBody(
     ReelHeading(R.string.year_in_music_ranked_artists, accent)
     Spacer(modifier = Modifier.height(24.dp))
     content.topArtists.take(5).forEachIndexed { i, artist ->
-        ReelReveal(delayMs = 200 + i * 140) {
+        ReelReveal(delayMs = 200 + i * 140, fromX = 48.dp) {
             ReelRankRow(
                 rank = i + 1,
                 title = artist.artist.name,
@@ -484,7 +495,7 @@ private fun ReelAlbumsBody(
     ReelHeading(R.string.year_in_music_ranked_albums, accent)
     Spacer(modifier = Modifier.height(24.dp))
     content.topAlbums.take(5).forEachIndexed { i, album ->
-        ReelReveal(delayMs = 200 + i * 140) {
+        ReelReveal(delayMs = 200 + i * 140, fromX = 48.dp) {
             ReelRankRow(
                 rank = i + 1,
                 title = album.album.title,
@@ -549,12 +560,11 @@ private fun ReelCountUp(
     target: Long,
     color: Color,
 ) {
-    val animated = remember { Animatable(0f) }
-    LaunchedEffect(target) {
-        animated.animateTo(target.toFloat(), tween(1_400, easing = FastOutSlowInEasing))
-    }
+    val clock = LocalReelClock.current
+    val progress = reelProgress(clock(), delayMs = 0, durationMs = 1_400f)
+    val shown = target * FastOutSlowInEasing.transform(progress)
     Text(
-        text = NumberFormat.getIntegerInstance().format(animated.value.toLong()),
+        text = NumberFormat.getIntegerInstance().format(shown.toLong()),
         style = MaterialTheme.typography.displayMedium,
         fontWeight = FontWeight.Bold,
         color = color,
@@ -627,28 +637,34 @@ private fun ReelEqualizer(color: Color) {
     }
 }
 
-/** Fades and rises a block in after [delayMs]. Used for staggered card entrances. */
+private fun reelProgress(nowMs: Float, delayMs: Int, durationMs: Float): Float =
+    ((nowMs - delayMs) / durationMs).coerceIn(0f, 1f)
+
+/**
+ * Fades, rises, scales and slides a block in after [delayMs] on the chapter clock.
+ * Driven from draw, so it does not recompose and freezes while the reel is paused.
+ */
 @Composable
 private fun ReelReveal(
     delayMs: Int,
+    fromX: Dp = 0.dp,
+    fromScale: Float = 0.94f,
     content: @Composable () -> Unit,
 ) {
-    var shown by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(delayMs.toLong())
-        shown = true
-    }
-    val progress by animateFloatAsState(
-        targetValue = if (shown) 1f else 0f,
-        animationSpec = tween(550),
-        label = "reelReveal",
-    )
-    val travel = with(LocalDensity.current) { 32.dp.toPx() }
+    val clock = LocalReelClock.current
+    val density = LocalDensity.current
+    val travel = with(density) { 32.dp.toPx() }
+    val travelX = with(density) { fromX.toPx() }
     Box(
         modifier =
             Modifier.graphicsLayer {
-                alpha = progress
-                translationY = (1f - progress) * travel
+                val p = FastOutSlowInEasing.transform(reelProgress(clock(), delayMs, 550f))
+                alpha = p
+                translationY = (1f - p) * travel
+                translationX = (1f - p) * travelX
+                val scale = fromScale + (1f - fromScale) * p
+                scaleX = scale
+                scaleY = scale
             },
     ) {
         content()
