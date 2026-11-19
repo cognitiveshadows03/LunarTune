@@ -1125,6 +1125,458 @@ private fun RankedArtistsRecapCard(
 }
 
 @Composable
+private fun RankedAlbumsRecapCard(
+    card: YearInMusicRecapCard.RankedAlbums,
+    applySafeContentInsets: Boolean,
+) {
+    val standout = card.albums.firstOrNull()
+    RecapCardContent(
+        badge = stringResource(R.string.albums),
+        footer = stringResource(R.string.year_in_music_ranked_albums),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        applySafeContentInsets = applySafeContentInsets,
+    ) {
+        if (standout != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                AsyncImage(
+                    model = rememberShareSafeImageRequest(standout.thumbnailUrl),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(124.dp).clip(RoundedCornerShape(22.dp)).background(RecapSurfaceHigh),
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.albums).uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        color = RecapYellow,
+                    )
+                    Text(
+                        text = standout.album.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                        color = RecapCream,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 29.sp,
+                    )
+                    Text(
+                        text = standout.artists.take(2).joinToString(" / ") { it.name },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = RecapCream.copy(alpha = 0.76f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            card.albums.drop(1).take(4).forEachIndexed { index, album ->
+                RankedAlbumRow(rank = index + 2, album = album)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryRecapCard(
+    card: YearInMusicRecapCard.Summary,
+    applySafeContentInsets: Boolean,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(Color(0xFFFFD66E), Color(0xFFFF9E89), Color(0xFFE7B5FF)),
+                    ),
+                ).then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                .padding(horizontal = 24.dp, vertical = 22.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = stringResource(R.string.app_name).uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = RecapInk.copy(alpha = 0.68f),
+                )
+                Text(
+                    text = "${card.year} ${stringResource(R.string.year_in_music_recap_word)}",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Black,
+                    color = RecapInk,
+                    lineHeight = 42.sp,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = stringResource(R.string.year_in_music_minutes_label).uppercase(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                    color = RecapInk.copy(alpha = 0.72f),
+                )
+                Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = formatListeningMinutes(card.totalListeningTime),
+                        style = MaterialTheme.typography.displayLarge.copy(fontSize = 56.sp),
+                        fontWeight = FontWeight.Black,
+                        color = RecapInk,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = stringResource(R.string.year_in_music_minutes_unit).uppercase(),
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = RecapInk.copy(alpha = 0.75f),
+                    )
+                }
+                Text(
+                    text = "${NumberFormat.getIntegerInstance().format(card.totalSongsPlayed)} ${stringResource(R.string.year_in_music_plays_short)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = RecapInk.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                card.topSongs.firstOrNull()?.let { song ->
+                    FinalePick(
+                        label = stringResource(R.string.year_in_music_top_track),
+                        title = song.title,
+                        imageData = song.thumbnailUrl,
+                    )
+                }
+                card.topArtists.firstOrNull()?.let { artist ->
+                    FinalePick(
+                        label = stringResource(R.string.top_artists),
+                        title = artist.artist.name,
+                        imageData = artist.artist.thumbnailUrl,
+                    )
+                }
+                card.topAlbums.firstOrNull()?.let { album ->
+                    FinalePick(
+                        label = stringResource(R.string.albums),
+                        title = album.album.title,
+                        imageData = album.thumbnailUrl,
+                    )
+                }
+            }
+
+            LunarTuneBrand(contentColor = RecapInk)
+        }
+    }
+}
+
+@Composable
+private fun FinalePick(
+    label: String,
+    title: String?,
+    imageData: Any?,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(RecapInk.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = rememberShareSafeImageRequest(imageData),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+            )
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label.uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+                color = RecapInk.copy(alpha = 0.65f),
+                maxLines = 1,
+            )
+            Text(
+                text = title.orEmpty(),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Black,
+                color = RecapInk,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ListeningOrbitRecapCard(
+    card: YearInMusicRecapCard.ListeningOrbit,
+    applySafeContentInsets: Boolean,
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        ListeningOrbitAtmosphere(modifier = Modifier.fillMaxSize())
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors =
+                                listOf(
+                                    RecapBlack.copy(alpha = 0.26f),
+                                    Color.Transparent,
+                                    RecapBlack.copy(alpha = 0.44f),
+                                ),
+                        ),
+                    ).then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                    .padding(24.dp),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween,
+            ) {
+                // One centred stack, like the reference card: the line sits just
+                // above the totals instead of being pinned to the top edge.
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text(
+                        text = card.label,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = RecapCream,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(26.dp))
+                    OrbitRecapMetric(
+                        value = NumberFormat.getIntegerInstance().format(card.activeDays),
+                        label = stringResource(R.string.year_in_music_active_days),
+                    )
+                    Spacer(modifier = Modifier.height(22.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OrbitRecapMetric(
+                            value = NumberFormat.getIntegerInstance().format(card.totalSongsPlayed),
+                            label = stringResource(R.string.year_in_music_plays_short),
+                            modifier = Modifier.weight(1f),
+                        )
+                        OrbitRecapMetric(
+                            value = formatListeningMinutes(card.totalListeningTime),
+                            label = stringResource(R.string.year_in_music_minutes_unit),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
+                // Reference-style badge: the mark beside a stacked year and
+                // feature name, rather than the wordmark left and year right.
+                Row(
+                    modifier = Modifier.align(Alignment.Start),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.lunartune_brand_round),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier =
+                            Modifier
+                                .size(30.dp)
+                                .clip(CircleShape),
+                    )
+                    Column {
+                        Text(
+                            text = "${card.year}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            color = RecapCream,
+                        )
+                        Text(
+                            text = stringResource(R.string.year_in_music),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = RecapCream.copy(alpha = 0.78f),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OrbitRecapMetric(
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // Oversized and tight-tracked like the reference card, with the label
+        // tucked under the digits: the line height sits below the font size so
+        // the pair reads as one lockup instead of two separated rows.
+        Text(
+            text = value,
+            style =
+                MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 48.sp,
+                    lineHeight = 44.sp,
+                    letterSpacing = (-1.5).sp,
+                ),
+            fontWeight = FontWeight.Black,
+            color = RecapCream,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = label.replaceFirstChar { it.uppercase() },
+            style = MaterialTheme.typography.titleMedium.copy(lineHeight = 18.sp),
+            fontWeight = FontWeight.Bold,
+            color = RecapCream,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun ListeningOrbitAtmosphere(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        // Fully gradient backdrop: a deep green base, two warm glows and a
+        // vignette. The drawn swirl that preceded this read as a cartoon
+        // spiral on real hardware; gradients keep the colour story without
+        // the shape.
+        val baseCenter = Offset(size.width * 0.48f, size.height * 0.46f)
+        drawRect(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color(0xFF354B35), Color(0xFF172118), RecapBlack),
+                    center = baseCenter,
+                    radius = size.maxDimension * 0.78f,
+                ),
+            size = size,
+        )
+
+        val warmCenter = Offset(size.width * 0.82f, size.height * 0.23f)
+        val warmRadius = size.minDimension * 0.52f
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color(0xBFFF4326), Color(0x44FF4B28), Color.Transparent),
+                    center = warmCenter,
+                    radius = warmRadius,
+                ),
+            center = warmCenter,
+            radius = warmRadius,
+        )
+
+        val lowerCenter = Offset(size.width * 0.22f, size.height * 0.84f)
+        val lowerRadius = size.minDimension * 0.46f
+        drawCircle(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color(0x99FF8A38), Color(0x33FF5A2C), Color.Transparent),
+                    center = lowerCenter,
+                    radius = lowerRadius,
+                ),
+            center = lowerCenter,
+            radius = lowerRadius,
+        )
+
+        drawRect(
+            brush =
+                Brush.radialGradient(
+                    colors = listOf(Color.Transparent, RecapBlack.copy(alpha = 0.42f)),
+                    center = baseCenter,
+                    radius = size.maxDimension * 0.74f,
+                ),
+            size = size,
+        )
+    }
+}
+
+@Composable
+private fun LunarTuneBrand(
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Image(
+            painter = painterResource(R.drawable.lunartune_brand_round),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .size(28.dp)
+                    .clip(CircleShape),
+        )
+        Text(
+            text = stringResource(R.string.app_name),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+            color = contentColor,
+        )
+    }
+}
+
+private fun formatListeningMinutes(duration: Long): String {
+    val minutes = (duration / 60_000L).coerceAtLeast(if (duration > 0L) 1L else 0L)
+    return NumberFormat.getIntegerInstance().format(minutes)
+}
+
+@Composable
+private fun RecapCardContent(
+    badge: String,
+    footer: String,
+    verticalArrangement: Arrangement.Vertical,
+    applySafeContentInsets: Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
+                .padding(24.dp),
+        verticalArrangement = verticalArrangement,
+    ) {
+        RecapBadge(text = badge)
+        content()
+        Text(
+            text = footer,
+            style = MaterialTheme.typography.labelMedium,
+            color = RecapCream.copy(alpha = 0.58f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
 private fun RankedArtistRow(
     rank: Int,
     artist: Artist,
