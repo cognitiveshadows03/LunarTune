@@ -1051,7 +1051,6 @@ fun AppearanceSettings(navController: NavController) {
                 item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.liked_songs)) },
-                        description = stringResource(R.string.library_shortcut_cards_desc),
                         icon = { Icon(painterResource(R.drawable.favorite), null) },
                         checked = showLibraryCardLiked,
                         onCheckedChange = onShowLibraryCardLikedChange,
