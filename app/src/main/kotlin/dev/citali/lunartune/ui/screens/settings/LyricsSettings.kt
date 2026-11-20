@@ -76,6 +76,7 @@ import dev.citali.lunartune.constants.EnableBetterLyricsKey
 import dev.citali.lunartune.constants.EnableBetterLyricsPortatoKey
 import dev.citali.lunartune.constants.EnableKugouKey
 import dev.citali.lunartune.constants.EnableLrcLibKey
+import dev.citali.lunartune.constants.EnableLrcRedKey
 import dev.citali.lunartune.constants.EnableMegalobizLyricsKey
 import dev.citali.lunartune.constants.EnableMusixmatchLyricsKey
 import dev.citali.lunartune.constants.EnableSimpMusicLyricsKey
@@ -177,6 +178,7 @@ fun LyricsSettings(
     val (betterLyricsApiKey, onBetterLyricsApiKeyChange) = rememberPreference(BetterLyricsApiKeyKey, defaultValue = "")
     val (lyricsMode, onLyricsModeChange) = rememberEnumPreference(LyricsModeKey, defaultValue = LyricsMode.ENHANCED)
     val (enableLrclib, onEnableLrclibChange) = rememberPreference(key = EnableLrcLibKey, defaultValue = true)
+    val (enableLrcRed, onEnableLrcRedChange) = rememberPreference(key = EnableLrcRedKey, defaultValue = true)
     val (enableKugou, onEnableKugouChange) = rememberPreference(key = EnableKugouKey, defaultValue = true)
     val (enableBetterLyrics, onEnableBetterLyricsChange) = rememberPreference(key = EnableBetterLyricsKey, defaultValue = true)
     val (enableBetterLyricsPortato, onEnableBetterLyricsPortatoChange) =
@@ -552,6 +554,15 @@ fun LyricsSettings(
 
             item {
                 SwitchPreference(
+                    title = { Text(stringResource(R.string.enable_lrc_red_lyrics)) },
+                    icon = { Icon(painterResource(R.drawable.lyrics), null) },
+                    checked = enableLrcRed,
+                    onCheckedChange = onEnableLrcRedChange,
+                )
+            }
+
+            item {
+                SwitchPreference(
                     title = { Text(stringResource(R.string.enable_kugou)) },
                     icon = { Icon(painterResource(R.drawable.lyrics), null) },
                     checked = enableKugou,
@@ -751,6 +762,7 @@ private enum class PaxsenixServerStatus { Operational, Degraded, Down }
 private fun PreferredLyricsProvider.displayName(): String =
     when (this) {
         PreferredLyricsProvider.LRCLIB -> "LrcLib"
+        PreferredLyricsProvider.LRC_RED -> "lrc.red"
         PreferredLyricsProvider.KUGOU -> "KuGou"
         PreferredLyricsProvider.MEGALOBIZ -> "Megalobiz"
         PreferredLyricsProvider.MUSIXMATCH -> "Musixmatch"

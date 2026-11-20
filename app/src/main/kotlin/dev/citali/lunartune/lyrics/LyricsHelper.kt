@@ -42,6 +42,7 @@ class LyricsHelper
                 BetterLyricsPortatoProvider,
                 YouLyPlusLyricsProvider,
                 LrcLibLyricsProvider,
+                LrcRedLyricsProvider,
                 KuGouLyricsProvider,
                 MegalobizLyricsProvider,
                 MusixmatchLyricsProvider,
@@ -229,6 +230,7 @@ class LyricsHelper
             val providerMap: Map<PreferredLyricsProvider, LyricsProvider> =
                 mapOf(
                     PreferredLyricsProvider.LRCLIB to LrcLibLyricsProvider,
+                    PreferredLyricsProvider.LRC_RED to LrcRedLyricsProvider,
                     PreferredLyricsProvider.KUGOU to KuGouLyricsProvider,
                     PreferredLyricsProvider.MEGALOBIZ to MegalobizLyricsProvider,
                     PreferredLyricsProvider.BETTER_LYRICS to BetterLyricsProvider,

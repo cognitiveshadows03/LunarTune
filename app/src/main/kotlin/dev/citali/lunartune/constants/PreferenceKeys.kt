@@ -193,6 +193,7 @@ val ContentCountryKey = stringPreferencesKey("contentCountry")
 val PlaylistSuggestionSourceKey = stringPreferencesKey("playlistSuggestionSource")
 val EnableKugouKey = booleanPreferencesKey("enableKugou")
 val EnableLrcLibKey = booleanPreferencesKey("enableLrclib")
+val EnableLrcRedKey = booleanPreferencesKey("enableLrcRed")
 val EnableBetterLyricsKey = booleanPreferencesKey("enableBetterLyrics")
 val EnableBetterLyricsPortatoKey = booleanPreferencesKey("enableBetterLyricsPortato")
 
@@ -688,6 +689,7 @@ enum class PreferredLyricsProvider {
     BETTER_LYRICS_PORTATO,
     YOULY_PLUS,
     LRCLIB,
+    LRC_RED,
     KUGOU,
     MEGALOBIZ,
     MUSIXMATCH,
@@ -701,6 +703,7 @@ val DefaultLyricsProviderOrder =
         PreferredLyricsProvider.BETTER_LYRICS_PORTATO,
         PreferredLyricsProvider.YOULY_PLUS,
         PreferredLyricsProvider.LRCLIB,
+        PreferredLyricsProvider.LRC_RED,
         PreferredLyricsProvider.KUGOU,
         PreferredLyricsProvider.MEGALOBIZ,
         PreferredLyricsProvider.MUSIXMATCH,
