@@ -10,6 +10,7 @@
 package dev.citali.lunartune.ui.menu
 
 import android.content.Intent
+import android.content.Context
 import android.media.audiofx.AudioEffect
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -101,6 +102,7 @@ import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
 import dev.citali.lunartune.constants.SpeedDialSongIdsKey
 import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.playback.CanvasArtworkRefetchResult
+import dev.citali.lunartune.playback.PlayerConnection
 import dev.citali.lunartune.playback.ExoDownloadService
 import dev.citali.lunartune.ui.component.BottomSheetState
 import dev.citali.lunartune.ui.component.ListDialog
@@ -1171,35 +1173,7 @@ private fun VolumeSliderL(
 
 @Composable
 fun TempoPitchDialog(onDismiss: () -> Unit) {
-    val playerConnection = LocalPlayerConnection.current ?: return
-    val initialSpeed = remember { playerConnection.player.playbackParameters.speed }
-    val initialPitch = remember { playerConnection.player.playbackParameters.pitch }
-    val context = LocalContext.current
-
-    var tempo by remember {
-        mutableFloatStateOf(initialSpeed.safeCoerceIn(TempoMin, TempoMax, fallback = 1f))
-    }
-
-    var pitch by remember {
-        mutableFloatStateOf(initialPitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f))
-    }
-
-    var pitchMode by rememberSaveable {
-        mutableStateOf(
-            if (isPitchSemitoneAligned(pitch)) PitchMode.Semitones else PitchMode.Multiplier,
-        )
-    }
-
-    val applyPlaybackParameters: (Float, Float) -> Unit = { speed, pitchMultiplier ->
-        val safeSpeed = speed.coerceIn(TempoMin, TempoMax)
-        val safePitch = pitchMultiplier.coerceIn(PitchMin, PitchMax)
-        playerConnection.player.playbackParameters = PlaybackParameters(safeSpeed, safePitch)
-        // Keep the values across app restarts; MusicService re-applies them on start.
-        PreferenceStore.launchEdit(context.dataStore) {
-            this[PlaybackSpeedKey] = safeSpeed
-            this[PlaybackPitchKey] = safePitch
-        }
-    }
+    val controller = rememberTempoPitchController() ?: return
 
     AlertDialog(
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -1209,11 +1183,7 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
         },
         dismissButton = {
             TextButton(
-                onClick = {
-                    tempo = 1f
-                    pitch = 1f
-                    applyPlaybackParameters(tempo, pitch)
-                },
+                onClick = controller::reset,
                 shapes = ButtonDefaults.shapes(),
             ) {
                 Text(stringResource(R.string.reset))
@@ -1228,279 +1198,344 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
             }
         },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(18.dp),
+            TempoPitchControls(
+                controller = controller,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp, vertical = 12.dp),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.speed),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                    )
-
-                    Text(
-                        text = stringResource(R.string.tempo),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    Text(
-                        text = "x${formatMultiplier(tempo)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.End,
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    IconButton(
-                        enabled = tempo > TempoMin,
-                        onClick = {
-                            tempo = (tempo - 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
-                            applyPlaybackParameters(tempo, pitch)
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.remove),
-                            contentDescription = null,
-                        )
-                    }
-
-                    Slider(
-                        value = multiplierToSlider(tempo),
-                        onValueChange = { slider ->
-                            val updated = sliderToMultiplier(slider).quantize(0.01f)
-                            if (abs(updated - tempo) >= 0.005f) {
-                                tempo = updated
-                                applyPlaybackParameters(tempo, pitch)
-                            }
-                        },
-                        valueRange = 0f..1f,
-                        modifier = Modifier.weight(1f),
-                        colors = SliderDefaults.colors(),
-                    )
-
-                    IconButton(
-                        enabled = tempo < TempoMax,
-                        onClick = {
-                            tempo = (tempo + 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
-                            applyPlaybackParameters(tempo, pitch)
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.add),
-                            contentDescription = null,
-                        )
-                    }
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                ) {
-                    val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                    presets.forEach { preset ->
-                        val selected = abs(tempo - preset) < 0.005f
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                tempo = preset
-                                applyPlaybackParameters(tempo, pitch)
-                            },
-                            label = { Text("x${formatMultiplier(preset)}") },
-                        )
-                    }
-                }
-
-                HorizontalDivider()
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.discover_tune),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                    )
-
-                    Text(
-                        text = stringResource(R.string.pitch),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-
-                    Text(
-                        text =
-                            when (pitchMode) {
-                                PitchMode.Semitones -> {
-                                    val semitones = pitchToSemitones(pitch)
-                                    "${if (semitones > 0) "+" else ""}$semitones"
-                                }
-
-                                PitchMode.Multiplier -> {
-                                    "x${formatMultiplier(pitch)}"
-                                }
-                            },
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.End,
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                ) {
-                    FilterChip(
-                        selected = pitchMode == PitchMode.Semitones,
-                        onClick = { pitchMode = PitchMode.Semitones },
-                        label = { Text(stringResource(R.string.pitch_mode_semitones_short)) },
-                    )
-                    FilterChip(
-                        selected = pitchMode == PitchMode.Multiplier,
-                        onClick = { pitchMode = PitchMode.Multiplier },
-                        label = { Text(stringResource(R.string.pitch_mode_multiplier_short)) },
-                    )
-                }
-
-                when (pitchMode) {
-                    PitchMode.Semitones -> {
-                        val currentSemitones = pitchToSemitones(pitch)
-                        Slider(
-                            value = currentSemitones.toFloat(),
-                            onValueChange = { slider ->
-                                val semitones = slider.roundToInt().coerceIn(-12, 12)
-                                val updated = semitonesToPitch(semitones)
-                                if (abs(updated - pitch) >= 0.0005f) {
-                                    pitch = updated
-                                    applyPlaybackParameters(tempo, pitch)
-                                }
-                            },
-                            valueRange = -12f..12f,
-                            steps = 23,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = SliderDefaults.colors(),
-                        )
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                        ) {
-                            val presets = listOf(-12, -7, -5, 0, 5, 7, 12)
-                            presets.forEach { preset ->
-                                val selected = currentSemitones == preset
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        pitch = semitonesToPitch(preset)
-                                        applyPlaybackParameters(tempo, pitch)
-                                    },
-                                    label = { Text("${if (preset > 0) "+" else ""}$preset") },
-                                )
-                            }
-                        }
-                    }
-
-                    PitchMode.Multiplier -> {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            IconButton(
-                                enabled = pitch > PitchMin,
-                                onClick = {
-                                    pitch = (pitch - 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
-                                    applyPlaybackParameters(tempo, pitch)
-                                },
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.remove),
-                                    contentDescription = null,
-                                )
-                            }
-
-                            Slider(
-                                value = multiplierToSlider(pitch),
-                                onValueChange = { slider ->
-                                    val updated = sliderToMultiplier(slider).quantize(0.01f)
-                                    if (abs(updated - pitch) >= 0.005f) {
-                                        pitch = updated
-                                        applyPlaybackParameters(tempo, pitch)
-                                    }
-                                },
-                                valueRange = 0f..1f,
-                                modifier = Modifier.weight(1f),
-                                colors = SliderDefaults.colors(),
-                            )
-
-                            IconButton(
-                                enabled = pitch < PitchMax,
-                                onClick = {
-                                    pitch = (pitch + 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
-                                    applyPlaybackParameters(tempo, pitch)
-                                },
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.add),
-                                    contentDescription = null,
-                                )
-                            }
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState()),
-                        ) {
-                            val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
-                            presets.forEach { preset ->
-                                val selected = abs(pitch - preset) < 0.005f
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        pitch = preset
-                                        applyPlaybackParameters(tempo, pitch)
-                                    },
-                                    label = { Text("x${formatMultiplier(preset)}") },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            )
         },
     )
 }
 
-private enum class PitchMode {
+/**
+ * Tempo and pitch controls. Used by the player menu dialog and inline on the Audio FX page.
+ */
+@Composable
+internal fun TempoPitchControls(
+    controller: TempoPitchController,
+    modifier: Modifier = Modifier,
+) {
+    var tempo by controller.tempo
+    var pitch by controller.pitch
+    var pitchMode by controller.pitchMode
+    val applyPlaybackParameters: (Float, Float) -> Unit = controller::applyParameters
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+        modifier = modifier,
+    ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.speed),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
+
+                Text(
+                    text = stringResource(R.string.tempo),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+
+                Text(
+                    text = "x${formatMultiplier(tempo)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.End,
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                IconButton(
+                    enabled = tempo > TempoMin,
+                    onClick = {
+                        tempo = (tempo - 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
+                        applyPlaybackParameters(tempo, pitch)
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.remove),
+                        contentDescription = null,
+                    )
+                }
+
+                Slider(
+                    value = multiplierToSlider(tempo),
+                    onValueChange = { slider ->
+                        val updated = sliderToMultiplier(slider).quantize(0.01f)
+                        if (abs(updated - tempo) >= 0.005f) {
+                            tempo = updated
+                            applyPlaybackParameters(tempo, pitch)
+                        }
+                    },
+                    valueRange = 0f..1f,
+                    modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(),
+                )
+
+                IconButton(
+                    enabled = tempo < TempoMax,
+                    onClick = {
+                        tempo = (tempo + 0.01f).coerceIn(TempoMin, TempoMax).quantize(0.01f)
+                        applyPlaybackParameters(tempo, pitch)
+                    },
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.add),
+                        contentDescription = null,
+                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+            ) {
+                val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                presets.forEach { preset ->
+                    val selected = abs(tempo - preset) < 0.005f
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            tempo = preset
+                            applyPlaybackParameters(tempo, pitch)
+                        },
+                        label = { Text("x${formatMultiplier(preset)}") },
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.discover_tune),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
+
+                Text(
+                    text = stringResource(R.string.pitch),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+
+                Text(
+                    text =
+                        when (pitchMode) {
+                            PitchMode.Semitones -> {
+                                val semitones = pitchToSemitones(pitch)
+                                "${if (semitones > 0) "+" else ""}$semitones"
+                            }
+
+                            PitchMode.Multiplier -> {
+                                "x${formatMultiplier(pitch)}"
+                            }
+                        },
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.End,
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+            ) {
+                FilterChip(
+                    selected = pitchMode == PitchMode.Semitones,
+                    onClick = { pitchMode = PitchMode.Semitones },
+                    label = { Text(stringResource(R.string.pitch_mode_semitones_short)) },
+                )
+                FilterChip(
+                    selected = pitchMode == PitchMode.Multiplier,
+                    onClick = { pitchMode = PitchMode.Multiplier },
+                    label = { Text(stringResource(R.string.pitch_mode_multiplier_short)) },
+                )
+            }
+
+            when (pitchMode) {
+                PitchMode.Semitones -> {
+                    val currentSemitones = pitchToSemitones(pitch)
+                    Slider(
+                        value = currentSemitones.toFloat(),
+                        onValueChange = { slider ->
+                            val semitones = slider.roundToInt().coerceIn(-12, 12)
+                            val updated = semitonesToPitch(semitones)
+                            if (abs(updated - pitch) >= 0.0005f) {
+                                pitch = updated
+                                applyPlaybackParameters(tempo, pitch)
+                            }
+                        },
+                        valueRange = -12f..12f,
+                        steps = 23,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = SliderDefaults.colors(),
+                    )
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                    ) {
+                        val presets = listOf(-12, -7, -5, 0, 5, 7, 12)
+                        presets.forEach { preset ->
+                            val selected = currentSemitones == preset
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    pitch = semitonesToPitch(preset)
+                                    applyPlaybackParameters(tempo, pitch)
+                                },
+                                label = { Text("${if (preset > 0) "+" else ""}$preset") },
+                            )
+                        }
+                    }
+                }
+
+                PitchMode.Multiplier -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        IconButton(
+                            enabled = pitch > PitchMin,
+                            onClick = {
+                                pitch = (pitch - 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
+                                applyPlaybackParameters(tempo, pitch)
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.remove),
+                                contentDescription = null,
+                            )
+                        }
+
+                        Slider(
+                            value = multiplierToSlider(pitch),
+                            onValueChange = { slider ->
+                                val updated = sliderToMultiplier(slider).quantize(0.01f)
+                                if (abs(updated - pitch) >= 0.005f) {
+                                    pitch = updated
+                                    applyPlaybackParameters(tempo, pitch)
+                                }
+                            },
+                            valueRange = 0f..1f,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(),
+                        )
+
+                        IconButton(
+                            enabled = pitch < PitchMax,
+                            onClick = {
+                                pitch = (pitch + 0.01f).coerceIn(PitchMin, PitchMax).quantize(0.01f)
+                                applyPlaybackParameters(tempo, pitch)
+                            },
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.add),
+                                contentDescription = null,
+                            )
+                        }
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                    ) {
+                        val presets = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+                        presets.forEach { preset ->
+                            val selected = abs(pitch - preset) < 0.005f
+                            FilterChip(
+                                selected = selected,
+                                onClick = {
+                                    pitch = preset
+                                    applyPlaybackParameters(tempo, pitch)
+                                },
+                                label = { Text("x${formatMultiplier(preset)}") },
+                            )
+                        }
+                    }
+                }
+            }
+    }
+}
+
+/** Holds tempo and pitch state. Each change goes to the player and is saved to preferences. */
+internal class TempoPitchController(
+    private val playerConnection: PlayerConnection,
+    private val context: Context,
+) {
+    val tempo =
+        mutableFloatStateOf(
+            playerConnection.player.playbackParameters.speed.safeCoerceIn(TempoMin, TempoMax, fallback = 1f),
+        )
+    val pitch =
+        mutableFloatStateOf(
+            playerConnection.player.playbackParameters.pitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f),
+        )
+    val pitchMode =
+        mutableStateOf(
+            if (isPitchSemitoneAligned(pitch.floatValue)) PitchMode.Semitones else PitchMode.Multiplier,
+        )
+
+    fun applyParameters(
+        speed: Float,
+        pitchMultiplier: Float,
+    ) {
+        val safeSpeed = speed.coerceIn(TempoMin, TempoMax)
+        val safePitch = pitchMultiplier.coerceIn(PitchMin, PitchMax)
+        playerConnection.player.playbackParameters = PlaybackParameters(safeSpeed, safePitch)
+        // Keep the values across app restarts; MusicService re-applies them on start.
+        PreferenceStore.launchEdit(context.dataStore) {
+            this[PlaybackSpeedKey] = safeSpeed
+            this[PlaybackPitchKey] = safePitch
+        }
+    }
+
+    fun reset() {
+        tempo.floatValue = 1f
+        pitch.floatValue = 1f
+        applyParameters(1f, 1f)
+    }
+}
+
+@Composable
+internal fun rememberTempoPitchController(): TempoPitchController? {
+    val playerConnection = LocalPlayerConnection.current ?: return null
+    val context = LocalContext.current.applicationContext
+    return remember(playerConnection) { TempoPitchController(playerConnection, context) }
+}
+
+internal enum class PitchMode {
     Semitones,
     Multiplier,
 }

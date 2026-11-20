@@ -322,6 +322,10 @@ val ReverbMixKey = intPreferencesKey("reverbMix")
 val ReverbRoomSizeKey = intPreferencesKey("reverbRoomSize")
 val ReverbDampingKey = intPreferencesKey("reverbDamping")
 val ReverbPreDelayKey = intPreferencesKey("reverbPreDelayMs")
+val ReverbWetKey = intPreferencesKey("reverbWet")
+val ReverbDryKey = intPreferencesKey("reverbDry")
+val ReverbWidthKey = intPreferencesKey("reverbWidth")
+val ReverbLowCutKey = intPreferencesKey("reverbLowCutHz")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
 enum class AudioQuality {

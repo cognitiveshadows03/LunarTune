@@ -237,6 +237,11 @@
     <string name="reverb_room_size">Room size</string>
     <string name="reverb_damping">Damping</string>
     <string name="reverb_pre_delay">Pre-delay</string>
+    <string name="reverb_wet">Wet</string>
+    <string name="reverb_dry">Dry</string>
+    <string name="reverb_width">Width</string>
+    <string name="reverb_low_cut">Low cut</string>
+    <string name="reverb_fine_tune">Fine tune</string>
     <string name="tempo">Tempo</string>
     <string name="pitch">Pitch</string>
     <string name="pitch_mode_semitones_short">st</string>
