@@ -95,8 +95,6 @@ import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.constants.DynamicThemeKey
 import dev.citali.lunartune.constants.FontPreferenceKey
 import dev.citali.lunartune.constants.ForceHighRefreshRateKey
-import dev.citali.lunartune.constants.GridItemSize
-import dev.citali.lunartune.constants.GridItemsSizeKey
 import dev.citali.lunartune.constants.HidePlayerThumbnailKey
 import dev.citali.lunartune.constants.LibraryChipOrderKey
 import dev.citali.lunartune.constants.LibraryFilter
@@ -280,12 +278,6 @@ fun AppearanceSettings(navController: NavController) {
             SwipeSensitivityKey,
             defaultValue = 0.73f,
         )
-    val (gridItemSize, onGridItemSizeChange) =
-        rememberEnumPreference(
-            GridItemsSizeKey,
-            defaultValue = GridItemSize.SMALL,
-        )
-
     val (swipeToSong, onSwipeToSongChange) =
         rememberPreference(
             SwipeToSongKey,

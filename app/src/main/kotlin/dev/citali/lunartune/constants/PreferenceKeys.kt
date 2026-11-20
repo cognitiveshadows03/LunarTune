@@ -33,7 +33,6 @@ val FontPreferenceKey = stringPreferencesKey("fontPreference")
 val CustomFontUriKey = stringPreferencesKey("customFontUri")
 val CustomFontNameKey = stringPreferencesKey("customFontName")
 val DefaultOpenTabKey = stringPreferencesKey("defaultOpenTab")
-val GridItemsSizeKey = stringPreferencesKey("gridItemSize")
 val SliderStyleKey = stringPreferencesKey("sliderStyle")
 val SwipeToSongKey = booleanPreferencesKey("SwipeToSong")
 val PlayerDesignStyleKey = stringPreferencesKey("playerDesignStyle")
@@ -203,12 +202,6 @@ val EnableYouLyPlusLyricsKey = booleanPreferencesKey("enableYouLyPlusLyrics")
 val EnableSimpMusicLyricsKey = booleanPreferencesKey("enableSimpMusicLyrics")
 val EnableMegalobizLyricsKey = booleanPreferencesKey("enableMegalobizLyrics")
 val EnableMusixmatchLyricsKey = booleanPreferencesKey("enableMusixmatchLyrics")
-val EnablePaxsenixLyricsKey = booleanPreferencesKey("enablePaxsenixLyrics")
-val EnablePaxsenixAppleMusicLyricsKey = booleanPreferencesKey("enablePaxsenixAppleMusicLyrics")
-val EnablePaxsenixNeteaseLyricsKey = booleanPreferencesKey("enablePaxsenixNeteaseLyrics")
-val EnablePaxsenixSpotifyLyricsKey = booleanPreferencesKey("enablePaxsenixSpotifyLyrics")
-val EnablePaxsenixMusixmatchLyricsKey = booleanPreferencesKey("enablePaxsenixMusixmatchLyrics")
-val EnablePaxsenixYouTubeLyricsKey = booleanPreferencesKey("enablePaxsenixYouTubeLyrics")
 val EnableUnisonLyricsKey = booleanPreferencesKey("enableUnisonLyrics")
 val HideExplicitKey = booleanPreferencesKey("hideExplicit")
 val HideVideoKey = booleanPreferencesKey("hideVideo")
@@ -469,7 +462,6 @@ val DiscordTokenKey = stringPreferencesKey("discordToken")
 val DiscordRefreshTokenKey = stringPreferencesKey("discordRefreshToken")
 val DiscordTokenExpiresAtKey = longPreferencesKey("discordTokenExpiresAt")
 val DiscordApplicationIdKey = stringPreferencesKey("discordApplicationId")
-val DiscordInfoDismissedKey = booleanPreferencesKey("discordInfoDismissed")
 val DiscordUsernameKey = stringPreferencesKey("discordUsername")
 val DiscordNameKey = stringPreferencesKey("discordName")
 val DiscordAvatarUrlKey = stringPreferencesKey("discordAvatarUrl")
@@ -514,8 +506,6 @@ val EnableTranslatorKey = booleanPreferencesKey("enableTranslator")
 val ChipSortTypeKey = stringPreferencesKey("chipSortType")
 val SongSortTypeKey = stringPreferencesKey("songSortType")
 val SongSortDescendingKey = booleanPreferencesKey("songSortDescending")
-val PlaylistSongSortTypeKey = stringPreferencesKey("playlistSongSortType")
-val PlaylistSongSortDescendingKey = booleanPreferencesKey("playlistSongSortDescending")
 val AutoPlaylistSongSortTypeKey = stringPreferencesKey("autoPlaylistSongSortType")
 val AutoPlaylistSongSortDescendingKey = booleanPreferencesKey("autoPlaylistSongSortDescending")
 val ArtistSortTypeKey = stringPreferencesKey("artistSortType")
@@ -526,28 +516,18 @@ val PlaylistSortTypeKey = stringPreferencesKey("playlistSortType")
 val PlaylistSortDescendingKey = booleanPreferencesKey("playlistSortDescending")
 val ArtistSongSortTypeKey = stringPreferencesKey("artistSongSortType")
 val ArtistSongSortDescendingKey = booleanPreferencesKey("artistSongSortDescending")
-val MixSortTypeKey = stringPreferencesKey("mixSortType")
-val MixSortDescendingKey = booleanPreferencesKey("albumSortDescending")
 
 val SongFilterKey = stringPreferencesKey("songFilter")
 val ArtistFilterKey = stringPreferencesKey("artistFilter")
 val AlbumFilterKey = stringPreferencesKey("albumFilter")
 
-val LastLikeSongSyncKey = longPreferencesKey("last_like_song_sync")
-val LastLibSongSyncKey = longPreferencesKey("last_library_song_sync")
-val LastAlbumSyncKey = longPreferencesKey("last_album_sync")
-val LastArtistSyncKey = longPreferencesKey("last_artist_sync")
-val LastPlaylistSyncKey = longPreferencesKey("last_playlist_sync")
 val LastFullSyncAtKey = longPreferencesKey("last_full_sync_at")
 
-val ArtistViewTypeKey = stringPreferencesKey("artistViewType")
-val AlbumViewTypeKey = stringPreferencesKey("albumViewType")
 
 val PlaylistEditLockKey = booleanPreferencesKey("playlistEditLock")
 val QuickPicksKey = stringPreferencesKey("discover")
 
 val SpeedDialSongIdsKey = stringPreferencesKey("speedDialSongIds")
-val PreferredLyricsProviderKey = stringPreferencesKey("lyricsProvider")
 val LyricsProviderOrderKey = stringPreferencesKey("lyricsProviderOrder")
 val QueueEditLockKey = booleanPreferencesKey("queueEditLock")
 
@@ -648,10 +628,6 @@ enum class MixSortType {
     LAST_UPDATED,
 }
 
-enum class GridItemSize {
-    BIG,
-    SMALL,
-}
 
 enum class MyTopFilter {
     ALL_TIME,
@@ -862,7 +838,6 @@ val LyricsRomanizeChineseKey = booleanPreferencesKey("lyricsRomanizeChinese")
 val LyricsRomanizeHindiKey = booleanPreferencesKey("lyricsRomanizeHindi")
 val LyricsRomanizeOtherLanguagesKey = booleanPreferencesKey("lyricsRomanizeOtherLanguages")
 val TranslateLyricsKey = booleanPreferencesKey("translateLyrics")
-val UseLyricsV2Key = booleanPreferencesKey("useLyricsV2")
 val LyricsModeKey = stringPreferencesKey("lyricsMode")
 
 enum class LyricsMode {
@@ -925,7 +900,6 @@ val SpotifyLibraryPlaylistsCacheKey = stringPreferencesKey("spotify_library_play
 val WebClientPoTokenEnabledKey = booleanPreferencesKey("webClientPoTokenEnabled")
 val PoTokenGvsKey = stringPreferencesKey("poTokenGvs")
 val PoTokenPlayerKey = stringPreferencesKey("poTokenPlayer")
-val UseVisitorDataKey = booleanPreferencesKey("useVisitorData")
 val PoTokenSourceUrlKey = stringPreferencesKey("poTokenSourceUrl")
 
 val LanguageCodeToName =
@@ -1102,7 +1076,6 @@ enum class TabTransitionStyle {
     SPRING_SLIDE,
 }
 
-val TabTransitionKey = stringPreferencesKey("tabTransition")
 
 val HideStatusBarKey = booleanPreferencesKey("hideStatusBar")
 

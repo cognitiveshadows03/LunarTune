@@ -50,7 +50,6 @@ import dev.citali.lunartune.constants.LowDataModeKey
 import dev.citali.lunartune.constants.LyricsAutoHidePlayerControlsKey
 import dev.citali.lunartune.constants.LyricsClickKey
 import dev.citali.lunartune.constants.LyricsScrollKey
-import dev.citali.lunartune.constants.NetworkMeteredKey
 import dev.citali.lunartune.constants.PauseListenHistoryKey
 import dev.citali.lunartune.constants.PauseOnDeviceMuteKey
 import dev.citali.lunartune.constants.PauseSearchHistoryKey
@@ -70,7 +69,6 @@ import dev.citali.lunartune.constants.SmartTrimmerKey
 import dev.citali.lunartune.constants.StopMusicOnTaskClearKey
 import dev.citali.lunartune.constants.SwipeToSongKey
 import dev.citali.lunartune.constants.TranslateLyricsKey
-import dev.citali.lunartune.constants.UseLyricsV2Key
 import dev.citali.lunartune.constants.UseSystemFontKey
 import dev.citali.lunartune.constants.WakelockKey
 import dev.citali.lunartune.utils.rememberPreference
@@ -211,7 +209,6 @@ fun buildSettingsGroups(
                 SettingsChild("Lyrics provider", "lyrics_provider", listOf("lyrics provider", "source", "lrclib", "kugou", "netease", "musixmatch", "paxsenix", "betterlyrics", "portato", "youlyplus", "unison", "simpmusic", "megalobiz")),
                 SettingsChild("Lyrics mode", "lyrics_mode", listOf("lyrics mode", "lyrics style", "lyrics display mode", "karaoke mode")),
                 SettingsChild("Show lyrics", "show_lyrics", listOf("show lyrics", "display lyrics", "lyrics toggle", "lyrics show")) { SearchResultSwitch(ShowLyricsKey, false) },
-                SettingsChild("Use lyrics V2", "use_lyrics_v2", listOf("lyrics v2", "new lyrics", "lyrics engine")) { SearchResultSwitch(UseLyricsV2Key, true) },
                 SettingsChild("Translate lyrics", "translate_lyrics", listOf("translate", "translation", "lyrics translation")) { SearchResultSwitch(TranslateLyricsKey, false) },
                 SettingsChild("Enable translator", "enable_translator", listOf("translator", "translation engine", "lyrics translator")) { SearchResultSwitch(EnableTranslatorKey, false) },
                 SettingsChild("Lyrics font size", "lyrics_font_size", listOf("font size", "lyrics size", "text size", "lyrics text size")),
@@ -279,7 +276,6 @@ fun buildSettingsGroups(
                 SettingsChild("Haptics", "haptics", listOf("haptic", "vibration", "haptic feedback", "vibrate")) { SearchResultSwitch(EnableHapticFeedbackKey, true) },
                 SettingsChild("Haptic strength", "haptic_strength", listOf("haptics", "vibration strength", "intensity", "texture", "slider")),
                 SettingsChild("Disable screenshot", "disable_screenshot", listOf("screenshot", "screen capture", "privacy", "no screenshot")) { SearchResultSwitch(DisableScreenshotKey, false) },
-                SettingsChild("Network metered", "network_metered", listOf("metered", "mobile data", "cellular", "data saver")) { SearchResultSwitch(NetworkMeteredKey, false) },
                 SettingsChild("Show tags in library", "show_tags_in_library", listOf("tags", "library tags", "show tags")),
             ),
         )

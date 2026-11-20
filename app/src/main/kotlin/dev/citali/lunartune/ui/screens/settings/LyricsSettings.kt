@@ -78,12 +78,6 @@ import dev.citali.lunartune.constants.EnableKugouKey
 import dev.citali.lunartune.constants.EnableLrcLibKey
 import dev.citali.lunartune.constants.EnableMegalobizLyricsKey
 import dev.citali.lunartune.constants.EnableMusixmatchLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixAppleMusicLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixMusixmatchLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixNeteaseLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixSpotifyLyricsKey
-import dev.citali.lunartune.constants.EnablePaxsenixYouTubeLyricsKey
 import dev.citali.lunartune.constants.EnableSimpMusicLyricsKey
 import dev.citali.lunartune.constants.EnableUnisonLyricsKey
 import dev.citali.lunartune.constants.EnableYouLyPlusLyricsKey
@@ -192,32 +186,6 @@ fun LyricsSettings(
     val (enableSimpMusicLyrics, onEnableSimpMusicLyricsChange) = rememberPreference(key = EnableSimpMusicLyricsKey, defaultValue = true)
     val (enableMegalobizLyrics, onEnableMegalobizLyricsChange) = rememberPreference(key = EnableMegalobizLyricsKey, defaultValue = true)
     val (enableMusixmatchLyrics, onEnableMusixmatchLyricsChange) = rememberPreference(key = EnableMusixmatchLyricsKey, defaultValue = true)
-    val (enablePaxsenixLyrics, onEnablePaxsenixLyricsChange) = rememberPreference(key = EnablePaxsenixLyricsKey, defaultValue = true)
-    val (enablePaxsenixAppleMusicLyrics, onEnablePaxsenixAppleMusicLyricsChange) =
-        rememberPreference(
-            key = EnablePaxsenixAppleMusicLyricsKey,
-            defaultValue = true,
-        )
-    val (enablePaxsenixNeteaseLyrics, onEnablePaxsenixNeteaseLyricsChange) =
-        rememberPreference(
-            key = EnablePaxsenixNeteaseLyricsKey,
-            defaultValue = true,
-        )
-    val (enablePaxsenixSpotifyLyrics, onEnablePaxsenixSpotifyLyricsChange) =
-        rememberPreference(
-            key = EnablePaxsenixSpotifyLyricsKey,
-            defaultValue = true,
-        )
-    val (enablePaxsenixMusixmatchLyrics, onEnablePaxsenixMusixmatchLyricsChange) =
-        rememberPreference(
-            key = EnablePaxsenixMusixmatchLyricsKey,
-            defaultValue = true,
-        )
-    val (enablePaxsenixYouTubeLyrics, onEnablePaxsenixYouTubeLyricsChange) =
-        rememberPreference(
-            key = EnablePaxsenixYouTubeLyricsKey,
-            defaultValue = true,
-        )
     val (enableUnisonLyrics, onEnableUnisonLyricsChange) = rememberPreference(key = EnableUnisonLyricsKey, defaultValue = true)
     val (providerOrderStr, onProviderOrderStrChange) =
         rememberPreference(
