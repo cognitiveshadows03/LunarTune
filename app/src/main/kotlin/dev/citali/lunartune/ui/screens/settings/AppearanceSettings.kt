@@ -637,7 +637,9 @@ fun AppearanceSettings(navController: NavController) {
                         onCheckedChange = onPureBlackChange,
                     )
                 }
+            }
 
+            PreferenceGroup(title = stringResource(R.string.display)) {
                 item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.disable_blur)) },
@@ -733,7 +735,9 @@ fun AppearanceSettings(navController: NavController) {
                         },
                     )
                 }
+            }
 
+            PreferenceGroup(title = stringResource(R.string.font_preference)) {
                 item {
                     EnumListPreference(
                         title = { Text(stringResource(R.string.font_preference)) },

@@ -362,7 +362,9 @@ fun PlayerSettings(navController: NavController) {
                         onValueChange = onHistoryDurationChange,
                     )
                 }
+            }
 
+            PreferenceGroup(title = stringResource(R.string.crossfade_section_title)) {
                 item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.audio_crossfade_title)) },
@@ -436,7 +438,9 @@ fun PlayerSettings(navController: NavController) {
                         isEnabled = crossfadeEnabled,
                     )
                 }
+            }
 
+            PreferenceGroup(title = stringResource(R.string.settings_playback_title)) {
                 item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.skip_silence)) },
