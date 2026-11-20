@@ -133,7 +133,6 @@ import dev.citali.lunartune.constants.ForceHighRefreshRateKey
 import dev.citali.lunartune.constants.LyricsAutoHidePlayerControlsKey
 import dev.citali.lunartune.constants.LyricsBackgroundStyle
 import dev.citali.lunartune.constants.LyricsBackgroundStyleKey
-import dev.citali.lunartune.constants.UseGpuBlurKey
 import dev.citali.lunartune.constants.LyricsMode
 import dev.citali.lunartune.constants.LyricsModeKey
 import dev.citali.lunartune.constants.PlayerBackgroundStyle
@@ -291,7 +290,8 @@ fun LyricsScreen(
     }
     val lyricsBackground = if (isActive) resolvedLyricsBackground else latchedLyricsBackground
     val disableBlur by rememberPreference(DisableBlurKey, false)
-    val useGpuBlur by rememberPreference(UseGpuBlurKey, true)
+    // GPU blur is always on where supported (Android 12+); the user setting was removed.
+    val useGpuBlur = true
     val blurRadius by rememberPreference(BlurRadiusKey, 48f)
     val playerCustomImageUri by rememberPreference(PlayerCustomImageUriKey, "")
     val playerCustomBlur by rememberPreference(PlayerCustomBlurKey, 0f)

@@ -72,7 +72,6 @@ import dev.citali.lunartune.constants.SwipeToSongKey
 import dev.citali.lunartune.constants.TranslateLyricsKey
 import dev.citali.lunartune.constants.UseLyricsV2Key
 import dev.citali.lunartune.constants.UseSystemFontKey
-import dev.citali.lunartune.constants.UseGpuBlurKey
 import dev.citali.lunartune.constants.WakelockKey
 import dev.citali.lunartune.utils.rememberPreference
 
@@ -133,7 +132,6 @@ fun buildSettingsGroups(
                 SettingsChild("App icon", "app_icon", listOf("icon", "app icon", "icon pack", "launcher icon")),
                 SettingsChild("Disable blur", "disable_blur", listOf("blur", "disable blur", "no blur", "performance")) { SearchResultSwitch(DisableBlurKey, false) },
                 SettingsChild("Blur intensity", "blur_intensity", listOf("blur intensity", "blur amount", "blur level", "blur radius")),
-                SettingsChild("Use GPU blur", "use_gpu_blur", listOf("gpu blur", "hardware blur", "render effect", "blur")) { SearchResultSwitch(UseGpuBlurKey, true, enabled = isAndroid12OrLater) },
                 SettingsChild("Backdrop blur", "backdrop_blur", listOf("backdrop", "backdrop blur", "background blur", "frosted")) { SearchResultSwitch(BackdropEnabledKey, false) },
                 SettingsChild("Font preference", "font_preference", listOf("font", "font style", "typography")),
                 SettingsChild("Use system font", "use_system_font", listOf("system font", "default font", "roboto")) { SearchResultSwitch(UseSystemFontKey, false) },

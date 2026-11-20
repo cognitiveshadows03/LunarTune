@@ -842,9 +842,6 @@ val HistoryDuration = intPreferencesKey("historyDuration")
 val PlayerButtonsStyleKey = stringPreferencesKey("player_buttons_style")
 val PlayerBackgroundStyleKey = stringPreferencesKey("playerBackgroundStyle")
 val LyricsBackgroundStyleKey = stringPreferencesKey("lyricsBackgroundStyle")
-// Android 12+ only. When off, the moving blur falls back to the pre-blurred bitmap
-// that Android 11 and below always use.
-val UseGpuBlurKey = booleanPreferencesKey("useGpuBlur")
 val ShowLyricsKey = booleanPreferencesKey("showLyrics")
 val LyricsTextPositionKey = stringPreferencesKey("lyricsTextPosition")
 val LyricsClickKey = booleanPreferencesKey("lyricsClick")
