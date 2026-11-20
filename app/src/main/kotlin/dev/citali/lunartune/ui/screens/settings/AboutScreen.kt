@@ -9,13 +9,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import dev.citali.lunartune.utils.rememberPreference
-import dev.citali.lunartune.constants.RecapStoriesUnlockedKey
-import android.widget.Toast
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -635,9 +628,6 @@ private fun AboutContentContainer(
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-/** Taps on the version chip needed to unlock the hidden Year in Music story. */
-private const val RecapUnlockTapCount = 7
-
 @Composable
 private fun AboutIdentityCard(
     model: AboutUiModel,
@@ -646,16 +636,6 @@ private fun AboutIdentityCard(
 ) {
     val scheme = MaterialTheme.colorScheme
     val badgeShape = settingsIconShape("about")
-    val context = LocalContext.current
-    val (recapUnlocked, setRecapUnlocked) = rememberPreference(RecapStoriesUnlockedKey, defaultValue = false)
-    var versionTaps by remember { mutableIntStateOf(0) }
-    val onVersionTap: () -> Unit = {
-        versionTaps++
-        if (!recapUnlocked && versionTaps >= RecapUnlockTapCount) {
-            setRecapUnlocked(true)
-            Toast.makeText(context, context.getString(R.string.recap_stories_unlocked), Toast.LENGTH_SHORT).show()
-        }
-    }
     Card(
         modifier = modifier,
         shape = MaterialTheme.shapes.extraLarge,
@@ -684,7 +664,6 @@ private fun AboutIdentityCard(
                         model = model,
                         horizontalAlignment = Alignment.Start,
                         modifier = Modifier.weight(1f),
-                        onVersionTap = onVersionTap,
                     )
                     LinkChipRow(
                         links = model.primaryLinks,
@@ -705,7 +684,6 @@ private fun AboutIdentityCard(
                     AboutIdentity(
                         model = model,
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        onVersionTap = onVersionTap,
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     LinkChipRow(
@@ -725,7 +703,6 @@ private fun AboutIdentity(
     model: AboutUiModel,
     horizontalAlignment: Alignment.Horizontal,
     modifier: Modifier = Modifier,
-    onVersionTap: () -> Unit = {},
 ) {
     Column(
         modifier = modifier,
@@ -744,7 +721,7 @@ private fun AboutIdentity(
             horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs, horizontalAlignment),
             verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
         ) {
-            AboutMetadataBadge(text = model.versionName, onClick = onVersionTap)
+            AboutMetadataBadge(text = model.versionName)
             model.buildHash?.let { buildHash ->
                 AboutMetadataBadge(text = buildHash)
             }
@@ -775,13 +752,9 @@ private fun SurfaceAppIcon(modifier: Modifier = Modifier) {
 private fun AboutMetadataBadge(
     text: String,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null,
 ) {
     Badge(
-        modifier =
-            modifier
-                .heightIn(min = 32.dp)
-                .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        modifier = modifier.heightIn(min = 32.dp),
         containerColor = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
     ) {

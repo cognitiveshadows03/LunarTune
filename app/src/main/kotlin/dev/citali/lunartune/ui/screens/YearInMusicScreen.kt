@@ -122,7 +122,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.DisableBlurKey
-import dev.citali.lunartune.constants.RecapStoriesUnlockedKey
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.Song
@@ -130,7 +129,6 @@ import dev.citali.lunartune.db.entities.SongWithStats
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.menu.ArtistMenu
 import dev.citali.lunartune.ui.menu.SongMenu
-import dev.citali.lunartune.ui.recap.RecapReelOverlay
 import dev.citali.lunartune.utils.ComposeToImage
 import dev.citali.lunartune.utils.joinByBullet
 import dev.citali.lunartune.utils.makeTimeString
@@ -163,7 +161,7 @@ private object RecapTokens {
     val ItemRadius = 18.dp
     val ShareVerticalPadding = 14.dp
 
-    /** Space kept free at the bottom of a card so the floating Highlight reel and Share buttons never cover its text. */
+    /** Space kept free at the bottom of a card so the floating Share button never covers its text. */
     val FloatingControlsClearance = 96.dp
 }
 
@@ -212,8 +210,6 @@ private fun YearInMusicRecapScreen(
     val coroutineScope = rememberCoroutineScope()
     val content = uiState as YearInMusicUiState.Content
     val (disableBlur) = rememberPreference(DisableBlurKey, false)
-    val (recapUnlocked) = rememberPreference(RecapStoriesUnlockedKey, false)
-    var showReel by remember { mutableStateOf(false) }
 
     var isGeneratingImage by remember { mutableStateOf(false) }
     var isShareCaptureMode by remember { mutableStateOf(false) }
@@ -280,30 +276,7 @@ private fun YearInMusicRecapScreen(
                     .fillMaxSize(),
         )
 
-        if (recapUnlocked && content.hasData && !isShareCaptureMode && !showReel) {
-            Box(modifier = Modifier.align(Alignment.BottomStart)) {
-                TextButton(
-                    onClick = { showReel = true },
-                    modifier =
-                        Modifier
-                            .windowInsetsPadding(
-                                LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal),
-                            ).padding(start = 16.dp, bottom = 16.dp),
-                ) {
-                    Text(stringResource(R.string.year_in_music_highlight_reel))
-                }
-            }
-        }
-
-        if (showReel) {
-            RecapReelOverlay(
-                year = content.selectedYear,
-                onClose = { showReel = false },
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        if (canShare && !showReel) {
+        if (canShare) {
             Box(modifier = Modifier.align(Alignment.BottomEnd)) {
                 RecapShareButton(
                     isGenerating = isGeneratingImage,
