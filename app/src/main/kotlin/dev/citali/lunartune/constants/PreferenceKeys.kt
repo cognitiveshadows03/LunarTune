@@ -310,6 +310,14 @@ val PreloadNextSongKey = booleanPreferencesKey("preloadNextSong")
  * created, so toggling it takes effect on the next app start.
  */
 val FastPlaybackStartKey = booleanPreferencesKey("fastPlaybackStart")
+
+/**
+ * Playback speed and pitch multiplier last set in the Tempo and pitch dialog.
+ * Saved on every change and applied when the player service starts, so the
+ * values survive app restarts.
+ */
+val PlaybackSpeedKey = floatPreferencesKey("playbackSpeed")
+val PlaybackPitchKey = floatPreferencesKey("playbackPitch")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
 enum class AudioQuality {

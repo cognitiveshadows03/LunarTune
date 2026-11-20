@@ -93,6 +93,8 @@ import dev.citali.lunartune.constants.LunarTuneCanvasKey
 import dev.citali.lunartune.constants.ArtistSeparatorsKey
 import dev.citali.lunartune.constants.ExternalDownloaderEnabledKey
 import dev.citali.lunartune.constants.ExternalDownloaderPackageKey
+import dev.citali.lunartune.constants.PlaybackPitchKey
+import dev.citali.lunartune.constants.PlaybackSpeedKey
 import dev.citali.lunartune.constants.PlayerDesignStyle
 import dev.citali.lunartune.constants.PlayerDesignStyleKey
 import dev.citali.lunartune.constants.PlayerDesignStyleOverridesKey
@@ -108,8 +110,10 @@ import dev.citali.lunartune.ui.component.NewActionGrid
 import dev.citali.lunartune.ui.component.sharePlayerCard
 import dev.citali.lunartune.ui.player.rememberDeviceMusicVolumeController
 import dev.citali.lunartune.utils.ExternalDownloaderLaunchResult
+import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.SpeedDialPin
 import dev.citali.lunartune.utils.SpeedDialPinType
+import dev.citali.lunartune.utils.dataStore
 import dev.citali.lunartune.utils.isLocalMediaId
 import dev.citali.lunartune.utils.openExternalDownloader
 import dev.citali.lunartune.utils.parsePlayerDesignStyleOverrides
@@ -1170,6 +1174,7 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
     val playerConnection = LocalPlayerConnection.current ?: return
     val initialSpeed = remember { playerConnection.player.playbackParameters.speed }
     val initialPitch = remember { playerConnection.player.playbackParameters.pitch }
+    val context = LocalContext.current
 
     var tempo by remember {
         mutableFloatStateOf(initialSpeed.safeCoerceIn(TempoMin, TempoMax, fallback = 1f))
@@ -1186,11 +1191,14 @@ fun TempoPitchDialog(onDismiss: () -> Unit) {
     }
 
     val applyPlaybackParameters: (Float, Float) -> Unit = { speed, pitchMultiplier ->
-        playerConnection.player.playbackParameters =
-            PlaybackParameters(
-                speed.coerceIn(TempoMin, TempoMax),
-                pitchMultiplier.coerceIn(PitchMin, PitchMax),
-            )
+        val safeSpeed = speed.coerceIn(TempoMin, TempoMax)
+        val safePitch = pitchMultiplier.coerceIn(PitchMin, PitchMax)
+        playerConnection.player.playbackParameters = PlaybackParameters(safeSpeed, safePitch)
+        // Keep the values across app restarts; MusicService re-applies them on start.
+        PreferenceStore.launchEdit(context.dataStore) {
+            this[PlaybackSpeedKey] = safeSpeed
+            this[PlaybackPitchKey] = safePitch
+        }
     }
 
     AlertDialog(
@@ -1497,12 +1505,12 @@ private enum class PitchMode {
     Multiplier,
 }
 
-private const val TempoMin = 0.25f
-private const val TempoMax = 2f
-private const val PitchMin = 0.25f
-private const val PitchMax = 2f
+internal const val TempoMin = 0.25f
+internal const val TempoMax = 2f
+internal const val PitchMin = 0.25f
+internal const val PitchMax = 2f
 
-private fun Float.safeCoerceIn(
+internal fun Float.safeCoerceIn(
     min: Float,
     max: Float,
     fallback: Float,

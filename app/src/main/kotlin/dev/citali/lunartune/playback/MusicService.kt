@@ -58,6 +58,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.ParserException
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Player.EVENT_POSITION_DISCONTINUITY
 import androidx.media3.common.Player.EVENT_TIMELINE_CHANGED
@@ -160,6 +161,8 @@ import dev.citali.lunartune.constants.CrossfadeDurationKey
 import dev.citali.lunartune.constants.CrossfadeEnabledKey
 import dev.citali.lunartune.constants.CrossfadeGaplessKey
 import dev.citali.lunartune.constants.FastPlaybackStartKey
+import dev.citali.lunartune.constants.PlaybackPitchKey
+import dev.citali.lunartune.constants.PlaybackSpeedKey
 import dev.citali.lunartune.constants.CrossfadeManualSkipKey
 import dev.citali.lunartune.constants.DeviceMutePlaybackRecoveryVolumeKey
 import dev.citali.lunartune.constants.DiscordShowWhenPausedKey
@@ -262,6 +265,11 @@ import dev.citali.lunartune.scrobbling.LastFmServiceConfig
 import dev.citali.lunartune.storage.StorageFolderKind
 import dev.citali.lunartune.storage.StorageLocationRepository
 import dev.citali.lunartune.together.TogetherPlaybackSync
+import dev.citali.lunartune.ui.menu.PitchMax
+import dev.citali.lunartune.ui.menu.PitchMin
+import dev.citali.lunartune.ui.menu.TempoMax
+import dev.citali.lunartune.ui.menu.TempoMin
+import dev.citali.lunartune.ui.menu.safeCoerceIn
 import dev.citali.lunartune.ui.screens.settings.DiscordPresenceManager
 import dev.citali.lunartune.ui.screens.settings.ListenBrainzManager
 import dev.citali.lunartune.utils.AuthScopedCacheValue
@@ -1298,6 +1306,7 @@ class MusicService :
                     sleepTimer = SleepTimer(scope, this, this@MusicService)
                     addListener(sleepTimer)
                 }
+        restoreSavedPlaybackParameters()
         playerInitialized.value = true
         database
             .blockedArtistIds()
@@ -1809,6 +1818,22 @@ class MusicService :
                 }
             }
         }
+    }
+
+    /**
+     * Re-applies the playback speed and pitch saved by the Tempo and pitch dialog.
+     * PreferenceStore is loaded before the service starts (see App.onCreate), so
+     * the synchronous read here sees the stored values.
+     */
+    private fun restoreSavedPlaybackParameters() {
+        val savedSpeed = runCatching { dataStore.get(PlaybackSpeedKey, 1f) }.getOrDefault(1f)
+        val savedPitch = runCatching { dataStore.get(PlaybackPitchKey, 1f) }.getOrDefault(1f)
+        if (savedSpeed == 1f && savedPitch == 1f) return
+        player.playbackParameters =
+            PlaybackParameters(
+                savedSpeed.safeCoerceIn(TempoMin, TempoMax, fallback = 1f),
+                savedPitch.safeCoerceIn(PitchMin, PitchMax, fallback = 1f),
+            )
     }
 
     private fun ensureScopesActive() {
