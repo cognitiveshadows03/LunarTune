@@ -26,8 +26,11 @@ import androidx.room.withTransaction
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import dev.citali.lunartune.recap.RecapDao
 import dev.citali.lunartune.db.entities.AlbumArtistMap
 import dev.citali.lunartune.db.entities.AlbumEntity
 import dev.citali.lunartune.db.entities.ArtistEntity
@@ -66,6 +69,13 @@ class MusicDatabase(
 ) : DatabaseDao by delegate.dao {
     val openHelper: SupportSQLiteOpenHelper
         get() = delegate.openHelper
+
+    val recapDao: RecapDao
+        get() = delegate.recapDao
+
+    fun recapChanges(): Flow<Unit> = delegate.invalidationTracker.createFlow(
+        "event", "song", "artist", "album", "song_artist_map", "song_album_map", "album_artist_map",
+    ).map { }
 
     fun query(block: MusicDatabase.() -> Unit) =
         with(delegate) {
@@ -161,6 +171,7 @@ class MusicDatabase(
 @TypeConverters(Converters::class)
 abstract class InternalDatabase : RoomDatabase() {
     abstract val dao: DatabaseDao
+    abstract val recapDao: RecapDao
 
     companion object {
         const val DB_NAME = "song.db"

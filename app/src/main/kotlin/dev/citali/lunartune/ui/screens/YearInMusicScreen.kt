@@ -130,6 +130,7 @@ import dev.citali.lunartune.db.entities.SongWithStats
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.menu.ArtistMenu
 import dev.citali.lunartune.ui.menu.SongMenu
+import dev.citali.lunartune.ui.recap.RecapReelOverlay
 import dev.citali.lunartune.utils.ComposeToImage
 import dev.citali.lunartune.utils.joinByBullet
 import dev.citali.lunartune.utils.makeTimeString
@@ -292,9 +293,10 @@ private fun YearInMusicRecapScreen(
         }
 
         if (showReel) {
-            YearInMusicReel(
-                content = content,
+            RecapReelOverlay(
+                year = content.selectedYear,
                 onClose = { showReel = false },
+                modifier = Modifier.fillMaxSize(),
             )
         }
 
