@@ -77,8 +77,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
-import dev.citali.lunartune.constants.DisableBlurKey
-import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.YearInMusicUiState
 import java.text.NumberFormat
 
@@ -90,6 +88,13 @@ import java.text.NumberFormat
 private val ReelBlack = Color(0xFF070707)
 private val ReelRed = Color(0xFFFF0033)
 private val ReelCream = Color(0xFFFFF7F2)
+
+/** Text colour for the current chapter; dark on the light intro, light elsewhere. */
+private val LocalReelInk = compositionLocalOf { ReelCream }
+
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+private fun reelInk(): Color = LocalReelInk.current
 
 /** Chapter-local motion clock in ms. It only advances while the reel is playing, so pausing freezes the motion. */
 private val LocalReelClock = compositionLocalOf<() -> Float> { { Float.MAX_VALUE } }
@@ -113,6 +118,24 @@ private fun reelDurationMs(chapter: ReelChapter): Long =
         ReelChapter.INTRO, ReelChapter.END -> 0L
         ReelChapter.SUMMARY -> 9_000L
         else -> 7_000L
+    }
+
+/** Background gradient per chapter, in the soft, colour-led style of the reference reel. */
+private fun reelPalette(chapter: ReelChapter): Pair<Color, Color> =
+    when (chapter) {
+        ReelChapter.INTRO -> Color(0xFFFFF4D6) to Color(0xFFD9F2C4)
+        ReelChapter.TOTALS -> Color(0xFF58B8C6) to Color(0xFF2F6F86)
+        ReelChapter.TOP_SONG -> Color(0xFF5C78D6) to Color(0xFF2D3F8A)
+        ReelChapter.ARTISTS -> Color(0xFFB9A85A) to Color(0xFFB55A3C)
+        ReelChapter.ALBUMS -> Color(0xFFF2B8C6) to Color(0xFF6F86D6)
+        ReelChapter.SUMMARY -> Color(0xFF6E8FD8) to Color(0xFF2B2F6B)
+        ReelChapter.END -> Color(0xFF4D6DCF) to Color(0xFF1E2C66)
+    }
+
+private fun reelInkFor(chapter: ReelChapter): Color =
+    when (chapter) {
+        ReelChapter.INTRO -> Color(0xFF1A1A1A)
+        else -> ReelCream
     }
 
 private fun reelAccent(chapter: ReelChapter): Color =
@@ -177,21 +200,21 @@ internal fun YearInMusicReel(
         next()
     }
 
-    val (disableBlur) = rememberPreference(DisableBlurKey, false)
     val accent by animateColorAsState(reelAccent(chapter), tween(600), label = "reelAccent")
+    val palette = reelPalette(chapter)
+    val paletteTop by animateColorAsState(palette.first, tween(700), label = "reelTop")
+    val paletteBottom by animateColorAsState(palette.second, tween(700), label = "reelBottom")
+    val ink by animateColorAsState(reelInkFor(chapter), tween(700), label = "reelInk")
     val progress = if (duration > 0L) (elapsed / duration.toFloat()).coerceIn(0f, 1f) else 0f
 
+    CompositionLocalProvider(LocalReelInk provides ink) {
     Box(modifier = Modifier.fillMaxSize().background(ReelBlack)) {
         // 1. Visuals only, no pointer input.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.4f), ReelBlack.copy(alpha = 0.75f), ReelBlack.copy(alpha = 0.92f)),
-                        ),
-                    ),
+                    .background(Brush.verticalGradient(listOf(paletteTop, paletteBottom))),
         )
         AnimatedContent(
             targetState = index,
@@ -260,10 +283,10 @@ internal fun YearInMusicReel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ReelIconButton(onClick = { manualPaused = !manualPaused }) {
-                    if (manualPaused) drawReelPlay() else drawReelPauseBars()
+                    if (manualPaused) drawReelPlay(ink) else drawReelPauseBars(ink)
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                ReelIconButton(onClick = onClose) { drawReelClose() }
+                ReelIconButton(onClick = onClose) { drawReelClose(ink) }
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -310,6 +333,7 @@ internal fun YearInMusicReel(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -330,15 +354,15 @@ private fun ReelIconButton(
     }
 }
 
-private fun DrawScope.drawReelPauseBars() {
+private fun DrawScope.drawReelPauseBars(color: Color) {
     val w = size.width
     val h = size.height
     val radius = CornerRadius(w * 0.12f)
-    drawRoundRect(ReelCream, topLeft = Offset(0f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
-    drawRoundRect(ReelCream, topLeft = Offset(w * 0.7f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
+    drawRoundRect(color, topLeft = Offset(0f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
+    drawRoundRect(color, topLeft = Offset(w * 0.7f, 0f), size = Size(w * 0.3f, h), cornerRadius = radius)
 }
 
-private fun DrawScope.drawReelPlay() {
+private fun DrawScope.drawReelPlay(color: Color) {
     val w = size.width
     val h = size.height
     val path =
@@ -348,13 +372,13 @@ private fun DrawScope.drawReelPlay() {
             lineTo(w * 0.1f, h)
             close()
         }
-    drawPath(path, ReelCream)
+    drawPath(path, color)
 }
 
-private fun DrawScope.drawReelClose() {
+private fun DrawScope.drawReelClose(color: Color) {
     val stroke = 2.5.dp.toPx()
-    drawLine(ReelCream, Offset(0f, 0f), Offset(size.width, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
-    drawLine(ReelCream, Offset(size.width, 0f), Offset(0f, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
+    drawLine(color, Offset(0f, 0f), Offset(size.width, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
+    drawLine(color, Offset(size.width, 0f), Offset(0f, size.height), strokeWidth = stroke, cap = StrokeCap.Round)
 }
 
 @Composable
@@ -391,7 +415,7 @@ private fun ReelActions(
                     Text(stringResource(R.string.year_in_music_rewatch), style = MaterialTheme.typography.titleMedium)
                 }
                 TextButton(onClick = onClose) {
-                    Text(stringResource(R.string.year_in_music_back_to_year), color = ReelCream)
+                    Text(stringResource(R.string.year_in_music_back_to_year), color = reelInk())
                 }
             }
         }
@@ -442,7 +466,7 @@ private fun ReelIntroBody(
             text = content.selectedYear.toString(),
             style = MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.Bold,
-            color = ReelCream,
+            color = reelInk(),
         )
     }
     ReelReveal(delayMs = 200) {
@@ -460,7 +484,7 @@ private fun ReelIntroBody(
         Text(
             text = stringResource(R.string.year_in_music_intro_hero),
             style = MaterialTheme.typography.headlineSmall,
-            color = ReelCream,
+            color = reelInk(),
         )
     }
     Spacer(modifier = Modifier.height(8.dp))
@@ -468,7 +492,7 @@ private fun ReelIntroBody(
         Text(
             text = stringResource(R.string.year_in_music_intro_details),
             style = MaterialTheme.typography.bodyLarge,
-            color = ReelCream.copy(alpha = 0.7f),
+            color = reelInk().copy(alpha = 0.7f),
         )
     }
 }
@@ -481,15 +505,15 @@ private fun ReelTotalsBody(
     val clock = LocalReelClock.current
     val ease = FastOutSlowInEasing.transform(reelProgress(clock(), delayMs = 150, durationMs = 1_400f))
     val minutes = (content.totalListeningTime / 60_000L * ease).toLong()
-    val faded = ReelCream.copy(alpha = 0.55f)
+    val faded = reelInk().copy(alpha = 0.55f)
     val statement =
         buildAnnotatedString {
             withStyle(SpanStyle(color = faded)) { append("You listened for ") }
-            withStyle(SpanStyle(color = ReelCream, fontWeight = FontWeight.Bold)) {
+            withStyle(SpanStyle(color = reelInk(), fontWeight = FontWeight.Bold)) {
                 append(NumberFormat.getIntegerInstance().format(minutes))
             }
             withStyle(SpanStyle(color = faded)) { append(" minutes in ") }
-            withStyle(SpanStyle(color = ReelCream, fontWeight = FontWeight.Bold)) {
+            withStyle(SpanStyle(color = reelInk(), fontWeight = FontWeight.Bold)) {
                 append(content.selectedYear.toString())
             }
             withStyle(SpanStyle(color = faded)) { append(".") }
@@ -552,7 +576,7 @@ private fun ReelTopSongBody(
             text = top.title,
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = ReelCream,
+            color = reelInk(),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -631,7 +655,7 @@ private fun ReelSummaryBody(
             text = content.selectedYear.toString(),
             style = MaterialTheme.typography.displayMedium,
             fontWeight = FontWeight.Bold,
-            color = ReelCream,
+            color = reelInk(),
         )
     }
     Spacer(modifier = Modifier.height(16.dp))
@@ -687,7 +711,7 @@ private fun ReelFact(
             text = value,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            color = ReelCream,
+            color = reelInk(),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
@@ -695,7 +719,7 @@ private fun ReelFact(
             Text(
                 text = detail,
                 style = MaterialTheme.typography.bodyMedium,
-                color = ReelCream.copy(alpha = 0.6f),
+                color = reelInk().copy(alpha = 0.6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -764,7 +788,7 @@ private fun ReelRankRow(
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
-            color = ReelCream,
+            color = reelInk(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -797,7 +821,7 @@ private fun ReelEqualizer(color: Color) {
                         .width(12.dp)
                         .fillMaxHeight(fraction)
                         .clip(CircleShape)
-                        .background(if (i % 2 == 0) color else ReelCream.copy(alpha = 0.6f)),
+                        .background(if (i % 2 == 0) color else reelInk().copy(alpha = 0.6f)),
             )
         }
     }

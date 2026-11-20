@@ -568,11 +568,11 @@ private fun RecapCardFrame(
         remember(card.id) {
             when (card) {
                 is YearInMusicRecapCard.Empty -> listOf(RecapSurfaceHigh, RecapBlack)
-                is YearInMusicRecapCard.Intro -> listOf(Color(0xFF5A1426), Color(0xFF1A0B12), RecapBlack)
-                is YearInMusicRecapCard.Totals -> listOf(Color(0xFF4A2A05), Color(0xFF1A1206), RecapBlack)
-                is YearInMusicRecapCard.TopSong -> listOf(Color(0xFF4A0F2A), Color(0xFF1A0812), RecapBlack)
-                is YearInMusicRecapCard.RankedArtists -> listOf(Color(0xFF0C3A2A), Color(0xFF0A1A14), RecapBlack)
-                is YearInMusicRecapCard.RankedAlbums -> listOf(Color(0xFF3A3806), Color(0xFF191806), RecapBlack)
+                is YearInMusicRecapCard.Intro -> listOf(Color(0xFF0F7A64), Color(0xFF0B5C4B))
+                is YearInMusicRecapCard.Totals -> listOf(Color(0xFF5B3FC7), Color(0xFF412C96))
+                is YearInMusicRecapCard.TopSong -> listOf(Color(0xFFB0173F), Color(0xFF7E0F2D))
+                is YearInMusicRecapCard.RankedArtists -> listOf(Color(0xFF6B7A26), Color(0xFF4C5619))
+                is YearInMusicRecapCard.RankedAlbums -> listOf(Color(0xFFC4623A), Color(0xFF8E4426))
                 is YearInMusicRecapCard.Summary -> listOf(Color(0xFFE9B4FF), Color(0xFFD7E7FF), Color(0xFFFF8CA1))
                 is YearInMusicRecapCard.ListeningOrbit -> listOf(Color(0xFF1B3A4A), Color(0xFF0C1A22), RecapBlack)
                 is YearInMusicRecapCard.Finale -> listOf(Color(0xFF1F2A6E), Color(0xFF0E1433), RecapBlack)
