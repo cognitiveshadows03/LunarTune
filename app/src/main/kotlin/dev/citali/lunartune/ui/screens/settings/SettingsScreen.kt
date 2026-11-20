@@ -29,6 +29,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.Row
@@ -466,10 +467,6 @@ fun SettingsScreen(
             emptyList()
         }
     }
-    // Dashboard categories must never also appear as legacy list rows.
-    val identityKeys = setOf("account", "stats")
-    val dashboardKeys = filteredGroups.flatMap { it.items }
-        .map { it.key }.filterNot { it in identityKeys }.toSet()
     val visibleGroups = filteredGroups.map { group ->
         group.copy(items = group.items.distinctBy { it.key })
     }
@@ -683,50 +680,20 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(SettingsDimensions.SectionSpacing))
             }
 
-            // Preserve the connected account group; category groups use a mixed-height dashboard.
-            visibleGroups.forEachIndexed { groupIndex, group ->
-                item(
-                    key = "settings_group_$groupIndex",
-                    contentType = "settings_group",
-                ) {
+            // The account row stays on this page. Every other group is a section that opens its own page.
+            visibleGroups.firstOrNull()?.let { accountGroup ->
+                item(key = "settings_group_0", contentType = "settings_group") {
                     Column(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(
-                                    horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
-                                ).padding(
-                                    top =
-                                        if (groupIndex > 0) {
-                                            SettingsDimensions.SectionSpacing
-                                        } else {
-                                            0.dp
-                                        },
-                                ),
+                                .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding),
                     ) {
-                        if (groupIndex > 0) {
-                            Text(
-                                text = group.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier =
-                                    Modifier.padding(
-                                        horizontal = 4.dp,
-                                        vertical = SettingsDimensions.SectionHeaderBottomPadding,
-                                    ),
-                            )
-                        }
-                        val dashboardItems = group.items.filter { it.key in dashboardKeys }
-                        val listItems = group.items.filterNot { it.key in dashboardKeys }
-                        if (dashboardItems.isNotEmpty()) {
-                            SettingsDashboardTiles(dashboardItems)
-                        }
-                        listItems.forEachIndexed { index, settingsItem ->
+                        accountGroup.items.forEachIndexed { index, settingsItem ->
                             SettingsEntryRow(
                                 settingsItem = settingsItem,
                                 index = index,
-                                count = listItems.size,
+                                count = accountGroup.items.size,
                                 account = accountChrome,
                                 onIdentityClick = { navController.navigate("settings/account") },
                                 modifier =
@@ -734,7 +701,50 @@ fun SettingsScreen(
                                         .fillMaxWidth()
                                         .padding(
                                             bottom =
-                                                if (index < listItems.lastIndex) {
+                                                if (index < accountGroup.items.lastIndex) {
+                                                    12.dp
+                                                } else {
+                                                    0.dp
+                                                },
+                                        ),
+                                flat = false,
+                            )
+                        }
+                    }
+                }
+            }
+
+            val sectionItems =
+                visibleGroups.drop(1).filter { it.key.isNotEmpty() && it.items.isNotEmpty() }.map { group ->
+                    SettingsItem(
+                        key = "section_${group.key}",
+                        icon = group.items.first().icon,
+                        title = group.title,
+                        onClick = { navController.navigate("settings/section/${group.key}") },
+                    )
+                }
+            if (sectionItems.isNotEmpty()) {
+                item(key = "settings_sections", contentType = "settings_group") {
+                    Column(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
+                                .padding(top = SettingsDimensions.SectionSpacing),
+                    ) {
+                        sectionItems.forEachIndexed { index, settingsItem ->
+                            SettingsEntryRow(
+                                settingsItem = settingsItem,
+                                index = index,
+                                count = sectionItems.size,
+                                account = accountChrome,
+                                onIdentityClick = {},
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(
+                                            bottom =
+                                                if (index < sectionItems.lastIndex) {
                                                     12.dp
                                                 } else {
                                                     0.dp
@@ -837,4 +847,65 @@ private fun SettingsEntryRow(
         modifier = modifier.excludeDotTexture(),
         flat = flat,
     )
+}
+
+
+/** One settings section (a group from [buildSettingsGroups]) on its own page. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsSectionScreen(
+    navController: NavController,
+    sectionKey: String,
+    latestVersionName: String,
+) {
+    val context = LocalContext.current
+    val isAndroid12OrLater = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val hasUpdate =
+        BuildConfig.UPDATER_AVAILABLE &&
+            Updater.isUpdateAvailable(latestVersionName, BuildConfig.VERSION_NAME)
+    val group =
+        buildSettingsGroups(navController, isAndroid12OrLater, hasUpdate, context)
+            .firstOrNull { it.key == sectionKey }
+    val sectionItems = group?.items?.filterNot { it.hidden }.orEmpty()
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(group?.title.orEmpty()) },
+                navigationIcon = {
+                    IconButton(
+                        onClick = navController::navigateUp,
+                        onLongClick = navController::backToMain,
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.arrow_back),
+                            contentDescription = stringResource(R.string.back_button_desc),
+                        )
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .windowInsetsPadding(
+                        LocalPlayerAwareWindowInsets.current.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom),
+                    ),
+        ) {
+            item(key = "section_items", contentType = "section_items") {
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
+                            .padding(top = SettingsDimensions.SectionSpacing, bottom = SettingsDimensions.ScreenBottomPadding),
+                ) {
+                    SettingsDashboardTiles(sectionItems)
+                }
+            }
+        }
+    }
 }
