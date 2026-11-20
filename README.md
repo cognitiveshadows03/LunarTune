@@ -179,6 +179,7 @@ LunarTune is made possible by the work of many open-source projects and communit
 - **ArchiveTune** by [Rukamori](https://github.com/rukamori/ArchiveTune) for base framework.
 - **Vivi Music** by [vivizzz007](https://github.com/vivizzz007/vivi-music) for Dolby and Dirac equalizer presets
 - **Metrolist** by [Mostafa Alagamy](https://github.com/mostafaalagamy/Metrolist) for Playback client fallback order.
+- **Mochy Music** by [realidkroo](https://github.com/realidkroo/Mochy-Music) for profile screen inspiration.
 - **SimpMusic** by [maxrave-dev](https://github.com/maxrave-dev/SimpMusic) for the lyrics API provider.
 - **Monochrome** by [monochrome-music](https://github.com/monochrome-music/monochrome) for the lossless FLAC streaming source.
 - [BetterLyrics](https://better-lyrics.boidu.dev/) for word-by-word lyrics, unison and artwork provider support.
