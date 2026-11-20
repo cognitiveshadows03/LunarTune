@@ -162,6 +162,9 @@ private const val RecapStoryDurationMs = 6_000
 private object RecapTokens {
     val ItemRadius = 18.dp
     val ShareVerticalPadding = 14.dp
+
+    /** Space kept free at the bottom of a card so the floating Highlight reel and Share buttons never cover its text. */
+    val FloatingControlsClearance = 96.dp
 }
 
 @Composable
@@ -823,83 +826,61 @@ private fun IntroRecapCard(
             Modifier
                 .fillMaxSize()
                 .then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
-                .padding(24.dp),
+                .padding(
+                    start = 24.dp,
+                    top = 24.dp,
+                    end = 24.dp,
+                    bottom = if (applySafeContentInsets) RecapTokens.FloatingControlsClearance else 24.dp,
+                ),
     ) {
         LunarTuneBrand(
             contentColor = RecapCream,
             modifier = Modifier.align(Alignment.TopStart),
         )
 
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
+        // Year and feature name stacked tight, left-aligned, as on Apple Music's Replay opener.
+        Column(modifier = Modifier.align(Alignment.Center)) {
             Text(
                 text = card.year.toString(),
-                style = MaterialTheme.typography.displayLarge.copy(fontSize = 104.sp),
+                style = MaterialTheme.typography.displayLarge.copy(fontSize = 112.sp),
                 fontWeight = FontWeight.Black,
                 color = RecapCream,
-                lineHeight = 96.sp,
+                lineHeight = 104.sp,
             )
             Text(
                 text = stringResource(R.string.year_in_music_recap_word),
                 style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Black,
                 color = accent,
-                lineHeight = 64.sp,
+                lineHeight = 60.sp,
             )
-            Spacer(modifier = Modifier.height(26.dp))
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                listOf(34, 58, 26, 72, 46, 64, 30).forEachIndexed { index, height ->
-                    Box(
-                        modifier =
-                            Modifier
-                                .width(8.dp)
-                                .height(height.dp)
-                                .clip(CircleShape)
-                                .background(if (index % 2 == 0) accent else RecapCream.copy(alpha = 0.7f)),
-                    )
-                }
-            }
         }
 
         Column(
             modifier = Modifier.align(Alignment.BottomStart),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
                 text = stringResource(R.string.year_in_music_intro_hero),
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Black,
                 color = RecapCream,
-                lineHeight = 30.sp,
+                lineHeight = 36.sp,
             )
             Text(
                 text = stringResource(R.string.year_in_music_intro_details),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = RecapCream.copy(alpha = 0.78f),
-                lineHeight = 19.sp,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = RecapCream.copy(alpha = 0.72f),
+                lineHeight = 22.sp,
             )
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(accent)
-                        .padding(vertical = 14.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.year_in_music_tap_begin),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    color = RecapInk,
-                )
-            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.year_in_music_tap_begin),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+            )
         }
     }
 }
@@ -1001,49 +982,44 @@ private fun TopSongRecapCard(
             verticalArrangement = Arrangement.SpaceBetween,
             applySafeContentInsets = applySafeContentInsets,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 AsyncImage(
                     model = imageModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier =
                         Modifier
-                            .size(190.dp)
-                            .clip(RoundedCornerShape(26.dp))
-                            .background(RecapSurfaceHigh)
-                            .border(
-                                width = 2.dp,
-                                color = RecapCream.copy(alpha = 0.82f),
-                                shape = RoundedCornerShape(26.dp),
+                            .size(240.dp)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(RecapSurfaceHigh),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = card.song.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = RecapCream,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 34.sp,
+                    )
+                    Text(
+                        text =
+                            joinByBullet(
+                                pluralStringResource(
+                                    R.plurals.n_time,
+                                    card.song.songCountListened,
+                                    card.song.songCountListened,
+                                ),
+                                makeTimeString(card.song.timeListened),
                             ),
-                )
-                Text(
-                    text = card.song.title,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                    color = RecapCream,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 34.sp,
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                RecapChip(
-                    icon = R.drawable.play,
-                    text =
-                        pluralStringResource(
-                            R.plurals.n_time,
-                            card.song.songCountListened,
-                            card.song.songCountListened,
-                        ),
-                    color = RecapRed,
-                )
-                RecapChip(
-                    icon = R.drawable.timer,
-                    text = makeTimeString(card.song.timeListened),
-                    color = RecapYellow,
-                )
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = RecapCream.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
     }
@@ -1057,104 +1033,73 @@ private fun RankedArtistsRecapCard(
     onArtistLongClick: (Artist) -> Unit,
 ) {
     val standout = card.artists.firstOrNull()
-    val accent = LocalRecapAccent.current
     RecapCardContent(
         badge = stringResource(R.string.top_artists),
         footer = stringResource(R.string.year_in_music_ranked_artists),
         verticalArrangement = Arrangement.SpaceBetween,
         applySafeContentInsets = applySafeContentInsets,
     ) {
-        if (standout != null) {
-            val minutes = (standout.timeListened?.toLong() ?: 0L) / 60_000L
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .combinedClickable(
-                            onClick = {},
-                            onLongClick = { onArtistLongClick(standout) },
-                        ),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                // Concentric rings framing the portrait, in the spirit of a wrapped story.
-                Box(modifier = Modifier.size(260.dp), contentAlignment = Alignment.Center) {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val center = Offset(size.width / 2f, size.height / 2f)
-                        listOf(128.dp, 114.dp, 100.dp).forEachIndexed { i, radius ->
-                            drawCircle(
-                                color = accent.copy(alpha = 0.3f + i * 0.2f),
-                                radius = radius.toPx(),
-                                center = center,
-                                style = Stroke(width = 1.5.dp.toPx()),
-                            )
-                        }
-                    }
+        Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            if (standout != null) {
+                val minutes = (standout.timeListened?.toLong() ?: 0L) / 60_000L
+                // Large circular portrait with the name and time beneath it, left-aligned like Replay's artist card.
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = { onArtistLongClick(standout) },
+                            ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     AsyncImage(
                         model = rememberShareSafeImageRequest(standout.artist.thumbnailUrl),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(196.dp).clip(CircleShape).background(RecapSurfaceHigh),
-                    )
-                }
-                Text(
-                    text = stringResource(R.string.year_in_music_artist_headline, standout.artist.name),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Black,
-                    color = RecapCream,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 34.sp,
-                )
-                Text(
-                    text = stringResource(
-                        R.string.year_in_music_artist_sentence,
-                        NumberFormat.getIntegerInstance().format(minutes),
-                    ),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = RecapCream.copy(alpha = 0.78f),
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-        ) {
-            card.artists.drop(1).take(4).forEachIndexed { index, artist ->
-                Column(
-                    modifier =
-                        Modifier
-                            .weight(1f)
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = { onArtistLongClick(artist) },
-                            ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    AsyncImage(
-                        model = rememberShareSafeImageRequest(artist.artist.thumbnailUrl),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
                         modifier =
                             Modifier
-                                .size(64.dp)
-                                .clip(CircleShape),
+                                .size(168.dp)
+                                .clip(CircleShape)
+                                .background(RecapSurfaceHigh),
                     )
                     Text(
-                        text = "#${index + 2}",
-                        style = MaterialTheme.typography.labelLarge,
+                        text = standout.artist.name,
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Black,
-                        color = accent,
+                        color = RecapCream,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 34.sp,
                     )
                     Text(
-                        text = artist.artist.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = RecapCream,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        text =
+                            stringResource(
+                                R.string.year_in_music_artist_sentence,
+                                NumberFormat.getIntegerInstance().format(minutes),
+                            ),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = RecapCream.copy(alpha = 0.72f),
+                    )
+                }
+            }
+
+            // Remaining artists as a plain ranked list with hairline dividers, not boxed rows.
+            Column(modifier = Modifier.fillMaxWidth()) {
+                card.artists.drop(1).take(4).forEachIndexed { index, artist ->
+                    if (index > 0) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(RecapCream.copy(alpha = 0.12f)),
+                        )
+                    }
+                    RankedArtistRow(
+                        rank = index + 2,
+                        artist = artist,
+                        onLongClick = { onArtistLongClick(artist) },
                     )
                 }
             }
@@ -1599,7 +1544,12 @@ private fun RecapCardContent(
             Modifier
                 .fillMaxSize()
                 .then(if (applySafeContentInsets) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier)
-                .padding(24.dp),
+                .padding(
+                    start = 24.dp,
+                    top = 24.dp,
+                    end = 24.dp,
+                    bottom = if (applySafeContentInsets) RecapTokens.FloatingControlsClearance else 24.dp,
+                ),
         verticalArrangement = verticalArrangement,
     ) {
         RecapBadge(text = badge)
@@ -1614,24 +1564,40 @@ private fun RecapCardContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RankedArtistRow(
     rank: Int,
     artist: Artist,
-    modifier: Modifier = Modifier,
+    onLongClick: () -> Unit,
 ) {
-    val imageModel = rememberShareSafeImageRequest(artist.artist.thumbnailUrl)
-
-    RankedRowContainer(modifier = modifier) {
-        RankNumber(rank = rank, color = RecapRed)
+    val accent = LocalRecapAccent.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = {}, onLongClick = onLongClick)
+                .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Black,
+            color = accent,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(24.dp),
+        )
         AsyncImage(
-            model = imageModel,
+            model = rememberShareSafeImageRequest(artist.artist.thumbnailUrl),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier =
                 Modifier
-                    .size(46.dp)
-                    .clip(CircleShape),
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(RecapSurfaceHigh),
         )
         Column(
             modifier = Modifier.weight(1f),
@@ -1639,7 +1605,7 @@ private fun RankedArtistRow(
         ) {
             Text(
                 text = artist.artist.name,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = RecapCream,
                 maxLines = 1,
@@ -1647,17 +1613,11 @@ private fun RankedArtistRow(
             )
             Text(
                 text = makeTimeString(artist.timeListened?.toLong()),
-                style = MaterialTheme.typography.labelSmall,
-                color = RecapCream.copy(alpha = 0.58f),
+                style = MaterialTheme.typography.labelMedium,
+                color = RecapCream.copy(alpha = 0.6f),
                 maxLines = 1,
             )
         }
-        Text(
-            text = pluralStringResource(R.plurals.n_time, artist.songCount, artist.songCount),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = RecapRed,
-        )
     }
 }
 
@@ -1762,73 +1722,19 @@ private fun RankNumber(
     }
 }
 
-@Composable
-private fun RecapChip(
-    icon: Int,
-    text: String,
-    color: Color,
-) {
-    Row(
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(color.copy(alpha = 0.2f))
-                .border(
-                    width = 1.dp,
-                    color = color.copy(alpha = 0.34f),
-                    shape = RoundedCornerShape(999.dp),
-                ).padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = color,
-            modifier = Modifier.size(16.dp),
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = RecapCream,
-            maxLines = 1,
-        )
-    }
-}
-
+/** Plain uppercase section label in the card accent, the way Apple Music labels its Replay sections. */
 @Composable
 private fun RecapBadge(text: String) {
     val accent = LocalRecapAccent.current
-    Row(
-        modifier =
-            Modifier
-                .clip(RoundedCornerShape(999.dp))
-                .background(accent.copy(alpha = 0.22f))
-                .border(
-                    width = 1.dp,
-                    color = accent.copy(alpha = 0.45f),
-                    shape = RoundedCornerShape(999.dp),
-                ).padding(horizontal = 12.dp, vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(accent),
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Black,
-            color = RecapCream,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Black,
+        color = accent,
+        letterSpacing = 1.2.sp,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
