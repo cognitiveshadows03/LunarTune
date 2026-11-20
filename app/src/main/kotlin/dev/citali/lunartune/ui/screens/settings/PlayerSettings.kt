@@ -442,6 +442,15 @@ fun PlayerSettings(navController: NavController) {
 
             PreferenceGroup(title = stringResource(R.string.settings_playback_title)) {
                 item {
+                    PreferenceEntry(
+                        title = { Text(stringResource(R.string.audio_fx_title)) },
+                        description = stringResource(R.string.audio_fx_desc),
+                        icon = { Icon(painterResource(R.drawable.equalizer), null) },
+                        onClick = { navController.navigate("settings/player/audio_fx") },
+                    )
+                }
+
+                item {
                     SwitchPreference(
                         title = { Text(stringResource(R.string.skip_silence)) },
                         icon = { Icon(painterResource(R.drawable.fast_forward), null) },

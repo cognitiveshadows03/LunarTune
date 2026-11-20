@@ -318,6 +318,16 @@ val FastPlaybackStartKey = booleanPreferencesKey("fastPlaybackStart")
  */
 val PlaybackSpeedKey = floatPreferencesKey("playbackSpeed")
 val PlaybackPitchKey = floatPreferencesKey("playbackPitch")
+
+/**
+ * Audio FX reverb. Off by default. Mix, room size and damping are 0–100; pre-delay is in ms.
+ */
+val ReverbEnabledKey = booleanPreferencesKey("reverbEnabled")
+val ReverbPresetKey = stringPreferencesKey("reverbPreset")
+val ReverbMixKey = intPreferencesKey("reverbMix")
+val ReverbRoomSizeKey = intPreferencesKey("reverbRoomSize")
+val ReverbDampingKey = intPreferencesKey("reverbDamping")
+val ReverbPreDelayKey = intPreferencesKey("reverbPreDelayMs")
 val PreloadQueueSongsCountKey = intPreferencesKey("preload_queue_songs_count")
 
 enum class AudioQuality {

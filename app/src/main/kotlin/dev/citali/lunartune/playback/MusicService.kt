@@ -37,6 +37,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.BassBoost
+import android.media.audiofx.EnvironmentalReverb
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.media.audiofx.Virtualizer
@@ -882,6 +883,8 @@ class MusicService :
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private var environmentalReverb: EnvironmentalReverb? = null
+    private val desiredReverbSettings = MutableStateFlow<ReverbSettings?>(null)
     private val audioEffectPlayerListener =
         object : Player.Listener {
             override fun onEvents(
@@ -1635,6 +1638,14 @@ class MusicService :
                 networkConnectivity = connectivityObserver,
                 lyricsHelper = lyricsHelper,
             )
+
+        dataStore.data
+            .map(::readReverbSettingsFromPrefs)
+            .distinctUntilChanged()
+            .collectLatest(scope) { settings ->
+                desiredReverbSettings.value = settings
+                environmentalReverb?.let { applyReverbSettings(it, settings) }
+            }
 
         dataStore.data
             .map(::readEqSettingsFromPrefs)
@@ -7043,6 +7054,11 @@ class MusicService :
             loudnessEnhancer?.release()
         } catch (_: Exception) {
         }
+        try {
+            environmentalReverb?.release()
+        } catch (_: Exception) {
+        }
+        environmentalReverb = null
         equalizer = null
         bassBoost = null
         virtualizer = null
@@ -7085,9 +7101,11 @@ class MusicService :
         bassBoost = createAudioEffect("BassBoost", sessionId) { BassBoost(0, sessionId) }
         virtualizer = createAudioEffect("Virtualizer", sessionId) { Virtualizer(0, sessionId) }
         loudnessEnhancer = createAudioEffect("LoudnessEnhancer", sessionId) { LoudnessEnhancer(sessionId) }
+        environmentalReverb = createAudioEffect("EnvironmentalReverb", sessionId) { EnvironmentalReverb(0, sessionId) }
 
         equalizer?.let(::updateEqCapabilitiesFromEffect)
         applyEqSettingsToEffects(desiredEqSettings.value)
+        desiredReverbSettings.value?.let { settings -> environmentalReverb?.let { applyReverbSettings(it, settings) } }
         return equalizer != null
     }
 
