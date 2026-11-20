@@ -548,22 +548,18 @@ fun buildSettingsGroups(
             items = listOf(account),
         ),
         SettingsGroup(
-            key = "player_content",
             title = stringResource(R.string.settings_section_player_content),
             items = listOf(appearance, playback, lyrics, content, behavior),
         ),
         SettingsGroup(
-            key = "integration",
             title = stringResource(R.string.integration),
             items = listOf(integration, aiIntegration, internet),
         ),
         SettingsGroup(
-            key = "storage",
             title = stringResource(R.string.storage),
             items = listOf(storage, downloads, backupRestore),
         ),
         SettingsGroup(
-            key = "about",
             title = stringResource(R.string.about),
             items =
                 buildList {

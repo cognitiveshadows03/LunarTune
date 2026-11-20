@@ -26,7 +26,6 @@ data class SettingsGroup(
     val title: String,
     val items: List<SettingsItem>,
     val showWhenFiltered: Boolean = true,
-    val key: String = "",
 )
 
 @Immutable

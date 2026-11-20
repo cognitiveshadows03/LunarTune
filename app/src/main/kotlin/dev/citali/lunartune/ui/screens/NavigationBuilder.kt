@@ -82,7 +82,6 @@ import dev.citali.lunartune.ui.screens.settings.PalettePickerScreen
 import dev.citali.lunartune.ui.screens.settings.PlayerSettings
 import dev.citali.lunartune.ui.screens.settings.PrivacySettings
 import dev.citali.lunartune.ui.screens.settings.SettingsScreen
-import dev.citali.lunartune.ui.screens.settings.SettingsSectionScreen
 import dev.citali.lunartune.ui.screens.settings.SourcesSettings
 import dev.citali.lunartune.ui.screens.settings.StorageSettings
 import dev.citali.lunartune.ui.screens.settings.StreamSourcesSettings
@@ -479,18 +478,6 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings") {
         DrillPageContainer(pureBlack) {
             SettingsScreen(navController, latestVersionName())
-        }
-    }
-    composable(
-        route = "settings/section/{sectionKey}",
-        arguments = listOf(navArgument("sectionKey") { type = NavType.StringType }),
-    ) { entry ->
-        DrillPageContainer(pureBlack) {
-            SettingsSectionScreen(
-                navController = navController,
-                sectionKey = entry.arguments?.getString("sectionKey").orEmpty(),
-                latestVersionName = latestVersionName(),
-            )
         }
     }
     composable(
