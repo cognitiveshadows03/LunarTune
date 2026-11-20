@@ -407,6 +407,7 @@ val ExternalDownloaderPackageKey = stringPreferencesKey("externalDownloaderPacka
 val PlaylistTagsFilterKey = stringPreferencesKey("playlistTagsFilter")
 val LibraryChipOrderKey = stringPreferencesKey("libraryChipOrder")
 val PlaylistTagOrderKey = stringPreferencesKey("playlistTagOrder")
+val ShowHomeCategoryChipsKey = booleanPreferencesKey("showHomeCategoryChips")
 val SharedScreenHeaderImageUriKey = stringPreferencesKey("sharedScreenHeaderImageUri")
 val HomeHeaderImageUriKey = stringPreferencesKey("homeHeaderImageUri")
 val SettingsHeaderImageUriKey = stringPreferencesKey("settingsHeaderImageUri")

@@ -20,6 +20,7 @@ import dev.citali.lunartune.constants.QuickPicks
 import dev.citali.lunartune.constants.QuickPicksKey
 import dev.citali.lunartune.constants.QuickPicksDisplayMode
 import dev.citali.lunartune.constants.QuickPicksDisplayModeKey
+import dev.citali.lunartune.constants.ShowHomeCategoryChipsKey
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.extensions.toEnum
@@ -38,6 +39,11 @@ class HomeRepository
         @ApplicationContext context: Context,
         private val database: MusicDatabase,
     ) {
+        val showCategoryChips: Flow<Boolean> =
+            context.dataStore.data
+                .map { preferences -> preferences[ShowHomeCategoryChipsKey] ?: true }
+                .distinctUntilChanged()
+
         val quickPicksDisplayMode: Flow<QuickPicksDisplayMode> =
             context.dataStore.data
                 .map { preferences ->

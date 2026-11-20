@@ -28,11 +28,13 @@ class ObserveHomePresentationPreferencesUseCase
     ) {
         operator fun invoke(): Flow<HomePresentationPreferences> =
             combine(
+                repository.showCategoryChips,
                 repository.quickPicksDisplayMode,
                 repository.quickPicksMode,
                 repository.showTonalBackdrop,
-            ) { quickPicksDisplayMode, quickPicksMode, showTonalBackdrop ->
+            ) { showCategoryChips, quickPicksDisplayMode, quickPicksMode, showTonalBackdrop ->
                 HomePresentationPreferences(
+                    showCategoryChips = showCategoryChips,
                     quickPicksDisplayMode = quickPicksDisplayMode,
                     quickPicksMode = quickPicksMode,
                     showTonalBackdrop = showTonalBackdrop,
@@ -42,6 +44,7 @@ class ObserveHomePresentationPreferencesUseCase
 
 @Immutable
 data class HomePresentationPreferences(
+    val showCategoryChips: Boolean,
     val quickPicksDisplayMode: QuickPicksDisplayMode,
     val quickPicksMode: QuickPicks,
     val showTonalBackdrop: Boolean,

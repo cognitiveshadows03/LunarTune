@@ -17,6 +17,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -117,6 +118,7 @@ private data class HomeRemoteContent(
 private data class HomeContent(
     val local: HomeLocalContent,
     val remote: HomeRemoteContent,
+    val selectedChip: HomePage.Chip?,
 ) {
     val hasContent: Boolean
         get() =
@@ -133,6 +135,7 @@ private data class HomeContent(
 private data class HomeLoadingFlags(
     val isRefreshing: Boolean,
     val isLoadingMore: Boolean,
+    val isChipLoading: Boolean,
 )
 
 private data class HomeStateInputs(
@@ -145,6 +148,7 @@ private data class HomeStateInputs(
     fun toScreenState(
         isRefreshing: Boolean,
         isLoadingMore: Boolean,
+        isChipLoading: Boolean,
     ): HomeScreenState {
         if (!content.hasContent) {
             if (loadError != null && isInitialLoadComplete) {
@@ -166,13 +170,16 @@ private data class HomeStateInputs(
                 accountPlaylists = ImmutableList.copyOf(content.remote.accountPlaylists),
                 homePage = content.remote.homePage,
                 remoteQuickPicks = content.remote.remoteQuickPicks,
+                selectedChip = content.selectedChip,
                 accountName = content.remote.accountName,
                 accountImageUrl = content.remote.accountImageUrl,
                 quickPicksDisplayMode = preferences.quickPicksDisplayMode,
                 quickPicksMode = preferences.quickPicksMode,
+                showCategoryChips = preferences.showCategoryChips,
                 showTonalBackdrop = preferences.showTonalBackdrop,
                 isRefreshing = isRefreshing,
                 isLoadingMore = isLoadingMore,
+                isChipLoading = isChipLoading,
             ),
         )
     }
@@ -197,6 +204,7 @@ class HomeViewModel
         private val isInitialLoadComplete = MutableStateFlow(false)
         private val loadError = MutableStateFlow<Int?>(null)
         private val isLoadingMore = MutableStateFlow(false)
+        private val isChipLoading = MutableStateFlow(false)
 
         private val quickPicksMode =
             context.dataStore.data
@@ -212,6 +220,9 @@ class HomeViewModel
         private val accountPlaylists = MutableStateFlow<List<PlaylistItem>?>(null)
         private val homePage = MutableStateFlow<HomePage?>(null)
         private val remoteQuickPicks = MutableStateFlow<HomePage.Section?>(null)
+        private val selectedChip = MutableStateFlow<HomePage.Chip?>(null)
+        private val previousHomePage = MutableStateFlow<HomePage?>(null)
+        private val previousRemoteQuickPicks = MutableStateFlow<HomePage.Section?>(null)
 
         private val _allLocalItems = MutableStateFlow<List<LocalItem>>(emptyList())
         val allLocalItems: StateFlow<List<LocalItem>> = _allLocalItems.asStateFlow()
@@ -270,10 +281,12 @@ class HomeViewModel
             combine(
                 localContent,
                 remoteContent,
-            ) { localContent, remoteContent ->
+                selectedChip,
+            ) { localContent, remoteContent, selectedChip ->
                 HomeContent(
                     local = localContent,
                     remote = remoteContent,
+                    selectedChip = selectedChip,
                 )
             }
 
@@ -293,19 +306,22 @@ class HomeViewModel
                     loadError = loadError,
                 )
             }.combine(
-                combine<Boolean, Boolean, HomeLoadingFlags>(
+                combine<Boolean, Boolean, Boolean, HomeLoadingFlags>(
                     isRefreshing,
                     isLoadingMore,
-                ) { isRefreshing, isLoadingMore ->
+                    isChipLoading,
+                ) { isRefreshing, isLoadingMore, isChipLoading ->
                     HomeLoadingFlags(
                         isRefreshing = isRefreshing,
                         isLoadingMore = isLoadingMore,
+                        isChipLoading = isChipLoading,
                     )
                 },
             ) { inputs, loadingFlags ->
                 inputs.toScreenState(
                     isRefreshing = loadingFlags.isRefreshing,
                     isLoadingMore = loadingFlags.isLoadingMore,
+                    isChipLoading = loadingFlags.isChipLoading,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -314,6 +330,7 @@ class HomeViewModel
             )
 
         private var wasLoggedIn = false
+        private var chipLoadJob: Job? = null
 
         /**
          * The cookie flow emits immediately on collect, so the first emission is never a
@@ -851,15 +868,126 @@ class HomeViewModel
             }
         }
 
+        /**
+         * Drops the active chip and puts the regular home feed back.
+         *
+         * Only restores the previous page when we actually stashed one, so a failed or
+         * unsupported chip selection can never blank out the home screen.
+         */
+        private fun clearSelectedChip() {
+            isChipLoading.value = false
+            previousHomePage.value?.let {
+                homePage.value = it
+                remoteQuickPicks.value = previousRemoteQuickPicks.value
+            }
+            previousHomePage.value = null
+            previousRemoteQuickPicks.value = null
+            selectedChip.value = null
+        }
+
+        private fun toggleChip(chip: HomePage.Chip?) {
+            chipLoadJob?.cancel()
+            chipLoadJob = null
+
+            val alreadySelected = chip != null && chip == selectedChip.value
+            if (chip == null || alreadySelected) {
+                clearSelectedChip()
+                return
+            }
+
+            // Without params there is nothing to filter the home feed with, so don't
+            // pretend a category is selected — that only looks like a broken chip.
+            val params = chip.endpoint?.params
+            if (params.isNullOrBlank()) {
+                Timber.w("Home chip \"${chip.title}\" has no browse params")
+                clearSelectedChip()
+                return
+            }
+
+            // Stash the unfiltered feed once, so switching between chips keeps the
+            // same "all categories" page to fall back to.
+            if (selectedChip.value == null) {
+                previousHomePage.value = homePage.value
+                previousRemoteQuickPicks.value = remoteQuickPicks.value
+            }
+
+            // Select right away: the chip highlights instantly and the feed switches to
+            // the category while its shelves are still loading.
+            selectedChip.value = chip
+            loadChip(chip, params)
+        }
+
+        /** Re-runs the fetch for the active category after it came back empty or failed. */
+        private fun retryChip() {
+            val chip = selectedChip.value ?: return
+            val params = chip.endpoint?.params
+            if (params.isNullOrBlank()) {
+                clearSelectedChip()
+                return
+            }
+            loadChip(chip, params)
+        }
+
+        private fun loadChip(
+            chip: HomePage.Chip,
+            params: String,
+        ) {
+            isChipLoading.value = true
+            chipLoadJob =
+                viewModelScope.launch(Dispatchers.IO) {
+                    YouTube
+                        .home(params = params)
+                        .onSuccess { nextSections ->
+                            val hideExplicit = context.dataStore.get(HideExplicitKey, false)
+                            val hideVideo = context.dataStore.get(HideVideoKey, false)
+                            val blockedArtistIds = database.getBlockedArtistIds().toSet()
+                            val aiContentFilterPolicy = loadAiContentFilterPolicy()
+                            val filteredPage =
+                                nextSections.copy(
+                                    chips = previousHomePage.value?.chips ?: homePage.value?.chips,
+                                    sections =
+                                        nextSections.sections.map { section ->
+                                            section.copy(
+                                                items =
+                                                    filterAiContent(
+                                                        section.items
+                                                            .filterExplicit(hideExplicit)
+                                                            .filterVideo(hideVideo)
+                                                            .filterBlockedArtists(blockedArtistIds),
+                                                        aiContentFilterPolicy,
+                                                    ),
+                                            )
+                                        },
+                                )
+                            val (pageWithoutQuickPicks, quickPicksSection) = filteredPage.extractQuickPicks()
+                            remoteQuickPicks.value = quickPicksSection
+                            homePage.value = pageWithoutQuickPicks
+                            selectedChip.value = chip
+                            isChipLoading.value = false
+                        }.onFailure { error ->
+                            if (error is CancellationException) throw error
+                            Timber.w(error, "Failed to load home chip \"${chip.title}\"")
+                            // Don't leave the feed stuck on a category that never arrived.
+                            clearSelectedChip()
+                        }
+                }
+        }
+
         fun onAction(action: HomeAction) {
             when (action) {
                 HomeAction.Refresh -> refresh()
+                is HomeAction.SelectChip -> toggleChip(action.chip)
+                HomeAction.RetryChip -> retryChip()
                 is HomeAction.LoadMore -> loadMoreYouTubeItems(action.continuation)
             }
         }
 
         private fun refresh() {
             if (isRefreshing.value) return
+            // A reload fetches the unfiltered home, so leave the active category first.
+            if (selectedChip.value != null) {
+                clearSelectedChip()
+            }
             viewModelScope.launch(Dispatchers.IO) {
                 isRefreshing.value = true
                 try {
