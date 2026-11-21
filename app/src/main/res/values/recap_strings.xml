@@ -7,4 +7,17 @@
     <string name="recap_pause_highlights">Pause highlights</string>
     <string name="recap_resume_highlights">Resume highlights</string>
     <string name="recap_progress">Step %1$d of %2$d</string>
+
+    <!-- Reel copy added with the Replay-style rebuild. -->
+    <string name="year_in_music_active_days">Active Days</string>
+    <string name="year_in_music_plays_short">Plays</string>
+    <string name="year_in_music_share_card">Share card</string>
+    <string name="year_in_music_top_songs_footer">Songs you had on repeat</string>
+    <string name="year_in_music_back_to_year">Back to your year</string>
+    <string name="year_in_music_tap_begin">Tap to begin</string>
+    <string name="year_in_music_summary_top_song">Top song</string>
+    <string name="year_in_music_summary_top_artist">Top artist</string>
+    <string name="year_in_music_totals_sentence">You listened for %1$s of music.</string>
+    <string name="year_in_music_plays_sentence">You played %1$s songs.</string>
+    <string name="year_in_music_artist_sentence">You spent %1$s minutes with them.</string>
 </resources>
