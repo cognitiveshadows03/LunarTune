@@ -334,7 +334,6 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         topAlbums = content.topAlbums,
                     ),
                 )
-                add(YearInMusicRecapCard.Finale(year = content.selectedYear))
             }
         }
     }
@@ -378,11 +377,6 @@ private fun RecapCardPager(
         progress.floatValue = (storyElapsed.toFloat() / CardDurationMs).coerceIn(0f, 1f)
         val card = cards.getOrNull(storyIndex) ?: return@LaunchedEffect
         if (paused || isShareCaptureMode) return@LaunchedEffect
-        if (card is YearInMusicRecapCard.Finale) {
-            storyElapsed = CardDurationMs
-            progress.floatValue = 1f
-            return@LaunchedEffect
-        }
         var last = withFrameNanos { it }
         while (storyElapsed < CardDurationMs) {
             val now = withFrameNanos { it }
@@ -480,10 +474,6 @@ private fun RecapCardPager(
                     progress = { progress.floatValue },
                     pageIndex = page,
                     pageCount = cards.size,
-                    onRewatch = {
-                        paused = false
-                        goTo(0)
-                    },
                     onBack = onBack,
                     onTogglePause = { paused = !paused },
                     shareCaptureMode = isShareCaptureMode,
@@ -508,7 +498,6 @@ private fun RecapCardPage(
     progress: () -> Float,
     pageIndex: Int,
     pageCount: Int,
-    onRewatch: () -> Unit,
     onBack: () -> Unit,
     onTogglePause: () -> Unit,
     shareCaptureMode: Boolean,
@@ -569,10 +558,7 @@ private fun RecapCardPage(
                 TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.Summary ->
-                SummaryRecapCard(card, tone, motion, applySafeContentInsets)
-
-            is YearInMusicRecapCard.Finale ->
-                FinaleRecapCard(card, tone, motion, applySafeContentInsets, onRewatch = onRewatch, onBack = onBack)
+                SummaryRecapCard(card, tone, motion, applySafeContentInsets, onBack = onBack)
         }
 
         // Chrome: story segments plus the Replay-style pause and close buttons.
@@ -588,7 +574,7 @@ private fun RecapCardPage(
                         },
                     ).padding(top = 12.dp),
         ) {
-            if (card !is YearInMusicRecapCard.Finale && !shareCaptureMode) {
+            if (!shareCaptureMode) {
                 RecapStoryProgress(
                     current = pageIndex,
                     count = pageCount,
@@ -601,7 +587,7 @@ private fun RecapCardPage(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Spacer(modifier = Modifier.weight(1f))
-                if (!shareCaptureMode && isCurrent && card !is YearInMusicRecapCard.Finale) {
+                if (!shareCaptureMode && isCurrent) {
                     RecapGlassButton(
                         icon = if (paused) R.drawable.play else R.drawable.pause,
                         label =

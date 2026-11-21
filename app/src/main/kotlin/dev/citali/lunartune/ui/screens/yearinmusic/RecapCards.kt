@@ -12,6 +12,7 @@ package dev.citali.lunartune.ui.screens.yearinmusic
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -44,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -538,6 +541,8 @@ internal fun TopArtistsRecapCard(
     onArtistLongClick: (Artist) -> Unit,
 ) {
     val standout = card.artists.firstOrNull()
+    val ink = tone.ink()
+
     RecapPage(applySafeContentInsets = applySafeContentInsets) {
         Column(modifier = Modifier.fillMaxSize()) {
             RecapEyebrow(
@@ -550,59 +555,32 @@ internal fun TopArtistsRecapCard(
                 verticalArrangement = Arrangement.Center,
             ) {
                 if (standout != null) {
-                    Column(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(onClick = {}, onLongClick = { onArtistLongClick(standout) }),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        RecapArtistPortrait(
-                            artwork = standout.artist.thumbnailUrl,
-                            modifier =
-                                Modifier
-                                    .size(132.dp)
-                                    .recapEntrance(motion, delay = 90, fromY = 30f, initialScale = 0.9f, blur = 0f),
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            AutoResizeText(
-                                text = standout.artist.name,
-                                fontSizeRange = FontSizeRange(min = 20.sp, max = 32.sp),
-                                style = RecapType.title,
-                                fontWeight = FontWeight.Bold,
-                                color = tone.ink(),
-                                maxLines = 2,
-                                modifier = Modifier.recapEntrance(motion, delay = 200, fromY = 22f, blur = 10f),
-                            )
-                            Text(
-                                text =
-                                    stringResource(
-                                        R.string.year_in_music_artist_sentence,
-                                        formatCount(((standout.timeListened ?: 0) / 60_000).toLong()),
+                    ArtistHero(
+                        artist = standout,
+                        ink = ink,
+                        tone = tone,
+                        motion = motion,
+                        onLongClick = { onArtistLongClick(standout) },
+                    )
+                    if (card.artists.size > 1) {
+                        Spacer(modifier = Modifier.height(22.dp))
+                        card.artists.drop(1).take(4).forEachIndexed { index, artist ->
+                            if (index > 0) RecapDivider(tone = tone, modifier = Modifier.padding(vertical = 10.dp))
+                            RankedArtistRow(
+                                rank = index + 2,
+                                artist = artist,
+                                tone = tone,
+                                onLongClick = { onArtistLongClick(artist) },
+                                modifier =
+                                    Modifier.recapEntrance(
+                                        motion,
+                                        delay = 300 + index * 80,
+                                        fromX = 22f,
+                                        fromY = 0f,
+                                        blur = 6f,
                                     ),
-                                style = RecapType.rowMeta,
-                                color = tone.secondaryInk(),
-                                modifier = Modifier.recapEntrance(motion, delay = 280, blur = 8f),
                             )
                         }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    card.artists.drop(1).take(4).forEachIndexed { index, artist ->
-                        if (index > 0) RecapDivider(tone = tone, modifier = Modifier.padding(vertical = 9.dp))
-                        RankedArtistRow(
-                            rank = index + 2,
-                            artist = artist,
-                            tone = tone,
-                            onLongClick = { onArtistLongClick(artist) },
-                            modifier =
-                                Modifier.recapEntrance(
-                                    motion,
-                                    delay = 360 + index * 80,
-                                    fromX = 24f,
-                                    fromY = 0f,
-                                    blur = 6f,
-                                ),
-                        )
                     }
                 }
             }
@@ -610,9 +588,56 @@ internal fun TopArtistsRecapCard(
                 text = stringResource(R.string.year_in_music_ranked_artists),
                 style = RecapType.footer,
                 color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 700, blur = 6f),
+                modifier = Modifier.recapEntrance(motion, delay = 680, blur = 6f),
             )
         }
+    }
+}
+
+/** The #1 artist: portrait, name, then the sentence Replay uses under it. */
+@Composable
+private fun ArtistHero(
+    artist: Artist,
+    ink: Color,
+    tone: RecapTone,
+    motion: () -> Long,
+    onLongClick: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = {}, onLongClick = onLongClick),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        RecapArtistPortrait(
+            artwork = artist.artist.thumbnailUrl,
+            modifier =
+                Modifier
+                    .size(136.dp)
+                    .recapEntrance(motion, delay = 90, fromY = 30f, initialScale = 0.9f, blur = 0f),
+        )
+        // The name holds up to two lines; Japanese and Latin names both get the full width
+        // before the meter truncates, so long romanised names never get cut mid-word.
+        AutoResizeText(
+            text = artist.artist.name,
+            fontSizeRange = FontSizeRange(min = 19.sp, max = 32.sp),
+            style = RecapType.title,
+            fontWeight = FontWeight.Bold,
+            color = ink,
+            maxLines = 2,
+            modifier = Modifier.recapEntrance(motion, delay = 200, fromY = 22f, blur = 10f),
+        )
+        Text(
+            text =
+                stringResource(
+                    R.string.year_in_music_artist_sentence,
+                    formatCount(((artist.timeListened ?: 0) / 60_000).toLong()),
+                ),
+            style = RecapType.rowMeta,
+            color = tone.secondaryInk(),
+            modifier = Modifier.recapEntrance(motion, delay = 280, blur = 8f),
+        )
     }
 }
 
@@ -630,16 +655,21 @@ private fun RankedArtistRow(
                 .fillMaxWidth()
                 .combinedClickable(onClick = {}, onLongClick = onLongClick),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
+        // Rank first, then the circle: Replay keeps the number outside the artwork so the
+        // portraits line up as a column.
         Text(
             text = rank.toString(),
             style = RecapType.rank.copy(fontSize = 19.sp),
             color = tone.secondaryInk(),
             textAlign = TextAlign.Center,
-            modifier = Modifier.width(26.dp),
+            modifier = Modifier.width(22.dp),
         )
-        RecapArtistPortrait(artwork = artist.artist.thumbnailUrl, modifier = Modifier.size(42.dp))
+        RecapArtistPortrait(
+            artwork = artist.artist.thumbnailUrl,
+            modifier = Modifier.size(44.dp),
+        )
         Text(
             text = artist.artist.name,
             style = RecapType.rowTitle.copy(fontSize = 17.sp),
@@ -648,6 +678,8 @@ private fun RankedArtistRow(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        // One time reading per row, like Replay: the plain duration is what the reference shows
+        // in the trailing column, so no second minutes figure competes with it.
         Text(
             text = makeTimeString((artist.timeListened ?: 0).toLong()),
             style = RecapType.caption,
@@ -669,6 +701,9 @@ internal fun TopAlbumsRecapCard(
     applySafeContentInsets: Boolean,
 ) {
     val albums = card.albums.take(5)
+    val hero = albums.firstOrNull()
+    val rest = albums.drop(1).take(4)
+
     RecapPage(applySafeContentInsets = applySafeContentInsets) {
         Column(modifier = Modifier.fillMaxSize()) {
             RecapEyebrow(
@@ -680,25 +715,30 @@ internal fun TopAlbumsRecapCard(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.Center,
             ) {
-                AlbumHero(album = albums.firstOrNull(), tone = tone, motion = motion)
-                if (albums.size > 1) {
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        albums.drop(1).take(4).forEachIndexed { index, album ->
-                            AlbumTile(
-                                album = album,
-                                tone = tone,
-                                modifier =
-                                    Modifier
-                                        .weight(1f)
-                                        .recapEntrance(
-                                            motion,
-                                            delay = 300 + index * 90,
-                                            fromY = 28f,
-                                            initialScale = 0.92f,
-                                            blur = 0f,
-                                        ),
-                            )
+                if (hero != null) {
+                    AlbumHero(album = hero, tone = tone, motion = motion)
+                    if (rest.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(26.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            rest.forEachIndexed { index, album ->
+                                AlbumTile(
+                                    album = album,
+                                    tone = tone,
+                                    modifier =
+                                        Modifier
+                                            .weight(1f)
+                                            .recapEntrance(
+                                                motion,
+                                                delay = 300 + index * 90,
+                                                fromY = 26f,
+                                                initialScale = 0.92f,
+                                                blur = 0f,
+                                            ),
+                                )
+                            }
                         }
                     }
                 }
@@ -715,29 +755,31 @@ internal fun TopAlbumsRecapCard(
 
 @Composable
 private fun AlbumHero(
-    album: Album?,
+    album: Album,
     tone: RecapTone,
     motion: () -> Long,
 ) {
-    if (album == null) return
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
+        // The hero cover gets a soft drop shadow so it lifts off the clay wash the way the
+        // reference cover does.
         Box(
             modifier =
                 Modifier
-                    .size(132.dp)
+                    .size(148.dp)
+                    .shadow(elevation = 18.dp, shape = RoundedCornerShape(12.dp), clip = false)
                     .recapEntrance(motion, delay = 100, fromY = 34f, initialScale = 0.92f, blur = 0f),
         ) {
             RecapArtwork(
                 artwork = album.thumbnailUrl,
                 modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(12.dp),
             )
         }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 text = "#1",
                 style = RecapType.caption,
@@ -746,20 +788,24 @@ private fun AlbumHero(
             )
             AutoResizeText(
                 text = album.album.title,
-                fontSizeRange = FontSizeRange(min = 17.sp, max = 26.sp),
-                style = RecapType.title.copy(fontSize = 26.sp, lineHeight = 31.sp),
+                fontSizeRange = FontSizeRange(min = 17.sp, max = 28.sp),
+                style = RecapType.title.copy(fontSize = 28.sp, lineHeight = 33.sp),
                 fontWeight = FontWeight.Bold,
                 color = tone.ink(),
                 maxLines = 3,
                 modifier = Modifier.recapEntrance(motion, delay = 220, blur = 10f),
             )
-            Text(
-                text = album.artists.take(2).joinToString(" / ") { it.name },
-                style = RecapType.caption,
-                color = tone.secondaryInk(),
-                maxLines = 2,
-                modifier = Modifier.recapEntrance(motion, delay = 300, blur = 6f),
-            )
+            val artists = album.artists.take(2).joinToString(" / ") { it.name }
+            if (artists.isNotBlank()) {
+                Text(
+                    text = artists,
+                    style = RecapType.caption.copy(fontSize = 14.sp, lineHeight = 18.sp),
+                    color = tone.secondaryInk(),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.recapEntrance(motion, delay = 300, blur = 6f),
+                )
+            }
         }
     }
 }
@@ -771,11 +817,19 @@ private fun AlbumTile(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        RecapArtwork(
-            artwork = album.thumbnailUrl,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-            shape = RoundedCornerShape(8.dp),
-        )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(8.dp), clip = false),
+        ) {
+            RecapArtwork(
+                artwork = album.thumbnailUrl,
+                modifier = Modifier.fillMaxSize(),
+                shape = RoundedCornerShape(8.dp),
+            )
+        }
         Text(
             text = album.album.title,
             style = RecapType.caption.copy(fontSize = 12.sp, lineHeight = 15.sp),
@@ -796,6 +850,7 @@ internal fun SummaryRecapCard(
     tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
+    onBack: () -> Unit,
 ) {
     val ink = tone.ink()
     val minutes = (card.totalListeningTime / 60_000L).coerceAtLeast(if (card.totalListeningTime > 0L) 1L else 0L)
@@ -890,7 +945,22 @@ internal fun SummaryRecapCard(
                     }
                 }
             }
-            RecapSignature(text = stringResource(R.string.app_name), tone = tone)
+            // The summary closes the reel now, so it carries the way out.
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = stringResource(R.string.year_in_music_back_to_year),
+                    style = RecapType.rowTitle.copy(fontSize = 16.sp),
+                    fontWeight = FontWeight.SemiBold,
+                    color = ink,
+                    modifier =
+                        Modifier
+                            .recapEntrance(motion, delay = 760, blur = 6f)
+                            .clip(RoundedCornerShape(50))
+                            .clickable(onClick = onBack)
+                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                )
+                RecapSignature(text = stringResource(R.string.app_name), tone = tone)
+            }
         }
     }
 }
@@ -922,70 +992,8 @@ private fun SummaryFact(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Finale + empty states
+// Empty state
 // ---------------------------------------------------------------------------------------------
-
-@Composable
-internal fun FinaleRecapCard(
-    card: YearInMusicRecapCard.Finale,
-    tone: RecapTone,
-    motion: () -> Long,
-    applySafeContentInsets: Boolean,
-    onRewatch: () -> Unit,
-    onBack: () -> Unit,
-) {
-    val ink = tone.ink()
-    RecapPage(applySafeContentInsets = applySafeContentInsets) {
-        Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                text = stringResource(R.string.year_in_music_recap),
-                style = RecapType.eyebrow,
-                color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, blur = 8f),
-            )
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                AutoResizeText(
-                    text = stringResource(R.string.year_in_music_finale_title),
-                    fontSizeRange = FontSizeRange(min = 24.sp, max = 38.sp),
-                    style = RecapType.statementLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = ink,
-                    textAlign = TextAlign.Center,
-                    maxLines = 3,
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .recapEntrance(motion, delay = 120, fromY = 30f, blur = 16f),
-                )
-                Column(
-                    modifier = Modifier.fillMaxWidth().recapEntrance(motion, delay = 320, fromY = 22f, blur = 10f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    RecapPillButton(
-                        text = stringResource(R.string.year_in_music_rewatch),
-                        onClick = onRewatch,
-                        tone = tone,
-                    )
-                    RecapPillButton(
-                        text = stringResource(R.string.year_in_music_back_to_year),
-                        onClick = onBack,
-                        tone = tone,
-                        filled = false,
-                    )
-                }
-            }
-            Text(
-                text = "${stringResource(R.string.app_name)} • ${card.year}",
-                style = RecapType.footer,
-                color = tone.secondaryInk(),
-            )
-        }
-    }
-}
 
 @Composable
 internal fun EmptyRecapCard(

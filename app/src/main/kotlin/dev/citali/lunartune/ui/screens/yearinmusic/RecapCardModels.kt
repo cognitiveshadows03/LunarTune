@@ -89,10 +89,4 @@ internal sealed interface YearInMusicRecapCard {
     ) : YearInMusicRecapCard {
         override val id: String = "summary_$year"
     }
-
-    data class Finale(
-        val year: Int,
-    ) : YearInMusicRecapCard {
-        override val id: String = "finale_$year"
-    }
 }

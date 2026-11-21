@@ -125,7 +125,6 @@ internal object RecapScenes {
             is YearInMusicRecapCard.TopArtists -> Olive
             is YearInMusicRecapCard.TopAlbums -> Clay
             is YearInMusicRecapCard.Summary -> UltraViolet
-            is YearInMusicRecapCard.Finale -> Midnight
         }
 }
 
@@ -472,35 +471,6 @@ internal fun RecapStoryProgress(
                             }.background(tone.ink()),
                 )
             }
-        }
-    }
-}
-
-/** Replay-style pill: a solid light pill for the primary action, plain text for the rest. */
-@Composable
-internal fun RecapPillButton(
-    text: String,
-    onClick: () -> Unit,
-    tone: RecapTone,
-    modifier: Modifier = Modifier,
-    filled: Boolean = true,
-) {
-    val content = tone.ink()
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(50),
-        color = if (filled) content else Color.Transparent,
-        contentColor = if (filled) (if (tone == RecapTone.LIGHT) Color.White else RecapInk) else content,
-        modifier = modifier.fillMaxWidth().height(52.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = text,
-                style = RecapType.rowTitle,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
         }
     }
 }
