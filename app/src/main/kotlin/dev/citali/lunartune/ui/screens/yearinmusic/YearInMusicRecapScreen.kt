@@ -67,10 +67,12 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,9 +81,11 @@ import dev.citali.lunartune.LocalPlayerAwareWindowInsets
 import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.DisableAnimationsKey
 import dev.citali.lunartune.constants.DisableBlurKey
+import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
 import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.ui.component.LocalMenuState
+import dev.citali.lunartune.ui.menu.AlbumMenu
 import dev.citali.lunartune.ui.menu.ArtistMenu
 import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.utils.ComposeToImage
@@ -173,6 +177,16 @@ private fun YearInMusicRecapScreen(
                     ArtistMenu(
                         originalArtist = artist,
                         coroutineScope = coroutineScope,
+                        onDismiss = menuState::dismiss,
+                    )
+                }
+            },
+            onTopAlbumLongClick = { album ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                menuState.show {
+                    AlbumMenu(
+                        originalAlbum = album,
+                        navController = navController,
                         onDismiss = menuState::dismiss,
                     )
                 }
@@ -383,6 +397,7 @@ private fun RecapCardPager(
     onCardBoundsChanged: (Rect) -> Unit,
     onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
+    onTopAlbumLongClick: (Album) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -442,6 +457,7 @@ private fun RecapCardPager(
         val scene = RecapScenes.forCard(card)
         val tone = scene.tone
         val isCurrent = page == storyIndex
+        val layoutDirection = LocalLayoutDirection.current
 
         // Entrance clock: restarts every time this card becomes the active one.
         var cardElapsed by remember(card.id) { mutableLongStateOf(0L) }
@@ -481,14 +497,23 @@ private fun RecapCardPager(
                         .background(GutterBlack)
                         .onGloballyPositioned { coordinates ->
                             if (page == pagerState.currentPage) onCardBoundsChanged(coordinates.boundsInRoot())
-                        }.pointerInput(card.id, isCurrent, isShareCaptureMode) {
+                        }.pointerInput(card.id, isCurrent, isShareCaptureMode, layoutDirection) {
                             // A parent-level tap detector only fires when nothing above consumed the
                             // press, so buttons and the artwork's own long-press menu keep priority.
                             detectTapGestures { offset ->
                                 if (isShareCaptureMode || !isCurrent) return@detectTapGestures
                                 // Go back from anywhere, but only forward on pages that say a
                                 // tap should advance; the top-track page keeps its own taps.
-                                if (offset.x < size.width * BackZoneFraction) {
+                                //
+                                // The back zone is the leading third of the card, so in RTL the
+                                // threshold has to be measured from the right edge instead.
+                                val inBackZone =
+                                    if (layoutDirection == LayoutDirection.Rtl) {
+                                        offset.x > size.width * (1f - BackZoneFraction)
+                                    } else {
+                                        offset.x < size.width * BackZoneFraction
+                                    }
+                                if (inBackZone) {
                                     if (storyIndex > 0) goTo(storyIndex - 1)
                                 } else if (card.tapAdvances && storyIndex < cards.lastIndex) {
                                     goTo(storyIndex + 1)
@@ -513,6 +538,7 @@ private fun RecapCardPager(
                     shareCaptureMode = isShareCaptureMode,
                     onTopSongLongClick = onTopSongLongClick,
                     onTopArtistLongClick = onTopArtistLongClick,
+                    onTopAlbumLongClick = onTopAlbumLongClick,
                 )
             }
         }
@@ -537,6 +563,7 @@ private fun RecapCardPage(
     shareCaptureMode: Boolean,
     onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
+    onTopAlbumLongClick: (Album) -> Unit,
 ) {
     val ambientFlow =
         if (motionEnabled) {
@@ -589,7 +616,7 @@ private fun RecapCardPage(
                 TopArtistsRecapCard(card, tone, motion, applySafeContentInsets, onTopArtistLongClick)
 
             is YearInMusicRecapCard.TopAlbums ->
-                TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets)
+                TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets, onTopAlbumLongClick)
 
             is YearInMusicRecapCard.Summary ->
                 SummaryRecapCard(card, tone, motion, applySafeContentInsets, onBack = onBack)

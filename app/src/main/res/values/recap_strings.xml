@@ -1,26 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="recap_active_days">Days with music</string>
-    <string name="recap_busiest_month">Busiest month</string>
-    <plurals name="recap_days_value">
-        <item quantity="one">%1$s day</item>
-        <item quantity="other">%1$s days</item>
-    </plurals>
-    <string name="recap_habits">Your listening rhythm</string>
-    <string name="recap_hour">Most-listened hour</string>
-    <string name="recap_longest_streak">Longest listening streak</string>
-    <string name="recap_minutes_value">%1$s min</string>
-    <string name="recap_months">Your year, month by month</string>
-    <string name="recap_period_so_far">%1$s · Year so far</string>
     <plurals name="recap_plays_value">
         <item quantity="one">%1$s play</item>
         <item quantity="other">%1$s plays</item>
     </plurals>
-    <string name="recap_story_end">There is even more to hear.</string>
-    <string name="recap_story_intro">This is your year in music.</string>
-    <string name="recap_summary">Your music recap</string>
-    <string name="recap_weekday">Most-listened weekday</string>
-    <string name="recap_pause_highlights" translatable="false">Pause highlights</string>
-    <string name="recap_resume_highlights" translatable="false">Resume highlights</string>
-    <string name="recap_progress" translatable="false">Step %1$d of %2$d</string>
+    <string name="recap_pause_highlights">Pause highlights</string>
+    <string name="recap_resume_highlights">Resume highlights</string>
+    <string name="recap_progress">Step %1$d of %2$d</string>
 </resources>

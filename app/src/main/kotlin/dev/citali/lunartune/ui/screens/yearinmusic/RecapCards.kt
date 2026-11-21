@@ -13,7 +13,6 @@ import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -721,7 +720,11 @@ private fun ArtistHero(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = {}, onLongClick = onLongClick),
+                // Long press only: an empty onClick would register the row as a button that
+                // TalkBack announces and then does nothing when activated.
+                .pointerInput(artist.id) {
+                    detectTapGestures(onLongPress = { onLongClick() })
+                },
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         RecapArtistPortrait(
@@ -767,7 +770,10 @@ private fun RankedArtistRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .combinedClickable(onClick = {}, onLongClick = onLongClick),
+                // Long press only, for the same reason as the hero above.
+                .pointerInput(artist.id) {
+                    detectTapGestures(onLongPress = { onLongClick() })
+                },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(13.dp),
     ) {
@@ -813,6 +819,7 @@ internal fun TopAlbumsRecapCard(
     tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
+    onAlbumLongClick: (Album) -> Unit,
 ) {
     val albums = card.albums.take(5)
     val hero = albums.firstOrNull()
@@ -830,7 +837,12 @@ internal fun TopAlbumsRecapCard(
                 verticalArrangement = Arrangement.Center,
             ) {
                 if (hero != null) {
-                    AlbumHero(album = hero, tone = tone, motion = motion)
+                    AlbumHero(
+                        album = hero,
+                        tone = tone,
+                        motion = motion,
+                        onLongClick = { onAlbumLongClick(hero) },
+                    )
                     if (rest.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(26.dp))
                         Row(
@@ -841,6 +853,7 @@ internal fun TopAlbumsRecapCard(
                                 AlbumTile(
                                     album = album,
                                     tone = tone,
+                                    onLongClick = { onAlbumLongClick(album) },
                                     modifier =
                                         Modifier
                                             .weight(1f)
@@ -872,9 +885,15 @@ private fun AlbumHero(
     album: Album,
     tone: RecapTone,
     motion: () -> Long,
+    onLongClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .pointerInput(album.id) {
+                    detectTapGestures(onLongPress = { onLongClick() })
+                },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
@@ -928,9 +947,17 @@ private fun AlbumHero(
 private fun AlbumTile(
     album: Album,
     tone: RecapTone,
+    onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        modifier =
+            modifier
+                .pointerInput(album.id) {
+                    detectTapGestures(onLongPress = { onLongClick() })
+                },
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Box(
             modifier =
                 Modifier
