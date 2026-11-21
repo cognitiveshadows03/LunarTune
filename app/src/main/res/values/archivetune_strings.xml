@@ -544,6 +544,7 @@
     <string name="year_in_music_intro_hero">It\'s here! Your year in music.</string>
     <string name="year_in_music_intro_details">Reveal your top songs, artists, albums, and listening time.</string>
     <string name="year_in_music_totals_title">You kept the music moving</string>
+    <string name="year_in_music_active_days">Active Days</string>
     <string name="year_in_music_top_track">Your top track</string>
     <string name="year_in_music_ranked_artists">Artists on repeat</string>
     <string name="year_in_music_ranked_albums">Albums you returned to</string>
@@ -551,7 +552,10 @@
     <string name="year_in_music_empty_subtitle">Play more music during %d and your recap will appear here.</string>
     <string name="year_in_music_minutes_label">Listening time</string>
     <string name="year_in_music_minutes_unit">minutes</string>
+    <string name="year_in_music_plays_short">Plays</string>
     <string name="year_in_music_top_pick">Top pick</string>
+    <string name="year_in_music_share_card">Share card</string>
+    <string name="year_in_music_top_songs_footer">Songs you had on repeat</string>
 
     <string name="stats_favourite_artist">Your Favourite Artist</string>
     <string name="stats_favourite_song">Your Favourite Song</string>
@@ -899,4 +903,11 @@
     <string name="sources_clear_last_stream">Clear</string>
     <string name="log_slow_frames">Log slow frames</string>
     <string name="description_log_slow_frames">Times every frame against this screen\'s refresh rate and writes the slow ones, plus a running summary, to Debug Logs under the Motion tag. Leave off unless you are tuning motion: it costs one callback per frame while on.</string>
+    <string name="year_in_music_back_to_year">Back to your year</string>
+    <string name="year_in_music_tap_begin">Tap to begin</string>
+    <string name="year_in_music_summary_top_song">Top song</string>
+    <string name="year_in_music_summary_top_artist">Top artist</string>
+    <string name="year_in_music_totals_sentence">You listened for %1$s of music.</string>
+    <string name="year_in_music_plays_sentence">You played %1$s songs.</string>
+    <string name="year_in_music_artist_sentence">You spent %1$s minutes with them.</string>
 </resources>
