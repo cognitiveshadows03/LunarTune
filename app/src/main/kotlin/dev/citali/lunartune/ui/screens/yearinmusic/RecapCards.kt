@@ -17,6 +17,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -45,6 +47,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -80,6 +84,8 @@ import dev.citali.lunartune.utils.makeTimeString
 import java.text.NumberFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
+import kotlin.math.sin
 
 private val CardPadding = 22.dp
 private val FloatingControlsClearance = 92.dp
@@ -204,49 +210,156 @@ internal fun TotalsRecapCard(
     val timeSentence = stringResource(R.string.year_in_music_totals_sentence, timeText)
     val playsSentence = stringResource(R.string.year_in_music_plays_sentence, playsText)
 
-    RecapPage(applySafeContentInsets = applySafeContentInsets) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            RecapEyebrow(
-                text = stringResource(R.string.total_listening_time),
-                tone = tone,
-                modifier = Modifier.recapEntrance(motion, blur = 8f),
-            )
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                // Sentence first, with the duration itself in solid ink — the Replay
-                // "You listened for 61,452 minutes of music." treatment.
-                Text(
-                    text =
-                        buildAnnotatedString {
-                            append(timeSentence)
-                            val start = timeSentence.indexOf(timeText)
-                            if (start >= 0) addStyle(SpanStyle(color = ink), start, start + timeText.length)
-                        },
-                    style = RecapType.statement,
-                    color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, delay = 120, fromY = 34f, blur = 16f),
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Replay scatters the year's artists and covers behind the sentence and lets them drift
+        // the whole time the page is up. They sit under the copy and are cut off by the card.
+        RecapFloatingArtwork(
+            items = card.floating,
+            motion = motion,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Wash between the art and the sentence: the tiles stay visible at the edges but the
+        // middle of the page keeps enough contrast for the large type.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to sceneWash(tone, 0.10f),
+                            0.38f to sceneWash(tone, 0.34f),
+                            0.72f to sceneWash(tone, 0.24f),
+                            1.00f to sceneWash(tone, 0.46f),
+                        ),
+                    ),
+        )
+
+        RecapPage(applySafeContentInsets = applySafeContentInsets) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                RecapEyebrow(
+                    text = stringResource(R.string.total_listening_time),
+                    tone = tone,
+                    modifier = Modifier.recapEntrance(motion, blur = 8f),
                 )
-                Spacer(modifier = Modifier.height(30.dp))
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    // The sentence is the page, so it is set at display size with only the
+                    // duration in solid ink — Replay's "You listened to 61,452 minutes" weight.
+                    Text(
+                        text =
+                            buildAnnotatedString {
+                                append(timeSentence)
+                                val start = timeSentence.indexOf(timeText)
+                                if (start >= 0) addStyle(SpanStyle(color = ink), start, start + timeText.length)
+                            },
+                        style = RecapType.heroStatement,
+                        color = tone.secondaryInk(),
+                        modifier = Modifier.recapEntrance(motion, delay = 120, fromY = 40f, blur = 18f),
+                    )
+                    Spacer(modifier = Modifier.height(26.dp))
+                    Text(
+                        text =
+                            buildAnnotatedString {
+                                append(playsSentence)
+                                val start = playsSentence.indexOf(playsText)
+                                if (start >= 0) addStyle(SpanStyle(color = ink), start, start + playsText.length)
+                            },
+                        style = RecapType.statement,
+                        color = tone.secondaryInk(),
+                        modifier = Modifier.recapEntrance(motion, delay = 300, fromY = 30f, blur = 14f),
+                    )
+                }
                 Text(
-                    text =
-                        buildAnnotatedString {
-                            append(playsSentence)
-                            val start = playsSentence.indexOf(playsText)
-                            if (start >= 0) addStyle(SpanStyle(color = ink), start, start + playsText.length)
-                        },
-                    style = RecapType.title.copy(fontSize = 24.sp, lineHeight = 30.sp),
+                    text = stringResource(R.string.year_in_music_totals_title),
+                    style = RecapType.footer,
                     color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, delay = 300, fromY = 26f, blur = 12f),
+                    modifier = Modifier.recapEntrance(motion, delay = 440, blur = 6f),
                 )
             }
-            Text(
-                text = stringResource(R.string.year_in_music_totals_title),
-                style = RecapType.footer,
-                color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 420, blur = 6f),
-            )
+        }
+    }
+}
+
+/** Scene-tinted wash colour for the legibility layer over the drifting art. */
+private fun sceneWash(tone: RecapTone, alpha: Float): Color =
+    if (tone == RecapTone.DARK) Color.Black.copy(alpha = alpha) else Color.White.copy(alpha = alpha)
+
+/** Where one drifting tile sits, as fractions of the card, plus how fast it wanders. */
+private data class FloatingSpot(
+    val x: Float,
+    val y: Float,
+    val size: Float,
+    val rise: Float,
+    val sway: Float,
+)
+
+private val FloatingSpots =
+    listOf(
+        // Upper band, behind the opening line.
+        FloatingSpot(0.18f, 0.16f, 0.26f, 26f, 12f),
+        FloatingSpot(0.66f, 0.10f, 0.19f, 34f, -14f),
+        FloatingSpot(0.90f, 0.27f, 0.23f, 22f, -10f),
+        // Lower band, behind the play count and the footer.
+        FloatingSpot(0.10f, 0.62f, 0.22f, 30f, 14f),
+        FloatingSpot(0.46f, 0.74f, 0.28f, 24f, -12f),
+        FloatingSpot(0.82f, 0.66f, 0.20f, 36f, 10f),
+        FloatingSpot(0.30f, 0.40f, 0.15f, 28f, -8f),
+    )
+
+/**
+ * The drifting wall on the totals page.
+ *
+ * Every tile rises a few dp and sways over the time the card is on screen, each at its own pace,
+ * so the group never looks like one block sliding. Tiles are dimmed a little so the sentence in
+ * front of them keeps its contrast, and they fade in one after another.
+ */
+@Composable
+private fun RecapFloatingArtwork(
+    items: List<RecapFloatingArt>,
+    motion: () -> Long,
+    modifier: Modifier = Modifier,
+) {
+    if (items.isEmpty()) return
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        val cardWidth = maxWidth
+        items.take(FloatingSpots.size).forEachIndexed { index, item ->
+            val spot = FloatingSpots[index]
+            val diameter = cardWidth * spot.size
+            Box(
+                modifier =
+                    Modifier
+                        .offset(
+                            x = cardWidth * spot.x - diameter / 2,
+                            y = maxHeight * spot.y - diameter / 2,
+                        ).size(diameter)
+                        .recapEntrance(
+                            motion,
+                            delay = index * 110,
+                            fromY = 0f,
+                            initialScale = 0.7f,
+                            blur = 0f,
+                        ).graphicsLayer {
+                            // Every tile keeps its own period, so the wall never moves as one slab.
+                            // The motion settles by 9 s, which is past the time this page is up.
+                            val drift = (motion() / 9_000f).coerceIn(0f, 1f)
+                            val pace = 1f + index * 0.17f
+                            val swing = sin(drift * pace * PI.toFloat() * 1.6f)
+                            translationY = -drift * spot.rise.dp.toPx()
+                            translationX = swing * spot.sway.dp.toPx()
+                        }.alpha(0.62f),
+            ) {
+                if (item.circle) {
+                    RecapArtistPortrait(artwork = item.artwork, modifier = Modifier.fillMaxSize())
+                } else {
+                    RecapArtwork(
+                        artwork = item.artwork,
+                        modifier = Modifier.fillMaxSize(),
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -268,8 +381,8 @@ internal fun TopSongRecapCard(
     // cover yields nothing usable.
     val tint = rememberDominantColor(card.song.thumbnailUrl)
 
-    // Only the long press belongs to this page; plain taps fall through to the reel's parent
-    // gesture so the card still advances and the share chrome keeps its taps.
+    // Only the long press belongs to this page: the reel's own tap handling is disabled here
+    // (tapAdvances = false), so a tap on the cover never flips the page out from under a menu.
     Box(
         modifier =
             Modifier

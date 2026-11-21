@@ -14,6 +14,15 @@ import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongWithStats
 
 /**
+ * One drifting tile on the totals page: an artist portrait (circle) or an album cover (square).
+ */
+@Immutable
+internal data class RecapFloatingArt(
+    val artwork: String?,
+    val circle: Boolean,
+)
+
+/**
  * One card of the recap reel.
  *
  * A card carries only the values it draws; the visible labels live in string resources resolved
@@ -22,6 +31,15 @@ import dev.citali.lunartune.db.entities.SongWithStats
 @Immutable
 internal sealed interface YearInMusicRecapCard {
     val id: String
+
+    /**
+     * Whether a tap anywhere on the page should move the reel on.
+     *
+     * The top-track page owns taps itself (its cover is a real song), so it opts out and leaves
+     * advancing to the story clock, the pause row and the edge zones.
+     */
+    val tapAdvances: Boolean
+        get() = true
 
     data class Empty(
         val year: Int,
@@ -42,6 +60,8 @@ internal sealed interface YearInMusicRecapCard {
     data class Totals(
         val totalListeningTime: Long,
         val totalSongsPlayed: Long,
+        /** Cover art drifting behind the sentence, drawn from this year's top lists. */
+        val floating: List<RecapFloatingArt> = emptyList(),
     ) : YearInMusicRecapCard {
         override val id: String = "totals"
     }
@@ -54,6 +74,7 @@ internal sealed interface YearInMusicRecapCard {
         val milliseconds: Long,
     ) : YearInMusicRecapCard {
         override val id: String = "top_song_${song.id}"
+        override val tapAdvances: Boolean = false
     }
 
     /** Ranks 1–5 with cover art, name and time. */

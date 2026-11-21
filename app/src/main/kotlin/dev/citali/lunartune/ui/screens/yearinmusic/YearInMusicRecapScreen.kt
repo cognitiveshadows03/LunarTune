@@ -300,6 +300,7 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                     YearInMusicRecapCard.Totals(
                         totalListeningTime = content.totalListeningTime,
                         totalSongsPlayed = content.totalSongsPlayed,
+                        floating = floatingArtwork(content),
                     ),
                 )
                 content.topSongsStats.firstOrNull()?.let { topSong ->
@@ -337,6 +338,37 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
             }
         }
     }
+
+/**
+ * Artwork that drifts behind the totals sentence.
+ *
+ * Drawn from the year's own standings — artists as circles, songs and albums as squares — and
+ * interleaved so no two of the same kind sit side by side. Anything without cover art is skipped
+ * rather than leaving a grey placeholder floating across the page.
+ */
+private fun floatingArtwork(content: YearInMusicUiState.Content): List<RecapFloatingArt> {
+    val artists =
+        content.topArtists
+            .map { it.thumbnailUrl }
+            .filterNot { it.isNullOrBlank() }
+            .map { RecapFloatingArt(artwork = it, circle = true) }
+    val songs =
+        content.topSongsStats.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
+            .map { RecapFloatingArt(artwork = it, circle = false) }
+    val albums =
+        content.topAlbums.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
+            .map { RecapFloatingArt(artwork = it, circle = false) }
+
+    // Alternate circle, square, circle, square so the wall never clusters.
+    val merged = mutableListOf<RecapFloatingArt>()
+    val longest = maxOf(artists.size, songs.size, albums.size)
+    for (index in 0 until longest) {
+        artists.getOrNull(index)?.let(merged::add)
+        songs.getOrNull(index)?.let(merged::add)
+        albums.getOrNull(index)?.let(merged::add)
+    }
+    return merged.distinctBy { it.artwork }.take(7)
+}
 
 // ---------------------------------------------------------------------------------------------
 // Pager and story clock
@@ -454,9 +486,11 @@ private fun RecapCardPager(
                             // press, so buttons and the artwork's own long-press menu keep priority.
                             detectTapGestures { offset ->
                                 if (isShareCaptureMode || !isCurrent) return@detectTapGestures
+                                // Go back from anywhere, but only forward on pages that say a
+                                // tap should advance; the top-track page keeps its own taps.
                                 if (offset.x < size.width * BackZoneFraction) {
                                     if (storyIndex > 0) goTo(storyIndex - 1)
-                                } else if (storyIndex < cards.lastIndex) {
+                                } else if (card.tapAdvances && storyIndex < cards.lastIndex) {
                                     goTo(storyIndex + 1)
                                 }
                             }

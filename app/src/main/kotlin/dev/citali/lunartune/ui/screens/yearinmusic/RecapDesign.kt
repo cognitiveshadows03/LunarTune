@@ -9,6 +9,7 @@ package dev.citali.lunartune.ui.screens.yearinmusic
 
 import android.os.Build
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +33,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
@@ -44,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -259,6 +262,14 @@ internal object RecapType {
 
     val statementLarge = statement.copy(fontSize = 39.sp, lineHeight = 45.sp)
 
+    /** The totals sentence: the largest statement in the reel. */
+    val heroStatement =
+        statement.copy(
+            fontSize = 44.sp,
+            lineHeight = 51.sp,
+            letterSpacing = (-0.7).sp,
+        )
+
     val title =
         TextStyle(
             fontFamily = LyricsFontFamily,
@@ -401,23 +412,31 @@ internal fun RecapGlassButton(
     }
 }
 
-/** App mark beside the name, how every Replay screen signs off. */
+/**
+ * App mark beside the name, how every Replay screen signs off.
+ *
+ * The mark is the app's own icon. The artwork is a transparent 月 glyph drawn in near-black,
+ * so it is tinted to the scene's ink instead of being placed in a white circle that would read
+ * as a stray blob on a dark page.
+ */
 @Composable
 internal fun RecapSignature(
     text: String,
     tone: RecapTone,
     modifier: Modifier = Modifier,
+    markSize: Dp = 16.dp,
 ) {
     Row(
         modifier = modifier.semantics { contentDescription = text },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Icon(
-            painter = painterResource(R.drawable.music_note),
+        Image(
+            painter = painterResource(R.drawable.lunartune_brand_round),
             contentDescription = null,
-            tint = tone.ink().copy(alpha = 0.75f),
-            modifier = Modifier.size(14.dp),
+            contentScale = ContentScale.Fit,
+            colorFilter = ColorFilter.tint(tone.ink().copy(alpha = 0.82f)),
+            modifier = Modifier.size(markSize),
         )
         Text(
             text = text,
