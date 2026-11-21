@@ -45,7 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -355,10 +355,12 @@ private fun RecapCardPager(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var storyIndex by rememberSaveable { mutableIntStateOf(0) }
+    var storyIndex by rememberSaveable { mutableStateOf(0) }
     var paused by rememberSaveable { mutableStateOf(false) }
-    var storyElapsed by rememberSaveable { mutableLongStateOf(0L) }
-    var progress by remember { mutableStateOf(0f) }
+    var storyElapsed by rememberSaveable { mutableStateOf(0L) }
+    // Progress lives in a state holder that only the segment row reads, so a frame tick never
+    // recomposes a whole card.
+    val progress = remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(cards.size) {
         if (storyIndex !in cards.indices) storyIndex = cards.lastIndex.coerceAtLeast(0)
@@ -373,12 +375,12 @@ private fun RecapCardPager(
     // Story clock: runs while the reel is allowed to play. Pausing freezes the current segment
     // where it is, and resuming picks it up from that point.
     LaunchedEffect(storyIndex, paused, isShareCaptureMode, cards.size) {
-        progress = (storyElapsed.toFloat() / CardDurationMs).coerceIn(0f, 1f)
+        progress.floatValue = (storyElapsed.toFloat() / CardDurationMs).coerceIn(0f, 1f)
         val card = cards.getOrNull(storyIndex) ?: return@LaunchedEffect
         if (paused || isShareCaptureMode) return@LaunchedEffect
         if (card is YearInMusicRecapCard.Finale) {
             storyElapsed = CardDurationMs
-            progress = 1f
+            progress.floatValue = 1f
             return@LaunchedEffect
         }
         var last = withFrameNanos { it }
@@ -386,7 +388,7 @@ private fun RecapCardPager(
             val now = withFrameNanos { it }
             storyElapsed = (storyElapsed + (now - last) / 1_000_000L).coerceAtMost(CardDurationMs)
             last = now
-            progress = (storyElapsed.toFloat() / CardDurationMs).coerceIn(0f, 1f)
+            progress.floatValue = (storyElapsed.toFloat() / CardDurationMs).coerceIn(0f, 1f)
         }
         if (storyIndex < cards.lastIndex) {
             storyIndex += 1
@@ -475,7 +477,7 @@ private fun RecapCardPager(
                     paused = paused,
                     isCurrent = isCurrent,
                     applySafeContentInsets = true,
-                    progress = { progress },
+                    progress = { progress.floatValue },
                     pageIndex = page,
                     pageCount = cards.size,
                     onRewatch = {
