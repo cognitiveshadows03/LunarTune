@@ -15,6 +15,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.Color
@@ -27,33 +29,49 @@ import dev.citali.lunartune.ui.component.excludeDotTexture
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** A full-width lead card and balanced pairs; long titles always get room to breathe. */
+/**
+ * A full-width lead card, then balanced pairs. Two cards share a row only when both titles fit on
+ * one line in a half-width tile at the current width and font scale. Narrow phones and large text
+ * therefore fall back to full-width cards instead of breaking words.
+ */
 @Composable
 internal fun SettingsDashboardTiles(items: List<SettingsItem>) {
-    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-    val roomy = configuration.screenWidthDp >= 380 && configuration.fontScale <= 1.15f
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        var index = 0
-        if (items.isNotEmpty()) {
-            SettingsDashboardTile(items.first(), Modifier.fillMaxWidth(), wide = true)
-            index = 1
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val titleStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val tileGap = 12.dp
+        val tileInnerPx = with(density) {
+            ((maxWidth - tileGap) / 2 - DashboardTilePadding * 2).roundToPx()
         }
-        while (index < items.size) {
-            val first = items[index]
-            val second = items.getOrNull(index + 1)
-            if (roomy && second != null && first.title.length <= 15 && second.title.length <= 15) {
-                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SettingsDashboardTile(first, Modifier.weight(1f).fillMaxHeight())
-                    SettingsDashboardTile(second, Modifier.weight(1f).fillMaxHeight())
+        fun fitsPairTile(item: SettingsItem): Boolean =
+            measurer.measure(item.title, titleStyle, maxLines = 1).size.width <= tileInnerPx
+
+        Column(verticalArrangement = Arrangement.spacedBy(tileGap)) {
+            var index = 0
+            if (items.isNotEmpty()) {
+                SettingsDashboardTile(items.first(), Modifier.fillMaxWidth(), wide = true)
+                index = 1
+            }
+            while (index < items.size) {
+                val first = items[index]
+                val second = items.getOrNull(index + 1)
+                if (second != null && fitsPairTile(first) && fitsPairTile(second)) {
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(tileGap)) {
+                        SettingsDashboardTile(first, Modifier.weight(1f).fillMaxHeight())
+                        SettingsDashboardTile(second, Modifier.weight(1f).fillMaxHeight())
+                    }
+                    index += 2
+                } else {
+                    SettingsDashboardTile(first, Modifier.fillMaxWidth(), wide = true)
+                    index++
                 }
-                index += 2
-            } else {
-                SettingsDashboardTile(first, Modifier.fillMaxWidth(), wide = true)
-                index++
             }
         }
     }
 }
+
+private val DashboardTilePadding = 18.dp
 
 @Composable
 private fun SettingsDashboardTile(
@@ -95,7 +113,7 @@ private fun SettingsDashboardTile(
                         drawOutline(outline, accent.copy(alpha = 0.065f))
                     }
                 }
-            }.padding(18.dp),
+            }.padding(DashboardTilePadding),
         ) {
             Box(
                 modifier = Modifier.size(52.dp).clip(badgeShape).background(accent.copy(alpha = 0.16f)),

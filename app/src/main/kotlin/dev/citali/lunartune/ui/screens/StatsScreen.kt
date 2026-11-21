@@ -118,6 +118,8 @@ import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1869,27 +1871,50 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
         Triple(StatPeriod.YEAR_1.ordinal, R.string.stats_replay_yearly, R.drawable.update),
         Triple(StatPeriod.ALL.ordinal, R.string.stats_replay_lifetime, R.drawable.all_inclusive),
     )
+    val labels = periods.map { stringResource(it.second) }
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val baseLabelStyle = MaterialTheme.typography.labelLarge
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            Row(Modifier.fillMaxWidth().padding(6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                periods.forEach { (value, label, iconRes) ->
-                    val isSelected = selected == value
-                    Surface(onClick = { onSelect(value) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 14.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
+                // Each segment has 4dp of padding on both sides; the label must fit inside that.
+                val labelWidthPx = with(density) {
+                    ((maxWidth - SegmentGap * (periods.size - 1)) / periods.size - SegmentInnerPadding * 2).roundToPx()
+                }
+                val labelStyle = remember(labelWidthPx, labels, baseLabelStyle) {
+                    fittingLabelStyle(measurer, labels, baseLabelStyle, labelWidthPx)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SegmentGap)) {
+                    periods.forEachIndexed { index, (value, _, iconRes) ->
+                        val isSelected = selected == value
+                        Surface(
+                            onClick = { onSelect(value) },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         ) {
-                            Icon(
-                                painter = painterResource(iconRes),
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(stringResource(label), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelLarge)
+                            // Icon above the label, so the label gets the segment's full width.
+                            Column(
+                                modifier = Modifier.padding(horizontal = SegmentInnerPadding, vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Icon(
+                                    painter = painterResource(iconRes),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = labels[index],
+                                    style = labelStyle,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Clip,
+                                )
+                            }
                         }
                     }
                 }
@@ -1899,6 +1924,26 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
             Text(stringResource(if (detailed) R.string.stats_hide_periods else R.string.stats_more_periods))
         }
     }
+}
+
+private val SegmentGap = 4.dp
+private val SegmentInnerPadding = 4.dp
+private const val MIN_PERIOD_LABEL_SP = 10f
+
+/** Shrinks the period label size in small steps until the longest label fits on one line. */
+private fun fittingLabelStyle(
+    measurer: TextMeasurer,
+    labels: List<String>,
+    base: TextStyle,
+    maxWidthPx: Int,
+): TextStyle {
+    var style = base
+    while (style.fontSize.value > MIN_PERIOD_LABEL_SP &&
+        labels.any { measurer.measure(it, style, maxLines = 1).size.width > maxWidthPx }
+    ) {
+        style = style.copy(fontSize = (style.fontSize.value - 0.5f).sp)
+    }
+    return style
 }
 
 /**
