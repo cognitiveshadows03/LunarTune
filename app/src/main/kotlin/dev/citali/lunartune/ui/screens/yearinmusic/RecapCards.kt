@@ -83,6 +83,8 @@ private val FloatingControlsClearance = 92.dp
 
 private fun formatCount(value: Long): String = NumberFormat.getIntegerInstance().format(value)
 
+private fun formatCount(value: Int): String = formatCount(value.toLong())
+
 /** Plural "99 plays" for a song. */
 @Composable
 private fun playsLabel(plays: Long): String {
@@ -576,7 +578,7 @@ internal fun TopArtistsRecapCard(
                                 text =
                                     stringResource(
                                         R.string.year_in_music_artist_sentence,
-                                        formatCount((standout.timeListened ?: 0) / 60_000),
+                                        formatCount(((standout.timeListened ?: 0) / 60_000).toLong()),
                                     ),
                                 style = RecapType.rowMeta,
                                 color = tone.secondaryInk(),

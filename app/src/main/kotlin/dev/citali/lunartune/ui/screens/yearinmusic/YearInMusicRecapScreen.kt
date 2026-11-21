@@ -673,7 +673,9 @@ private suspend fun awaitNextPreDraw(view: View) {
             }
         vto.addOnPreDrawListener(listener)
         cont.invokeOnCancellation {
-            if (vto.isAlive) vto.removeOnPreDrawListener(this)
+            // `this` inside the OnPreDrawListener refers to the listener, so removal on
+            // cancellation must reach it through the captured reference.
+            if (vto.isAlive) vto.removeOnPreDrawListener(listener)
         }
         view.invalidate()
     }
