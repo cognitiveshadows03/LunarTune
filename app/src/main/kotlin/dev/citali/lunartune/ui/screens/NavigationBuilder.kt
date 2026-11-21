@@ -60,7 +60,6 @@ import dev.citali.lunartune.ui.screens.settings.AccountSettings
 import dev.citali.lunartune.ui.screens.settings.AiIntegrationSettings
 import dev.citali.lunartune.ui.screens.settings.AodCustomizedScreen
 import dev.citali.lunartune.ui.screens.settings.AppearanceSettings
-import dev.citali.lunartune.ui.screens.settings.AudioFxSettings
 import dev.citali.lunartune.ui.screens.settings.BackupAndRestore
 import dev.citali.lunartune.ui.screens.settings.ChangelogScreen
 import dev.citali.lunartune.ui.screens.settings.ChiperSettings
@@ -566,11 +565,6 @@ fun NavGraphBuilder.navigationBuilder(
     composable("settings/player/stream_sources") {
         DrillPageContainer(pureBlack) {
             StreamSourcesSettings(navController)
-        }
-    }
-    composable("settings/player/audio_fx") {
-        DrillPageContainer(pureBlack) {
-            AudioFxSettings(navController)
         }
     }
     composable("settings/player/chiper") {
