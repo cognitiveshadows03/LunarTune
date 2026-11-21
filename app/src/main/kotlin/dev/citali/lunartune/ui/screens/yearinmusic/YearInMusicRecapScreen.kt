@@ -361,27 +361,21 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
  * rather than leaving a grey placeholder floating across the page.
  */
 private fun floatingArtwork(content: YearInMusicUiState.Content): List<RecapFloatingArt> {
-    val artists =
-        content.topArtists
-            .map { it.thumbnailUrl }
-            .filterNot { it.isNullOrBlank() }
-            .map { RecapFloatingArt(artwork = it, circle = true) }
-    val songs =
-        content.topSongsStats.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
-            .map { RecapFloatingArt(artwork = it, circle = false) }
-    val albums =
-        content.topAlbums.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
-            .map { RecapFloatingArt(artwork = it, circle = false) }
+    fun collect(artwork: List<String?>, kind: RecapArtKind) =
+        artwork.filterNot { it.isNullOrBlank() }.map { RecapFloatingArt(artwork = it, kind = kind) }
 
-    // Alternate circle, square, circle, square so the wall never clusters.
-    val merged = mutableListOf<RecapFloatingArt>()
-    val longest = maxOf(artists.size, songs.size, albums.size)
-    for (index in 0 until longest) {
-        artists.getOrNull(index)?.let(merged::add)
-        songs.getOrNull(index)?.let(merged::add)
-        albums.getOrNull(index)?.let(merged::add)
+    val songs = collect(content.topSongsStats.map { it.thumbnailUrl }, RecapArtKind.SONG)
+    val albums = collect(content.topAlbums.map { it.thumbnailUrl }, RecapArtKind.ALBUM)
+    val artists = collect(content.topArtists.map { it.thumbnailUrl }, RecapArtKind.ARTIST)
+
+    // Songs and albums share the left curtain, artists take the right. Interleave the two
+    // square lists so a 5-song year and a 1-album year still produce an alternating strip.
+    val squares = mutableListOf<RecapFloatingArt>()
+    for (index in 0 until maxOf(songs.size, albums.size)) {
+        songs.getOrNull(index)?.let(squares::add)
+        albums.getOrNull(index)?.let(squares::add)
     }
-    return merged.distinctBy { it.artwork }.take(7)
+    return (squares.distinctBy { it.artwork } + artists.distinctBy { it.artwork }).take(14)
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -16,11 +16,16 @@ import dev.citali.lunartune.db.entities.SongWithStats
 /**
  * One drifting tile on the totals page: an artist portrait (circle) or an album cover (square).
  */
+/** Which of the year's lists a drifting cover came from. */
+internal enum class RecapArtKind { SONG, ALBUM, ARTIST }
+
 @Immutable
 internal data class RecapFloatingArt(
     val artwork: String?,
-    val circle: Boolean,
-)
+    val kind: RecapArtKind,
+) {
+    val circle: Boolean get() = kind == RecapArtKind.ARTIST
+}
 
 /**
  * One card of the recap reel.
