@@ -172,7 +172,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-import java.time.format.TextStyle
+import java.time.format.TextStyle as JavaTextStyle
 import java.time.temporal.WeekFields
 import java.util.Locale
 import kotlin.math.PI
@@ -2922,7 +2922,7 @@ private fun StatsListeningCalendar(
                         (0..6).map { index ->
                             weekFields.firstDayOfWeek
                                 .plus(index.toLong())
-                                .getDisplayName(TextStyle.SHORT, locale)
+                                .getDisplayName(JavaTextStyle.SHORT, locale)
                         }
                     }
                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
