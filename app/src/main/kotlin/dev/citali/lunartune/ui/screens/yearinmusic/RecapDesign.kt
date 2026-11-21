@@ -13,12 +13,15 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -26,9 +29,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
@@ -37,17 +43,24 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import dev.citali.lunartune.R
@@ -55,6 +68,7 @@ import dev.citali.lunartune.ui.player.rememberOfflineArtworkImageRequest
 import dev.citali.lunartune.ui.theme.LyricsFontFamily
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.sin
 
 // ---------------------------------------------------------------------------------------------
 // Palette: one ink per tone. Colour comes from the scene, never from the text.
@@ -189,7 +203,7 @@ internal fun RecapSceneBackdrop(
 // as a single choreographed entrance.
 // ---------------------------------------------------------------------------------------------
 
-private fun springCurve(t: Float): Float = if (t >= 1f) 1f else 1f - exp(-6.5f * t) * cos(9.5f * t)
+internal fun springCurve(t: Float): Float = if (t >= 1f) 1f else 1f - exp(-6.5f * t) * cos(9.5f * t)
 
 internal fun Modifier.recapEntrance(
     motion: () -> Long,
@@ -446,6 +460,199 @@ internal fun RecapSignature(
         )
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Editorial primitives: mosaic, ghost art and outlined ranks
+// ---------------------------------------------------------------------------------------------
+
+/** One tile of a [RecapArtMosaic]; left edge, right edge and both vertical edges are fractions. */
+@Immutable
+internal data class RecapMosaicTile(
+    val startFraction: Float,
+    val endFraction: Float,
+    val topFraction: Float,
+    val bottomFraction: Float,
+    val radius: Dp = 0.dp,
+    /** Delay, in milliseconds, before this tile starts to appear. Staggers the reveal. */
+    val revealDelay: Int = 0,
+)
+
+/**
+ * Album covers butted together into one collage, the way the reference builds its backdrop out
+ * of its own artwork instead of drifting it around the edges.
+ *
+ * Every tile is drawn at exactly the size it occupies, and the collage fades in from the centre
+ * outward, so the page reads as art first and the words land on top of it.
+ */
+@Composable
+internal fun RecapArtMosaic(
+    artworks: List<String?>,
+    tiles: List<RecapMosaicTile>,
+    motion: () -> Long,
+    modifier: Modifier = Modifier,
+) {
+    val usable = artworks.filterNot { it.isNullOrBlank() }
+    if (usable.isEmpty() || tiles.isEmpty()) return
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        val width = maxWidth
+        val height = maxHeight
+        tiles.forEachIndexed { index, tile ->
+            val artwork = usable[index % usable.size]
+            Box(
+                modifier =
+                    Modifier
+                        .offset(x = width * tile.startFraction, y = height * tile.topFraction)
+                        .width(width * (tile.endFraction - tile.startFraction))
+                        .height(height * (tile.bottomFraction - tile.topFraction))
+                        .recapTileReveal(motion, delay = tile.revealDelay),
+            ) {
+                RecapArtwork(
+                    artwork = artwork,
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(tile.radius),
+                )
+            }
+        }
+    }
+}
+
+/** A mosaic tile that fades and settles into place as the card opens. */
+private fun Modifier.recapTileReveal(
+    motion: () -> Long,
+    delay: Int,
+): Modifier =
+    graphicsLayer {
+        val fraction = ((motion() - delay) / 900f).coerceIn(0f, 1f)
+        val progress = springCurve(fraction)
+        alpha = (fraction * 2.2f).coerceIn(0f, 1f)
+        translationY = (1f - progress) * 22.dp.toPx()
+        scaleX = 0.94f + 0.06f * progress
+        scaleY = scaleX
+    }
+
+/**
+ * Outlined numeral set behind the ranked lists.
+ *
+ * The reference lets its type be bigger than the card; a filled numeral that size would swallow
+ * the rows, so the rank is drawn as an outline with a faint fill — present, enormous, and never
+ * in the way of a song title.
+ *
+ * The outline is the numeral drawn a ring of times behind itself, which keeps it independent of
+ * any text-stroke API and identical across platform versions.
+ */
+@Composable
+internal fun RecapGhostNumeral(
+    text: String,
+    tone: RecapTone,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 92.sp,
+    fillAlpha: Float = 0.12f,
+    strokeAlpha: Float = 0.4f,
+) {
+    val ink = tone.ink()
+    val style =
+        TextStyle(
+            fontFamily = LyricsFontFamily,
+            fontWeight = FontWeight.Black,
+            fontSize = fontSize,
+            lineHeight = fontSize,
+            letterSpacing = (-0.06).em,
+        )
+    val outline =
+        Modifier.drawWithContent {
+            val radius = 1.4.dp.toPx()
+            for (step in 0 until OutlineRingSteps) {
+                val angle = step * 6.2831855f / OutlineRingSteps
+                translate(left = cos(angle) * radius, top = sin(angle) * radius) {
+                    this@drawWithContent.drawContent()
+                }
+            }
+        }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text = text,
+            style = style,
+            color = ink.copy(alpha = strokeAlpha),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            modifier = outline,
+        )
+        Text(
+            text = text,
+            style = style,
+            color = ink.copy(alpha = fillAlpha),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+        )
+    }
+}
+
+private const val OutlineRingSteps = 12
+
+/**
+ * Display type that is measured, not guessed.
+ *
+ * The reference's numbers are sized to the card, not the other way round: the figure grows until
+ * it *just* fits the width and is cropped by the edges only when it is meant to be. [AutoResizeText]
+ * shrinks on height overflow alone, which would let a long figure run off the side, so the size is
+ * picked here by measuring candidate sizes against the real constraints.
+ */
+@Composable
+internal fun RecapFitText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    minSize: TextUnit,
+    maxSize: TextUnit,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1,
+    softWrap: Boolean = false,
+) {
+    val measurer = rememberTextMeasurer()
+    val annotated = remember(text) { AnnotatedString(text) }
+    BoxWithConstraints(modifier = modifier) {
+        val layoutWidth = constraints.maxWidth
+        val fontSize: Float =
+            remember(annotated, layoutWidth, style, minSize, maxSize, maxLines, softWrap, measurer) {
+                if (layoutWidth <= 0) {
+                    minSize.value
+                } else {
+                    // Seven bisection passes land within a quarter of a point of the largest
+                    // size that still fits, which is finer than the eye can resolve.
+                    var low = minSize.value
+                    var high = maxSize.value.coerceAtLeast(low)
+                    repeat(FitPasses) {
+                        val mid = (low + high) / 2f
+                        val measured =
+                            measurer.measure(
+                                text = annotated,
+                                style = style.copy(fontSize = mid.sp, lineHeight = (mid * style.lineHeightFactor()).sp),
+                                maxLines = maxLines,
+                                softWrap = softWrap,
+                                overflow = TextOverflow.Clip,
+                                constraints = Constraints(maxWidth = layoutWidth),
+                            )
+                        if (measured.hasVisualOverflow) high = mid else low = mid
+                    }
+                    low
+                }
+            }
+        Text(
+            text = text,
+            style = style.copy(fontSize = fontSize.sp, lineHeight = (fontSize * style.lineHeightFactor()).sp),
+            color = color,
+            maxLines = maxLines,
+            softWrap = softWrap,
+            overflow = TextOverflow.Clip,
+        )
+    }
+}
+
+/** Share of the font size a style spends on a line, kept when fitting so leading stays proportional. */
+private fun TextStyle.lineHeightFactor(): Float =
+    if (fontSize.value > 0f && lineHeight.type == TextUnitType.Sp) (lineHeight.value / fontSize.value).coerceIn(0.8f, 1.4f) else 1f
+
+private const val FitPasses = 7
 
 /** Segment row at the very top: finished cards filled, the current one filling. */
 @Composable

@@ -593,7 +593,7 @@ private fun RecapCardPage(
                 IntroRecapCard(card, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.Totals ->
-                TotalsRecapCard(card, tone, motion, applySafeContentInsets)
+                TotalsRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopSong ->
                 TopSongRecapCard(
@@ -604,10 +604,10 @@ private fun RecapCardPage(
                 )
 
             is YearInMusicRecapCard.TopSongs ->
-                TopSongsRecapCard(card, tone, motion, applySafeContentInsets)
+                TopSongsRecapCard(card, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopArtists ->
-                TopArtistsRecapCard(card, tone, motion, applySafeContentInsets, onTopArtistLongClick)
+                TopArtistsRecapCard(card, scene, tone, motion, applySafeContentInsets, onTopArtistLongClick)
 
             is YearInMusicRecapCard.TopAlbums ->
                 TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets, onTopAlbumLongClick)
