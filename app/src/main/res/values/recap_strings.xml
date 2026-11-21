@@ -20,4 +20,7 @@
     <string name="recap_story_intro">This is your year in music.</string>
     <string name="recap_summary">Your music recap</string>
     <string name="recap_weekday">Most-listened weekday</string>
+    <string name="recap_pause_highlights" translatable="false">Pause highlights</string>
+    <string name="recap_resume_highlights" translatable="false">Resume highlights</string>
+    <string name="recap_progress" translatable="false">Step %1$d of %2$d</string>
 </resources>

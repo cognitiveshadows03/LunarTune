@@ -560,6 +560,9 @@
     <string name="year_in_music_plays_short">Plays</string>
     <string name="year_in_music_top_pick">Top pick</string>
     <string name="year_in_music_current_card">Share card</string>
+    <string name="year_in_music_share_card" translatable="false">Share card</string>
+    <string name="year_in_music_top_songs_footer" translatable="false">Songs you had on repeat</string>
+
     <string name="stats_favourite_artist">Your Favourite Artist</string>
     <string name="stats_favourite_song">Your Favourite Song</string>
     <string name="stats_total_time_listened">Total Time Listened</string>
