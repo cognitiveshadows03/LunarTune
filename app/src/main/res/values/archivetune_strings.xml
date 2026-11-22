@@ -924,4 +924,7 @@
     <string name="year_in_music_streak_grid_note">One square for every day of the run, drawn from %1$d covers</string>
     <string name="year_in_music_streak_footer">The run you kept going</string>
     <string name="year_in_music_top_albums_footer">The records you kept coming back to</string>
+    <string name="year_in_music_conclusion_lead">That was %1$s.</string>
+    <string name="year_in_music_conclusion_title">Yours, start to finish.</string>
+    <string name="year_in_music_conclusion_body">%1$s minutes across %2$s listening days, all kept on this device.</string>
 </resources>

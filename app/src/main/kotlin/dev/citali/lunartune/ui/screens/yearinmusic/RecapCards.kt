@@ -141,52 +141,58 @@ internal fun IntroRecapCard(
                 tone = tone,
                 modifier = Modifier.recapEntrance(motion, blur = 8f),
             )
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                // Giant year, autosized so four digits always fit the narrowest phone.
-                AutoResizeText(
-                    text = card.year.toString(),
-                    fontSizeRange = FontSizeRange(min = 56.sp, max = 132.sp),
-                    style = RecapType.statementLarge.copy(fontSize = 132.sp, lineHeight = 132.sp),
-                    fontWeight = FontWeight.Black,
-                    color = ink,
-                    maxLines = 1,
-                    modifier =
-                        Modifier.recapEntrance(motion, delay = 90, fromY = 44f, initialScale = 0.92f, blur = 18f),
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.year_in_music_recap_word),
-                    style = RecapType.statementLarge,
-                    fontWeight = FontWeight.Black,
-                    color = ink.copy(alpha = 0.92f),
-                    lineHeight = 44.sp,
-                    modifier = Modifier.recapEntrance(motion, delay = 200, fromY = 26f, blur = 14f),
-                )
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = stringResource(R.string.year_in_music_intro_hero),
-                    style = RecapType.statement,
-                    color = ink,
-                    modifier = Modifier.recapEntrance(motion, delay = 320, blur = 12f),
-                )
-                Text(
-                    text = stringResource(R.string.year_in_music_intro_details),
-                    style = RecapType.rowMeta.copy(fontSize = 16.sp, lineHeight = 22.sp),
-                    color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, delay = 420, blur = 10f),
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = stringResource(R.string.year_in_music_tap_begin),
-                    style = RecapType.rowTitle.copy(fontSize = 15.sp),
-                    color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, delay = 520, blur = 8f),
-                )
-            }
+            // Cover-page proportions. The year sits a little above the optical centre and the
+            // invitation sits on the floor of the card; the two weights are unequal on purpose,
+            // because the reference's opener is mostly air and the air is the point.
+            Spacer(modifier = Modifier.weight(0.62f))
+            // Fitted to the content width so four digits read as a masthead on every phone
+            // rather than shrinking politely on the narrow ones.
+            RecapFitText(
+                text = card.year.toString(),
+                style = RecapType.statementLarge.copy(letterSpacing = (-4).sp),
+                color = ink,
+                minSize = 64.sp,
+                maxSize = 168.sp,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .recapEntrance(motion, delay = 90, fromY = 44f, initialScale = 0.92f, blur = 18f),
+            )
+            Text(
+                text = stringResource(R.string.year_in_music_recap_word),
+                style =
+                    RecapType.statementLarge.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = 32.sp,
+                        lineHeight = 36.sp,
+                        letterSpacing = 3.sp,
+                    ),
+                color = ink.copy(alpha = 0.94f),
+                modifier = Modifier.recapEntrance(motion, delay = 200, fromY = 26f, blur = 14f),
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = stringResource(R.string.year_in_music_intro_hero),
+                style = RecapType.statement,
+                fontWeight = FontWeight.Bold,
+                color = ink,
+                modifier = Modifier.recapEntrance(motion, delay = 320, blur = 12f),
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.year_in_music_intro_details),
+                style = RecapType.rowMeta.copy(fontSize = 16.sp, lineHeight = 23.sp),
+                color = tone.secondaryInk(),
+                modifier = Modifier.recapEntrance(motion, delay = 420, blur = 10f),
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            Text(
+                text = stringResource(R.string.year_in_music_tap_begin),
+                style = RecapType.rowTitle.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = tone.secondaryInk(),
+                modifier = Modifier.recapEntrance(motion, delay = 520, blur = 8f),
+            )
         }
     }
 }
@@ -1114,13 +1120,15 @@ internal fun TopAlbumsRecapCard(
     applySafeContentInsets: Boolean,
     onAlbumLongClick: (Album) -> Unit,
 ) {
-    val albums = card.albums.take(5)
+    // Four albums, not five: the leader plus three ranked rows is what the card can hold above
+    // its footer and the floating share pill. A fifth row was being cut in half by the card edge.
+    val albums = card.albums.take(4)
     val leader = albums.firstOrNull()
-    val rest = albums.drop(1).take(4)
+    val rest = albums.drop(1).take(3)
     val ink = tone.ink()
     val tint = rememberDominantColor(leader?.thumbnailUrl)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFC47552))) {
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFD98A63))) {
         if (leader != null) {
             AsyncImage(
                 model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
@@ -1142,10 +1150,10 @@ internal fun TopAlbumsRecapCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.00f to (tint ?: Color(0xFF7A3F2A)).copy(alpha = 0.72f),
-                                0.40f to Color(0xFFD99068).copy(alpha = 0.86f),
-                                0.70f to Color(0xFFD99068),
-                                1.00f to Color(0xFFC47552),
+                                0.00f to (tint ?: Color(0xFF9C5A40)).copy(alpha = 0.58f),
+                                0.38f to Color(0xFFE8A57C).copy(alpha = 0.78f),
+                                0.68f to Color(0xFFE8A57C),
+                                1.00f to Color(0xFFD98A63),
                             ),
                         ),
             )
@@ -1375,52 +1383,54 @@ internal fun SummaryRecapCard(
 
     RecapPage(applySafeContentInsets = applySafeContentInsets) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // A closing page is a sign-off, not another list. It says the year once, shows the
+            // three faces that carried it, and then gets out of the way: the reel ends here on
+            // its own, so there is no fifth row to scroll past and nothing left hanging.
             Column(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.Center,
             ) {
                 Text(
-                    text = "${card.year} ${stringResource(R.string.year_in_music_recap_word)}",
-                    style = RecapType.eyebrow,
+                    text =
+                        stringResource(
+                            R.string.year_in_music_conclusion_lead,
+                            card.year.toString(),
+                        ),
+                    style = RecapType.statement,
                     color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, blur = 8f),
+                    modifier = Modifier.recapEntrance(motion, blur = 10f),
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                AutoResizeText(
-                    text = formatCount(minutes),
-                    fontSizeRange = FontSizeRange(min = 54.sp, max = 92.sp),
-                    style = RecapType.statementLarge.copy(fontSize = 92.sp, lineHeight = 92.sp),
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.year_in_music_conclusion_title),
+                    style = RecapType.heroStatement,
                     fontWeight = FontWeight.Black,
                     color = ink,
-                    maxLines = 1,
                     modifier =
-                        Modifier.recapEntrance(motion, delay = 90, fromY = 40f, initialScale = 0.94f, blur = 16f),
+                        Modifier.recapEntrance(
+                            motion,
+                            delay = 110,
+                            fromY = 34f,
+                            initialScale = 0.96f,
+                            blur = 14f,
+                        ),
                 )
+                Spacer(modifier = Modifier.height(22.dp))
                 Text(
-                    text = stringResource(R.string.year_in_music_minutes_unit).uppercase(),
-                    style = RecapType.eyebrow,
+                    text =
+                        stringResource(
+                            R.string.year_in_music_conclusion_body,
+                            formatCount(minutes),
+                            formatCount(card.activeDays),
+                        ),
+                    style = RecapType.rowMeta.copy(fontSize = 15.sp, lineHeight = 22.sp),
                     color = tone.secondaryInk(),
-                    modifier = Modifier.recapEntrance(motion, delay = 170, blur = 8f),
+                    modifier = Modifier.recapEntrance(motion, delay = 220, blur = 8f),
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                    SummaryFact(
-                        label = stringResource(R.string.year_in_music_plays_short),
-                        value = formatCount(card.totalSongsPlayed),
-                        tone = tone,
-                        modifier = Modifier.weight(1f).recapEntrance(motion, delay = 300, fromY = 24f, blur = 10f),
-                    )
-                    SummaryFact(
-                        label = stringResource(R.string.year_in_music_active_days),
-                        value = formatCount(card.activeDays.toLong()),
-                        tone = tone,
-                        modifier = Modifier.weight(1f).recapEntrance(motion, delay = 380, fromY = 24f, blur = 10f),
-                    )
-                }
                 if (picks.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    // Three art tiles, the way Replay signs the recap off with its top picks.
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    // The three faces of the year, in one quiet rank-free row.
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         picks.forEachIndexed { index, (label, artwork) ->
                             Column(
                                 modifier =
@@ -1428,18 +1438,20 @@ internal fun SummaryRecapCard(
                                         .weight(1f)
                                         .recapEntrance(
                                             motion,
-                                            delay = 460 + index * 100,
-                                            fromY = 30f,
-                                            initialScale = 0.9f,
+                                            delay = 340 + index * 90,
+                                            fromY = 28f,
+                                            initialScale = 0.92f,
                                             blur = 0f,
                                         ),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(7.dp),
                             ) {
-                                RecapArtwork(
-                                    artwork = artwork,
-                                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                                    shape = if (index == 0) CircleShape else RoundedCornerShape(10.dp),
-                                )
+                                Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+                                    RecapArtwork(
+                                        artwork = artwork,
+                                        modifier = Modifier.fillMaxSize(),
+                                        shape = if (index == 0) CircleShape else RoundedCornerShape(12.dp),
+                                    )
+                                }
                                 Text(
                                     text = label,
                                     style = RecapType.caption.copy(fontSize = 11.sp, lineHeight = 14.sp),
@@ -1452,8 +1464,16 @@ internal fun SummaryRecapCard(
                     }
                 }
             }
-            // The summary closes the reel now, so it carries the way out.
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // The sign-off line: the app's name and mark, then the way back to the year itself.
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                RecapSignature(
+                    text = stringResource(R.string.app_name),
+                    tone = tone,
+                    modifier = Modifier.recapEntrance(motion, delay = 620, blur = 6f),
+                )
                 Text(
                     text = stringResource(R.string.year_in_music_back_to_year),
                     style = RecapType.rowTitle.copy(fontSize = 16.sp),
@@ -1461,42 +1481,16 @@ internal fun SummaryRecapCard(
                     color = ink,
                     modifier =
                         Modifier
-                            .recapEntrance(motion, delay = 760, blur = 6f)
+                            .recapEntrance(motion, delay = 700, blur = 6f)
                             .clip(RoundedCornerShape(50))
                             .clickable(onClick = onBack)
                             .padding(horizontal = 18.dp, vertical = 12.dp),
                 )
-                RecapSignature(text = stringResource(R.string.app_name), tone = tone)
             }
         }
     }
 }
 
-@Composable
-private fun SummaryFact(
-    label: String,
-    value: String,
-    tone: RecapTone,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        AutoResizeText(
-            text = value,
-            fontSizeRange = FontSizeRange(min = 20.sp, max = 30.sp),
-            style = RecapType.title.copy(fontSize = 30.sp, lineHeight = 33.sp),
-            fontWeight = FontWeight.Bold,
-            color = tone.ink(),
-            maxLines = 1,
-        )
-        Text(
-            text = label,
-            style = RecapType.caption,
-            color = tone.secondaryInk(),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
 
 // ---------------------------------------------------------------------------------------------
 // Empty state

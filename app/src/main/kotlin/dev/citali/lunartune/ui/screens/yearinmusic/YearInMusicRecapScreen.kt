@@ -433,6 +433,12 @@ private fun RecapCardPager(
         if (storyIndex < cards.lastIndex) {
             storyIndex += 1
             storyElapsed = 0L
+        } else if (cards.size > 1) {
+            // The reel ends when the closing card's segment does. There is nowhere further to
+            // go, so instead of idling on the last frame with a full bar, it lets the screen go
+            // the way the close button would. The lone empty-state card is exempt: it is not a
+            // reel, and closing it out from under the reader would only be rude.
+            onBack()
         }
     }
 

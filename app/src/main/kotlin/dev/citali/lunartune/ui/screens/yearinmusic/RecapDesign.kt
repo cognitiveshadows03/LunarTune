@@ -95,8 +95,10 @@ internal data class RecapScene(
 internal object RecapScenes {
     private val Emerald =
         RecapScene(
-            base = listOf(Color(0xFF1F8A6A), Color(0xFF12705A), Color(0xFF0A4A3E)),
-            glows = listOf(Color(0xFF43B08C), Color(0xFFB93A4A), Color(0xFF0B3B32)),
+            // The intro's field: deep forest green with a warm, almost muddy haze in the
+            // top-left corner, the way the reference's cover page is lit.
+            base = listOf(Color(0xFF2E7058), Color(0xFF1E5645), Color(0xFF0E372C)),
+            glows = listOf(Color(0xFF5E9E7E), Color(0xFF8C6A48), Color(0xFF15453A)),
             tone = RecapTone.DARK,
         )
     private val UltraViolet =
@@ -107,27 +109,35 @@ internal object RecapScenes {
         )
     private val Smoke =
         RecapScene(
-            base = listOf(Color(0xFF23211F), Color(0xFF171615), Color(0xFF0E0D0D)),
-            glows = listOf(Color(0xFF8C4A5A), Color(0xFF3A2A30), Color(0xFF0A0909)),
+            base = listOf(Color(0xFF3B3330), Color(0xFF2A2422), Color(0xFF191514)),
+            glows = listOf(Color(0xFFB25F72), Color(0xFF5C4148), Color(0xFF241C1B)),
             tone = RecapTone.DARK,
         )
     private val Olive =
         RecapScene(
-            base = listOf(Color(0xFF8E9B2E), Color(0xFF77832A), Color(0xFF5C6620)),
-            glows = listOf(Color(0xFFB9C64A), Color(0xFF4E8F2E), Color(0xFF6E7A22)),
+            base = listOf(Color(0xFFA9B83C), Color(0xFF91A032), Color(0xFF77852A)),
+            glows = listOf(Color(0xFFD7E36A), Color(0xFF6FB046), Color(0xFF8B9A31)),
             tone = RecapTone.LIGHT,
         )
     private val Clay =
         RecapScene(
-            base = listOf(Color(0xFFE7A87E), Color(0xFFD99068), Color(0xFFC47552)),
-            glows = listOf(Color(0xFFF3C39C), Color(0xFFC0603F), Color(0xFFE7A87E)),
+            base = listOf(Color(0xFFF2BC94), Color(0xFFE8A57C), Color(0xFFD98A63)),
+            glows = listOf(Color(0xFFFFD9B4), Color(0xFFD9704A), Color(0xFFF0B089)),
             tone = RecapTone.LIGHT,
         )
     private val Midnight =
         RecapScene(
-            base = listOf(Color(0xFF2B3970), Color(0xFF1E2A55), Color(0xFF111834)),
-            glows = listOf(Color(0xFF3D5AA8), Color(0xFF1A2450), Color(0xFF0C1228)),
+            base = listOf(Color(0xFF3C5096), Color(0xFF2C3D75), Color(0xFF1D2850)),
+            glows = listOf(Color(0xFF5C7BD0), Color(0xFF2A3A6E), Color(0xFF16203E)),
             tone = RecapTone.DARK,
+        )
+    // The closing page is its own sunrise: warm enough to read as a farewell rather than
+    // another chapter, and light enough that the ink flips to near-black on it.
+    private val Dawn =
+        RecapScene(
+            base = listOf(Color(0xFFF6E7CF), Color(0xFFEFD3B4), Color(0xFFE3B394)),
+            glows = listOf(Color(0xFFFFF6E6), Color(0xFFECA07E), Color(0xFFF7DCC0)),
+            tone = RecapTone.LIGHT,
         )
 
     fun forCard(card: YearInMusicRecapCard): RecapScene =
@@ -141,7 +151,7 @@ internal object RecapScenes {
             is YearInMusicRecapCard.TopSongs -> Midnight
             is YearInMusicRecapCard.TopArtists -> Olive
             is YearInMusicRecapCard.TopAlbums -> Clay
-            is YearInMusicRecapCard.Summary -> UltraViolet
+            is YearInMusicRecapCard.Summary -> Dawn
         }
 }
 
