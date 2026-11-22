@@ -305,18 +305,9 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         floating = floatingArtwork(content),
                     ),
                 )
-                content.longestStreak?.let { streak ->
-                    // The streak answers with the leader's covers first, then the rest of the
-                    // year's albums, so every cell of the grid is artwork that was really played.
-                    add(
-                        YearInMusicRecapCard.LongestStreak(
-                            days = streak.days,
-                            startDay = streak.start.toString(),
-                            endDay = streak.end.toString(),
-                            covers = streakCovers(content),
-                        ),
-                    )
-                }
+                // The longest-streak page is parked while its design is reworked. The card
+                // variant, its renderer and the streak maths all stay in place so it can come
+                // back as one line here; nothing else in the reel depends on it.
                 if (content.topSongsStats.isNotEmpty()) {
                     add(YearInMusicRecapCard.TopSongs(songs = content.topSongsStats.take(5)))
                 }
@@ -613,7 +604,7 @@ private fun RecapCardPage(
                 TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets, onTopAlbumLongClick)
 
             is YearInMusicRecapCard.Summary ->
-                SummaryRecapCard(card, tone, motion, applySafeContentInsets, onBack = onBack)
+                SummaryRecapCard(card, tone, motion, applySafeContentInsets)
         }
 
         // Chrome: story segments plus the Replay-style pause and close buttons.

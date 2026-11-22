@@ -12,7 +12,6 @@ package dev.citali.lunartune.ui.screens.yearinmusic
 import android.content.Context
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,7 +47,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -136,62 +134,61 @@ internal fun IntroRecapCard(
     val ink = tone.ink()
     RecapPage(applySafeContentInsets = applySafeContentInsets) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // The cover and the closing page are the same page seen from both ends of the year,
+            // so they share a layout: mark at the top, one large statement, supporting lines,
+            // and a lot of quiet space in between. The year is set as a fitted masthead rather
+            // than fitted into a box, because a cover's job is to name the thing loudly.
             RecapSignature(
                 text = stringResource(R.string.app_name),
                 tone = tone,
                 modifier = Modifier.recapEntrance(motion, blur = 8f),
             )
-            // Cover-page proportions. The year sits a little above the optical centre and the
-            // invitation sits on the floor of the card; the two weights are unequal on purpose,
-            // because the reference's opener is mostly air and the air is the point.
-            Spacer(modifier = Modifier.weight(0.62f))
-            // Fitted to the content width so four digits read as a masthead on every phone
-            // rather than shrinking politely on the narrow ones.
-            RecapFitText(
-                text = card.year.toString(),
-                style = RecapType.statementLarge.copy(letterSpacing = (-4).sp),
-                color = ink,
-                minSize = 64.sp,
-                maxSize = 168.sp,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .recapEntrance(motion, delay = 90, fromY = 44f, initialScale = 0.92f, blur = 18f),
-            )
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = stringResource(R.string.year_in_music_recap_word),
                 style =
-                    RecapType.statementLarge.copy(
-                        fontWeight = FontWeight.Black,
-                        fontSize = 32.sp,
-                        lineHeight = 36.sp,
-                        letterSpacing = 3.sp,
+                    RecapType.eyebrow.copy(
+                        fontSize = 14.sp,
+                        letterSpacing = 4.sp,
                     ),
-                color = ink.copy(alpha = 0.94f),
-                modifier = Modifier.recapEntrance(motion, delay = 200, fromY = 26f, blur = 14f),
+                fontWeight = FontWeight.SemiBold,
+                color = tone.secondaryInk(),
+                modifier = Modifier.recapEntrance(motion, delay = 60, blur = 8f),
             )
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(6.dp))
+            RecapFitText(
+                text = card.year.toString(),
+                style = RecapType.statementLarge.copy(letterSpacing = (-5).sp),
+                color = ink,
+                minSize = 68.sp,
+                maxSize = 176.sp,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .recapEntrance(motion, delay = 110, fromY = 40f, initialScale = 0.94f, blur = 16f),
+            )
+            Spacer(modifier = Modifier.height(26.dp))
             Text(
                 text = stringResource(R.string.year_in_music_intro_hero),
                 style = RecapType.statement,
                 fontWeight = FontWeight.Bold,
                 color = ink,
-                modifier = Modifier.recapEntrance(motion, delay = 320, blur = 12f),
+                modifier = Modifier.recapEntrance(motion, delay = 260, blur = 12f),
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.year_in_music_intro_details),
                 style = RecapType.rowMeta.copy(fontSize = 16.sp, lineHeight = 23.sp),
                 color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 420, blur = 10f),
+                modifier = Modifier.recapEntrance(motion, delay = 360, blur = 10f),
             )
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.weight(1.18f))
             Text(
                 text = stringResource(R.string.year_in_music_tap_begin),
                 style = RecapType.rowTitle.copy(fontSize = 15.sp),
                 fontWeight = FontWeight.SemiBold,
                 color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 520, blur = 8f),
+                modifier = Modifier.recapEntrance(motion, delay = 480, blur = 8f),
             )
         }
     }
@@ -1365,7 +1362,6 @@ internal fun SummaryRecapCard(
     tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
-    onBack: () -> Unit,
 ) {
     val ink = tone.ink()
     val minutes = (card.totalListeningTime / 60_000L).coerceAtLeast(if (card.totalListeningTime > 0L) 1L else 0L)
@@ -1464,29 +1460,14 @@ internal fun SummaryRecapCard(
                     }
                 }
             }
-            // The sign-off line: the app's name and mark, then the way back to the year itself.
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                RecapSignature(
-                    text = stringResource(R.string.app_name),
-                    tone = tone,
-                    modifier = Modifier.recapEntrance(motion, delay = 620, blur = 6f),
-                )
-                Text(
-                    text = stringResource(R.string.year_in_music_back_to_year),
-                    style = RecapType.rowTitle.copy(fontSize = 16.sp),
-                    fontWeight = FontWeight.SemiBold,
-                    color = ink,
-                    modifier =
-                        Modifier
-                            .recapEntrance(motion, delay = 700, blur = 6f)
-                            .clip(RoundedCornerShape(50))
-                            .clickable(onClick = onBack)
-                            .padding(horizontal = 18.dp, vertical = 12.dp),
-                )
-            }
+            // The sign-off is the mark alone. The reel closes itself when this segment ends,
+            // so a "back to your year" button underneath would only be a second way out that
+            // the page does not need to advertise.
+            RecapSignature(
+                text = stringResource(R.string.app_name),
+                tone = tone,
+                modifier = Modifier.recapEntrance(motion, delay = 620, blur = 6f),
+            )
         }
     }
 }

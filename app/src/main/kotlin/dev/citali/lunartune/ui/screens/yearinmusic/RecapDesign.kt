@@ -93,13 +93,13 @@ internal data class RecapScene(
 )
 
 internal object RecapScenes {
-    private val Emerald =
+    // The cover: the same warm, bright daylight the closing page uses, so the reel opens and
+    // shuts on the same note instead of opening dark and shutting light.
+    private val Parchment =
         RecapScene(
-            // The intro's field: deep forest green with a warm, almost muddy haze in the
-            // top-left corner, the way the reference's cover page is lit.
-            base = listOf(Color(0xFF2E7058), Color(0xFF1E5645), Color(0xFF0E372C)),
-            glows = listOf(Color(0xFF5E9E7E), Color(0xFF8C6A48), Color(0xFF15453A)),
-            tone = RecapTone.DARK,
+            base = listOf(Color(0xFFFBF0DF), Color(0xFFF6E3CB), Color(0xFFEFD2B1)),
+            glows = listOf(Color(0xFFFFFBF2), Color(0xFFF7C9A4), Color(0xFFE9D3B4)),
+            tone = RecapTone.LIGHT,
         )
     private val UltraViolet =
         RecapScene(
@@ -143,7 +143,7 @@ internal object RecapScenes {
     fun forCard(card: YearInMusicRecapCard): RecapScene =
         when (card) {
             is YearInMusicRecapCard.Empty -> Midnight
-            is YearInMusicRecapCard.Intro -> Emerald
+            is YearInMusicRecapCard.Intro -> Parchment
             is YearInMusicRecapCard.Totals -> UltraViolet
             // The streak borrows the smoke scene: its sentence is the reference's warm dark page,
             // and the covers on it need a field that is quiet rather than bright.
