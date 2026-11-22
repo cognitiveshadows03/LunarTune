@@ -1002,19 +1002,26 @@ private fun DataSourcesCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
-                headlineContent = {
-                    Text(
-                        text = "lrc.red",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
+                trailingContent = {
+                    Icon(
+                        painter = painterResource(R.drawable.arrow_forward),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 },
-                supportingContent = {
-                    Text(
-                        text = stringResource(R.string.about_lrc_red_desc),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                content = {
+                    Column(verticalArrangement = Arrangement.spacedBy(AboutSpacing.xxs)) {
+                        Text(
+                            text = "lrc.red",
+                            style = MaterialTheme.typography.titleMediumEmphasized,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = stringResource(R.string.about_lrc_red_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 },
             )
         }
