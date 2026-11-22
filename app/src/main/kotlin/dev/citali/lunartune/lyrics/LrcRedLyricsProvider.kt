@@ -16,9 +16,12 @@ import dev.citali.lunartune.utils.get
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -38,6 +41,7 @@ import kotlin.math.abs
 object LrcRedLyricsProvider : LyricsProvider {
     private const val LOG_TAG = "lrc.red"
     private const val BASE_URL = "https://lrc.red"
+    private const val USER_AGENT = "LunarTune (https://github.com/cognitiveshadows03/LunarTune)"
     private const val DURATION_TOLERANCE_SECONDS = 3.0
 
     private val ISRC = Regex("""[A-Z]{2}[A-Z0-9]{3}\d{7}""")
@@ -74,6 +78,15 @@ object LrcRedLyricsProvider : LyricsProvider {
         }
     }
 
+    /**
+     * lrc.red's terms ask every client to identify itself: a User-Agent naming the app with a
+     * link and a contact address, and they warn that bulk requests without one can get the
+     * caller's address blocked. Both requests carry the same identity.
+     */
+    private fun HttpRequestBuilder.identityHeaders() {
+        header(HttpHeaders.UserAgent, USER_AGENT)
+    }
+
     private data class Hit(
         val isrc: String?,
         val title: String?,
@@ -108,7 +121,10 @@ object LrcRedLyricsProvider : LyricsProvider {
         return try {
             val hit = search(cleanTitle, cleanArtist, duration) ?: return null
             val isrc = hit.isrc ?: return null
-            val response = client.get("$BASE_URL/s/$isrc.ttml")
+            val response =
+                client.get("$BASE_URL/s/$isrc.ttml") {
+                    identityHeaders()
+                }
             if (response.status.value !in 200..299) {
                 GlobalLog.append(Log.INFO, LOG_TAG, "document request failed with status ${response.status.value}")
                 null
@@ -130,6 +146,7 @@ object LrcRedLyricsProvider : LyricsProvider {
     ): Hit? {
         val response =
             client.get("$BASE_URL/search.json") {
+                identityHeaders()
                 parameter("q", "$title $artist")
             }
         if (response.status.value !in 200..299) return null

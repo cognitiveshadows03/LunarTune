@@ -596,6 +596,15 @@ private fun AboutSuccessContent(
             }
         }
 
+        item(key = "data_sources", contentType = "about_data_sources") {
+            AboutContentContainer {
+                DataSourcesCard(
+                    onOpenUri = onOpenUri,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
         item(key = "legal_notice", contentType = "about_legal_notice") {
             AboutContentContainer {
                 LegalNoticeCard(modifier = Modifier.fillMaxWidth())
@@ -929,6 +938,90 @@ private fun LegalNoticeCard(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * Third-party data credits.
+ *
+ * lrc.red's terms require a visible credit and a link back wherever its lyrics are shown, so
+ * the provider is a real row with the site's own URL behind it rather than a mention buried in
+ * a paragraph. Anything else the app starts sourcing is expected to land in this same list.
+ */
+@Composable
+private fun DataSourcesCard(
+    onOpenUri: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scheme = MaterialTheme.colorScheme
+    val badgeShape = settingsIconShape("about")
+    Card(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors =
+            CardDefaults.cardColors(
+                containerColor = lerp(scheme.surfaceContainerLow, scheme.primaryContainer, 0.32f),
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aboutBlob(badgeShape, scheme.primary)
+                    .padding(AboutSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AboutSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.language),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = stringResource(R.string.about_data_sources),
+                    style = MaterialTheme.typography.titleLargeEmphasized,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            Text(
+                text = stringResource(R.string.about_data_sources_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SegmentedListItem(
+                onClick = { onOpenUri(LrcRedUrl) },
+                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1),
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = AboutSpacing.xxs),
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                leadingContent = {
+                    Icon(
+                        painter = painterResource(R.drawable.link),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                headlineContent = {
+                    Text(
+                        text = "lrc.red",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        text = stringResource(R.string.about_lrc_red_desc),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+            )
+        }
+    }
+}
+
+private const val LrcRedUrl = "https://lrc.red"
 
 @Composable
 private fun AboutSectionHeader(

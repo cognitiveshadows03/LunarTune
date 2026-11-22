@@ -187,6 +187,12 @@ LunarTune is made possible by the work of many open-source projects and communit
 - [Read You](https://github.com/Ashinch/ReadYou) and [Seal](https://github.com/JunkFood02/Seal) for UI component inspiration.
 - Translators, beta testers, contributors, and community members who continue to support the project.
 
+### Data Sources
+
+LunarTune shows third-party data in a few places. Each source is credited here and in the app's About screen, as their terms require:
+
+- **Lyrics** are provided by [lrc.red](https://lrc.red), a free community lyrics service. Its API is used under the [lrc.red terms](https://lrc.red/api) — requests identify LunarTune in their User-Agent, and lrc.red is credited wherever its lyrics are shown.
+
 ---
 
 ## ⚖️ Legal Disclaimer
