@@ -23,12 +23,13 @@ import kotlinx.coroutines.launch
 import dev.citali.lunartune.db.MusicDatabase
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
+import dev.citali.lunartune.db.entities.ListeningByDate
 import dev.citali.lunartune.db.entities.ListeningTotals
-import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongWithStats
 import moe.rukamori.archivetune.innertube.YouTube
 import dev.citali.lunartune.utils.reportException
 import java.time.Duration
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import javax.inject.Inject
@@ -77,17 +78,6 @@ class YearInMusicViewModel
                     )
                 }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-        private val topSongs =
-            selectedYear
-                .flatMapLatest { year ->
-                    database
-                        .mostPlayedSongs(
-                            fromTimeStamp = getYearStartTimestamp(year),
-                            limit = 5,
-                            toTimeStamp = getYearEndTimestamp(year),
-                        ).map { songs -> songs.filter { song -> song.artists.none { it.blockedAt != null } } }
-                }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
         private val topArtists =
             selectedYear
                 .flatMapLatest { year ->
@@ -130,17 +120,31 @@ class YearInMusicViewModel
                     )
                 }.stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
+        /**
+         * Per-day plays for the selected year.
+         *
+         * The calendar query groups raw events into wall-clock days, which is exactly the
+         * granularity a streak needs; the run itself is folded here rather than in the UI so the
+         * card receives one finished fact.
+         */
+        private val listeningDays =
+            selectedYear
+                .flatMapLatest { year ->
+                    database.listeningByDate(
+                        fromTimestamp = getYearStartTimestamp(year),
+                        toTimestamp = getYearEndTimestamp(year),
+                    )
+                }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
         private val recapData =
             combine(
                 topSongsStats,
-                topSongs,
                 topArtists,
                 topAlbums,
                 listeningTotals,
-            ) { songStats, songs, artists, albums, totals ->
+            ) { songStats, artists, albums, totals ->
                 YearInMusicRecapData(
                     topSongsStats = songStats,
-                    topSongs = songs,
                     topArtists = artists,
                     topAlbums = albums,
                     totalListeningTime = totals.totalTimeListened,
@@ -154,17 +158,18 @@ class YearInMusicViewModel
                 availableYears,
                 recapData,
                 activeDays,
-            ) { year, years, data, days ->
+                listeningDays,
+            ) { year, years, data, days, dayRows ->
                 YearInMusicUiState.Content(
                     selectedYear = year,
                     availableYears = years,
                     topSongsStats = data.topSongsStats,
-                    topSongs = data.topSongs,
                     topArtists = data.topArtists,
                     topAlbums = data.topAlbums,
                     totalListeningTime = data.totalListeningTime,
                     totalSongsPlayed = data.totalSongsPlayed,
                     activeDays = days,
+                    longestStreak = longestStreak(dayRows),
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -225,12 +230,51 @@ class YearInMusicViewModel
         }
     }
 
+/**
+ * The longest run of consecutive days with listening in [days], and where it fell.
+ *
+ * Rows arrive day-ordered with one key per calendar day, but a repeated or out-of-order key
+ * would otherwise inflate a run silently, so consecutive means exactly one day apart.
+ */
+private fun longestStreak(days: List<ListeningByDate>): YearInMusicStreak? {
+    if (days.isEmpty()) return null
+    var bestDays = 0
+    var bestStart: LocalDate? = null
+    var bestEnd: LocalDate? = null
+    var run = 0
+    var runStart: LocalDate? = null
+    var previous: LocalDate? = null
+    days.forEach { row ->
+        val date = runCatching { LocalDate.parse(row.day) }.getOrNull() ?: return@forEach
+        val previousDay = previous
+        val continues = previousDay != null && previousDay.plusDays(1) == date
+        run = if (continues) run + 1 else 1
+        if (!continues) runStart = date
+        if (run > bestDays) {
+            bestDays = run
+            bestStart = runStart
+            bestEnd = date
+        }
+        previous = date
+    }
+    val start = bestStart ?: return null
+    val end = bestEnd ?: return null
+    return YearInMusicStreak(days = bestDays, start = start, end = end)
+}
+
+/** A finished streak fact: how many days, and the window they fell in. */
+@Immutable
+data class YearInMusicStreak(
+    val days: Int,
+    val start: LocalDate,
+    val end: LocalDate,
+)
+
 @Immutable
 private data class YearInMusicRecapData(
     val totalListeningTime: Long,
     val totalSongsPlayed: Long,
     val topSongsStats: List<SongWithStats>,
-    val topSongs: List<Song>,
     val topArtists: List<Artist>,
     val topAlbums: List<Album>,
 )
@@ -246,8 +290,8 @@ sealed interface YearInMusicUiState {
         val totalListeningTime: Long = 0L,
         val totalSongsPlayed: Long = 0L,
         val activeDays: Int = 0,
+        val longestStreak: YearInMusicStreak? = null,
         val topSongsStats: List<SongWithStats> = emptyList(),
-        val topSongs: List<Song> = emptyList(),
         val topArtists: List<Artist> = emptyList(),
         val topAlbums: List<Album> = emptyList(),
     ) : YearInMusicUiState {

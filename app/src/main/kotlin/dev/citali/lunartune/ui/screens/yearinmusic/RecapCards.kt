@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,8 +59,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.palette.graphics.Palette
@@ -80,6 +79,9 @@ import dev.citali.lunartune.ui.component.FontSizeRange
 import dev.citali.lunartune.ui.player.rememberOfflineArtworkImageRequest
 import dev.citali.lunartune.utils.makeTimeString
 import java.text.NumberFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -196,11 +198,10 @@ internal fun IntroRecapCard(
 /**
  * The year in two numbers.
  *
- * The reference leads its totals page with one figure set so large that it runs off the edges of
- * the card, over a collage of its own artwork. Here the lead is the listening time in the largest
- * unit that still says something — "5d 2h" once a day is on the clock, "18h 40m" before that —
- * with the residue in a smaller line beneath, exactly the way the reference's number spills onto
- * a second line instead of being explained in prose.
+ * The reference opens with one strip of its own artwork pinned to the top of the card and then
+ * lets the figures own a flat field: no scattering of tiles around the type, no wash heavy enough
+ * to drown the colour. Here the strip is full-bleed and butted together — two covers and a centre
+ * album shape — and everything under it sits on the scene's own base colour.
  */
 @Composable
 internal fun TotalsRecapCard(
@@ -214,122 +215,177 @@ internal fun TotalsRecapCard(
     val lead = remember(card.totalListeningTime) { listeningTimeLead(card.totalListeningTime) }
     val tail = remember(card.totalListeningTime) { listeningTimeTail(card.totalListeningTime) }
     val playsText = formatCount(card.totalSongsPlayed)
-    val mosaic = remember(card.floating) { card.floating.map { it.artwork } }
+    val band = remember(card.floating) { card.floating.map { it.artwork } }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        RecapArtMosaic(
-            artworks = mosaic,
-            tiles = TotalsMosaicTiles,
-            motion = motion,
-            modifier = Modifier.fillMaxSize(),
-        )
+    Box(modifier = Modifier.fillMaxSize().background(scene.base[1])) {
+        // The band: a single row of art across the very top of the card, cropped by the edges so
+        // it reads as a continuous surface rather than a gallery.
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(TotalsBandHeightFraction).clipToBounds(),
+        ) {
+            val bandHeight = maxHeight
+            val sideWidth = maxWidth * TotalsBandSideFraction
+            val gap = 10.dp
+            val sides = band.drop(1)
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(gap),
+                verticalAlignment = Alignment.Top,
+            ) {
+                BandTile(
+                    artwork = sides.getOrNull(0) ?: band.firstOrNull(),
+                    motion = motion,
+                    delay = 40,
+                    modifier = Modifier.width(sideWidth).height(bandHeight * 0.88f),
+                    radius = 0.dp,
+                )
+                // The centre plate is the one rounded, taller cell, the way the reference lets
+                // its middle cover break the line of an otherwise flush strip.
+                BandTile(
+                    artwork = band.firstOrNull(),
+                    motion = motion,
+                    delay = 110,
+                    modifier = Modifier.weight(1f).height(bandHeight),
+                    radius = 10.dp,
+                )
+                BandTile(
+                    artwork = sides.getOrNull(1) ?: band.getOrNull(2) ?: band.firstOrNull(),
+                    motion = motion,
+                    delay = 180,
+                    modifier = Modifier.width(sideWidth).height(bandHeight * 0.88f),
+                    radius = 0.dp,
+                )
+            }
+        }
 
-        // The collage keeps the page's own scene under it rather than being replaced by it: a
-        // violet wash at partial strength turns five unrelated covers into one backdrop, and a
-        // deeper foot holds the footer's contrast without dimming the art the number sits on.
+        // A soft foot of the scene colour keeps the band from ending on a hard line, and leaves
+        // the rest of the page a quiet, single-colour field for the figures.
         Box(
             modifier =
                 Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .fillMaxHeight(TotalsBandHeightFraction)
                     .background(
                         Brush.verticalGradient(
-                            0.00f to scene.base[0].copy(alpha = 0.66f),
-                            0.42f to scene.base[1].copy(alpha = 0.54f),
-                            1.00f to scene.base[2].copy(alpha = 0.76f),
+                            0.62f to Color.Transparent,
+                            1.00f to scene.base[1],
                         ),
                     ),
         )
 
         RecapPage(applySafeContentInsets = applySafeContentInsets) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                RecapEyebrow(
-                    text = stringResource(R.string.total_listening_time),
-                    tone = tone,
-                    modifier = Modifier.recapEntrance(motion, blur = 8f),
-                )
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    // Both figures are pulled past the page's own margins so they bleed off the
-                    // card the way the reference's type does.
-                    RecapFitText(
-                        text = lead,
-                        style = DisplayStyle,
-                        color = ink,
-                        minSize = 56.sp,
-                        maxSize = 150.sp,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .offset(x = DisplayBleed)
-                                .recapEntrance(motion, delay = 90, fromY = 46f, initialScale = 0.94f, blur = 18f),
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                // The band is a share of the card, so the space reserved for it has to be too:
+                // a fixed spacer drifts off the artwork on tall phones and overruns it on short
+                // ones, which is how copy ends up sitting on top of the covers.
+                val bandSpace = maxHeight * TotalsBandHeightFraction
+                val compact = maxHeight < 620.dp
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Spacer(modifier = Modifier.height(bandSpace + 14.dp))
+                    RecapEyebrow(
+                        text = stringResource(R.string.total_listening_time),
+                        tone = tone,
+                        modifier = Modifier.recapEntrance(motion, blur = 8f),
                     )
-                    // The residue and the unit sentence sit together as one quiet block beneath
-                    // the figure, so the page has a single display line and one readable line
-                    // under it — the reference's hierarchy, without a third competing headline.
-                    Row(
-                        modifier =
-                            Modifier
-                                .offset(x = DisplayBleed)
-                                .padding(top = 2.dp)
-                                .recapEntrance(motion, delay = 200, blur = 8f),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        Text(
-                            text = tail,
-                            style = RecapType.statementLarge.copy(fontSize = 30.sp, lineHeight = 34.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = ink.copy(alpha = 0.9f),
-                            letterSpacing = (-1).sp,
-                        )
-                        Text(
-                            text = stringResource(R.string.year_in_music_of_music),
-                            style = RecapType.rowMeta.copy(fontSize = 17.sp, lineHeight = 22.sp),
-                            color = ink.copy(alpha = 0.8f),
-                            modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(34.dp))
-                    // The play count is the page's second number and gets the same treatment:
-                    // enormous, flush with the lead, with its noun set inline.
-                    Row(
-                        modifier = Modifier.fillMaxWidth().offset(x = DisplayBleed),
-                        verticalAlignment = Alignment.Bottom,
+                    Column(
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        verticalArrangement = Arrangement.Center,
                     ) {
                         RecapFitText(
-                            text = playsText,
-                            style = DisplayStyle.copy(fontSize = 80.sp, lineHeight = 76.sp),
+                            text = lead,
+                            style = DisplayStyle,
                             color = ink,
-                            minSize = 30.sp,
-                            maxSize = 80.sp,
+                            minSize = if (compact) 44.sp else 56.sp,
+                            maxSize = if (compact) 104.sp else 150.sp,
                             modifier =
                                 Modifier
-                                    .weight(1f)
-                                    .recapEntrance(motion, delay = 320, fromY = 30f, blur = 14f),
+                                    .fillMaxWidth()
+                                    .offset(x = DisplayBleed)
+                                    .recapEntrance(motion, delay = 90, fromY = 46f, initialScale = 0.94f, blur = 18f),
                         )
-                        // The noun rides the numeral's baseline instead of floating beside its
-                        // centre, which keeps the pair reading as one figure with a unit.
-                        Text(
-                            text = stringResource(R.string.year_in_music_songs_word),
-                            style = RecapType.rowTitle.copy(fontSize = 21.sp, lineHeight = 24.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = ink.copy(alpha = 0.86f),
+                        // The residue and the unit sentence sit together as one quiet block
+                        // beneath the figure: a single display line, one readable line under it.
+                        Row(
                             modifier =
                                 Modifier
-                                    .padding(start = 12.dp, bottom = 10.dp)
-                                    .recapEntrance(motion, delay = 380, blur = 8f),
-                        )
+                                    .offset(x = DisplayBleed)
+                                    .padding(top = 2.dp)
+                                    .recapEntrance(motion, delay = 200, blur = 8f),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            Text(
+                                text = tail,
+                                style = RecapType.statementLarge.copy(fontSize = 30.sp, lineHeight = 34.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = ink.copy(alpha = 0.9f),
+                                letterSpacing = (-1).sp,
+                            )
+                            Text(
+                                text = stringResource(R.string.year_in_music_of_music),
+                                style = RecapType.rowMeta.copy(fontSize = 17.sp, lineHeight = 22.sp),
+                                color = ink.copy(alpha = 0.8f),
+                                modifier = Modifier.padding(start = 10.dp, bottom = 4.dp),
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(if (compact) 20.dp else 34.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().offset(x = DisplayBleed),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            RecapFitText(
+                                text = playsText,
+                                style = DisplayStyle.copy(fontSize = 80.sp, lineHeight = 76.sp),
+                                color = ink,
+                                minSize = 26.sp,
+                                maxSize = if (compact) 56.sp else 80.sp,
+                                // fill = false keeps the numeral its natural width, so its unit
+                                // sits against it instead of being pushed to the far margin.
+                                modifier =
+                                    Modifier
+                                        .weight(1f, fill = false)
+                                        .recapEntrance(motion, delay = 320, fromY = 30f, blur = 14f),
+                            )
+                            // The noun rides the numeral's baseline instead of floating beside
+                            // its centre, which keeps the pair reading as one figure with a unit.
+                            Text(
+                                text = stringResource(R.string.year_in_music_songs_word),
+                                style = RecapType.rowTitle.copy(fontSize = 21.sp, lineHeight = 24.sp),
+                                fontWeight = FontWeight.Bold,
+                                color = ink.copy(alpha = 0.86f),
+                                modifier =
+                                    Modifier
+                                        .padding(start = 12.dp, bottom = 10.dp)
+                                        .recapEntrance(motion, delay = 380, blur = 8f),
+                            )
+                        }
                     }
+                    Text(
+                        text = stringResource(R.string.year_in_music_totals_title),
+                        style = RecapType.footer,
+                        color = ink.copy(alpha = 0.8f),
+                        modifier = Modifier.offset(x = DisplayBleed).recapEntrance(motion, delay = 460, blur = 6f),
+                    )
                 }
-                Text(
-                    text = stringResource(R.string.year_in_music_totals_title),
-                    style = RecapType.footer,
-                    color = ink.copy(alpha = 0.8f),
-                    modifier = Modifier.offset(x = DisplayBleed).recapEntrance(motion, delay = 460, blur = 6f),
-                )
             }
         }
+    }
+}
+
+/** One tile of the totals band; square-cropped and sliding in with the rest of the page. */
+@Composable
+private fun BandTile(
+    artwork: String?,
+    motion: () -> Long,
+    delay: Int,
+    modifier: Modifier = Modifier,
+    radius: Dp,
+) {
+    Box(modifier = modifier.recapEntrance(motion, delay = delay, fromY = -18f, initialScale = 1f, blur = 0f)) {
+        RecapArtwork(
+            artwork = artwork,
+            modifier = Modifier.fillMaxSize(),
+            shape = RoundedCornerShape(radius),
+        )
     }
 }
 
@@ -344,20 +400,11 @@ private val DisplayStyle =
 /** How far the figures hang past the page margin, in dp. */
 private val DisplayBleed = (-8).dp
 
-/**
- * The collage under the totals number: five covers butted together, two of them peeking in from
- * just off the sides so the page never looks framed.
- */
-private val TotalsMosaicTiles =
-    listOf(
-        RecapMosaicTile(-0.18f, 0.34f, 0.02f, 0.30f, radius = 0.dp, revealDelay = 40),
-        RecapMosaicTile(0.36f, 0.72f, 0.05f, 0.26f, radius = 6.dp, revealDelay = 110),
-        RecapMosaicTile(0.74f, 1.16f, 0.00f, 0.22f, radius = 0.dp, revealDelay = 170),
-        RecapMosaicTile(-0.12f, 0.28f, 0.58f, 0.86f, radius = 6.dp, revealDelay = 230),
-        RecapMosaicTile(0.60f, 1.14f, 0.62f, 0.96f, radius = 0.dp, revealDelay = 290),
-    )
+/** Share of the card height the art band occupies, and of the width each flanking tile takes. */
+private const val TotalsBandHeightFraction = 0.40f
+private const val TotalsBandSideFraction = 0.28f
 
-/** "[h]h [m]m" once an hour is on the clock, "[m]m [s]s" before that. */
+/** "[h]h [m]m" once an hour is on the clock, "[m]m" before that. */
 private fun listeningTimeLead(milliseconds: Long): String {
     val totalMinutes = (milliseconds / 60_000L).coerceAtLeast(0L)
     val hours = totalMinutes / 60L
@@ -365,148 +412,183 @@ private fun listeningTimeLead(milliseconds: Long): String {
     return if (totalMinutes >= 60L) "${hours}h ${minutes}m" else "${minutes}m"
 }
 
-/** What does not fit the lead line: seconds, always; under an hour they move up to the tail. */
+/** The residue under the lead line: seconds, zero-padded so the figure never jitters. */
 private fun listeningTimeTail(milliseconds: Long): String {
-    val totalMinutes = (milliseconds / 60_000L).coerceAtLeast(0L)
     val seconds = ((milliseconds / 1_000L) % 60L).coerceAtLeast(0L)
-    return if (totalMinutes >= 60L) "%02ds".format(seconds) else "%02ds".format(seconds)
+    return "%02ds".format(seconds)
 }
 
-// ---------------------------------------------------------------------------------------------
-// #1 track
-// ---------------------------------------------------------------------------------------------
-
+/**
+ * The longest run of days with music on, answered with the year's own artwork.
+ *
+ * The reference states the streak as a sentence and then fills the rest of the page with covers;
+ * here each day of the run is one cell of that field, so the grid *is* the streak — a six-day run
+ * is six cells, and every extra cover is a day that kept it alive.
+ */
 @Composable
-internal fun TopSongRecapCard(
-    card: YearInMusicRecapCard.TopSong,
+internal fun LongestStreakRecapCard(
+    card: YearInMusicRecapCard.LongestStreak,
+    scene: RecapScene,
+    tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
-    onLongClick: () -> Unit,
 ) {
-    val ink = Color.White
-    val imageModel = rememberOfflineArtworkImageRequest(card.song.thumbnailUrl)
-    // Replay paints this page with the cover's own hue; fall back to plain black if the
-    // cover yields nothing usable.
-    val tint = rememberDominantColor(card.song.thumbnailUrl)
-
-    // Only the long press belongs to this page: the reel's own tap handling is disabled here
-    // (tapAdvances = false), so a tap on the cover never flips the page out from under a menu.
-    Box(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .background(RecapScenes.forCard(card).base.first())
-                .pointerInput(card.song.id) {
-                    detectTapGestures(onLongPress = { onLongClick() })
-                },
-    ) {
-        AsyncImage(
-            model = imageModel,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .blur(26.dp)
-                    .recapHeroBreath(motion, initialScale = 1.16f),
+    val ink = tone.ink()
+    val days = remember(card.days) { maxOf(card.days, 1) }
+    val covers = remember(card.covers, days) { cellCovers(card.covers, days) }
+    val streakFigure =
+        stringResource(
+            R.string.year_in_music_streak_figure,
+            pluralStringResource(R.plurals.year_in_music_streak_days, days, days),
         )
+    val span =
+        stringResource(
+            R.string.year_in_music_streak_span,
+            remember(card.startDay) { shortDate(card.startDay) },
+            remember(card.endDay) { shortDate(card.endDay) },
+        )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // A warm radial breath behind the copy: the page is otherwise a flat scene colour, and
+        // the grid needs something under it so the cells do not look pasted on.
         Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.verticalGradient(
-                            colors =
-                                if (tint != null) {
-                                    listOf(
-                                        tint.copy(alpha = 0.34f),
-                                        tint.copy(alpha = 0.72f),
-                                        tint.copy(alpha = 0.92f),
-                                    )
-                                } else {
-                                    listOf(
-                                        Color.Black.copy(alpha = 0.3f),
-                                        Color.Black.copy(alpha = 0.72f),
-                                        Color.Black.copy(alpha = 0.95f),
-                                    )
-                                },
+                        Brush.radialGradient(
+                            0.15f to scene.glows.first().copy(alpha = 0.22f),
+                            0.75f to Color.Transparent,
                         ),
                     ),
         )
         RecapPage(applySafeContentInsets = applySafeContentInsets) {
             Column(modifier = Modifier.fillMaxSize()) {
-                Text(
-                    text = "#1 ${stringResource(R.string.year_in_music_top_track)}",
-                    style = RecapType.eyebrow,
-                    color = ink.copy(alpha = 0.9f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                RecapEyebrow(
+                    text = stringResource(R.string.year_in_music_streak_title),
+                    tone = tone,
+                    modifier = Modifier.recapEntrance(motion, blur = 8f),
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                // The sentence, then the figure it is about, set as the largest thing on the page.
+                RecapFitText(
+                    text = stringResource(R.string.year_in_music_streak_lead),
+                    style = RecapType.statement.copy(fontSize = 30.sp, lineHeight = 38.sp),
+                    color = ink.copy(alpha = 0.92f),
+                    minSize = 21.sp,
+                    maxSize = 30.sp,
+                    maxLines = 3,
+                    softWrap = true,
                     modifier =
                         Modifier
-                            .recapEntrance(motion, blur = 8f)
-                            .background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(50))
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .fillMaxWidth()
+                            .recapEntrance(motion, delay = 80, fromY = 26f, blur = 12f),
                 )
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                .widthIn(max = 300.dp)
-                                .fillMaxWidth(0.78f)
-                                .recapEntrance(motion, delay = 100, fromY = 48f, initialScale = 0.86f, blur = 0f)
-                                .recapHeroBreath(motion, initialScale = 1.02f),
-                    ) {
+                RecapFitText(
+                    text = streakFigure,
+                    style = RecapType.statementLarge.copy(fontSize = 56.sp, lineHeight = 58.sp),
+                    color = ink,
+                    minSize = 34.sp,
+                    maxSize = 56.sp,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp)
+                            .recapEntrance(motion, delay = 150, fromY = 34f, blur = 14f),
+                )
+                Text(
+                    text = span,
+                    style = RecapType.caption.copy(fontSize = 14.sp),
+                    color = tone.secondaryInk(),
+                    modifier = Modifier.padding(top = 6.dp).recapEntrance(motion, delay = 240, blur = 8f),
+                )
+                Spacer(modifier = Modifier.height(22.dp))
+                // The grid takes every pixel the copy above and the note below leave behind, so
+                // a short run draws big cells and a long one still fits.
+                StreakCoverGrid(
+                    covers = covers,
+                    motion = motion,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+                Text(
+                    text = stringResource(R.string.year_in_music_streak_grid_note, covers.size),
+                    style = RecapType.footer,
+                    color = tone.secondaryInk(),
+                    modifier = Modifier.padding(top = 12.dp).recapEntrance(motion, delay = 560, blur = 6f),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Cells of the streak grid, one per day.
+ *
+ * The grid is as square as the page allows: columns are picked from the cell aspect rather than
+ * fixed, so a three-day run is three big cells and a long run still tiles cleanly.
+ */
+@Composable
+private fun StreakCoverGrid(
+    covers: List<String?>,
+    motion: () -> Long,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        val columns = when {
+            covers.size <= 3 -> covers.size.coerceAtLeast(1)
+            covers.size <= 9 -> 3
+            covers.size <= 16 -> 4
+            else -> 5
+        }
+        val rows = ((covers.size + columns - 1) / columns).coerceAtLeast(1)
+        val gap = 4.dp
+        val cellWidth = (maxWidth - gap * (columns - 1)) / columns
+        val cellHeight = (maxHeight - gap * (rows - 1)) / rows
+        val cell = minOf(cellWidth, cellHeight)
+        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+            covers.chunked(columns).forEachIndexed { rowIndex, rowCovers ->
+                Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    rowCovers.forEachIndexed { columnIndex, artwork ->
+                        val index = rowIndex * columns + columnIndex
                         RecapArtwork(
-                            artwork = card.song.thumbnailUrl,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                            shape = RoundedCornerShape(16.dp),
+                            artwork = artwork,
+                            modifier =
+                                Modifier
+                                    .size(cell)
+                                    .clipToBounds()
+                                    .recapEntrance(
+                                        motion,
+                                        delay = 260 + index * 34,
+                                        fromY = 16f,
+                                        initialScale = 0.9f,
+                                        blur = 0f,
+                                    ),
+                            shape = RoundedCornerShape(6.dp),
                         )
                     }
-                    Spacer(modifier = Modifier.height(24.dp))
-                    AutoResizeText(
-                        text = card.song.title,
-                        fontSizeRange = FontSizeRange(min = 20.sp, max = 34.sp),
-                        style = RecapType.title,
-                        fontWeight = FontWeight.Bold,
-                        color = ink,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        modifier = Modifier.recapEntrance(motion, delay = 260, fromY = 22f, blur = 10f),
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = playsLabel(card.plays),
-                        style = RecapType.rowMeta,
-                        color = ink.copy(alpha = 0.72f),
-                        modifier = Modifier.recapEntrance(motion, delay = 340, fromY = 18f, blur = 8f),
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().recapEntrance(motion, delay = 420, blur = 6f),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.year_in_music_top_pick),
-                        style = RecapType.footer,
-                        color = ink.copy(alpha = 0.7f),
-                        maxLines = 1,
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        text = makeTimeString(card.milliseconds),
-                        style = RecapType.footer,
-                        color = ink.copy(alpha = 0.7f),
-                        maxLines = 1,
-                    )
                 }
             }
         }
     }
 }
+
+/**
+ * One cover per day: the run's own artwork where the year has that many, then the list repeats
+ * so the grid keeps its shape instead of ending on a ragged half-row of blanks.
+ */
+private fun cellCovers(covers: List<String?>, days: Int): List<String?> {
+    val usable = covers.filterNot { it.isNullOrBlank() }
+    if (usable.isEmpty()) return List(days) { null }
+    return List(days) { index -> usable[index % usable.size] }
+}
+
+/** "12 Feb" for the streak's date line, from the ISO keys the calendar stores. */
+private fun shortDate(isoDay: String): String =
+    runCatching {
+        LocalDate
+            .parse(isoDay)
+            .format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+    }.getOrDefault(isoDay)
 
 /**
  * Dominant colour of an artwork URL, straight from the cover.
@@ -1017,6 +1099,13 @@ private fun RankedArtistRow(
 // Albums
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * The records that kept coming back.
+ *
+ * Same language as the songs and artists pages: a blurred print of the leader's cover carries the
+ * page, the leader gets an offset spread with a ghosted numeral bleeding off the corner, and the
+ * remaining four sit on hairline rules with outlined ranks in the gutter.
+ */
 @Composable
 internal fun TopAlbumsRecapCard(
     card: YearInMusicRecapCard.TopAlbums,
@@ -1026,121 +1115,173 @@ internal fun TopAlbumsRecapCard(
     onAlbumLongClick: (Album) -> Unit,
 ) {
     val albums = card.albums.take(5)
-    val hero = albums.firstOrNull()
+    val leader = albums.firstOrNull()
     val rest = albums.drop(1).take(4)
+    val ink = tone.ink()
+    val tint = rememberDominantColor(leader?.thumbnailUrl)
 
-    RecapPage(applySafeContentInsets = applySafeContentInsets) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            RecapEyebrow(
-                text = stringResource(R.string.top_albums),
-                tone = tone,
-                modifier = Modifier.recapEntrance(motion, blur = 8f),
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFC47552))) {
+        if (leader != null) {
+            AsyncImage(
+                model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.68f)
+                        .align(Alignment.TopCenter)
+                        .blur(46.dp)
+                        .recapHeroBreath(motion, initialScale = 1.22f),
             )
-            Column(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                if (hero != null) {
-                    AlbumHero(
-                        album = hero,
+            // The clay scene's own base carries the foot of the page, with the cover's dark swatch
+            // mixed into its top so the print and the field read as one surface.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0.00f to (tint ?: Color(0xFF7A3F2A)).copy(alpha = 0.72f),
+                                0.40f to Color(0xFFD99068).copy(alpha = 0.86f),
+                                0.70f to Color(0xFFD99068),
+                                1.00f to Color(0xFFC47552),
+                            ),
+                        ),
+            )
+        }
+
+        RecapPage(applySafeContentInsets = applySafeContentInsets) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                RecapEyebrow(
+                    text = stringResource(R.string.top_albums),
+                    tone = tone,
+                    modifier = Modifier.recapEntrance(motion, blur = 8f),
+                )
+                Spacer(modifier = Modifier.height(18.dp))
+                if (leader != null) {
+                    AlbumLeader(
+                        album = leader,
+                        ink = ink,
                         tone = tone,
                         motion = motion,
-                        onLongClick = { onAlbumLongClick(hero) },
+                        onLongClick = { onAlbumLongClick(leader) },
                     )
-                    if (rest.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(26.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            rest.forEachIndexed { index, album ->
-                                AlbumTile(
-                                    album = album,
-                                    tone = tone,
-                                    onLongClick = { onAlbumLongClick(album) },
-                                    modifier =
-                                        Modifier
-                                            .weight(1f)
-                                            .recapEntrance(
-                                                motion,
-                                                delay = 300 + index * 90,
-                                                fromY = 26f,
-                                                initialScale = 0.92f,
-                                                blur = 0f,
-                                            ),
-                                )
-                            }
+                }
+                if (rest.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    rest.forEachIndexed { index, album ->
+                        if (index > 0) {
+                            RecapDivider(tone = tone, modifier = Modifier.padding(vertical = 9.dp))
                         }
+                        RankedAlbumRow(
+                            rank = index + 2,
+                            album = album,
+                            tone = tone,
+                            onLongClick = { onAlbumLongClick(album) },
+                            modifier =
+                                Modifier.recapEntrance(
+                                    motion,
+                                    delay = 300 + index * 80,
+                                    fromX = 24f,
+                                    fromY = 0f,
+                                    blur = 6f,
+                                ),
+                        )
                     }
                 }
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = stringResource(R.string.year_in_music_top_albums_footer),
+                    style = RecapType.footer,
+                    color = ink.copy(alpha = 0.72f),
+                    modifier = Modifier.recapEntrance(motion, delay = 660, blur = 6f),
+                )
             }
-            Text(
-                text = stringResource(R.string.year_in_music_ranked_albums),
-                style = RecapType.footer,
-                color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 700, blur = 6f),
-            )
         }
     }
 }
 
+/**
+ * Rank one: the cover large on the left, its facts stacked on the right, a ghosted "1" hanging
+ * off the top corner — the same offset spread the songs page uses, so the reel reads as a set.
+ */
 @Composable
-private fun AlbumHero(
+private fun AlbumLeader(
     album: Album,
+    ink: Color,
     tone: RecapTone,
     motion: () -> Long,
     onLongClick: () -> Unit,
 ) {
-    Row(
+    Box(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .pointerInput(album.id) {
                     detectTapGestures(onLongPress = { onLongClick() })
                 },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        // The hero cover gets a soft drop shadow so it lifts off the clay wash the way the
-        // reference cover does.
-        Box(
+        RecapGhostNumeral(
+            text = "1",
+            tone = tone,
+            fontSize = 176.sp,
+            fillAlpha = 0.14f,
+            strokeAlpha = 0.4f,
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 26.dp, y = (-40).dp),
+        )
+        Row(
             modifier =
                 Modifier
-                    .size(148.dp)
-                    .shadow(elevation = 18.dp, shape = RoundedCornerShape(12.dp), clip = false)
-                    .recapEntrance(motion, delay = 100, fromY = 34f, initialScale = 0.92f, blur = 0f),
+                    .fillMaxWidth()
+                    .recapEntrance(motion, delay = 120, fromY = 34f, initialScale = 1f, blur = 0f),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            RecapArtwork(
-                artwork = album.thumbnailUrl,
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(12.dp),
-            )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = "#1",
-                style = RecapType.caption,
-                color = tone.secondaryInk(),
-                modifier = Modifier.recapEntrance(motion, delay = 180, blur = 6f),
-            )
-            AutoResizeText(
-                text = album.album.title,
-                fontSizeRange = FontSizeRange(min = 17.sp, max = 28.sp),
-                style = RecapType.title.copy(fontSize = 28.sp, lineHeight = 33.sp),
-                fontWeight = FontWeight.Bold,
-                color = tone.ink(),
-                maxLines = 3,
-                modifier = Modifier.recapEntrance(motion, delay = 220, blur = 10f),
-            )
-            val artists = album.artists.take(2).joinToString(" / ") { it.name }
-            if (artists.isNotBlank()) {
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1.18f)
+                        .aspectRatio(1f)
+                        .shadow(elevation = 26.dp, shape = RoundedCornerShape(10.dp), clip = false),
+            ) {
+                RecapArtwork(
+                    artwork = album.thumbnailUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RoundedCornerShape(10.dp),
+                )
+            }
+            Column(
+                modifier = Modifier.weight(0.82f).align(Alignment.CenterVertically),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
                 Text(
-                    text = artists,
-                    style = RecapType.caption.copy(fontSize = 14.sp, lineHeight = 18.sp),
-                    color = tone.secondaryInk(),
-                    maxLines = 2,
+                    text = album.album.title,
+                    style = RecapType.title.copy(fontSize = 26.sp, lineHeight = 29.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = ink,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.recapEntrance(motion, delay = 300, blur = 6f),
+                    modifier = Modifier.recapEntrance(motion, delay = 200, blur = 10f),
+                )
+                val artists = album.artists.take(2).joinToString(" / ") { it.name }
+                if (artists.isNotBlank()) {
+                    Text(
+                        text = artists,
+                        style = RecapType.caption.copy(fontSize = 14.sp, lineHeight = 18.sp),
+                        color = tone.secondaryInk(),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.recapEntrance(motion, delay = 260, blur = 8f),
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                RecapDivider(tone = tone)
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = makeTimeString(album.timeListened ?: 0L),
+                    style = RecapType.caption.copy(fontSize = 14.sp),
+                    color = tone.secondaryInk(),
+                    maxLines = 1,
                 )
             }
         }
@@ -1148,39 +1289,60 @@ private fun AlbumHero(
 }
 
 @Composable
-private fun AlbumTile(
+private fun RankedAlbumRow(
+    rank: Int,
     album: Album,
     tone: RecapTone,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    Row(
         modifier =
             modifier
+                .fillMaxWidth()
                 .pointerInput(album.id) {
                     detectTapGestures(onLongPress = { onLongClick() })
                 },
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(8.dp), clip = false),
-        ) {
-            RecapArtwork(
-                artwork = album.thumbnailUrl,
-                modifier = Modifier.fillMaxSize(),
-                shape = RoundedCornerShape(8.dp),
+        Box(modifier = Modifier.width(38.dp), contentAlignment = Alignment.CenterStart) {
+            RecapGhostNumeral(
+                text = rank.toString(),
+                tone = tone,
+                fillAlpha = 0.1f,
+                strokeAlpha = 0.34f,
             )
         }
+        RecapArtwork(
+            artwork = album.thumbnailUrl,
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(7.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = album.album.title,
+                style = RecapType.rowTitle.copy(fontSize = 17.sp, lineHeight = 21.sp),
+                color = tone.ink(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val artists = album.artists.take(2).joinToString(" / ") { it.name }
+            if (artists.isNotBlank()) {
+                Text(
+                    text = artists,
+                    style = RecapType.caption,
+                    color = tone.secondaryInk(),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Text(
-            text = album.album.title,
-            style = RecapType.caption.copy(fontSize = 12.sp, lineHeight = 15.sp),
-            color = tone.ink(),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            text = makeTimeString(album.timeListened ?: 0L),
+            style = RecapType.caption,
+            color = tone.secondaryInk(),
+            maxLines = 1,
         )
     }
 }

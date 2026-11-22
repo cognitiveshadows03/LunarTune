@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
@@ -137,7 +135,9 @@ internal object RecapScenes {
             is YearInMusicRecapCard.Empty -> Midnight
             is YearInMusicRecapCard.Intro -> Emerald
             is YearInMusicRecapCard.Totals -> UltraViolet
-            is YearInMusicRecapCard.TopSong -> Smoke
+            // The streak borrows the smoke scene: its sentence is the reference's warm dark page,
+            // and the covers on it need a field that is quiet rather than bright.
+            is YearInMusicRecapCard.LongestStreak -> Smoke
             is YearInMusicRecapCard.TopSongs -> Midnight
             is YearInMusicRecapCard.TopArtists -> Olive
             is YearInMusicRecapCard.TopAlbums -> Clay
@@ -464,71 +464,6 @@ internal fun RecapSignature(
 // ---------------------------------------------------------------------------------------------
 // Editorial primitives: mosaic, ghost art and outlined ranks
 // ---------------------------------------------------------------------------------------------
-
-/** One tile of a [RecapArtMosaic]; left edge, right edge and both vertical edges are fractions. */
-@Immutable
-internal data class RecapMosaicTile(
-    val startFraction: Float,
-    val endFraction: Float,
-    val topFraction: Float,
-    val bottomFraction: Float,
-    val radius: Dp = 0.dp,
-    /** Delay, in milliseconds, before this tile starts to appear. Staggers the reveal. */
-    val revealDelay: Int = 0,
-)
-
-/**
- * Album covers butted together into one collage, the way the reference builds its backdrop out
- * of its own artwork instead of drifting it around the edges.
- *
- * Every tile is drawn at exactly the size it occupies, and the collage fades in from the centre
- * outward, so the page reads as art first and the words land on top of it.
- */
-@Composable
-internal fun RecapArtMosaic(
-    artworks: List<String?>,
-    tiles: List<RecapMosaicTile>,
-    motion: () -> Long,
-    modifier: Modifier = Modifier,
-) {
-    val usable = artworks.filterNot { it.isNullOrBlank() }
-    if (usable.isEmpty() || tiles.isEmpty()) return
-    BoxWithConstraints(modifier = modifier.clipToBounds()) {
-        val width = maxWidth
-        val height = maxHeight
-        tiles.forEachIndexed { index, tile ->
-            val artwork = usable[index % usable.size]
-            Box(
-                modifier =
-                    Modifier
-                        .offset(x = width * tile.startFraction, y = height * tile.topFraction)
-                        .width(width * (tile.endFraction - tile.startFraction))
-                        .height(height * (tile.bottomFraction - tile.topFraction))
-                        .recapTileReveal(motion, delay = tile.revealDelay),
-            ) {
-                RecapArtwork(
-                    artwork = artwork,
-                    modifier = Modifier.fillMaxSize(),
-                    shape = RoundedCornerShape(tile.radius),
-                )
-            }
-        }
-    }
-}
-
-/** A mosaic tile that fades and settles into place as the card opens. */
-private fun Modifier.recapTileReveal(
-    motion: () -> Long,
-    delay: Int,
-): Modifier =
-    graphicsLayer {
-        val fraction = ((motion() - delay) / 900f).coerceIn(0f, 1f)
-        val progress = springCurve(fraction)
-        alpha = (fraction * 2.2f).coerceIn(0f, 1f)
-        translationY = (1f - progress) * 22.dp.toPx()
-        scaleX = 0.94f + 0.06f * progress
-        scaleY = scaleX
-    }
 
 /**
  * Outlined numeral set behind the ranked lists.

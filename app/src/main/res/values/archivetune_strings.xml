@@ -913,4 +913,18 @@
     <string name="year_in_music_minutes_line">%1$s minutes this year</string>
     <string name="year_in_music_of_music">of music</string>
     <string name="year_in_music_songs_word">songs</string>
+    <plurals name="year_in_music_streak_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <string name="year_in_music_streak_title">Longest streak</string>
+    <string name="year_in_music_streak_lead">Your longest listening streak was</string>
+    <string name="year_in_music_streak_span">%1$s to %2$s</string>
+    <string name="year_in_music_streak_figure">%1$s.</string>
+    <string name="year_in_music_streak_grid_note">One square for every day of the run, drawn from %1$d covers</string>
+    <string name="year_in_music_streak_footer">The run you kept going</string>
+    <string name="year_in_music_top_albums_footer">The records you kept coming back to</string>
+    <string name="year_in_music_minutes_line">%1$s minutes this year</string>
+    <string name="year_in_music_of_music">of music</string>
+    <string name="year_in_music_songs_word">songs</string>
 </resources>

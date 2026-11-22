@@ -10,7 +10,6 @@ package dev.citali.lunartune.ui.screens.yearinmusic
 import androidx.compose.runtime.Immutable
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
-import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.db.entities.SongWithStats
 
 /**
@@ -37,12 +36,7 @@ internal data class RecapFloatingArt(
 internal sealed interface YearInMusicRecapCard {
     val id: String
 
-    /**
-     * Whether a tap anywhere on the page should move the reel on.
-     *
-     * The top-track page owns taps itself (its cover is a real song), so it opts out and leaves
-     * advancing to the story clock, the pause row and the edge zones.
-     */
+    /** Whether a tap anywhere on the page should move the reel on. */
     val tapAdvances: Boolean
         get() = true
 
@@ -71,15 +65,20 @@ internal sealed interface YearInMusicRecapCard {
         override val id: String = "totals"
     }
 
-    /** The #1 track, full-bleed artwork behind a floating square cover. */
-    data class TopSong(
-        val song: SongWithStats,
-        val originalSong: Song?,
-        val plays: Long,
-        val milliseconds: Long,
+    /**
+     * The longest run of consecutive listening days in the year.
+     *
+     * The reel answers the sentence with the year's own album covers: one tile per day of the
+     * streak, each a cover that was played on it, so a six-day streak is six square cells of
+     * artwork rather than an abstract number.
+     */
+    data class LongestStreak(
+        val days: Int,
+        val startDay: String,
+        val endDay: String,
+        val covers: List<String?>,
     ) : YearInMusicRecapCard {
-        override val id: String = "top_song_${song.id}"
-        override val tapAdvances: Boolean = false
+        override val id: String = "longest_streak_${startDay}_$days"
     }
 
     /** Ranks 1–5 with cover art, name and time. */

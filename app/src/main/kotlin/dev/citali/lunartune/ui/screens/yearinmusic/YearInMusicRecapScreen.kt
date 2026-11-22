@@ -83,11 +83,9 @@ import dev.citali.lunartune.constants.DisableAnimationsKey
 import dev.citali.lunartune.constants.DisableBlurKey
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
-import dev.citali.lunartune.db.entities.Song
 import dev.citali.lunartune.ui.component.LocalMenuState
 import dev.citali.lunartune.ui.menu.AlbumMenu
 import dev.citali.lunartune.ui.menu.ArtistMenu
-import dev.citali.lunartune.ui.menu.SongMenu
 import dev.citali.lunartune.utils.ComposeToImage
 import dev.citali.lunartune.utils.rememberPreference
 import dev.citali.lunartune.viewmodels.YearInMusicUiState
@@ -161,16 +159,6 @@ private fun YearInMusicRecapScreen(
             pagerState = pagerState,
             isShareCaptureMode = isShareCaptureMode,
             onCardBoundsChanged = { currentCardBounds = it },
-            onTopSongLongClick = { song ->
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                menuState.show {
-                    SongMenu(
-                        originalSong = song,
-                        navController = navController,
-                        onDismiss = menuState::dismiss,
-                    )
-                }
-            },
             onTopArtistLongClick = { artist ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 menuState.show {
@@ -295,9 +283,9 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
         content.totalSongsPlayed,
         content.activeDays,
         content.topSongsStats,
-        content.topSongs,
         content.topArtists,
         content.topAlbums,
+        content.longestStreak,
     ) {
         if (!content.hasData) {
             listOf(YearInMusicRecapCard.Empty(content.selectedYear))
@@ -317,19 +305,19 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
                         floating = floatingArtwork(content),
                     ),
                 )
-                content.topSongsStats.firstOrNull()?.let { topSong ->
+                content.longestStreak?.let { streak ->
+                    // The streak answers with the leader's covers first, then the rest of the
+                    // year's albums, so every cell of the grid is artwork that was really played.
                     add(
-                        YearInMusicRecapCard.TopSong(
-                            song = topSong,
-                            originalSong =
-                                content.topSongs.firstOrNull { it.id == topSong.id }
-                                    ?: content.topSongs.firstOrNull(),
-                            plays = topSong.songCountListened.toLong(),
-                            milliseconds = topSong.timeListened ?: 0L,
+                        YearInMusicRecapCard.LongestStreak(
+                            days = streak.days,
+                            startDay = streak.start.toString(),
+                            endDay = streak.end.toString(),
+                            covers = streakCovers(content),
                         ),
                     )
                 }
-                if (content.topSongsStats.size > 1) {
+                if (content.topSongsStats.isNotEmpty()) {
                     add(YearInMusicRecapCard.TopSongs(songs = content.topSongsStats.take(5)))
                 }
                 if (content.topArtists.isNotEmpty()) {
@@ -360,6 +348,24 @@ private fun rememberYearInMusicCards(content: YearInMusicUiState.Content): List<
  * interleaved so no two of the same kind sit side by side. Anything without cover art is skipped
  * rather than leaving a grey placeholder floating across the page.
  */
+/**
+ * Artwork for the streak grid.
+ *
+ * Albums lead because a run of days reads better as records than as single tracks, then songs
+ * fill in behind them, interleaved and de-duplicated so the grid never shows the same cover in
+ * two neighbouring cells.
+ */
+private fun streakCovers(content: YearInMusicUiState.Content): List<String?> {
+    val albums = content.topAlbums.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
+    val songs = content.topSongsStats.map { it.thumbnailUrl }.filterNot { it.isNullOrBlank() }
+    return buildList {
+        for (index in 0 until maxOf(albums.size, songs.size)) {
+            albums.getOrNull(index)?.let(::add)
+            songs.getOrNull(index)?.let(::add)
+        }
+    }.distinct()
+}
+
 private fun floatingArtwork(content: YearInMusicUiState.Content): List<RecapFloatingArt> {
     fun collect(artwork: List<String?>, kind: RecapArtKind) =
         artwork.filterNot { it.isNullOrBlank() }.map { RecapFloatingArt(artwork = it, kind = kind) }
@@ -389,7 +395,6 @@ private fun RecapCardPager(
     pagerState: androidx.compose.foundation.pager.PagerState,
     isShareCaptureMode: Boolean,
     onCardBoundsChanged: (Rect) -> Unit,
-    onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
     onTopAlbumLongClick: (Album) -> Unit,
     onBack: () -> Unit,
@@ -530,7 +535,6 @@ private fun RecapCardPager(
                     onBack = onBack,
                     onTogglePause = { paused = !paused },
                     shareCaptureMode = isShareCaptureMode,
-                    onTopSongLongClick = onTopSongLongClick,
                     onTopArtistLongClick = onTopArtistLongClick,
                     onTopAlbumLongClick = onTopAlbumLongClick,
                 )
@@ -555,7 +559,6 @@ private fun RecapCardPage(
     onBack: () -> Unit,
     onTogglePause: () -> Unit,
     shareCaptureMode: Boolean,
-    onTopSongLongClick: (Song) -> Unit,
     onTopArtistLongClick: (Artist) -> Unit,
     onTopAlbumLongClick: (Album) -> Unit,
 ) {
@@ -575,15 +578,11 @@ private fun RecapCardPage(
         }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // The top-track page supplies its own cover-derived wash, so the shared scene sits under
-        // it rather than competing with it.
-        if (card !is YearInMusicRecapCard.TopSong) {
-            RecapSceneBackdrop(
-                scene = scene,
-                phase = ambientFlow.value,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
+        RecapSceneBackdrop(
+            scene = scene,
+            phase = ambientFlow.value,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         when (card) {
             is YearInMusicRecapCard.Empty ->
@@ -595,13 +594,8 @@ private fun RecapCardPage(
             is YearInMusicRecapCard.Totals ->
                 TotalsRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
-            is YearInMusicRecapCard.TopSong ->
-                TopSongRecapCard(
-                    card = card,
-                    motion = motion,
-                    applySafeContentInsets = applySafeContentInsets,
-                    onLongClick = { card.originalSong?.let(onTopSongLongClick) },
-                )
+            is YearInMusicRecapCard.LongestStreak ->
+                LongestStreakRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopSongs ->
                 TopSongsRecapCard(card, motion, applySafeContentInsets)
