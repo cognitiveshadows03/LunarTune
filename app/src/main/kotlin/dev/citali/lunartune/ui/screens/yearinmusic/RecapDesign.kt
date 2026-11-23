@@ -93,46 +93,73 @@ internal data class RecapScene(
 )
 
 internal object RecapScenes {
-    // The cover: the same warm, bright daylight the closing page uses, so the reel opens and
-    // shuts on the same note instead of opening dark and shutting light.
+    // The reel is one bright family: every page is a warm, high-key wash in the same register as
+    // the cover, and the ink stays near-black throughout. The colours change page to page so the
+    // reel still has chapters, but none of them drop the lights, because a recap that switches
+    // from cream to near-black and back reads as two different features stitched together.
+    //
+    // Each scene keeps its own hue — the warmth of Totals, the green of Top Artists, the clay of
+    // Top Albums — and each is simply lifted: the darks that used to run to 0x0E now stop around
+    // 0xC0, which is what keeps a page readable as "bright" without washing the ink out.
+
+    /** The cover: the warmest, palest page, and the one the closing page answers. */
     private val Parchment =
         RecapScene(
             base = listOf(Color(0xFFFBF0DF), Color(0xFFF6E3CB), Color(0xFFEFD2B1)),
             glows = listOf(Color(0xFFFFFBF2), Color(0xFFF7C9A4), Color(0xFFE9D3B4)),
             tone = RecapTone.LIGHT,
         )
-    private val UltraViolet =
+
+    /** Totals: apricot, the year's warmth at its most literal. */
+    private val Apricot =
         RecapScene(
-            base = listOf(Color(0xFF6A47E8), Color(0xFF5233C4), Color(0xFF33207E)),
-            glows = listOf(Color(0xFF9C7BFF), Color(0xFFE8B27A), Color(0xFF412A9E)),
-            tone = RecapTone.DARK,
-        )
-    private val Smoke =
-        RecapScene(
-            base = listOf(Color(0xFF3B3330), Color(0xFF2A2422), Color(0xFF191514)),
-            glows = listOf(Color(0xFFB25F72), Color(0xFF5C4148), Color(0xFF241C1B)),
-            tone = RecapTone.DARK,
-        )
-    private val Olive =
-        RecapScene(
-            base = listOf(Color(0xFFA9B83C), Color(0xFF91A032), Color(0xFF77852A)),
-            glows = listOf(Color(0xFFD7E36A), Color(0xFF6FB046), Color(0xFF8B9A31)),
+            base = listOf(Color(0xFFFDE8CF), Color(0xFFF9D7B4), Color(0xFFF2C49B)),
+            glows = listOf(Color(0xFFFFF6E8), Color(0xFFF7B183), Color(0xFFF0CBA8)),
             tone = RecapTone.LIGHT,
         )
+
+    /** Top songs: a cool mint, so the tracks page is not another warm one. */
+    private val Mint =
+        RecapScene(
+            base = listOf(Color(0xFFE6F4E9), Color(0xFFD3EBDC), Color(0xFFBEDFCB)),
+            glows = listOf(Color(0xFFF7FDF8), Color(0xFFA9DCBE), Color(0xFFCDE8D6)),
+            tone = RecapTone.LIGHT,
+        )
+
+    /** Top artists: soft sage, the olive page brought up into daylight. */
+    private val Sage =
+        RecapScene(
+            base = listOf(Color(0xFFEEF1D6), Color(0xFFE2E7BF), Color(0xFFD0D8A6)),
+            glows = listOf(Color(0xFFFAFCEF), Color(0xFFC2CE8A), Color(0xFFE4E9C6)),
+            tone = RecapTone.LIGHT,
+        )
+
+    /** Top albums: clay, lifted until the covers sit on it rather than sink into it. */
     private val Clay =
         RecapScene(
-            base = listOf(Color(0xFFF2BC94), Color(0xFFE8A57C), Color(0xFFD98A63)),
-            glows = listOf(Color(0xFFFFD9B4), Color(0xFFD9704A), Color(0xFFF0B089)),
+            base = listOf(Color(0xFFFBE0CB), Color(0xFFF7CFB2), Color(0xFFF1BC99)),
+            glows = listOf(Color(0xFFFFF3E7), Color(0xFFF0A077), Color(0xFFF7CEB2)),
             tone = RecapTone.LIGHT,
         )
-    private val Midnight =
+
+    /** The empty state: still bright, but a quieter page, since there is nothing to celebrate. */
+    private val Linen =
         RecapScene(
-            base = listOf(Color(0xFF3C5096), Color(0xFF2C3D75), Color(0xFF1D2850)),
-            glows = listOf(Color(0xFF5C7BD0), Color(0xFF2A3A6E), Color(0xFF16203E)),
-            tone = RecapTone.DARK,
+            base = listOf(Color(0xFFF6F2EA), Color(0xFFEDE7DC), Color(0xFFE2DACD)),
+            glows = listOf(Color(0xFFFFFDF9), Color(0xFFDCD3C4), Color(0xFFEFEAE1)),
+            tone = RecapTone.LIGHT,
         )
-    // The closing page is its own sunrise: warm enough to read as a farewell rather than
-    // another chapter, and light enough that the ink flips to near-black on it.
+
+    // The streak is parked while it is reworked, but it keeps a scene so bringing it back needs
+    // no work here. It uses the same warm register as everything else.
+    private val Smoke =
+        RecapScene(
+            base = listOf(Color(0xFFF4E9E4), Color(0xFFEBDAD3), Color(0xFFE0C8BE)),
+            glows = listOf(Color(0xFFFDF6F3), Color(0xFFD9AFA4), Color(0xFFEFDFD9)),
+            tone = RecapTone.LIGHT,
+        )
+
+    /** The closing page: the cover's own light, a note warmer. */
     private val Dawn =
         RecapScene(
             base = listOf(Color(0xFFF6E7CF), Color(0xFFEFD3B4), Color(0xFFE3B394)),
@@ -142,14 +169,12 @@ internal object RecapScenes {
 
     fun forCard(card: YearInMusicRecapCard): RecapScene =
         when (card) {
-            is YearInMusicRecapCard.Empty -> Midnight
+            is YearInMusicRecapCard.Empty -> Linen
             is YearInMusicRecapCard.Intro -> Parchment
-            is YearInMusicRecapCard.Totals -> UltraViolet
-            // The streak borrows the smoke scene: its sentence is the reference's warm dark page,
-            // and the covers on it need a field that is quiet rather than bright.
+            is YearInMusicRecapCard.Totals -> Apricot
             is YearInMusicRecapCard.LongestStreak -> Smoke
-            is YearInMusicRecapCard.TopSongs -> Midnight
-            is YearInMusicRecapCard.TopArtists -> Olive
+            is YearInMusicRecapCard.TopSongs -> Mint
+            is YearInMusicRecapCard.TopArtists -> Sage
             is YearInMusicRecapCard.TopAlbums -> Clay
             is YearInMusicRecapCard.Summary -> Dawn
         }

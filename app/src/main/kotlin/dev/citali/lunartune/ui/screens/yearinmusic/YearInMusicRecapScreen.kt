@@ -256,14 +256,20 @@ private fun YearInMusicRecapScreen(
     }
 }
 
-/** Soft violet wash behind the black gutter, so the rounded card has something to sit on. */
+/**
+ * Soft warm wash behind the gutter, so the rounded card has something to sit on.
+ *
+ * The cards are all high-key now, and a near-black gutter around a cream card reads as a hard
+ * black frame. The wash is warm and mid-toned, dark enough that the card's rounded corners are
+ * clearly its own edge and light enough that it does not fight the page inside them.
+ */
 @Composable
 private fun RecapAmbientBackdrop(modifier: Modifier = Modifier) {
     Box(
         modifier =
             modifier.background(
                 Brush.radialGradient(
-                    colors = listOf(Color(0xFF4A2F86).copy(alpha = 0.6f), Color(0xFF0B0B0D), Color(0xFF000000)),
+                    colors = listOf(Color(0xFF6B4A2E).copy(alpha = 0.55f), Color(0xFF2A2320), Color(0xFF161210)),
                     radius = 1_400f,
                 ),
             ),
@@ -595,7 +601,7 @@ private fun RecapCardPage(
                 LongestStreakRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopSongs ->
-                TopSongsRecapCard(card, motion, applySafeContentInsets)
+                TopSongsRecapCard(card, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopArtists ->
                 TopArtistsRecapCard(card, scene, tone, motion, applySafeContentInsets, onTopArtistLongClick)

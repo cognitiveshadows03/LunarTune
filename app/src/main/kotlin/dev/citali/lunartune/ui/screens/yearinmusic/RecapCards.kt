@@ -52,7 +52,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -61,13 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.palette.graphics.Palette
 import coil3.compose.AsyncImage
-import coil3.imageLoader
-import coil3.request.ImageRequest
-import coil3.request.SuccessResult
 import coil3.request.allowHardware
-import coil3.toBitmap
 import dev.citali.lunartune.R
 import dev.citali.lunartune.db.entities.Album
 import dev.citali.lunartune.db.entities.Artist
@@ -80,8 +74,6 @@ import java.text.NumberFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 private val CardPadding = 22.dp
 private val FloatingControlsClearance = 92.dp
@@ -134,55 +126,63 @@ internal fun IntroRecapCard(
     val ink = tone.ink()
     RecapPage(applySafeContentInsets = applySafeContentInsets) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // The cover and the closing page are the same page seen from both ends of the year,
-            // so they share a layout: mark at the top, one large statement, supporting lines,
-            // and a lot of quiet space in between. The year is set as a fitted masthead rather
-            // than fitted into a box, because a cover's job is to name the thing loudly.
             RecapSignature(
                 text = stringResource(R.string.app_name),
                 tone = tone,
                 modifier = Modifier.recapEntrance(motion, blur = 8f),
             )
+            // Cover page: the year takes the middle of the card and everything else hangs off
+            // it. The previous pass spread the blocks top and bottom with a weight between them,
+            // which left a dead band across the middle on a tall phone. Here the year group is
+            // what the two weights centre, so the air ends up above and below the whole block,
+            // where it reads as margin, rather than through the middle of the composition.
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = stringResource(R.string.year_in_music_recap_word),
-                style =
-                    RecapType.eyebrow.copy(
-                        fontSize = 14.sp,
-                        letterSpacing = 4.sp,
-                    ),
+                style = RecapType.eyebrow.copy(fontSize = 13.sp, letterSpacing = 5.sp),
                 fontWeight = FontWeight.SemiBold,
                 color = tone.secondaryInk(),
                 modifier = Modifier.recapEntrance(motion, delay = 60, blur = 8f),
             )
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             RecapFitText(
                 text = card.year.toString(),
-                style = RecapType.statementLarge.copy(letterSpacing = (-5).sp),
+                style = RecapType.statementLarge.copy(letterSpacing = (-6).sp),
                 color = ink,
-                minSize = 68.sp,
-                maxSize = 176.sp,
+                minSize = 72.sp,
+                maxSize = 190.sp,
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .recapEntrance(motion, delay = 110, fromY = 40f, initialScale = 0.94f, blur = 16f),
             )
-            Spacer(modifier = Modifier.height(26.dp))
+            // The rule is the page's only decoration and gives the copy block something to hang
+            // from, so the invitation is anchored to the year instead of floating below it.
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp)
+                        .height(1.dp)
+                        .background(tone.ink().copy(alpha = 0.14f))
+                        .recapEntrance(motion, delay = 200, blur = 6f),
+            )
+            Spacer(modifier = Modifier.height(22.dp))
             Text(
                 text = stringResource(R.string.year_in_music_intro_hero),
-                style = RecapType.statement,
+                style = RecapType.statement.copy(fontSize = 30.sp, lineHeight = 37.sp),
                 fontWeight = FontWeight.Bold,
                 color = ink,
-                modifier = Modifier.recapEntrance(motion, delay = 260, blur = 12f),
+                modifier = Modifier.recapEntrance(motion, delay = 280, blur = 12f),
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.year_in_music_intro_details),
-                style = RecapType.rowMeta.copy(fontSize = 16.sp, lineHeight = 23.sp),
+                style = RecapType.rowMeta.copy(fontSize = 15.sp, lineHeight = 22.sp),
                 color = tone.secondaryInk(),
                 modifier = Modifier.recapEntrance(motion, delay = 360, blur = 10f),
             )
-            Spacer(modifier = Modifier.weight(1.18f))
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = stringResource(R.string.year_in_music_tap_begin),
                 style = RecapType.rowTitle.copy(fontSize = 15.sp),
@@ -593,49 +593,6 @@ private fun shortDate(isoDay: String): String =
             .format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
     }.getOrDefault(isoDay)
 
-/**
- * Dominant colour of an artwork URL, straight from the cover.
- *
- * Replay paints its top-track page with the album art, so the page inherits the cover's own
- * hue. The request runs through Coil's cache, so the very image the card draws is reused.
- */
-@Composable
-private fun rememberDominantColor(artwork: String?): Color? {
-    val context = LocalContext.current
-    var color by remember(artwork) { mutableStateOf<Color?>(null) }
-    LaunchedEffect(artwork) {
-        if (artwork.isNullOrBlank()) return@LaunchedEffect
-        color = withContext(Dispatchers.Default) { dominantColor(context, artwork) }
-    }
-    return color
-}
-
-private suspend fun dominantColor(
-    context: Context,
-    artwork: String,
-): Color? =
-    runCatching {
-        val request =
-            ImageRequest
-                .Builder(context)
-                .data(artwork)
-                .allowHardware(false)
-                .size(112)
-                .build()
-        val result = context.imageLoader.execute(request)
-        if (result !is SuccessResult) return null
-        val palette = Palette.from(result.image.toBitmap()).maximumColorCount(16).generate()
-        val swatch =
-            palette.darkMutedSwatch
-                ?: palette.darkVibrantSwatch
-                ?: palette.mutedSwatch
-                ?: palette.dominantSwatch
-        swatch?.rgb?.let(::Color)
-    }.getOrNull()
-
-// ---------------------------------------------------------------------------------------------
-// Ranked songs
-// ---------------------------------------------------------------------------------------------
 
 /**
  * The five tracks that owned the year, in one editorial ladder.
@@ -648,24 +605,31 @@ private suspend fun dominantColor(
 @Composable
 internal fun TopSongsRecapCard(
     card: YearInMusicRecapCard.TopSongs,
+    tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
 ) {
-    val ink = Color.White
+    val ink = tone.ink()
     val songs = card.songs.take(5)
     val leader = songs.firstOrNull()
     val rest = songs.drop(1)
-    val tint = rememberDominantColor(leader?.thumbnailUrl)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (leader != null) {
-            // The leader's own cover is the page: blurred, pushed back, and washed with the
-            // cover's own dark swatch so the white type stays legible whatever the art is.
+            // The leader's cover still sets the temperature of the page, but as a soft bloom of
+            // its own colours held at the top rather than a black-out wash: on a bright field a
+            // dark scrim would read as a hole in the card.
             AsyncImage(
                 model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().blur(30.dp).recapHeroBreath(motion, initialScale = 1.2f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.46f)
+                        .align(Alignment.TopCenter)
+                        .blur(64.dp)
+                        .recapHeroBreath(motion, initialScale = 1.2f),
             )
             Box(
                 modifier =
@@ -673,10 +637,10 @@ internal fun TopSongsRecapCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.00f to Color.Black.copy(alpha = 0.62f),
-                                0.34f to (tint ?: Color.Black).copy(alpha = 0.72f),
-                                0.70f to Color.Black.copy(alpha = 0.88f),
-                                1.00f to Color.Black.copy(alpha = 0.96f),
+                                0.00f to Color.White.copy(alpha = 0.42f),
+                                0.30f to Color.White.copy(alpha = 0.72f),
+                                0.58f to Color.White.copy(alpha = 0.94f),
+                                1.00f to Color.White,
                             ),
                         ),
             )
@@ -698,21 +662,21 @@ internal fun TopSongsRecapCard(
                     )
                     Spacer(modifier = Modifier.height(18.dp))
                     if (leader != null) {
-                        LeaderSong(song = leader, ink = ink, motion = motion, compact = compact)
+                        LeaderSong(song = leader, tone = tone, motion = motion, compact = compact)
                     }
                     if (rest.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(if (compact) 16.dp else 22.dp))
                         rest.forEachIndexed { index, song ->
                             if (index > 0) {
                                 RecapDivider(
-                                    tone = RecapTone.DARK,
+                                    tone = tone,
                                     modifier = Modifier.padding(vertical = if (compact) 6.dp else 9.dp),
                                 )
                             }
                                 RankedSongRow(
                                 rank = index + 2,
                                 song = song,
-                                tone = RecapTone.DARK,
+                                tone = tone,
                                 compact = compact,
                                 modifier =
                                     Modifier.recapEntrance(
@@ -748,14 +712,15 @@ internal fun TopSongsRecapCard(
 @Composable
 private fun LeaderSong(
     song: SongWithStats,
-    ink: Color,
+    tone: RecapTone,
     motion: () -> Long,
     compact: Boolean,
 ) {
+    val ink = tone.ink()
     Box(modifier = Modifier.fillMaxWidth().recapEntrance(motion, delay = 120, fromY = 34f, blur = 0f)) {
         RecapGhostNumeral(
             text = "1",
-            tone = RecapTone.DARK,
+            tone = tone,
             fontSize = 176.sp,
             fillAlpha = 0.16f,
             strokeAlpha = 0.5f,
@@ -798,7 +763,7 @@ private fun LeaderSong(
                         maxLines = 1,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    RecapDivider(tone = RecapTone.DARK)
+                    RecapDivider(tone = tone)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = makeTimeString(song.timeListened ?: 0L),
@@ -874,18 +839,6 @@ private fun RankedSongRow(
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Artists
-// ---------------------------------------------------------------------------------------------
-
-/**
- * The artists who owned the year.
- *
- * The leader is treated as a poster: a portrait that bleeds to both edges of the card, the
- * artist's name set over the bottom of it, and a ghosted "1" hanging off the far corner. Ranks
- * two to five drop to a tidy column with small portraits, so the page has one subject and one
- * list rather than five equal rows.
- */
 @Composable
 internal fun TopArtistsRecapCard(
     card: YearInMusicRecapCard.TopArtists,
@@ -1123,10 +1076,12 @@ internal fun TopAlbumsRecapCard(
     val leader = albums.firstOrNull()
     val rest = albums.drop(1).take(3)
     val ink = tone.ink()
-    val tint = rememberDominantColor(leader?.thumbnailUrl)
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFD98A63))) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (leader != null) {
+            // The leader's cover blooms at the top of the page and dissolves into the clay under
+            // white, so the page keeps the cover's temperature without handing it the whole
+            // surface. A tinted scrim was tried here and read as dirt on a bright field.
             AsyncImage(
                 model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
                 contentDescription = null,
@@ -1134,23 +1089,21 @@ internal fun TopAlbumsRecapCard(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .fillMaxHeight(0.68f)
+                        .fillMaxHeight(0.52f)
                         .align(Alignment.TopCenter)
-                        .blur(46.dp)
+                        .blur(56.dp)
                         .recapHeroBreath(motion, initialScale = 1.22f),
             )
-            // The clay scene's own base carries the foot of the page, with the cover's dark swatch
-            // mixed into its top so the print and the field read as one surface.
             Box(
                 modifier =
                     Modifier
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.00f to (tint ?: Color(0xFF9C5A40)).copy(alpha = 0.58f),
-                                0.38f to Color(0xFFE8A57C).copy(alpha = 0.78f),
-                                0.68f to Color(0xFFE8A57C),
-                                1.00f to Color(0xFFD98A63),
+                                0.00f to Color.White.copy(alpha = 0.38f),
+                                0.34f to Color.White.copy(alpha = 0.74f),
+                                0.62f to Color.White.copy(alpha = 0.95f),
+                                1.00f to Color.White,
                             ),
                         ),
             )
