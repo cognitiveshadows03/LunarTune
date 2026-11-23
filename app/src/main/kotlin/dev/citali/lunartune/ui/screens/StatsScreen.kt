@@ -110,6 +110,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
@@ -1875,12 +1876,27 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val baseLabelStyle = MaterialTheme.typography.labelLarge
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+    // The page padding steps down on a narrow window, the way the platform's own layouts do:
+    // sixteen dp of gutter on each side is comfortable on a 400dp phone and cramped on a 320dp
+    // one, where it costs the four segments a third of their width for no gain.
+    val horizontalPadding =
+        when {
+            LocalConfiguration.current.screenWidthDp <= NarrowWindowWidthDp -> 8.dp
+            else -> 16.dp
+        }
+    Column(Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)) {
         Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
-                // Each segment has 4dp of padding on both sides; the label must fit inside that.
+                // Each segment spends 4dp on both sides plus the icon and its gap, so the label
+                // has whatever is left. The width is measured once here and the label style is
+                // picked from it, which is what keeps the words whole on a narrow phone without
+                // changing the shape of the control.
+                val iconPx = with(density) { SegmentIconSize.roundToPx() }
                 val labelWidthPx = with(density) {
-                    ((maxWidth - SegmentGap * (periods.size - 1)) / periods.size - SegmentInnerPadding * 2).roundToPx()
+                    (
+                        (maxWidth - SegmentGap * (periods.size - 1)) / periods.size -
+                            SegmentInnerPadding * 2 - SegmentIconGap
+                    ).roundToPx() - iconPx
                 }
                 val labelStyle = remember(labelWidthPx, labels, baseLabelStyle) {
                     fittingLabelStyle(measurer, labels, baseLabelStyle, labelWidthPx)
@@ -1895,17 +1911,23 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
                             color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                             contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                         ) {
-                            // Icon above the label, so the label gets the segment's full width.
-                            Column(
-                                modifier = Modifier.padding(horizontal = SegmentInnerPadding, vertical = 12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                            // Icon beside the label, the way the control has always been drawn:
+                            // the icon and the word read as one unit, and the row of segments is
+                            // one line tall instead of two.
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = SegmentInnerPadding, vertical = 14.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
                                     painter = painterResource(iconRes),
                                     contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(SegmentIconSize),
                                 )
-                                Spacer(modifier = Modifier.height(4.dp))
+                                Spacer(modifier = Modifier.width(SegmentIconGap))
                                 Text(
                                     text = labels[index],
                                     style = labelStyle,
@@ -1926,8 +1948,16 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
     }
 }
 
+/**
+ * Windows at or below this width are treated as narrow: the gutter tightens and labels are
+ * allowed to sit at their smallest size rather than being shrunk from a comfortable one.
+ */
+private const val NarrowWindowWidthDp = 360
+
 private val SegmentGap = 4.dp
 private val SegmentInnerPadding = 4.dp
+private val SegmentIconSize = 16.dp
+private val SegmentIconGap = 5.dp
 private const val MIN_PERIOD_LABEL_SP = 10f
 
 /** Shrinks the period label size in small steps until the longest label fits on one line. */

@@ -605,11 +605,15 @@ private fun shortDate(isoDay: String): String =
 @Composable
 internal fun TopSongsRecapCard(
     card: YearInMusicRecapCard.TopSongs,
+    scene: RecapScene,
     tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
 ) {
     val ink = tone.ink()
+    // The bloom dissolves into the page's own field, not into white: a white fade over a
+    // coloured page leaves a pale rectangle of a different colour sitting behind the art.
+    val backdrop = scene.base[1]
     val songs = card.songs.take(5)
     val leader = songs.firstOrNull()
     val rest = songs.drop(1)
@@ -637,10 +641,10 @@ internal fun TopSongsRecapCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.00f to Color.White.copy(alpha = 0.42f),
-                                0.30f to Color.White.copy(alpha = 0.72f),
-                                0.58f to Color.White.copy(alpha = 0.94f),
-                                1.00f to Color.White,
+                                0.00f to Color.Transparent,
+                                0.30f to backdrop.copy(alpha = 0.55f),
+                                0.58f to backdrop.copy(alpha = 0.88f),
+                                1.00f to backdrop,
                             ),
                         ),
             )
@@ -1065,6 +1069,7 @@ private fun RankedArtistRow(
 @Composable
 internal fun TopAlbumsRecapCard(
     card: YearInMusicRecapCard.TopAlbums,
+    scene: RecapScene,
     tone: RecapTone,
     motion: () -> Long,
     applySafeContentInsets: Boolean,
@@ -1076,6 +1081,7 @@ internal fun TopAlbumsRecapCard(
     val leader = albums.firstOrNull()
     val rest = albums.drop(1).take(3)
     val ink = tone.ink()
+    val backdrop = scene.base[1]
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (leader != null) {
@@ -1100,10 +1106,10 @@ internal fun TopAlbumsRecapCard(
                         .fillMaxSize()
                         .background(
                             Brush.verticalGradient(
-                                0.00f to Color.White.copy(alpha = 0.38f),
-                                0.34f to Color.White.copy(alpha = 0.74f),
-                                0.62f to Color.White.copy(alpha = 0.95f),
-                                1.00f to Color.White,
+                                0.00f to Color.Transparent,
+                                0.34f to backdrop.copy(alpha = 0.58f),
+                                0.62f to backdrop.copy(alpha = 0.9f),
+                                1.00f to backdrop,
                             ),
                         ),
             )

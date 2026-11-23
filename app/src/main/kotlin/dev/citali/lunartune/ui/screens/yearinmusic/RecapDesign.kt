@@ -110,11 +110,15 @@ internal object RecapScenes {
             tone = RecapTone.LIGHT,
         )
 
-    /** Totals: apricot, the year's warmth at its most literal. */
-    private val Apricot =
+    /**
+     * Totals: sky. The page that carries the year's headline numbers was reading as a warmer
+     * repeat of the cover, so it takes the one hue the rest of the reel does not use. Cool
+     * against the warm cover and the warm clay further down, and still high-key.
+     */
+    private val Sky =
         RecapScene(
-            base = listOf(Color(0xFFFDE8CF), Color(0xFFF9D7B4), Color(0xFFF2C49B)),
-            glows = listOf(Color(0xFFFFF6E8), Color(0xFFF7B183), Color(0xFFF0CBA8)),
+            base = listOf(Color(0xFFE7F1FB), Color(0xFFD3E5F7), Color(0xFFBBD6F0)),
+            glows = listOf(Color(0xFFF8FBFF), Color(0xFF9CC4E8), Color(0xFFD8E9F8)),
             tone = RecapTone.LIGHT,
         )
 
@@ -171,7 +175,7 @@ internal object RecapScenes {
         when (card) {
             is YearInMusicRecapCard.Empty -> Linen
             is YearInMusicRecapCard.Intro -> Parchment
-            is YearInMusicRecapCard.Totals -> Apricot
+            is YearInMusicRecapCard.Totals -> Sky
             is YearInMusicRecapCard.LongestStreak -> Smoke
             is YearInMusicRecapCard.TopSongs -> Mint
             is YearInMusicRecapCard.TopArtists -> Sage

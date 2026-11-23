@@ -601,13 +601,13 @@ private fun RecapCardPage(
                 LongestStreakRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopSongs ->
-                TopSongsRecapCard(card, tone, motion, applySafeContentInsets)
+                TopSongsRecapCard(card, scene, tone, motion, applySafeContentInsets)
 
             is YearInMusicRecapCard.TopArtists ->
                 TopArtistsRecapCard(card, scene, tone, motion, applySafeContentInsets, onTopArtistLongClick)
 
             is YearInMusicRecapCard.TopAlbums ->
-                TopAlbumsRecapCard(card, tone, motion, applySafeContentInsets, onTopAlbumLongClick)
+                TopAlbumsRecapCard(card, scene, tone, motion, applySafeContentInsets, onTopAlbumLongClick)
 
             is YearInMusicRecapCard.Summary ->
                 SummaryRecapCard(card, tone, motion, applySafeContentInsets)

@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -42,6 +43,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -561,7 +563,16 @@ fun SettingsScreen(
             state = listState,
             modifier =
                 Modifier
-                    .fillMaxSize()
+                    // The list is capped and centred rather than stretched. On a phone the cap
+                    // is wider than the window, so nothing changes; on a tablet or a desktop
+                    // window it is what keeps a settings row from running the full width with
+                    // its switch stranded at the far edge. Capping the list rather than each
+                    // group means the banner, the search field and the image header all sit on
+                    // the same measure instead of each needing their own rule.
+                    .widthIn(max = SettingsDimensions.ScreenContentMaxWidth)
+                    .fillMaxHeight()
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
                     // Ported from the base app: horizontal insets pad the viewport,
                     // but the player's slot lives in contentPadding so the list fills
                     // the whole screen and scrolls its last rows out from under the
@@ -617,7 +628,7 @@ fun SettingsScreen(
                         onDismiss = { isUpdateDismissed = true },
                         modifier =
                             Modifier
-                                .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding)
+                                .padding(horizontal = SettingsDimensions.AdaptiveScreenHorizontalPadding)
                                 .padding(bottom = SettingsDimensions.SectionSpacing).excludeDotTexture(),
                     )
                 }
@@ -640,7 +651,7 @@ fun SettingsScreen(
                         },
                         modifier =
                             Modifier
-                                .padding(horizontal = SettingsDimensions.ScreenHorizontalPadding)
+                                .padding(horizontal = SettingsDimensions.AdaptiveScreenHorizontalPadding)
                                 .padding(bottom = SettingsDimensions.SectionSpacing).excludeDotTexture(),
                     )
                 }
@@ -654,7 +665,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.surfaceContainerHighest,
                     modifier =
                         Modifier
-                            .padding(horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding)
+                            .padding(horizontal = SettingsDimensions.AdaptiveSegmentedGroupHorizontalPadding)
                             .fillMaxWidth().excludeDotTexture(),
                 ) {
                     Row(
@@ -694,7 +705,7 @@ fun SettingsScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(
-                                    horizontal = SettingsDimensions.SegmentedGroupHorizontalPadding,
+                                    horizontal = SettingsDimensions.AdaptiveSegmentedGroupHorizontalPadding,
                                 ).padding(
                                     top =
                                         if (groupIndex > 0) {
