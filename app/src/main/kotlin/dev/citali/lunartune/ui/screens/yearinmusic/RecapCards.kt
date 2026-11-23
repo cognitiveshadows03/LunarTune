@@ -611,43 +611,44 @@ internal fun TopSongsRecapCard(
     applySafeContentInsets: Boolean,
 ) {
     val ink = tone.ink()
-    // The bloom dissolves into the page's own field, not into white: a white fade over a
-    // coloured page leaves a pale rectangle of a different colour sitting behind the art.
-    val backdrop = scene.base[1]
     val songs = card.songs.take(5)
     val leader = songs.firstOrNull()
     val rest = songs.drop(1)
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // The same treatment the artists page gets, and for the same reason: a tall blurred
+        // print of the leader held in its own clipped box, with a wash over it that reaches
+        // full opacity before the rows start. The clip is what keeps the blurred image's own
+        // edge from showing, and ending on an opaque stop is what removes the seam: the page
+        // below the art has to be the page the rows sit on, not a shade of it.
         if (leader != null) {
-            // The leader's cover still sets the temperature of the page, but as a soft bloom of
-            // its own colours held at the top rather than a black-out wash: on a bright field a
-            // dark scrim would read as a hole in the card.
-            AsyncImage(
-                model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.46f)
-                        .align(Alignment.TopCenter)
-                        .blur(64.dp)
-                        .recapHeroBreath(motion, initialScale = 1.2f),
-            )
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.00f to Color.Transparent,
-                                0.30f to backdrop.copy(alpha = 0.55f),
-                                0.58f to backdrop.copy(alpha = 0.88f),
-                                1.00f to backdrop,
+            Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                AsyncImage(
+                    model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.58f)
+                            .align(Alignment.TopCenter)
+                            .blur(46.dp)
+                            .recapHeroBreath(motion, initialScale = 1.22f),
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0.00f to scene.base[2].copy(alpha = 0.30f),
+                                    0.30f to scene.base[1].copy(alpha = 0.58f),
+                                    0.62f to scene.base[0].copy(alpha = 0.96f),
+                                    1.00f to scene.base[0],
+                                ),
                             ),
-                        ),
-            )
+                )
+            }
         }
 
         RecapPage(applySafeContentInsets = applySafeContentInsets) {
@@ -1081,38 +1082,39 @@ internal fun TopAlbumsRecapCard(
     val leader = albums.firstOrNull()
     val rest = albums.drop(1).take(3)
     val ink = tone.ink()
-    val backdrop = scene.base[1]
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Same construction as the songs page. The album leader is a squarer print than the
+        // track's, so the art sits a little lower and the wash reaches full opacity sooner,
+        // but the principle is identical: clipped, opaque by the time the first row starts.
         if (leader != null) {
-            // The leader's cover blooms at the top of the page and dissolves into the clay under
-            // white, so the page keeps the cover's temperature without handing it the whole
-            // surface. A tinted scrim was tried here and read as dirt on a bright field.
-            AsyncImage(
-                model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.52f)
-                        .align(Alignment.TopCenter)
-                        .blur(56.dp)
-                        .recapHeroBreath(motion, initialScale = 1.22f),
-            )
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0.00f to Color.Transparent,
-                                0.34f to backdrop.copy(alpha = 0.58f),
-                                0.62f to backdrop.copy(alpha = 0.9f),
-                                1.00f to backdrop,
+            Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
+                AsyncImage(
+                    model = rememberOfflineArtworkImageRequest(leader.thumbnailUrl),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.62f)
+                            .align(Alignment.TopCenter)
+                            .blur(46.dp)
+                            .recapHeroBreath(motion, initialScale = 1.22f),
+                )
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0.00f to scene.base[2].copy(alpha = 0.26f),
+                                    0.34f to scene.base[1].copy(alpha = 0.55f),
+                                    0.66f to scene.base[0].copy(alpha = 0.97f),
+                                    1.00f to scene.base[0],
+                                ),
                             ),
-                        ),
-            )
+                )
+            }
         }
 
         RecapPage(applySafeContentInsets = applySafeContentInsets) {
