@@ -361,4 +361,5 @@
     <string name="android_auto_sort_playlist">מיון פלייליסט</string>
     <string name="android_auto_sort_option_format">%1$s - %2$s</string>
     <string name="empty_album">אלבום ריק</string>
+    <string name="year_in_music">השנה במוזיקה</string>
 </resources>

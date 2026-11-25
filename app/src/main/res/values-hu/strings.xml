@@ -72,4 +72,7 @@
     <string name="personal_label">Személyes(saját)</string>
     <string name="youtube_synced">Youtube szinkronizáció</string>
     <string name="options_label">Lehetőségek</string>
+    <string name="stats">Statisztikák</string>
+    <string name="music_together">LunarTune Music Together</string>
+    <string name="settings">Beállítások</string>
 </resources>

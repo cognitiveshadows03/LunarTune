@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="explore">Prohlížet</string>
+    <string name="year_in_music">Rok v hudbě</string>
+    <string name="charts">Žebříčky</string>
 </resources>

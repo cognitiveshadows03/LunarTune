@@ -63,4 +63,6 @@
     <string name="library_top_mixes_no_recent_history">Poslušaj več pesmi, potem osvežite da zgradite mixe z UI.</string>
     <string name="library_top_mixes_no_valid_mixes">UI ni ustvaril uporabnih mixov.</string>
     <string name="library_top_mixes_failed">Napaka pri ustvarjanju najboljših Mixov</string>
+    <string name="music_together">LunarTune Music Together</string>
+    <string name="settings">Nastavitve</string>
 </resources>

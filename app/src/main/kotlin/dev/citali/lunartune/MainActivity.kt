@@ -3864,14 +3864,6 @@ private fun FrostedTopBarMenu(
 
                             FrostedTopBarMenuGroup(pillColor = pillColor) {
                                 FrostedTopBarMenuRow(
-                                    iconRes = R.drawable.stats,
-                                    label = stringResource(R.string.stats),
-                                ) {
-                                    onExpandedChange(false)
-                                    onNavigate("stats")
-                                }
-                                FrostedTopBarMenuDivider()
-                                FrostedTopBarMenuRow(
                                     iconRes = R.drawable.history,
                                     label = stringResource(R.string.history),
                                 ) {
@@ -3880,11 +3872,20 @@ private fun FrostedTopBarMenu(
                                 }
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
-                                    iconRes = R.drawable.multi_user,
-                                    label = stringResource(R.string.music_together_short),
+                                    iconRes = R.drawable.stats,
+                                    label = stringResource(R.string.stats),
                                 ) {
                                     onExpandedChange(false)
-                                    onNavigate("settings/music_together")
+                                    onNavigate("stats")
+                                }
+                                FrostedTopBarMenuDivider()
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.auto_awesome,
+                                    label = stringResource(R.string.year_in_music),
+                                ) {
+                                    onExpandedChange(false)
+                                    // No year argument: the screen opens on the current one.
+                                    onNavigate("year_in_music")
                                 }
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
@@ -3897,10 +3898,18 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.new_release,
-                                    label = stringResource(R.string.new_release_albums_short),
+                                    label = stringResource(R.string.new_release_albums),
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("new_release")
+                                }
+                                FrostedTopBarMenuDivider()
+                                FrostedTopBarMenuRow(
+                                    iconRes = R.drawable.multi_user,
+                                    label = stringResource(R.string.music_together),
+                                ) {
+                                    onExpandedChange(false)
+                                    onNavigate("settings/music_together")
                                 }
                             }
                             Spacer(Modifier.height(MenuGroupGap))

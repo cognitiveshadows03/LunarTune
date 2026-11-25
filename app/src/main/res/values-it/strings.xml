@@ -551,4 +551,5 @@
     <string name="library_top_mixes_failed">Impossibile creare i mix migliori</string>
     <string name="your_playlists">Le tue playlist</string>
     <string name="library_top_mixes_ai_not_configured_desc">L\'integrazione AI è richiesta prima, così che LunarTune possa creare personali mix in base ai tuoi gusti</string>
+    <string name="music_together">LunarTune Music Together</string>
 </resources>

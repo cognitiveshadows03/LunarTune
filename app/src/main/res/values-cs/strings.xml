@@ -85,4 +85,6 @@
     <string name="tracks_count_label">Počet skladeb</string>
     <string name="recently_updated">Nedávno aktualizované</string>
     <string name="custom_order">Vlastní seřazení</string>
+    <string name="music_together">LunarTune Music Together</string>
+    <string name="settings">Nastavení</string>
 </resources>

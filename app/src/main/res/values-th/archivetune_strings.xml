@@ -1,3 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="year_in_music">ปีในดนตรี</string>
+    <string name="charts">ชาร์ต</string>
 </resources>

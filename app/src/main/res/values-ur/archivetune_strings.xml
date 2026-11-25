@@ -44,4 +44,6 @@
     <string name="music_recognition_history_search">شناخت شدہ گیت تلاش کریں</string>
     <string name="music_recognition_history_empty_title">ابھی تک کوئی شناخت شدہ گیت نہیں</string>
     <string name="music_recognition_history_empty_body">شناخت کی کامیابی کے بعد میل شدہ گیت ادھر نمودار ہوں۔</string>
+    <string name="year_in_music">میوزک میں سال</string>
+    <string name="charts">چارٹس</string>
 </resources>
