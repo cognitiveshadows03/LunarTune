@@ -71,6 +71,12 @@ data class TeamMember(
     @StringRes val positionResId: Int,
     val profileUrl: String?,
     val links: AboutLinkCollection,
+    /**
+     * A packaged portrait, for an entry that is a project rather than a person and so has no
+     * avatar to fetch. Drawn when [avatarUrl] is blank: a remote picture cannot be assumed to
+     * exist for every name in this list, and a packaged one avoids a grey circle.
+     */
+    @DrawableRes val avatarResId: Int? = null,
 )
 
 @Immutable
@@ -403,6 +409,26 @@ class AboutViewModel
                                         iconResId = R.drawable.github,
                                         labelResId = R.string.about_content_desc_github,
                                         url = "https://github.com/rukamori/ArchiveTune",
+                                    ),
+                                ),
+                        ),
+                        // lrc.red is credited here as well as in the Data sources card: the
+                        // card explains what the app sources and on what terms, this list is
+                        // where a reader looks for the names behind it. Both are required by
+                        // the service's terms, and they answer different questions.
+                        TeamMember(
+                            avatarUrl = "",
+                            avatarResId = R.drawable.ic_lrc_red,
+                            name = "lrc.red",
+                            positionResId = R.string.about_position_lrc_red,
+                            profileUrl = "https://lrc.red",
+                            links =
+                                AboutLinkCollection.of(
+                                    AboutLinkUiModel(
+                                        id = "website",
+                                        iconResId = R.drawable.language,
+                                        labelResId = R.string.about_content_desc_website,
+                                        url = "https://lrc.red",
                                     ),
                                 ),
                         ),

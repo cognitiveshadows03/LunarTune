@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  lrc.red's mark: a red square, as on their own site. Drawn here rather than fetched so the
+  credit row has a portrait without a network round trip, and so it never falls back to an
+  empty circle the way a missing remote avatar would.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+
+    <path
+        android:fillColor="#F2F2F2"
+        android:pathData="M0,0h48v48h-48z" />
+
+    <path
+        android:fillColor="#E30613"
+        android:pathData="M13,13h22v22h-22z" />
+</vector>

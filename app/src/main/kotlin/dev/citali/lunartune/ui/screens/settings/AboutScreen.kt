@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -1084,15 +1085,26 @@ private fun TeamMemberListItem(
         colors = AboutListItemDefaults.colors(),
         verticalAlignment = Alignment.CenterVertically,
         leadingContent = {
-            AsyncImage(
-                model = member.avatarUrl,
-                contentDescription = member.name,
-                modifier =
-                    Modifier
-                        .size(avatarSize)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
-            )
+            val portraitModifier =
+                Modifier
+                    .size(avatarSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+            // Projects get a packaged mark; people get their GitHub portrait.
+            if (member.avatarResId != null && member.avatarUrl.isBlank()) {
+                Image(
+                    painter = painterResource(member.avatarResId),
+                    contentDescription = member.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = portraitModifier,
+                )
+            } else {
+                AsyncImage(
+                    model = member.avatarUrl,
+                    contentDescription = member.name,
+                    modifier = portraitModifier,
+                )
+            }
         },
         supportingContent = {
             Text(

@@ -810,6 +810,7 @@
     <string name="about_lrc_red_desc">Community lyrics service · lrc.red</string>
     <string name="about_position_lead_dev">Lead developer of LunarTune</string>
     <string name="about_position_original">Base framework</string>
+    <string name="about_position_lrc_red">Synced lyrics provider · Word-timed TTML lyrics API</string>
     <string name="about_position_bot_contributor">Contributor</string>
     <string name="about_position_developers">Developer | Team</string>
     <string name="about_position_beta_tester_contributor" translatable="false">Beta Tester | Contributor</string>
