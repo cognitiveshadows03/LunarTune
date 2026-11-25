@@ -961,4 +961,5 @@
     <string name="unhide">숨기기 해제</string>
     <string name="source">소스</string>
     <string name="enable_youlyplus_lyrics">YouLyPlus 자막 활성화</string>
+    <string name="new_release_albums_short">최신 앨범</string>
 </resources>

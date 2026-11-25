@@ -3825,7 +3825,7 @@ private fun FrostedTopBarMenu(
                                             performanceMode = HazePerformanceMode.Performance,
                                         )
                                     } else {
-                                        // No live blur below 12: the panel paints the frost's
+                                        // Live blur unavailable: the panel paints the frost's
                                         // fallback scrim itself so the labels stay readable.
                                         Modifier.background(barColor.copy(alpha = FrostedFallbackAlpha))
                                     },
@@ -3880,15 +3880,6 @@ private fun FrostedTopBarMenu(
                                 }
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
-                                    iconRes = R.drawable.auto_awesome,
-                                    label = stringResource(R.string.year_in_music),
-                                ) {
-                                    onExpandedChange(false)
-                                    // No year argument: the screen opens on the current one.
-                                    onNavigate("year_in_music")
-                                }
-                                FrostedTopBarMenuDivider()
-                                FrostedTopBarMenuRow(
                                     iconRes = R.drawable.trending_up,
                                     label = stringResource(R.string.charts),
                                 ) {
@@ -3898,7 +3889,7 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.new_release,
-                                    label = stringResource(R.string.new_release_albums),
+                                    label = stringResource(R.string.new_release_albums_short),
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("new_release")
@@ -3906,7 +3897,7 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuDivider()
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.multi_user,
-                                    label = stringResource(R.string.music_together),
+                                    label = stringResource(R.string.music_together_short),
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("settings/music_together")

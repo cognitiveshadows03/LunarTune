@@ -412,10 +412,10 @@ class AboutViewModel
                                     ),
                                 ),
                         ),
-                        // lrc.red is credited here as well as in the Data sources card: the
-                        // card explains what the app sources and on what terms, this list is
-                        // where a reader looks for the names behind it. Both are required by
-                        // the service's terms, and they answer different questions.
+                        // lrc.red's terms want a visible credit and a link back, and this
+                        // list is where a reader looks for the names behind the app, so the
+                        // credit lives here rather than in a card of its own. The README
+                        // carries the same credit for people who never open this screen.
                         TeamMember(
                             avatarUrl = "",
                             avatarResId = R.drawable.ic_lrc_red,

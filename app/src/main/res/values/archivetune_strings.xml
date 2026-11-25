@@ -805,9 +805,6 @@
     <string name="about_license_unknown">Unknown license</string>
     <string name="about_legal_notice">Legal Notice</string>
     <string name="about_legal_notice_body">LunarTune does not host any content. All music content is provided by third-party sources through YouTube Music. Please respect copyright laws and support official artists and distributors.</string>
-    <string name="about_data_sources">Data sources</string>
-    <string name="about_data_sources_body">Lyrics are provided by lrc.red, a free community lyrics service. Its data is used under the terms of the lrc.red API, and lrc.red is credited here and in the project README wherever its lyrics are shown.</string>
-    <string name="about_lrc_red_desc">Community lyrics service · lrc.red</string>
     <string name="about_position_lead_dev">Lead developer of LunarTune</string>
     <string name="about_position_original">Base framework</string>
     <string name="about_position_lrc_red">Synced lyrics provider · Word-timed TTML lyrics API</string>

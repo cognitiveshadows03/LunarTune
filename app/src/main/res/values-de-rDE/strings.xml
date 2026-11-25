@@ -1060,4 +1060,5 @@
     <string name="custom_background_permission_error">LunarTune konnte den Zugriff auf dieses Bild nicht aufrechterhalten.</string>
     <string name="eq_signal">Signal</string>
     <string name="enable_betterlyrics_portato">BetterLyrics Portato aktivieren</string>
+    <string name="new_release_albums_short">Neue Alben</string>
 </resources>

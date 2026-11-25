@@ -1109,4 +1109,5 @@
     <string name="updates_channel_warning_canary_acknowledgement">ملاحظة: التنزيل المباشر من GitHub بيتجاوز أي فحص إضافي للمتجر اللي انت ممكن تكون حملت منه التطبيق.\nبمتابعتك، انت معترف إن نسخ Canary ممكن تكون مش مستقرة وعلى مسئوليتك الكاملة.</string>
     <string name="updates_canary_channel_confirmation">حول لقناة Canary عشان تجيلك الإصدارات التطويرية.\n\nإصدارات Canary بتتنشر تلقائياً من أحدث فرع تطويري.\nملاحظة: التنزيل المباشر من GitHub بيتجاوز أي فحص إضافي للمتجر اللي انت ممكن تكون حملت منه التطبيق.</string>
     <string name="onboarding_permission_device_audio_capture_desc">بيتعرف على المزيكا اللي شغالة في التطبيقات التانية من غير ما يستخدم المايك. أندرويد هيطلب منك إذن الشاشة والصوت، بس LunarTune بياخد الصوت بس.</string>
+    <string name="new_release_albums_short">أجدد الألبومات</string>
 </resources>

@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  lrc.red's mark: a red square, as on their own site. Drawn here rather than fetched so the
-  credit row has a portrait without a network round trip, and so it never falls back to an
-  empty circle the way a missing remote avatar would.
+  lrc.red's mark: their red square, filling the whole portrait.
+
+  The row clips its portrait to a circle, so a square drawn inset in a padded
+  tile leaves a ring of the row colour showing through as an ugly grey halo.
+  Filling the full 48dp square edge to edge means the circle crop lands on red
+  and nothing else, which is how the mark reads on lrc.red's own site.
+
+  The colour is taken from the site's own favicon (a plain #E30613 square), so
+  this stays the real mark rather than an approximation of it.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
@@ -11,10 +17,6 @@
     android:viewportHeight="48">
 
     <path
-        android:fillColor="#F2F2F2"
-        android:pathData="M0,0h48v48h-48z" />
-
-    <path
         android:fillColor="#E30613"
-        android:pathData="M13,13h22v22h-22z" />
+        android:pathData="M0,0h48v48h-48z" />
 </vector>

@@ -1098,4 +1098,5 @@
     <string name="sort_a_to_z">A → Z</string>
     <string name="sort_z_to_a">Z → A</string>
     <string name="discord_activity_type_playing_label">正在播放</string>
+    <string name="new_release_albums_short">新发行</string>
 </resources>

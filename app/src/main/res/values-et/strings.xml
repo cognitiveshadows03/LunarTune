@@ -275,4 +275,5 @@
     <string name="backdrop_blur_amount">Tausta hägustamise määr</string>
     <string name="backdrop_blur_amount_value">%1$d%%</string>
     <string name="music_together">LunarTune Music Together</string>
+    <string name="new_release_albums_short">Uued albumid</string>
 </resources>

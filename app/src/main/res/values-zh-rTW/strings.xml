@@ -1099,4 +1099,5 @@
     <string name="scheduled_backup_load_failed">無法載入計劃備份設定</string>
     <string name="scheduled_backup_update_failed">無法儲存計劃備份設定</string>
     <string name="enable_betterlyrics_portato">啟用 BetterLyrics Portato 歌詞來源</string>
+    <string name="new_release_albums_short">最新發行</string>
 </resources>

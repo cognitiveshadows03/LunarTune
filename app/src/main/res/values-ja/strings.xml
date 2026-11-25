@@ -990,4 +990,5 @@
     <string name="hidden_playlists_description">ライブラリから非表示にしたプレイリストがここに表示される</string>
     <string name="no_hidden_playlists">非表示のプレイリストはない</string>
     <string name="unhide">再表示</string>
+    <string name="new_release_albums_short">新着</string>
 </resources>

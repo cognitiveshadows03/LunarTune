@@ -552,4 +552,5 @@
     <string name="your_playlists">Le tue playlist</string>
     <string name="library_top_mixes_ai_not_configured_desc">L\'integrazione AI è richiesta prima, così che LunarTune possa creare personali mix in base ai tuoi gusti</string>
     <string name="music_together">LunarTune Music Together</string>
+    <string name="new_release_albums_short">Nuovi album</string>
 </resources>

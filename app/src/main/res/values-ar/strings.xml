@@ -1153,4 +1153,5 @@
     <string name="updates_channel_warning_canary_unstable">تُوفر إصدارات Canary للاختبار والوصول المبكر فقط.\nالاستقرار، التوافق، والوظائف غير مضمونة.</string>
     <string name="updates_channel_warning_canary_acknowledgement">ملاحظة: التنزيل مباشرة من GitHub يتجاوز أي فحص إضافي يجريه المتجر الذي ربما ثبّت التطبيق منه سابقًا.\nبالمتابعة، فإنك تقر بأن إصدارات Canary قد تكون غير مستقرة وتتحمل مسؤولية استخدامها.</string>
     <string name="updates_canary_channel_confirmation">التبديل إلى قناة Canary لتلقي إصدارات التطوير.\n\nتُحمل إصدارات Canary تلقائيًا من أحدث فرع تطوير.\nملاحظة: التنزيل مباشرة من GitHub يتجاوز أي فحص إضافي يجريه المتجر الذي ربما ثبّت التطبيق منه سابقًا.</string>
+    <string name="new_release_albums_short">أحدث الألبومات</string>
 </resources>

@@ -1119,4 +1119,5 @@
     <string name="gatekeeper_connection_blocked">Conexión bloqueada por LunarTune Remote. Esta aplicación no se ha podido verificar como una compilación oficial de LunarTune. Instale una compilación oficial desde https://github.com/cognitiveshadows03/LunarTune o https://t.me/LunarTuneGC.</string>
     <string name="enable_megalobiz_lyrics">Activar las letras de Megalobiz</string>
     <string name="enable_betterlyrics_portato">Activar BetterLyrics Portato</string>
+    <string name="new_release_albums_short">Novedades</string>
 </resources>

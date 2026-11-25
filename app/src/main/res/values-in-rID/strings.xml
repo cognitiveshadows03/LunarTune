@@ -1098,4 +1098,5 @@
     <string name="scheduled_backup_load_failed">Pengaturan pencadangan terjadwal tidak dapat dimuat</string>
     <string name="scheduled_backup_update_failed">Pengaturan pencadangan terjadwal tidak dapat disimpan</string>
     <string name="gatekeeper_connection_blocked">Koneksi diblokir oleh LunarTune Remote. Aplikasi ini tidak dapat diverifikasi sebagai build LunarTune resmi. Instal build resmi dari https://github.com/cognitiveshadows03/LunarTune atau https://t.me/LunarTuneGC.</string>
+    <string name="new_release_albums_short">Album baru</string>
 </resources>

@@ -731,4 +731,5 @@
     <string name="backdrop_blur_amount_value">%1$d%%</string>
     <string name="most_played_badge">PALING SERING DIPUTAR</string>
     <string name="play_all">Puter semua</string>
+    <string name="new_release_albums_short">Album anyar</string>
 </resources>

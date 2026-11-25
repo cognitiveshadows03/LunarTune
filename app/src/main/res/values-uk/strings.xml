@@ -682,4 +682,5 @@
     <string name="album_backdrop_desc">Показувати зображення як розмитий фон на плеєрі</string>
     <string name="backdrop_blur_amount">Ступінь розмиття фону</string>
     <string name="backdrop_blur_amount_value">%1$d%%</string>
+    <string name="new_release_albums_short">Нові альбоми</string>
 </resources>

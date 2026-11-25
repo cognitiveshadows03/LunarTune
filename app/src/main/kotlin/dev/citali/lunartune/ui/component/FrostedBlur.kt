@@ -44,30 +44,35 @@ val FrostedBgGlowKey = floatPreferencesKey("frostedBgGlow")
 const val FrostedFallbackAlpha = 0.92f
 
 /**
- * Whether live frosted blur is worth running on this device.
+ * Whether live frosted blur can run on this device at all.
  *
- * Haze blurs a captured frame. On Android 12+ that capture and blur happen on the GPU
- * through [android.graphics.RenderEffect]. Below 12 there is no RenderEffect, and Haze
- * falls back to a native (RenderScript) path that re-captures and re-blurs the region on
- * every frame — measured on a Snapdragon 636 at 60 Hz as 49 % dropped frames for the whole
- * duration of an animation, plus a 250 ms GC, because each pass allocates a fresh set of
- * full-frame buffers.
+ * Haze blurs a captured frame, and how it does that depends on the platform. Android 12+
+ * has [android.graphics.RenderEffect], which blurs on the GPU as part of drawing. Below 12
+ * there is no RenderEffect and Haze falls back to RenderScript, which re-captures and
+ * re-blurs the region on every frame and allocates a fresh set of full-frame buffers each
+ * pass — measured on a Snapdragon 636 at 60 Hz as 49 % dropped frames for the whole of an
+ * animation, alongside a 250 ms GC.
  *
- * So below 12 the frost is drawn, not computed: the surfaces keep their scrim, their rim
- * glow and their palette tint, and give up the refracted background. Call sites skip the
- * [dev.chrisbanes.haze.blur.hazeBlur] modifier entirely rather than attaching it with
- * blur disabled, because not attaching it is the only way to be certain nothing is
- * captured at all.
+ * That measurement is why this was once a hard API 31 cut-off, and it is worth keeping in
+ * mind: the frost was asked for on every version the app supports, so the gate is gone, but
+ * on the RenderScript path the frame cost above is real and shows up on old mid-range
+ * hardware during animation. The blur radius stays small ([FrostedBlurDefault], and the
+ * slider caps at [FrostedBlurMax]) and every call site asks Haze for its cheapest profile,
+ * which keeps the work proportional. If the frame timer ever shows the RenderScript path
+ * costing frames again, restoring the cut-off is a one-line change back to
+ * `Build.VERSION_CODES.S`.
+ *
+ * Devices on 12+ are unaffected and get exactly the blur they got before.
  */
-val HazeLiveBlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+val HazeLiveBlurSupported: Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
 
 /**
  * AniDash-style frosted blur for the navigation bar: a small live-blur radius
  * over a 50% surface scrim. The radius stays tiny on purpose — a small kernel
  * over a small pill is what keeps this at full fps on weak GPUs.
  *
- * [HazeLiveBlurSupported] gates the live blur: below Android 12 this style still supplies
- * the scrim, glow and tint, but nothing is captured or blurred.
+ * [HazeLiveBlurSupported] gates the live blur. Below Android 12 Haze draws the blur through
+ * its RenderScript path instead of RenderEffect; the scrim, glow and tint are the same.
  *
  * @param bgGlow 0-1 background-item glow: adds extra blur plus a brightening
  * tint over the content behind the bar, so background items glow as it rises.

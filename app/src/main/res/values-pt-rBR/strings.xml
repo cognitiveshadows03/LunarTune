@@ -1121,4 +1121,5 @@
     <string name="scheduled_backup_update_failed">Não foi possível salvar as configurações do backup programado</string>
     <string name="gatekeeper_connection_blocked">Conexão bloqueada pelo LunarTune Remote. Não foi possível verificar se este aplicativo é uma versão oficial do LunarTune. Instale uma versão oficial em https://github.com/cognitiveshadows03/LunarTune ou https://t.me/LunarTuneGC.</string>
     <string name="enable_betterlyrics_portato">Ativar BetterLyrics Portato</string>
+    <string name="new_release_albums_short">Lançamentos</string>
 </resources>

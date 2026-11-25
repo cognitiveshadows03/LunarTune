@@ -736,4 +736,5 @@
     <string name="remove_playlist_cover">Убрать свою обложку</string>
     <string name="playlist_cover_updated">Обложка обновлена</string>
     <string name="playlist_cover_update_failed">Не удалось обновить обложку</string>
+    <string name="new_release_albums_short">Новинки</string>
 </resources>

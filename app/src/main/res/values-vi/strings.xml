@@ -1057,4 +1057,5 @@
     <string name="ai_content_filter_list_counts">Độ tin cậy cao: %1$d · Độ tin cậy trung bình: %2$d</string>
     <string name="ai_content_filter_source">Về AiSList</string>
     <string name="ai_content_filter_source_summary">Dữ liệu kênh do cộng đồng duy trì từ AiSlopList.com</string>
+    <string name="new_release_albums_short">Album mới</string>
 </resources>
