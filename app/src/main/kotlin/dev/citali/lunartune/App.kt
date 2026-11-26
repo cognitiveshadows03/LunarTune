@@ -123,13 +123,20 @@ class App :
         PreferenceStore.start(this)
         // stream source modules (beta): attach inbuilt modules with their hosts
         dev.citali.lunartune.modules.StreamSourceManager.attachAll(this)
-        runBlocking {
-            PreferenceStore.awaitReady()
-            // Anything the user made their own — theme colour, custom typeface —
-            // has to be in place before the first frame, otherwise the app opens
-            // on the stock look and visibly corrects itself a moment later.
-            preparePersonalisationBeforeFirstFrame()
-        }
+        // Start-up no longer blocks on the data store.
+        //
+        // This used to be a runBlocking that awaited preferences - with a 1.5s
+        // timeout - and then warmed the custom font, on the theory that the first
+        // frame had to already carry the user's own colours. It does not: the
+        // theme colour is read reactively inside the composition, so it arrives a
+        // moment later and settles without a visible correction.
+        //
+        // The custom typeface is the one thing that genuinely wants warming
+        // before the first frame, because the face is resolved through a
+        // synchronous cache lookup: cold, the app opens in the stock face and
+        // visibly swaps. So only that work waits, and only for as long as the
+        // store takes to answer on its own - see warmCustomFont.
+        warmCustomFont()
         Timber.plant(Timber.DebugTree())
         try {
             Timber.plant(
@@ -139,32 +146,55 @@ class App :
         } catch (_: Exception) {
         }
 
+        rollStartupThemeIfNeeded()
         initializeGatekeeper()
         initializeCriticalSync()
         initializeDeferredAsync()
     }
 
     /**
-     * Runs before the first Activity composes, so the app opens already wearing
-     * the user's colours and font.
+     * Warms the custom typeface, and only the typeface.
      *
-     * The custom face is rebuilt from the private copy saved when it was picked,
-     * and the "random theme on startup" roll happens here — rewritten into the
-     * preference snapshot synchronously — instead of in the deferred background
-     * pass that used to repaint the theme a second or two after launch.
+     * The face is resolved through a synchronous cache lookup at composition
+     * time, so if nothing has filled that cache the app opens in the stock face
+     * and swaps once the font loads - the one visible correction start-up used
+     * to have. Warming it is worth a short wait on the devices that actually use
+     * a custom font, and worth none at all on the rest.
+     *
+     * So this asks the data store for its answer with a short budget rather than
+     * the old 1.5s: on a normal launch the store answers in single-digit
+     * milliseconds and the warm happens before the first frame; if it is slow,
+     * start-up gives up waiting and the face arrives with the rest of the theme
+     * instead of holding the window hostage.
      */
-    private suspend fun preparePersonalisationBeforeFirstFrame() {
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val fontPreference =
-                    PreferenceStore.get(FontPreferenceKey).toEnum(defaultValue = AppFontPreference.DEFAULT)
-                if (fontPreference == AppFontPreference.CUSTOM) {
-                    PreferenceStore.get(CustomFontUriKey)?.takeIf { it.isNotBlank() }?.let { uri ->
-                        CustomFontLoader.preload(this@App, uri)
-                    }
+    private fun warmCustomFont() {
+        runBlocking {
+            val prefs = PreferenceStore.awaitReady(timeoutMs = CustomFontWarmBudgetMs) ?: return@runBlocking
+            if (prefs[FontPreferenceKey].toEnum(defaultValue = AppFontPreference.DEFAULT) !=
+                AppFontPreference.CUSTOM
+            ) {
+                return@runBlocking
+            }
+            prefs[CustomFontUriKey]?.takeIf { it.isNotBlank() }?.let { uri ->
+                withContext(Dispatchers.IO) {
+                    runCatching { CustomFontLoader.preload(this@App, uri) }
+                        .onFailure { Timber.w(it, "Could not preload the custom font") }
                 }
-            }.onFailure { Timber.w(it, "Could not preload the custom font") }
+            }
+        }
+    }
 
+    /**
+     * Rolls the "random theme on startup" choice, if the user asked for one.
+     *
+     * This used to run before the first frame with the rest of the start-up work.
+     * It does not need to: the shell theme is already on screen, and the Random
+     * palette repaints the palette the composition is reading, so it lands the
+     * same way a theme change from Settings does. Off the start-up path it costs
+     * nothing on the launches that do not use it, which is most of them.
+     */
+    private fun rollStartupThemeIfNeeded() {
+        applicationScope.launch(Dispatchers.IO) {
             runCatching {
                 if (PreferenceStore.get(RandomThemeOnStartupKey) == true) {
                     val randomPalette = ThemePalettes.generateRandomPalette()
@@ -480,6 +510,13 @@ class App :
 
     companion object {
         private const val GATEKEEPER_RETRY_INTERVAL_MILLIS = 30_000L
+
+        /**
+         * How long start-up waits for the preference store when it only needs to
+         * know whether a custom font is set. Enough for a warm store, short enough
+         * that a cold one is not felt.
+         */
+        private const val CustomFontWarmBudgetMs = 120L
 
         lateinit var instance: App
             private set
