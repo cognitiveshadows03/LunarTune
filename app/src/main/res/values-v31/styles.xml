@@ -2,10 +2,17 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <!--
-      Android 12+ draws its own splash on top of our starting window. Keep that splash
-      a plain surface too: no icon (see splash_icon_empty) and no animated reveal, so
-      the launcher stays visually identical from the first frame until the app has
-      finished loading.
+      Android 12+ draws its own splash on top of our starting window.
+
+      That splash shows the active launcher icon, which the system reads through
+      PackageManager and masks itself - so it is the right icon for whichever
+      activity-alias the user picked, and it is correctly shaped. Supplying an
+      icon here would override all of that with one static drawable, so no icon
+      item is given and the system's own behaviour is left alone.
+
+      The reveal animation is still off: the brand colour is not the launcher
+      icon's background, and the default zoom-out adds a beat between the splash
+      and the first real frame of the app.
     -->
     <style name="Theme.LunarTune" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowContentOverlay">@null</item>
@@ -18,7 +25,6 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowSplashScreenBackground">@color/window_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_empty</item>
         <item name="android:windowSplashScreenAnimationDuration">0</item>
     </style>
 
