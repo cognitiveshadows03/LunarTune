@@ -131,19 +131,15 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -3639,24 +3635,34 @@ private val MenuSheetContentWidth = 196.dp
  */
 private val MenuSheetMaxWidth = 224.dp
 
-/** Corner radius of one standalone action bar inside the sheet. */
-private val MenuGroupCorner = 15.dp
+/** How many rows share one run of pills, for their corner shaping. */
+private const val MenuRowCount = 5
 
 /** Gap between the grouped pills, like the spacing between notification cards. */
 private val MenuGroupGap = 7.dp
 
+/** Corner radius of the frosted backdrop the pills sit on. */
+private val MenuBackdropCorner = 22.dp
+
+/** Faint scrim over the backdrop blur; the pills supply their own contrast. */
+private const val MenuBackdropScrimAlpha = 0.12f
+
+/** Inset between the frosted backdrop's edge and the pills sitting on it. */
+private val MenuSheetInset = 6.dp
+
+/** Gap between two neighbouring pills; smaller than the inset, so they read grouped. */
+private val MenuPillSpacing = 3.dp
+
 /**
- * Scrim over each pill's blur. Light enough that the background reads through
- * the frost - the pills are meant to look like a piece of the wallpaper - but
- * present enough that the labels stay legible on bright artwork behind them.
+ * Corner radius of one pill in the stack. The first and last pills in a run get
+ * the full radius on their outer corners and the tighter [MenuPillGroupCorner]
+ * on the edges that face a neighbour, which is what makes a run of separate
+ * pills read as one grouped block while still being separate surfaces.
  */
-private val MenuPillScrim = Color.Black.copy(alpha = 0.30f)
+private val MenuPillOuterCorner = 17.dp
 
-/** Ring of room each pill keeps for the shadow it paints itself. */
-private val MenuPillShadowRoom = 2.dp
-
-/** How far one pill's painted shadow reaches into that ring. */
-private val MenuPillShadowSpread = 2.dp
+/** Corner radius on the edges where two pills meet. */
+private val MenuPillGroupCorner = 7.dp
 
 /**
  * Replaces the top-bar action cluster with the grid trigger that opens the menu.
@@ -3802,14 +3808,27 @@ private fun FrostedTopBarMenu(
                         modifier =
                             Modifier
                                 .widthIn(min = MenuSheetContentWidth, max = MenuSheetMaxWidth)
-                                // No sheet of its own to paint: every pill below carries
-                                // its own blur, shape and painted shadow, and each keeps
-                                // the ring of room that shadow needs.
-                                .padding(vertical = 2.dp),
+                                // The frosted sheet is back, as a backdrop the pills sit
+                                // on rather than as their container: it blurs the screen
+                                // behind the whole menu so the gaps between pills read as
+                                // frost instead of as a hole cut through to the home
+                                // screen. It paints no tint and no rim, so nothing of its
+                                // own shows except the blur.
+                                .clip(RoundedCornerShape(MenuBackdropCorner))
+                                .then(
+                                    if (HazeLiveBlurSupported) {
+                                        Modifier.hazeBlur(
+                                            input = HazeInput.Sources(hazeState),
+                                            style = menuBackdropStyle(),
+                                            performanceMode = HazePerformanceMode.Performance,
+                                        )
+                                    } else {
+                                        Modifier.background(barColor.copy(alpha = FrostedFallbackAlpha))
+                                    },
+                                ).padding(horizontal = MenuSheetInset, vertical = MenuSheetInset),
                     ) {
                         Column {
                             FrostedTopBarMenuAccount(
-                                hazeState = hazeState,
                                 bannerModel = bannerModel,
                                 avatarModel = accountImageUrl,
                                 title = accountTitle,
@@ -3820,12 +3839,17 @@ private fun FrostedTopBarMenu(
                                 onNavigate("profile")
                             }
 
-                            Spacer(Modifier.height(MenuGroupGap))
+                            FrostedTopBarMenuGroup {
+                                // One run of seven pills. Each row shapes itself from its
+                                // position, so the run reads as a single grouped block
+                                // while every pill stays its own opaque surface.
+                                val runCount = MenuRowCount
 
-                            FrostedTopBarMenuGroup(hazeState = hazeState, scrimColor = MenuPillScrim) {
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.history,
                                     label = stringResource(R.string.history),
+                                    index = 0,
+                                    count = runCount,
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("history")
@@ -3833,6 +3857,8 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.stats,
                                     label = stringResource(R.string.stats),
+                                    index = 1,
+                                    count = runCount,
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("stats")
@@ -3840,6 +3866,8 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.trending_up,
                                     label = stringResource(R.string.charts),
+                                    index = 2,
+                                    count = runCount,
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("charts_screen")
@@ -3847,6 +3875,8 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.new_release,
                                     label = stringResource(R.string.new_release_albums_short),
+                                    index = 3,
+                                    count = runCount,
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("new_release")
@@ -3854,13 +3884,18 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.multi_user,
                                     label = stringResource(R.string.music_together_short),
+                                    index = 4,
+                                    count = runCount,
                                 ) {
                                     onExpandedChange(false)
                                     onNavigate("settings/music_together")
                                 }
-                            }
-                            Spacer(Modifier.height(MenuGroupGap))
-                            FrostedTopBarMenuGroup(hazeState = hazeState, scrimColor = MenuPillScrim) {
+
+                                // Settings sits apart from the browsing rows: a small
+                                // gap, and its own rounded ends, so it reads as the
+                                // config group rather than an eighth item in the list.
+                                Spacer(Modifier.height(MenuGroupGap))
+
                                 val settingsTrailing: (@Composable () -> Unit)? =
                                     if (updateAvailable) {
                                         @Composable { Badge() }
@@ -3870,6 +3905,8 @@ private fun FrostedTopBarMenu(
                                 FrostedTopBarMenuRow(
                                     iconRes = R.drawable.settings,
                                     label = stringResource(R.string.settings),
+                                    index = 0,
+                                    count = 1,
                                     trailing = settingsTrailing,
                                 ) {
                                     onExpandedChange(false)
@@ -3908,84 +3945,32 @@ private class TopEndMenuPositionProvider : PopupPositionProvider {
 }
 
 /**
- * Soft shadow for the floating menu sheet, drawn in the ring of padding the
- * sheet keeps for it. Stacked translucent rounded rects approximate a blur and
- * stay entirely inside the popup, so no edge is ever sliced flat.
- */
-private fun DrawScope.drawFloatingSheetShadow(
-    cornerRadiusPx: Float,
-    spreadPx: Float,
-    shade: Color,
-) {
-    val steps = 6
-    for (step in steps downTo 1) {
-        val t = step / steps.toFloat()
-        val spread = spreadPx * t
-        drawRoundRect(
-            color = shade.copy(alpha = 0.028f + 0.032f * (1f - t)),
-            topLeft = Offset(-spread, -spread * 0.35f + spreadPx * 0.42f),
-            size = Size(size.width + spread * 2f, size.height + spread * 2f),
-            cornerRadius = CornerRadius(cornerRadiusPx + spread),
-        )
-    }
-}
-
-/**
- * Frost for one standalone pill: the same recipe the top bar and the navigation
- * pill use, so the pills read as pieces of the background rather than cards
- * laid on top of it. No rim and no palette tint - just the blur and its scrim.
+ * Frost for the backdrop the pills sit on.
+ *
+ * The pills are opaque, so the blur has no job inside them - it is the gaps
+ * between them and the margin around them that need to frost, which is what
+ * makes the stack look like it is floating on the wallpaper rather than pasted
+ * onto the home screen. Only the blur: no tint, no rim, and no scrim beyond the
+ * faintest one needed to keep the hairlines between pills from glaring.
  */
 @Composable
-private fun menuPillStyle(scrimColor: Color): HazeBlurStyle =
+private fun menuBackdropStyle(): HazeBlurStyle =
     frostedTopMenuStyle(
-        scrim = scrimColor,
-        fallbackScrim = scrimColor.copy(alpha = FrostedFallbackAlpha),
+        scrim = Color.Black.copy(alpha = MenuBackdropScrimAlpha),
+        fallbackScrim = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = FrostedFallbackAlpha),
     )
 
 /**
- * One pill holding a logical group of actions.
- *
- * Each group is its own frosted surface with its own shape and its own shadow,
- * separated by a gap rather than by a divider on shared chrome. That is what
- * makes the stack read as several pills sitting together instead of one tall
- * panel with lines across it: the background shows through the gaps, and every
- * pill gets the full pill radius instead of being clipped by a parent.
+ * A run of pills shown together. Carries no surface of its own - every pill
+ * inside paints itself - so this only holds the run and keeps their edges
+ * aligned.
  */
 @Composable
 private fun FrostedTopBarMenuGroup(
-    hazeState: HazeState,
-    scrimColor: Color,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val groupShape = RoundedCornerShape(MenuGroupCorner)
-    val shadow = MaterialTheme.colorScheme.scrim
     Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                // The group's own room for the shadow it paints, so the popup's
-                // edge never slices it flat.
-                .padding(MenuPillShadowRoom)
-                .drawBehind {
-                    drawFloatingSheetShadow(
-                        cornerRadiusPx = MenuGroupCorner.toPx(),
-                        spreadPx = MenuPillShadowSpread.toPx(),
-                        shade = shadow,
-                    )
-                }.clip(groupShape)
-                .then(
-                    if (HazeLiveBlurSupported) {
-                        Modifier.hazeBlur(
-                            input = HazeInput.Sources(hazeState),
-                            style = menuPillStyle(scrimColor),
-                            performanceMode = HazePerformanceMode.Performance,
-                        )
-                    } else {
-                        // No live blur: the pill paints its scrim itself so the
-                        // labels keep their contrast.
-                        Modifier.background(scrimColor.copy(alpha = FrostedFallbackAlpha))
-                    },
-                ).padding(vertical = 3.dp),
+        modifier = Modifier.fillMaxWidth(),
         content = content,
     )
 }
@@ -3996,7 +3981,6 @@ private fun FrostedTopBarMenuGroup(
  */
 @Composable
 private fun FrostedTopBarMenuAccount(
-    hazeState: HazeState,
     bannerModel: Any?,
     avatarModel: Any?,
     title: String,
@@ -4004,32 +3988,22 @@ private fun FrostedTopBarMenuAccount(
     pillColor: Color,
     onClick: () -> Unit,
 ) {
-    val groupShape = RoundedCornerShape(MenuGroupCorner)
-    val shadow = MaterialTheme.colorScheme.scrim
+    // First pill in the run: full radius on top, pinched where it meets the next.
+    val groupShape =
+        RoundedCornerShape(
+            topStart = MenuPillOuterCorner,
+            topEnd = MenuPillOuterCorner,
+            bottomStart = MenuPillGroupCorner,
+            bottomEnd = MenuPillGroupCorner,
+        )
     Box(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // Its own shadow room, like the action pills below it.
-                .padding(MenuPillShadowRoom)
-                .drawBehind {
-                    drawFloatingSheetShadow(
-                        cornerRadiusPx = MenuGroupCorner.toPx(),
-                        spreadPx = MenuPillShadowSpread.toPx(),
-                        shade = shadow,
-                    )
-                }.clip(groupShape)
-                .then(
-                    if (HazeLiveBlurSupported) {
-                        Modifier.hazeBlur(
-                            input = HazeInput.Sources(hazeState),
-                            style = menuPillStyle(pillColor),
-                            performanceMode = HazePerformanceMode.Performance,
-                        )
-                    } else {
-                        Modifier.background(pillColor.copy(alpha = FrostedFallbackAlpha))
-                    },
-                ).clickable(onClick = onClick),
+                .padding(bottom = MenuPillSpacing / 2)
+                .clip(groupShape)
+                .background(pillColor)
+                .clickable(onClick = onClick),
     ) {
         if (bannerModel != null) {
             AsyncImage(
@@ -4091,20 +4065,44 @@ private fun FrostedTopBarMenuAccount(
     }
 }
 
-/** One row of [FrostedTopBarMenu], drawn onto its group's pill. */
+/**
+ * One row of [FrostedTopBarMenu]: its own opaque pill.
+ *
+ * Every row is a separate surface, not a line inside a shared panel, and the
+ * corners are what convey the grouping. [index] and [count] describe the row's
+ * place among the rows shown together: the first row rounds its top corners
+ * fully and pinches the bottom pair, the last does the reverse, and rows in
+ * between use the tight radius on both. That is the shape language stock
+ * settings lists use, and it is what makes a run of separate pills read as one
+ * block without any of them actually sharing a surface.
+ */
 @Composable
 private fun FrostedTopBarMenuRow(
     @DrawableRes iconRes: Int,
     label: String,
+    index: Int,
+    count: Int,
     trailing: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
+    val topCorners =
+        if (index == 0) MenuPillOuterCorner else MenuPillGroupCorner
+    val bottomCorners =
+        if (index == count - 1) MenuPillOuterCorner else MenuPillGroupCorner
+    val shape =
+        RoundedCornerShape(
+            topStart = topCorners,
+            topEnd = topCorners,
+            bottomStart = bottomCorners,
+            bottomEnd = bottomCorners,
+        )
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                // The group pill clips the ripple, so no second rounded shape
-                // is needed here: a tap fills the whole width of its card.
+                .padding(vertical = MenuPillSpacing / 2)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
                 .clickable(onClick = onClick)
                 .padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
