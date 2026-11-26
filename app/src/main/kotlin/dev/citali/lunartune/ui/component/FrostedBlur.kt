@@ -23,9 +23,6 @@ const val FrostedBlurDefault = 10f
 /** Strongest blur the slider can reach, in dp. */
 const val FrostedBlurMax = 20f
 
-/** Default primary-color rim glow around the frosted pill (0-100% adjustable). */
-const val FrostedGlowDefault = 0.5f
-
 /** Default background-item glow (0-100% adjustable, off by default). */
 const val FrostedBgGlowDefault = 0f
 
@@ -37,7 +34,6 @@ const val FrostedBgGlowTint = 0.35f
 
 val FrostedDimKey = floatPreferencesKey("frostedDim")
 val FrostedBlurKey = floatPreferencesKey("frostedBlur")
-val FrostedGlowKey = floatPreferencesKey("frostedGlow")
 val FrostedBgGlowKey = floatPreferencesKey("frostedBgGlow")
 
 /** Opaque-ish scrim used only if blurring is unavailable on the device. */

@@ -1170,8 +1170,6 @@
     <string name="frosted_dim_desc">Dim behind the bar</string>
     <string name="frosted_blur">Blur strength</string>
     <string name="frosted_blur_desc">Background blur radius</string>
-    <string name="frosted_glow">Rim glow</string>
-    <string name="frosted_glow_desc">Outline glow</string>
     <string name="frosted_bg_glow">Background glow</string>
     <string name="frosted_bg_glow_desc">Background glow and blur</string>
     <string name="navigation_bar_style_capsule">Capsule</string>

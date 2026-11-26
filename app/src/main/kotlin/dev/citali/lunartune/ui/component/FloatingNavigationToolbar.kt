@@ -13,7 +13,6 @@ import android.os.Build
 import android.os.SystemClock
 import android.view.ViewConfiguration
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.BorderStroke
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
@@ -233,7 +232,6 @@ fun FloatingNavigationToolbar(
 
     val (frostedDim) = rememberPreference(FrostedDimKey, defaultValue = FrostedDimDefault)
     val (frostedBlur) = rememberPreference(FrostedBlurKey, defaultValue = FrostedBlurDefault)
-    val (frostedGlow) = rememberPreference(FrostedGlowKey, defaultValue = FrostedGlowDefault)
     val (frostedBgGlow) = rememberPreference(FrostedBgGlowKey, defaultValue = FrostedBgGlowDefault)
     val frostedScrimBase =
         if (pureBlack) Color.Black else MaterialTheme.colorScheme.surfaceContainer
@@ -268,15 +266,10 @@ fun FloatingNavigationToolbar(
             color = if (isFrosted) Color.Transparent else navigationContainerColor,
             tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
-            border =
-                if (isFrosted) {
-                    BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.primary.copy(alpha = frostedGlow.coerceIn(0f, 1f)),
-                    )
-                } else {
-                    null
-                },
+            // No rim on the frosted bar: the blur is meant to read as the
+            // background itself, and a lit hairline drew a visible edge around
+            // it that the rest of the frosted surfaces do not have.
+            border = null,
         ) {
             // Guaranteed AniDash veil: Haze draws nothing until its first blurred
             // frame completes (or if RenderScript fails on old devices), so the

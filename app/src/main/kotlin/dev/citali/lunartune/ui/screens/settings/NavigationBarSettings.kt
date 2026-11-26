@@ -9,7 +9,6 @@
 
 package dev.citali.lunartune.ui.screens.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -91,8 +90,6 @@ import dev.citali.lunartune.ui.component.FrostedBlurMax
 import dev.citali.lunartune.ui.component.FrostedDimDefault
 import dev.citali.lunartune.ui.component.FrostedDimKey
 import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
-import dev.citali.lunartune.ui.component.FrostedGlowDefault
-import dev.citali.lunartune.ui.component.FrostedGlowKey
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.PreferenceEntry
 import dev.citali.lunartune.ui.component.PreferenceGroup
@@ -142,8 +139,6 @@ fun NavigationBarSettings(navController: NavController) {
         rememberPreference(FrostedDimKey, defaultValue = FrostedDimDefault)
     val (frostedBlur, onFrostedBlurChange) =
         rememberPreference(FrostedBlurKey, defaultValue = FrostedBlurDefault)
-    val (frostedGlow, onFrostedGlowChange) =
-        rememberPreference(FrostedGlowKey, defaultValue = FrostedGlowDefault)
     val (frostedBgGlow, onFrostedBgGlowChange) =
         rememberPreference(FrostedBgGlowKey, defaultValue = FrostedBgGlowDefault)
     Scaffold(
@@ -272,31 +267,6 @@ fun NavigationBarSettings(navController: NavController) {
                                     cornerRadius = navigationBarCornerRadius,
                                     style = navigationBarStyle,
                                     frostedBlur = tempBlur,
-                                )
-                            },
-                        )
-                    }
-
-                    item {
-                        SliderPreferenceRow(
-                            title = stringResource(R.string.frosted_glow),
-                            description = stringResource(R.string.frosted_glow_desc),
-                            iconRes = R.drawable.tune,
-                            value = frostedGlow,
-                            onValueChange = onFrostedGlowChange,
-                            range = 0f..1f,
-                            valueLabel = { "${(it * 100).roundToInt()}%" },
-                            default = FrostedGlowDefault,
-                            preview = { tempGlow ->
-                                NavBarPreview(
-                                    widthFraction = navigationBarWidth,
-                                    heightMultiplier = navigationBarHeight,
-                                    opacity = navigationBarOpacity,
-                                    transparency = navigationBarTransparency,
-                                    labelSpacing = navigationBarLabelSpacing,
-                                    cornerRadius = navigationBarCornerRadius,
-                                    style = navigationBarStyle,
-                                    frostedGlow = tempGlow,
                                 )
                             },
                         )
@@ -629,16 +599,13 @@ private fun NavBarPreview(
     style: NavigationBarStyle,
     frostedDim: Float? = null,
     frostedBlur: Float? = null,
-    frostedGlow: Float? = null,
     frostedBgGlow: Float? = null,
 ) {
     val (storedDim) = rememberPreference(FrostedDimKey, defaultValue = FrostedDimDefault)
     val (storedBlur) = rememberPreference(FrostedBlurKey, defaultValue = FrostedBlurDefault)
-    val (storedGlow) = rememberPreference(FrostedGlowKey, defaultValue = FrostedGlowDefault)
     val (storedBgGlow) = rememberPreference(FrostedBgGlowKey, defaultValue = FrostedBgGlowDefault)
     val dim = (frostedDim ?: storedDim).coerceIn(0f, 0.9f)
     val blur = (frostedBlur ?: storedBlur).coerceIn(0f, FrostedBlurMax)
-    val glow = (frostedGlow ?: storedGlow).coerceIn(0f, 1f)
     val bgGlow = (frostedBgGlow ?: storedBgGlow).coerceIn(0f, 1f)
     val isFloating =
         style == NavigationBarStyle.FLOATING || style == NavigationBarStyle.FROSTED
@@ -710,15 +677,9 @@ private fun NavBarPreview(
             color = if (isFrosted) Color.Transparent else barColor,
             tonalElevation = if (isFrosted) 0.dp else NavigationBarDefaults.Elevation,
             shadowElevation = if (isFloating) 8.dp else NavigationBarDefaults.Elevation,
-            border =
-                if (isFrosted) {
-                    BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.primary.copy(alpha = glow),
-                    )
-                } else {
-                    null
-                },
+            // No rim on the frosted bar, matching the real one: a lit hairline
+            // would preview an edge the app no longer draws.
+            border = null,
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isFrosted) {
