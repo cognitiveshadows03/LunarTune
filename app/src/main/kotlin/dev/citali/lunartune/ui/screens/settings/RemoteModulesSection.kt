@@ -80,7 +80,7 @@ fun RemoteModulesSection(userAgent: String) {
         StreamSourceManager.reloadLoaded()
     }
 
-    SourcesSectionLabel(stringResource(R.string.remote_modules_title))
+    LoadedSectionLabel(stringResource(R.string.remote_modules_title))
 
     Text(
         text = stringResource(R.string.remote_modules_description),
@@ -223,6 +223,18 @@ fun RemoteModulesSection(userAgent: String) {
             },
         )
     }
+}
+
+/** the page's section label, repeated here so this file owns what it renders */
+@Composable
+private fun LoadedSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp),
+    )
 }
 
 @Composable
