@@ -1359,4 +1359,21 @@
     <string name="profile_release_build">Release build</string>
     <string name="profile_debug_build">Debug build</string>
     <string name="crossfade_section_title">Crossfade</string>
+
+    <string name="remote_modules_title">Loaded modules</string>
+    <string name="remote_modules_description">Modules other people wrote. A module here is a document that says how to ask a service for a stream — it runs no code, and it can only reach addresses it names in plain http or https.</string>
+    <string name="remote_modules_empty">Nothing loaded yet.</string>
+    <string name="remote_modules_needs_enabling">Turn it on in the list above to use it.</string>
+    <string name="remote_modules_add_url">From an address</string>
+    <string name="remote_modules_add_text">Paste a document</string>
+    <string name="remote_modules_url_label">https://…</string>
+    <string name="remote_modules_text_label">Module document</string>
+    <string name="remote_modules_install">Install</string>
+    <string name="remote_modules_loading">Reading the document…</string>
+    <string name="remote_modules_added">%1$s is installed. Turn it on in the list above to use it.</string>
+    <string name="remote_modules_failed">That module could not be loaded.</string>
+    <string name="remote_modules_version">v%1$s</string>
+    <string name="remote_modules_remove">Remove</string>
+    <string name="remote_modules_remove_title">Remove %1$s?</string>
+    <string name="remote_modules_remove_body">It leaves your sources and the settings it stored are deleted. You can install it again at any time.</string>
 </resources>

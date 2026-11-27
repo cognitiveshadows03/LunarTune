@@ -16,6 +16,7 @@ import dev.citali.lunartune.constants.ModuleEnabledKey
 import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
+import dev.citali.lunartune.modules.remote.RemoteModuleStore
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.dataStore
 import kotlinx.coroutines.Dispatchers
@@ -61,11 +62,22 @@ object StreamSourceManager {
         { JioSaavnModule() },
     )
 
-    private val modules: Map<String, SourceModule> by lazy {
+    /** set once from the application, so a module added later can still be attached */
+    @Volatile private var appContext: Context? = null
+
+    /** in-app modules, built once; their set cannot change while the app runs */
+    private val inbuilt: Map<String, SourceModule> by lazy {
         factories.map { it() }.associateBy { it.info.id }
     }
 
-    /** every inbuilt module, in default priority order */
+    /** loaded modules, rebuilt whenever the installed set changes */
+    @Volatile private var loaded: Map<String, SourceModule> = emptyMap()
+
+    /** everything that can serve a stream, in-built first, then whatever is loaded */
+    private val modules: Map<String, SourceModule>
+        get() = inbuilt + loaded.filterKeys { it !in inbuilt }
+
+    /** every module, in default priority order: in-app ones first, then loaded ones */
     fun allModules(): List<SourceModule> = modules.values.toList()
 
     fun module(id: String): SourceModule? = modules[id]
@@ -141,10 +153,33 @@ object StreamSourceManager {
 
     /** attach every module with its host; call once from the application */
     fun attachAll(context: Context) {
-        modules.values.forEach { module ->
+        appContext = context.applicationContext
+        inbuilt.values.forEach { module ->
             runCatching { module.attach(Host(context.applicationContext, module.info.id)) }
                 .onFailure { e -> Timber.tag("StreamSource").w(e, "Module %s attach failed", module.info.id) }
         }
+        reloadLoaded()
+    }
+
+    /**
+     * Re-reads the loaded modules and attaches them.
+     *
+     * Called at start-up and again whenever a module is added or removed, because
+     * the installed set changes while the app is running and a registry built once
+     * would keep offering a module that is no longer there — or miss one that was
+     * just added until the next launch.
+     */
+    fun reloadLoaded() {
+        val context = appContext ?: return
+        loaded =
+            RemoteModuleStore.modules()
+                .onEach { module ->
+                    runCatching { module.attach(Host(context, module.info.id)) }
+                        .onFailure { e ->
+                            Timber.tag("StreamSource").w(e, "Loaded module %s attach failed", module.info.id)
+                        }
+                }
+                .associateBy { it.info.id }
     }
 
     private class Host(

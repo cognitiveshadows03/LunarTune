@@ -96,6 +96,10 @@ private const val MIN_TOLERANCE = 2
 private const val MAX_TOLERANCE = 20
 private const val DEFAULT_TOLERANCE = 10
 
+/** identifies the app to wherever a module document is fetched from */
+private val RemoteModuleUserAgent =
+    "LunarTune/${dev.citali.lunartune.BuildConfig.VERSION_NAME} (Android)"
+
 /**
  * Where audio can come from: YouTube Music as the always-on baseline, then every
  * stream module the build ships, in priority order. A module that has the song
@@ -196,6 +200,14 @@ fun SourcesSettings(navController: NavController) {
             )
 
             TrackMatchingSection()
+
+            // Loaded modules sit at the end: they arrive after the shipped ones in
+            // priority order, and the list above is the thing people come here to see.
+            // The reload the section reports back only matters because the registry
+            // above is built from it - without it a module would join the list only
+            // after a restart.
+            RemoteModulesSection(userAgent = RemoteModuleUserAgent)
+            Spacer(Modifier.height(12.dp))
         }
     }
 
