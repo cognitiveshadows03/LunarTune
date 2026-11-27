@@ -48,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -72,7 +73,12 @@ import dev.citali.lunartune.R
 import dev.citali.lunartune.constants.ModuleEnabledKey
 import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
+import dev.citali.lunartune.constants.ModulesEnabledKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
+import dev.citali.lunartune.modules.remote.CatalogEntry
+import dev.citali.lunartune.modules.remote.RemoteCatalogStore
+import dev.citali.lunartune.modules.remote.RemoteModule
+import dev.citali.lunartune.modules.remote.RemoteModuleStore
 import dev.citali.lunartune.modules.AccountState
 import dev.citali.lunartune.modules.FieldKind
 import dev.citali.lunartune.modules.ModuleField
@@ -101,26 +107,56 @@ private val RemoteModuleUserAgent =
     "LunarTune/${dev.citali.lunartune.BuildConfig.VERSION_NAME} (Android)"
 
 /**
- * Where audio can come from: YouTube Music as the always-on baseline, then every
- * stream module the build ships, in priority order. A module that has the song
- * serves it and YouTube Music stays the fallback behind all of them.
+ * The modules page: what can serve audio, in what order, and what else is
+ * available to add.
+ *
+ * It is laid out as a master switch over the whole mechanism, then two tabs. The
+ * tabs are the split that was missing before — "the modules this app has" and
+ * "modules someone else publishes" were the same undifferentiated list, so
+ * adding one meant scrolling past everything already installed.
+ *
+ * Built-in modules are never removable and are never hidden: they are the floor
+ * this feature stands on, and the page says so by listing them separately from
+ * the ones that can go.
  */
 @Composable
 fun SourcesSettings(navController: NavController) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val (orderRaw) = rememberPreference(StreamSourceOrderKey, "")
+    val (masterEnabled, onMasterEnabledChange) = rememberPreference(ModulesEnabledKey, true)
+
+    var tab by rememberSaveable { mutableStateOf(ModulesTab.Installed) }
+    var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+    var addCatalogOpen by remember { mutableStateOf(false) }
+    var installingEntry by remember { mutableStateOf<CatalogEntry?>(null) }
+    var addChoiceOpen by remember { mutableStateOf(false) }
+    var addModuleOpen by remember { mutableStateOf(false) }
+    var addDocumentOpen by remember { mutableStateOf(false) }
+    var catalogBusy by remember { mutableStateOf(false) }
+    // bumped after anything that changes the installed set, so the lists re-read it
+    var installedVersion by remember { mutableStateOf(0) }
+
     val orderedModules =
-        remember(orderRaw) {
+        remember(orderRaw, installedVersion) {
             val saved = orderRaw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val all = StreamSourceManager.allModules()
             val known = all.map { it.info.id }
             (saved.filter { it in known } + known.filter { it !in saved })
                 .mapNotNull { id -> all.firstOrNull { it.info.id == id } }
         }
-    var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
-    // bumped when a module's remembered stream is cleared, so its row redraws
+    val builtIn = orderedModules.filter { it !is RemoteModule }
+    val loaded = orderedModules.filterIsInstance<RemoteModule>()
+    // loaded modules the user can see but which did not parse are not in the
+    // registry at all, so they are read from the store rather than from the list
+    val brokenLoaded = remember(installedVersion) {
+        RemoteModuleStore.installed().filterNot { it.usable }
+    }
+    val catalogs = remember(installedVersion) { RemoteCatalogStore.catalogsWithEntries() }
+
     var lastStreamVersion by remember { mutableStateOf(0) }
-    // what each module last said about itself, re-read on a timer so a module that comes
-    // back is shown as back without anyone having to open it or press anything
     var moduleStates by remember { mutableStateOf<Map<String, AccountState>>(emptyMap()) }
     LaunchedEffect(orderedModules) {
         while (true) {
@@ -133,11 +169,15 @@ fun SourcesSettings(navController: NavController) {
         }
     }
 
+    val enabledCount = remember(orderRaw, installedVersion, masterEnabled) {
+        orderedModules.count { StreamSourceManager.isEnabled(it.info.id) }
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.sources_page_title)) },
+                title = {},
                 navigationIcon = {
                     IconButton(
                         onClick = navController::navigateUp,
@@ -159,66 +199,239 @@ fun SourcesSettings(navController: NavController) {
                 ).verticalScroll(rememberScrollState())
                 .padding(bottom = SettingsDimensions.ScreenBottomPadding),
         ) {
-            SourcesSectionLabel(stringResource(R.string.sources_audio_sources))
+            ModulesHeader(
+                title = stringResource(R.string.sources_page_title),
+                subtitle = stringResource(R.string.modules_page_subtitle),
+            )
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(horizontal = 16.dp),
-            ) {
-                // YouTube Music is not optional and never disabled, so its row
-                // states that instead of offering a switch.
-                SourceCard(
-                    iconRes = R.drawable.ic_source_youtube,
-                    title = stringResource(R.string.sources_youtube_title),
-                    subtitle = stringResource(R.string.sources_youtube_status),
-                    enabled = true,
-                    showStatusDot = true,
-                    trailing = {
-                        StatusPill(
-                            text = stringResource(R.string.sources_always_on),
-                            container = MaterialTheme.colorScheme.surfaceContainerHighest,
-                            content = MaterialTheme.colorScheme.onSurface,
+            Spacer(Modifier.height(10.dp))
+
+            ModuleMasterCard(
+                enabled = masterEnabled,
+                enabledCount = enabledCount,
+                installedCount = builtIn.size + loaded.size + brokenLoaded.size,
+                catalogCount = catalogs.size,
+                onEnabledChange = onMasterEnabledChange,
+            )
+
+            Spacer(Modifier.height(16.dp))
+
+            ModulesTabs(selected = tab, onSelect = { tab = it })
+
+            Spacer(Modifier.height(8.dp))
+
+            ModuleTabContent(tab) { current ->
+                when (current) {
+                    ModulesTab.Installed ->
+                        InstalledTab(
+                            builtIn = builtIn,
+                            loaded = loaded,
+                            brokenLoaded = brokenLoaded,
+                            masterEnabled = masterEnabled,
+                            moduleStates = moduleStates,
+                            lastStreamVersion = lastStreamVersion,
+                            orderRaw = orderRaw,
+                            onOpen = { selectedModuleId = it },
+                            onMoved = { id, direction ->
+                                scope.launch { StreamSourceManager.move(context, id, direction) }
+                            },
                         )
-                    },
-                )
-
-                orderedModules.forEach { module ->
-                    ModuleCard(
-                        module = module,
-                        state = moduleStates[module.info.id],
-                        lastStreamVersion = lastStreamVersion,
-                        onClick = { selectedModuleId = module.info.id },
-                    )
+                    ModulesTab.Catalogs ->
+                        CatalogsTab(
+                            catalogs = catalogs,
+                            busy = catalogBusy,
+                            onAdd = { addCatalogOpen = true },
+                            onRefresh = { url ->
+                                catalogBusy = true
+                                scope.launch {
+                                    withContext(Dispatchers.IO) {
+                                        RemoteCatalogStore.refresh(context, url, RemoteModuleUserAgent)
+                                    }
+                                    catalogBusy = false
+                                    installedVersion++
+                                }
+                            },
+                            onRemove = { url ->
+                                RemoteCatalogStore.remove(context, url)
+                                installedVersion++
+                            },
+                            onInstall = { entry ->
+                                importMessage = null
+                                installingEntry = entry
+                            },
+                        )
                 }
             }
 
+            if (tab == ModulesTab.Installed) {
+                ModulesFab(onClick = { addChoiceOpen = true })
+            }
+
+            // Say what the fallback is once, at the point the reader has finished
+            // looking at the list, rather than repeating it on every row.
             Text(
                 text = stringResource(R.string.stream_sources_fallback),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
             )
 
             TrackMatchingSection()
 
-            // Loaded modules sit at the end: they arrive after the shipped ones in
-            // priority order, and the list above is the thing people come here to see.
-            // The reload the section reports back only matters because the registry
-            // above is built from it - without it a module would join the list only
-            // after a restart.
-            RemoteModulesSection(userAgent = RemoteModuleUserAgent)
-            Spacer(Modifier.height(12.dp))
+            importMessage?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 
     selectedModuleId?.let { moduleId ->
-        val module = StreamSourceManager.module(moduleId)
-        if (module != null) {
+        StreamSourceManager.module(moduleId)?.let { module ->
             ModuleDetailSheet(
                 module = module,
                 onDismiss = { selectedModuleId = null },
                 onLastStreamCleared = { lastStreamVersion++ },
             )
+        }
+    }
+
+    installingEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { installingEntry = null },
+            title = { Text(entry.title) },
+            text = {
+                Text(
+                    entry.description.ifBlank {
+                        stringResource(R.string.remote_modules_description)
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        installingEntry = null
+                        importing = true
+                        scope.launch {
+                            val result =
+                                withContext(Dispatchers.IO) {
+                                    RemoteCatalogStore.installEntry(context, entry, RemoteModuleUserAgent)
+                                }
+                            importing = false
+                            result
+                                .onSuccess { document ->
+                                    StreamSourceManager.reloadLoaded()
+                                    installedVersion++
+                                    importMessage = context.getString(R.string.remote_modules_added, document.name)
+                                }.onFailure { error ->
+                                    // FAQ: a published module is not readable by this app
+                                    importMessage =
+                                        error.message?.let {
+                                            context.getString(R.string.modules_import_failed_reason, it)
+                                        } ?: context.getString(R.string.remote_modules_failed)
+                                }
+                        }
+                    },
+                    enabled = !importing,
+                ) {
+                    Text(stringResource(R.string.remote_modules_install))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { installingEntry = null }) { Text(stringResource(android.R.string.cancel)) }
+            },
+        )
+    }
+
+    if (addChoiceOpen) {
+        AddModuleChoiceDialog(
+            onDismiss = { addChoiceOpen = false },
+            onAddress = {
+                addChoiceOpen = false
+                addModuleOpen = true
+            },
+            onPaste = {
+                addChoiceOpen = false
+                addDocumentOpen = true
+            },
+        )
+    }
+
+    if (addDocumentOpen) {
+        TextEntryDialogSimple(
+            title = stringResource(R.string.modules_add_from_document),
+            label = stringResource(R.string.modules_add_url_label),
+            confirm = stringResource(R.string.remote_modules_install),
+            multiline = true,
+            onDismiss = { addDocumentOpen = false },
+        ) { text ->
+            addDocumentOpen = false
+            RemoteModuleStore.install(context, text)
+                .onSuccess { document ->
+                    StreamSourceManager.reloadLoaded()
+                    installedVersion++
+                    importMessage = context.getString(R.string.remote_modules_added, document.name)
+                }.onFailure { error ->
+                    importMessage = error.message ?: context.getString(R.string.remote_modules_failed)
+                }
+        }
+    }
+
+    if (addModuleOpen) {
+        TextEntryDialogSimple(
+            title = stringResource(R.string.modules_add),
+            label = stringResource(R.string.modules_add_url_label),
+            confirm = stringResource(R.string.remote_modules_install),
+            onDismiss = { addModuleOpen = false },
+        ) { url ->
+            addModuleOpen = false
+            importing = true
+            scope.launch {
+                val result =
+                    withContext(Dispatchers.IO) {
+                        RemoteModuleStore.installFromUrl(context, url, RemoteModuleUserAgent)
+                    }
+                importing = false
+                result
+                    .onSuccess { document ->
+                        StreamSourceManager.reloadLoaded()
+                        installedVersion++
+                        importMessage = context.getString(R.string.remote_modules_added, document.name)
+                    }.onFailure { error ->
+                        importMessage = error.message ?: context.getString(R.string.remote_modules_failed)
+                    }
+            }
+        }
+    }
+
+    if (addCatalogOpen) {
+        TextEntryDialogSimple(
+            title = stringResource(R.string.modules_catalog_add),
+            label = stringResource(R.string.modules_catalog_url_label),
+            confirm = stringResource(R.string.remote_modules_install),
+            onDismiss = { addCatalogOpen = false },
+        ) { url ->
+            addCatalogOpen = false
+            catalogBusy = true
+            scope.launch {
+                val result =
+                    withContext(Dispatchers.IO) {
+                        RemoteCatalogStore.add(context, url, RemoteModuleUserAgent)
+                    }
+                catalogBusy = false
+                result
+                    .onSuccess { catalog ->
+                        installedVersion++
+                        importMessage = context.getString(R.string.modules_catalog_added, catalog.name)
+                    }.onFailure { error ->
+                        importMessage = error.message ?: context.getString(R.string.modules_catalog_failed)
+                    }
+            }
         }
     }
 }

@@ -1072,6 +1072,15 @@ enum class TabTransitionStyle {
 
 val HideStatusBarKey = booleanPreferencesKey("hideStatusBar")
 
+/**
+ * The master switch for module playback.
+ *
+ * Off means no module is consulted at all, whatever its own switch says — so
+ * turning modules off is one action, and turning them back on restores exactly
+ * the arrangement that was there before.
+ */
+val ModulesEnabledKey = booleanPreferencesKey("modulesPlaybackEnabled")
+
 /** Stream source modules (beta): priority order as comma-separated module ids. */
 val StreamSourceOrderKey = stringPreferencesKey("streamSourceOrder")
 

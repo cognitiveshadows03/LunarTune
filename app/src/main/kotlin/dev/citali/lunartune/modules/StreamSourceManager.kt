@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import dev.citali.lunartune.constants.ModuleEnabledKey
+import dev.citali.lunartune.constants.ModulesEnabledKey
 import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
@@ -99,9 +100,43 @@ object StreamSourceManager {
 
     private fun defaultEnabled(id: String): Boolean = false
 
-    /** enabled modules in priority order */
-    fun activeModules(): List<SourceModule> =
-        priorityOrder().mapNotNull { modules[it] }.filter { isEnabled(it.info.id) }
+    /**
+     * Whether modules are consulted at all.
+     *
+     * The per-module switches say which ones are wanted; this says whether the
+     * whole mechanism runs. Default on, so an existing install keeps behaving as
+     * it did before the switch existed.
+     */
+    fun modulesEnabled(): Boolean = PreferenceStore.get(ModulesEnabledKey) ?: true
+
+    /** enabled modules in priority order; empty when the master switch is off */
+    fun activeModules(): List<SourceModule> {
+        if (!modulesEnabled()) return emptyList()
+        return priorityOrder().mapNotNull { modules[it] }.filter { isEnabled(it.info.id) }
+    }
+
+    /**
+     * Moves a module one place earlier or later in the saved order.
+     *
+     * The order is an explicit list, so a move is a rewrite of it: take the
+     * current order, swap the two positions, save. Modules that were never saved
+     * are appended first, so moving anything works on the order the user is
+     * actually looking at rather than the one in the preference.
+     */
+    suspend fun move(
+        context: Context,
+        id: String,
+        towards: Int,
+    ) {
+        val current = priorityOrder().toMutableList()
+        val from = current.indexOf(id)
+        if (from < 0) return
+        val to = (from + towards).coerceIn(0, current.lastIndex)
+        if (to == from) return
+        current.removeAt(from)
+        current.add(to, id)
+        context.dataStore.edit { prefs -> prefs[StreamSourceOrderKey] = current.joinToString(",") }
+    }
 
     fun picksFor(id: String): Map<String, String> {
         val raw = PreferenceStore.get(ModulePicksKey(id)) ?: return emptyMap()
