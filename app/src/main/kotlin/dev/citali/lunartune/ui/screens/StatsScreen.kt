@@ -174,6 +174,7 @@ import dev.citali.lunartune.utils.makeTimeString
 import dev.citali.lunartune.viewmodels.CalendarRange
 import dev.citali.lunartune.viewmodels.ListeningCalendarData
 import dev.citali.lunartune.viewmodels.ListeningPatternSlot
+import dev.citali.lunartune.viewmodels.ReplayHighlight
 import dev.citali.lunartune.viewmodels.StatsScreenState
 import dev.citali.lunartune.viewmodels.StatsViewModel
 import java.time.LocalDate
