@@ -75,10 +75,7 @@ import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.ModulesEnabledKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
-import dev.citali.lunartune.modules.remote.CatalogEntry
-import dev.citali.lunartune.modules.remote.RemoteCatalogStore
-import dev.citali.lunartune.modules.remote.RemoteModule
-import dev.citali.lunartune.modules.remote.RemoteModuleStore
+import dev.citali.lunartune.modules.addon.AddonStore
 import dev.citali.lunartune.modules.AccountState
 import dev.citali.lunartune.modules.FieldKind
 import dev.citali.lunartune.modules.ModuleField
@@ -102,22 +99,17 @@ private const val MIN_TOLERANCE = 2
 private const val MAX_TOLERANCE = 20
 private const val DEFAULT_TOLERANCE = 10
 
-/** identifies the app to wherever a module document is fetched from */
-private val RemoteModuleUserAgent =
-    "LunarTune/${dev.citali.lunartune.BuildConfig.VERSION_NAME} (Android)"
-
 /**
- * The modules page: what can serve audio, in what order, and what else is
- * available to add.
+ * The modules page: what can serve audio, in what order, and what else can be
+ * added.
  *
- * It is laid out as a master switch over the whole mechanism, then two tabs. The
- * tabs are the split that was missing before — "the modules this app has" and
- * "modules someone else publishes" were the same undifferentiated list, so
- * adding one meant scrolling past everything already installed.
+ * The list is deliberately two groups — the modules compiled into this build,
+ * and the addons the user has added. They behave identically once playback
+ * starts, but only one of the groups can be removed, and a page that mixed them
+ * would have to explain that per row instead of once.
  *
- * Built-in modules are never removable and are never hidden: they are the floor
- * this feature stands on, and the page says so by listing them separately from
- * the ones that can go.
+ * Addons speak the BitChord addon protocol: three HTTP routes, JSON in and JSON
+ * out, and no code that runs here.
  */
 @Composable
 fun SourcesSettings(navController: NavController) {
@@ -128,33 +120,22 @@ fun SourcesSettings(navController: NavController) {
 
     var tab by rememberSaveable { mutableStateOf(ModulesTab.Installed) }
     var selectedModuleId by rememberSaveable { mutableStateOf<String?>(null) }
-    var importing by remember { mutableStateOf(false) }
-    var importMessage by remember { mutableStateOf<String?>(null) }
-    var addCatalogOpen by remember { mutableStateOf(false) }
-    var installingEntry by remember { mutableStateOf<CatalogEntry?>(null) }
-    var addChoiceOpen by remember { mutableStateOf(false) }
-    var addModuleOpen by remember { mutableStateOf(false) }
-    var addDocumentOpen by remember { mutableStateOf(false) }
-    var catalogBusy by remember { mutableStateOf(false) }
-    // bumped after anything that changes the installed set, so the lists re-read it
-    var installedVersion by remember { mutableStateOf(0) }
+    var addOpen by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var pendingRemove by remember { mutableStateOf<SourceModule?>(null) }
+    var addedVersion by remember { mutableStateOf(0) }
 
     val orderedModules =
-        remember(orderRaw, installedVersion) {
+        remember(orderRaw, addedVersion) {
             val saved = orderRaw.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val all = StreamSourceManager.allModules()
             val known = all.map { it.info.id }
             (saved.filter { it in known } + known.filter { it !in saved })
                 .mapNotNull { id -> all.firstOrNull { it.info.id == id } }
         }
-    val builtIn = orderedModules.filter { it !is RemoteModule }
-    val loaded = orderedModules.filterIsInstance<RemoteModule>()
-    // loaded modules the user can see but which did not parse are not in the
-    // registry at all, so they are read from the store rather than from the list
-    val brokenLoaded = remember(installedVersion) {
-        RemoteModuleStore.installed().filterNot { it.usable }
-    }
-    val catalogs = remember(installedVersion) { RemoteCatalogStore.catalogsWithEntries() }
+    val builtIn = orderedModules.filterNot { it.info.id.startsWith(StreamSourceManager.ADDON_ID_PREFIX) }
+    val added = orderedModules.filter { it.info.id.startsWith(StreamSourceManager.ADDON_ID_PREFIX) }
 
     var lastStreamVersion by remember { mutableStateOf(0) }
     var moduleStates by remember { mutableStateOf<Map<String, AccountState>>(emptyMap()) }
@@ -162,14 +143,13 @@ fun SourcesSettings(navController: NavController) {
         while (true) {
             moduleStates =
                 orderedModules
-                    .mapNotNull { module ->
+                    .mapNotNull { module -> modules@
                         runCatching { module.accountState() }.getOrNull()?.let { module.info.id to it }
                     }.toMap()
             delay(MODULE_STATE_REFRESH_MS)
         }
     }
-
-    val enabledCount = remember(orderRaw, installedVersion, masterEnabled) {
+    val enabledCount = remember(orderRaw, addedVersion, masterEnabled) {
         orderedModules.count { StreamSourceManager.isEnabled(it.info.id) }
     }
 
@@ -209,8 +189,8 @@ fun SourcesSettings(navController: NavController) {
             ModuleMasterCard(
                 enabled = masterEnabled,
                 enabledCount = enabledCount,
-                installedCount = builtIn.size + loaded.size + brokenLoaded.size,
-                catalogCount = catalogs.size,
+                installedCount = builtIn.size + added.size,
+                catalogCount = 0,
                 onEnabledChange = onMasterEnabledChange,
             )
 
@@ -225,50 +205,25 @@ fun SourcesSettings(navController: NavController) {
                     ModulesTab.Installed ->
                         InstalledTab(
                             builtIn = builtIn,
-                            loaded = loaded,
-                            brokenLoaded = brokenLoaded,
+                            added = added,
                             masterEnabled = masterEnabled,
                             moduleStates = moduleStates,
                             lastStreamVersion = lastStreamVersion,
-                            orderRaw = orderRaw,
                             onOpen = { selectedModuleId = it },
                             onMoved = { id, direction ->
                                 scope.launch { StreamSourceManager.move(context, id, direction) }
                             },
+                            onRemove = { pendingRemove = it },
                         )
                     ModulesTab.Catalogs ->
-                        CatalogsTab(
-                            catalogs = catalogs,
-                            busy = catalogBusy,
-                            onAdd = { addCatalogOpen = true },
-                            onRefresh = { url ->
-                                catalogBusy = true
-                                scope.launch {
-                                    withContext(Dispatchers.IO) {
-                                        RemoteCatalogStore.refresh(context, url, RemoteModuleUserAgent)
-                                    }
-                                    catalogBusy = false
-                                    installedVersion++
-                                }
-                            },
-                            onRemove = { url ->
-                                RemoteCatalogStore.remove(context, url)
-                                installedVersion++
-                            },
-                            onInstall = { entry ->
-                                importMessage = null
-                                installingEntry = entry
-                            },
-                        )
+                        CatalogsTab(onAdd = { tab = ModulesTab.Installed; addOpen = true })
                 }
             }
 
             if (tab == ModulesTab.Installed) {
-                ModulesFab(onClick = { addChoiceOpen = true })
+                ModulesFab(onClick = { addOpen = true })
             }
 
-            // Say what the fallback is once, at the point the reader has finished
-            // looking at the list, rather than repeating it on every row.
             Text(
                 text = stringResource(R.string.stream_sources_fallback),
                 style = MaterialTheme.typography.bodySmall,
@@ -278,7 +233,7 @@ fun SourcesSettings(navController: NavController) {
 
             TrackMatchingSection()
 
-            importMessage?.let { text ->
+            message?.let { text ->
                 Text(
                     text = text,
                     style = MaterialTheme.typography.bodySmall,
@@ -301,209 +256,65 @@ fun SourcesSettings(navController: NavController) {
         }
     }
 
-    installingEntry?.let { entry ->
+    if (addOpen) {
+        TextEntryDialogSimple(
+            title = stringResource(R.string.modules_add_addon_title),
+            label = stringResource(R.string.modules_addon_url_label),
+            confirm = stringResource(R.string.modules_add_addon_confirm),
+            onDismiss = { addOpen = false },
+        ) { address ->
+            addOpen = false
+            busy = true
+            message = null
+            scope.launch {
+                val result =
+                    withContext(Dispatchers.IO) {
+                        AddonStore.add(context, address)
+                    }
+                busy = false
+                result
+                    .onSuccess { info ->
+                        StreamSourceManager.reloadLoaded()
+                        addedVersion++
+                        message = context.getString(R.string.modules_addon_added, info.name)
+                    }.onFailure { error ->
+                        message =
+                            context.getString(
+                                R.string.modules_addon_failed,
+                                error.message ?: context.getString(R.string.remote_modules_failed),
+                            )
+                    }
+            }
+        }
+    }
+
+    pendingRemove?.let { module ->
         AlertDialog(
-            onDismissRequest = { installingEntry = null },
-            title = { Text(entry.title) },
-            text = {
-                Text(
-                    entry.description.ifBlank {
-                        stringResource(R.string.remote_modules_description)
-                    },
-                )
-            },
+            onDismissRequest = { pendingRemove = null },
+            title = { Text(stringResource(R.string.modules_addon_remove_title, module.info.name)) },
+            text = { Text(stringResource(R.string.modules_addon_remove_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        installingEntry = null
-                        importing = true
+                        pendingRemove = null
+                        AddonStore.remove(context, module.info.id)
                         scope.launch {
-                            val result =
-                                withContext(Dispatchers.IO) {
-                                    RemoteCatalogStore.installEntry(context, entry, RemoteModuleUserAgent)
-                                }
-                            importing = false
-                            result
-                                .onSuccess { document ->
-                                    StreamSourceManager.reloadLoaded()
-                                    installedVersion++
-                                    importMessage = context.getString(R.string.remote_modules_added, document.name)
-                                }.onFailure { error ->
-                                    // FAQ: a published module is not readable by this app
-                                    importMessage =
-                                        error.message?.let {
-                                            context.getString(R.string.modules_import_failed_reason, it)
-                                        } ?: context.getString(R.string.remote_modules_failed)
-                                }
+                            StreamSourceManager.reloadLoaded()
+                            addedVersion++
                         }
                     },
-                    enabled = !importing,
                 ) {
-                    Text(stringResource(R.string.remote_modules_install))
+                    Text(stringResource(R.string.remote_modules_remove))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { installingEntry = null }) { Text(stringResource(android.R.string.cancel)) }
+                TextButton(onClick = { pendingRemove = null }) { Text(stringResource(android.R.string.cancel)) }
             },
         )
     }
-
-    if (addChoiceOpen) {
-        AddModuleChoiceDialog(
-            onDismiss = { addChoiceOpen = false },
-            onAddress = {
-                addChoiceOpen = false
-                addModuleOpen = true
-            },
-            onPaste = {
-                addChoiceOpen = false
-                addDocumentOpen = true
-            },
-        )
-    }
-
-    if (addDocumentOpen) {
-        TextEntryDialogSimple(
-            title = stringResource(R.string.modules_add_from_document),
-            label = stringResource(R.string.modules_add_url_label),
-            confirm = stringResource(R.string.remote_modules_install),
-            multiline = true,
-            onDismiss = { addDocumentOpen = false },
-        ) { text ->
-            addDocumentOpen = false
-            RemoteModuleStore.install(context, text)
-                .onSuccess { document ->
-                    StreamSourceManager.reloadLoaded()
-                    installedVersion++
-                    importMessage = context.getString(R.string.remote_modules_added, document.name)
-                }.onFailure { error ->
-                    importMessage = error.message ?: context.getString(R.string.remote_modules_failed)
-                }
-        }
-    }
-
-    if (addModuleOpen) {
-        TextEntryDialogSimple(
-            title = stringResource(R.string.modules_add),
-            label = stringResource(R.string.modules_add_url_label),
-            confirm = stringResource(R.string.remote_modules_install),
-            onDismiss = { addModuleOpen = false },
-        ) { url ->
-            addModuleOpen = false
-            importing = true
-            scope.launch {
-                val result =
-                    withContext(Dispatchers.IO) {
-                        RemoteModuleStore.installFromUrl(context, url, RemoteModuleUserAgent)
-                    }
-                importing = false
-                result
-                    .onSuccess { document ->
-                        StreamSourceManager.reloadLoaded()
-                        installedVersion++
-                        importMessage = context.getString(R.string.remote_modules_added, document.name)
-                    }.onFailure { error ->
-                        importMessage = error.message ?: context.getString(R.string.remote_modules_failed)
-                    }
-            }
-        }
-    }
-
-    if (addCatalogOpen) {
-        TextEntryDialogSimple(
-            title = stringResource(R.string.modules_catalog_add),
-            label = stringResource(R.string.modules_catalog_url_label),
-            confirm = stringResource(R.string.remote_modules_install),
-            onDismiss = { addCatalogOpen = false },
-        ) { url ->
-            addCatalogOpen = false
-            catalogBusy = true
-            scope.launch {
-                val result =
-                    withContext(Dispatchers.IO) {
-                        RemoteCatalogStore.add(context, url, RemoteModuleUserAgent)
-                    }
-                catalogBusy = false
-                result
-                    .onSuccess { catalog ->
-                        installedVersion++
-                        importMessage = context.getString(R.string.modules_catalog_added, catalog.name)
-                    }.onFailure { error ->
-                        importMessage = error.message ?: context.getString(R.string.modules_catalog_failed)
-                    }
-            }
-        }
-    }
 }
-
-@Composable
-private fun SourcesSectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp),
-    )
-}
-
-@DrawableRes
-private fun moduleIcon(id: String): Int =
-    when (id) {
-        "monochrome" -> R.drawable.ic_source_monochrome
-        "jiosaavn" -> R.drawable.ic_source_jiosaavn
-        else -> R.drawable.music_note
-    }
 
 /** A module row: its own icon, whether it is on, and what it does. */
-@Composable
-private fun ModuleCard(
-    module: SourceModule,
-    state: AccountState?,
-    lastStreamVersion: Int,
-    onClick: () -> Unit,
-) {
-    val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(module.info.id), false)
-    // what the module actually served last - the point of the feature is the
-    // fidelity, so the row says what came back rather than just "on"
-    val lastStream = remember(module, lastStreamVersion) { module.lastStreamLabel() }
-    val onOff = stringResource(if (enabled) R.string.sources_module_on else R.string.sources_module_off)
-    // a module that stopped answering says so on its row too, not only on its own page
-    val down = state as? AccountState.Expired
-    val detail =
-        when {
-            down != null -> down.reason
-            enabled && lastStream != null -> lastStream
-            else -> NO_ACCOUNT_LABEL
-        }
-    SourceCard(
-        iconRes = moduleIcon(module.info.id),
-        title = module.info.name,
-        subtitle = "$onOff · $detail",
-        enabled = enabled,
-        showStatusDot = true,
-        healthy = down == null,
-        meta =
-            listOf(
-                stringResource(R.string.sources_songs_chip),
-                stringResource(R.string.sources_built_in_version, module.info.version),
-            ),
-        trailing = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Switch(checked = enabled, onCheckedChange = onEnabledChange)
-                Spacer(Modifier.width(6.dp))
-                Icon(
-                    painter = painterResource(R.drawable.navigate_next),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-        },
-        onClick = onClick,
-    )
-}
-
 @Composable
 private fun SourceCard(
     @DrawableRes iconRes: Int,
@@ -625,6 +436,18 @@ private fun StatusPill(
  * the same recording. Wide enough for intro/outro trims, narrow enough that a
  * different edit does not slip through.
  */
+/** the small heading that separates one group of settings from the next */
+@Composable
+private fun SourcesSectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 10.dp),
+    )
+}
+
 @Composable
 private fun TrackMatchingSection() {
     val (tolerance, onToleranceChange) = rememberPreference(ModuleMatchToleranceKey, DEFAULT_TOLERANCE)
@@ -730,7 +553,7 @@ private fun ModuleDetailSheet(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Image(
-                    painter = painterResource(moduleIcon(module.info.id)),
+                    painter = painterResource(moduleBrandMark(module.info.id)),
                     contentDescription = null,
                     modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)),
                 )

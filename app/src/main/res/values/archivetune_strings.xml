@@ -964,4 +964,19 @@
     <string name="year_in_music_conclusion_lead">That was %1$s.</string>
     <string name="year_in_music_conclusion_title">Yours, start to finish.</string>
     <string name="year_in_music_conclusion_body">%1$s minutes across %2$s listening days, all kept on this device.</string>
+
+    <string name="modules_page_subtitle">Point the app at an addon and it can serve your music.</string>
+    <string name="modules_built_in_label">Built in</string>
+    <string name="modules_addons_label">Addons</string>
+    <string name="modules_add_addon_title">Add an addon</string>
+    <string name="modules_add_addon_confirm">Add</string>
+    <string name="modules_addon_url_label">Address</string>
+    <string name="modules_addon_added">%1$s added. Switch it on to use it.</string>
+    <string name="modules_addon_failed">Not added: %1$s</string>
+    <string name="modules_addon_remove_title">Remove %1$s?</string>
+    <string name="modules_addon_remove_body">It stops being used for playback. Anything it stored for itself is removed too.</string>
+    <string name="modules_catalog_empty_title">No catalogs yet</string>
+    <string name="modules_catalog_empty_body">Addons are servers you host or are given: paste the address and the app reads what it offers.</string>
+    <string name="modules_catalog_add">Add an addon</string>
+    <string name="modules_catalog_explainer">An addon address looks like https://example.com/music — anything serving the addon protocol works, including one running on your own machine.</string>
 </resources>

@@ -1,163 +1,155 @@
-# Loaded modules
+# Addon modules
 
-A module is a JSON document that tells LunarTune how to ask a service for a
-stream. It runs no code: everything it can do is one of the shapes below, with
-its own addresses in them. Modules you install appear in **Settings → Sources**
-next to the ones that ship with the app, take part in the same priority order,
-and fall back to YouTube Music the same way.
+An addon is an ordinary HTTP server. It is not code that runs inside LunarTune:
+nothing is downloaded and nothing is executed. The app makes requests, reads
+JSON back, and plays the address the addon names. That is the whole contract, and
+it is the same one the BitChord addon protocol uses, so a server written for that
+works here unchanged.
 
-Two rules the app enforces, and why:
+## Adding one
 
-- **http and https only.** A module cannot name a `file:`, `content:` or `intent:`
-  address, so it cannot be used to read the device's own storage.
-- **Nothing is evaluated.** Values are substituted into templates and
-  percent-encoded, so a track title containing `&` or `/` cannot break out of the
-  parameter it was placed in.
+Settings → Data sources → **Add an addon**, paste a base address:
 
-## Installing
+```
+https://example.com/music          ← this
+https://example.com/music/manifest.json   ← or this
+```
 
-**Settings → Sources → Loaded modules → From an address** takes a URL;
-**Paste a document** takes the text directly. After installing, switch the module
-on in the list above — a new module starts disabled.
+Both are accepted. A trailing `.json` filename is dropped, so the routes below
+resolve the same way from either. The address is read first: the app asks for
+`manifest.json` and shows what came back. Nothing is saved until an addon answers
+and describes itself, so a mistyped address cannot sit in the list failing on
+every track.
 
-## The document
+The address is the addon's identity. Adding the same one twice replaces the entry
+rather than creating a second row that would be consulted twice.
+
+## The three routes
+
+All are `GET`, all answer `application/json`.
+
+### `GET {base}/manifest.json`
 
 ```json
 {
-  "id": "example.saavn",
-  "name": "Example Saavn",
+  "id": "my-catalogue",
+  "name": "My Catalogue",
   "version": "1.0",
-  "description": "Lossless where the catalogue has it",
-  "author": "you",
-  "homepage": "https://example.com",
-
-  "capabilities": {
-    "stream": {
-      "search": {
-        "url": "https://api.example.com/search?q={title}&artist={artist}&limit=10",
-        "method": "GET",
-        "headers": { "X-Api-Key": "{fields.key}" }
-      },
-      "stream": {
-        "url": "https://api.example.com/song/{match.id}/stream?quality={picks.quality}",
-        "headers": { "Referer": "https://example.com/" }
-      },
-      "match": {
-        "resultsPath": "data.results",
-        "idPath": "id",
-        "titlePath": "title",
-        "artistPath": "artist",
-        "albumPath": "album",
-        "durationPath": "duration"
-      },
-      "extract": {
-        "urlPath": "data.media.url",
-        "codecPath": "data.media.codec",
-        "bitratePath": "data.media.bitrate",
-        "format": "progressive"
-      },
-      "codec": "AAC",
-      "quality": "320 kbps"
-    }
-  },
-
-  "choices": [
+  "resources": ["search", "stream"],
+  "settings": [
     {
-      "id": "quality",
-      "label": "Quality",
+      "key": "quality",
+      "name": "Quality",
+      "type": "select",
+      "default": "LOSSLESS",
       "options": [
-        { "id": "hi", "label": "High", "description": "320 kbps" },
-        { "id": "lo", "label": "Low", "description": "96 kbps" }
+        { "value": "LOSSLESS", "name": "Lossless" },
+        { "value": "HIGH", "name": "High" }
       ]
     }
   ],
+  "allowDownloads": false,
+  "checkValidLossless": false
+}
+```
 
-  "fields": [
+`resources` is how the app knows what the addon can do. An addon without
+`search` cannot be added: there would be no way to ask it for anything. `name` is
+what the module row shows; it falls back to the address's host.
+
+`settings` are the addon's own switches. They are shown on the module's page as
+chips, and their values are sent as query parameters on every `search` and
+`stream` call — that is how an addon that gates lossless behind a switch learns
+which tier to serve.
+
+### `GET {base}/search?q=…&quality=…`
+
+```json
+{
+  "tracks": [
     {
-      "id": "key",
-      "label": "API key",
-      "kind": "password",
-      "default": "",
-      "description": "From your account page."
+      "id": "track-1",
+      "title": "Song Title",
+      "artist": "Artist",
+      "album": "Album",
+      "duration": 214.5,
+      "artworkURL": "https://…/cover.jpg"
     }
   ]
 }
 ```
 
-### What happens on a resolve
+`q` is the track's title and artist, space-separated. `duration` is in seconds and
+may be a decimal or absent. `streamURL` may be included on a row — when it is,
+the app plays it directly and skips the `stream` route, which saves a round trip
+on the path that has to finish before audio starts.
 
-1. `search.url` is filled in and requested.
-2. `match.resultsPath` is walked to the list of candidates. Each is tested
-   against the track: the title must contain what was asked for, and a duration
-   that both sides know must be within the matching tolerance (**Settings →
-   Sources → Track matching**). Candidates that fail are dropped; among the rest
-   the closest title and artist wins.
-3. The matched record's `id` becomes `{match.id}`.
-4. `stream.url` is filled in and requested.
-5. `extract.urlPath` is read for the playable address.
+### `GET {base}/stream/{id}?quality=…`
 
-### Placeholders
+```json
+{
+  "url": "https://…/audio.flac",
+  "format": "flac",
+  "quality": "LOSSLESS",
+  "codec": "FLAC",
+  "container": "flac",
+  "encrypted": false,
+  "sampleRate": 44100,
+  "bitDepth": 16,
+  "bitrate": 1411200
+}
+```
 
-| In `search` | Meaning |
-|---|---|
-| `{title}` | the song title |
-| `{artist}` | the first artist |
-| `{artists}` | every artist, space separated |
-| `{album}` | the album, empty if unknown |
-| `{duration}` | length in whole seconds |
-| `{isrc}` | the ISRC, empty if unknown |
+`url` is what the player opens. It may be a progressive file, an HLS playlist
+(`manifest: "hls"` or a `.m3u8` address) or DASH (`manifest: "dash"` or `.mpd`).
 
-| In `stream` | Meaning |
-|---|---|
-| `{match.id}` | the id of the record the match step chose |
-| `{match.title}`, `{match.artist}`, `{match.album}` | that record's own fields |
+Anything with `encrypted` set to anything but `false` is refused. An addon that
+serves its audio as an encrypted blob expects its own player to hold the key, and
+this app will not pretend to be that player.
 
-| Anywhere | Meaning |
-|---|---|
-| `{picks.<choiceId>}` | the picked option's id |
-| `{picks.<choiceId>.label}` | the picked option's label |
-| `{fields.<fieldId>}` | a setting's value, or its default |
+## When an addon has nothing
 
-A placeholder with no value becomes empty rather than being left in the URL.
-Values are percent-encoded where they land in an address, so they cannot break
-the query.
+Two ways, both understood:
 
-### Paths
+```
+HTTP 404                                    ← no such route
+HTTP 200 {"error": "not in this catalogue"}  ← an answer, but not a track
+```
 
-`data.results`, `data.media.url`, `data.songs[0].id`, `data.items[*].id`. A path
-that lands on an array spreads into its elements. A path that resolves to nothing
-yields `null`, so a module written against one version of a service degrades to
-"not found" instead of failing.
+Either way the addon is not charged a failure — the next module in the order is
+asked, and the addon's own words are what the diagnostics show.
 
-Where a service wraps a value in an object — `"artist": {"name": "M83"}` — the
-common keys (`name`, `title`, `text`, `value`, `label`) are read automatically.
+## How an addon is used
 
-### `extract` fields
+An addon takes part in the same pipeline as the built-in modules:
 
-| Field | Meaning |
-|---|---|
-| `urlPath` | where the playable address is (required) |
-| `fallbackUrlPath` | a second address, tried when the first is absent |
-| `urlPrefix` | prefix for a relative address |
-| `base64` | decode the address before using it |
-| `format` | `progressive` (default), `hls`, `dash` |
-| `headersPath` | a JSON object of headers the player should send |
-| `codecPath`, `bitratePath`, `sampleRatePath` | optional, for the format badge |
+* It has a row in **Installed**, a switch, and a position in the order.
+* It is not asked at all unless the master switch is on and its own is on.
+* It is asked in the order the arrow buttons set, after the built-ins.
+* If it finds nothing, playback falls through to the next module and finally to
+  YouTube Music, as before.
 
-### Fields
+The matching is done on the app's side and is deliberately strict: candidates
+whose duration disagrees with the track by more than the tolerance slider are
+rejected outright, then the survivors are scored on title and artist. Addons are
+catalogues of whole services, so the same song appears as a remaster, a live take
+and a remix; taking the first row is how a lossless source ends up playing the
+wrong thing.
 
-`kind` is `text`, `password`, `select` or `toggle`. A field with an empty default
-counts as required: the module shows as needing setup until it is filled in.
+## Hosting one
 
-## Limits
+The protocol is small enough that a few dozen lines of Python or Node will do it.
+Return the three documents above, point `url` at wherever the audio really lives,
+and give the app the server's address. It can run on a machine on the same
+network — a `http://192.168.x.x:8080` address is accepted.
 
-- 64 KB per document, 24 installed modules.
-- `GET`, `POST`, `PUT` and `HEAD`.
-- The loader and every module call share the app's HTTP client, so its proxy and
-  DNS settings apply.
+There is no public directory of addons. The lists that circulated were GitHub
+repositories whose files have since gone, so treat an addon address as something
+you host or are given.
 
-## A module that cannot play
+## What an addon is not
 
-A document may declare only a `search` capability. It will be listed and
-installed, but it never serves audio — useful for checking a service's answers
-before writing the stream half.
+An addon cannot draw its own interface, cannot read the library, and cannot
+change how the app behaves. It answers three questions about a track and nothing
+else. That is why an addon needs no sandbox and no permission prompt — the only
+thing it can do is name an address.

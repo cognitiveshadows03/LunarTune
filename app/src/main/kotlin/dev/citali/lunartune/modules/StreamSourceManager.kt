@@ -17,7 +17,7 @@ import dev.citali.lunartune.constants.ModulesEnabledKey
 import dev.citali.lunartune.constants.ModuleMatchToleranceKey
 import dev.citali.lunartune.constants.ModulePicksKey
 import dev.citali.lunartune.constants.StreamSourceOrderKey
-import dev.citali.lunartune.modules.remote.RemoteModuleStore
+import dev.citali.lunartune.modules.addon.AddonStore
 import dev.citali.lunartune.utils.PreferenceStore
 import dev.citali.lunartune.utils.dataStore
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +83,9 @@ object StreamSourceManager {
 
     fun module(id: String): SourceModule? = modules[id]
 
+    /** the marker every addon's module id carries, so the two groups can be told apart */
+    const val ADDON_ID_PREFIX = "addon-"
+
     /** module ids in the user's priority order (unknown ids dropped, missing ones appended) */
     fun priorityOrder(): List<String> {
         val saved = PreferenceStore.get(StreamSourceOrderKey)
@@ -122,6 +125,13 @@ object StreamSourceManager {
      * current order, swap the two positions, save. Modules that were never saved
      * are appended first, so moving anything works on the order the user is
      * actually looking at rather than the one in the preference.
+     *
+     * A move is confined to the module's own group. The page shows built-ins and
+     * addons as two lists, and their arrows say what happens in that list; if a
+     * move crossed between them the row would jump out from under the finger and
+     * the two groups would stop describing the real order. Built-ins therefore
+     * always outrank addons, which is also the sane default: the sources compiled
+     * into the app are the ones that were chosen for it.
      */
     suspend fun move(
         context: Context,
@@ -131,7 +141,13 @@ object StreamSourceManager {
         val current = priorityOrder().toMutableList()
         val from = current.indexOf(id)
         if (from < 0) return
-        val to = (from + towards).coerceIn(0, current.lastIndex)
+        val addon = id.startsWith(ADDON_ID_PREFIX)
+        // the stretch of the list this module may move within
+        val first = if (addon) current.indexOfFirst { it.startsWith(ADDON_ID_PREFIX) } else 0
+        val last = if (addon) current.lastIndex else current.indexOfFirst { it.startsWith(ADDON_ID_PREFIX) }
+            .let { if (it < 0) current.lastIndex else it - 1 }
+        if (first < 0) return
+        val to = (from + towards).coerceIn(first, last.coerceAtLeast(first))
         if (to == from) return
         current.removeAt(from)
         current.add(to, id)
@@ -207,7 +223,7 @@ object StreamSourceManager {
     fun reloadLoaded() {
         val context = appContext ?: return
         loaded =
-            RemoteModuleStore.modules()
+            AddonStore.modules()
                 .onEach { module ->
                     runCatching { module.attach(Host(context, module.info.id)) }
                         .onFailure { e ->

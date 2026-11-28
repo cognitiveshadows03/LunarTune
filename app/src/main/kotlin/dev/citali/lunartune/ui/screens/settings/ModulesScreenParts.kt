@@ -26,18 +26,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,10 +51,6 @@ import dev.citali.lunartune.R
 
 /**
  * The parts the modules page is assembled from.
- *
- * A page this shallow could be written inline, but the same few shapes are used
- * in all three tabs — a summary tile, a segmented tab, the empty state — and
- * keeping them apart is what lets the tabs stay readable.
  */
 
 /** The large page title, with the one-line description under it as a lead-in. */
@@ -83,8 +79,8 @@ fun ModulesHeader(
  * The master switch, and what it means when it is off.
  *
  * Off does not hide anything — the explanation says so, because a switch this
- * prominent reads as "the whole page is disabled" otherwise, and installing
- * modules while playback is off is a perfectly sensible thing to do.
+ * prominent reads as "the whole page is disabled" otherwise, and adding addons
+ * while playback is off is a perfectly sensible thing to do.
  */
 @Composable
 fun ModuleMasterCard(
@@ -241,9 +237,8 @@ enum class ModulesTab(
 /**
  * What a tab shows when it has nothing in it yet.
  *
- * The blurb is deliberately concrete about the next action ("import a document
- * or add an address") rather than a shrug, because the empty state is the first
- * thing anyone sees on this page.
+ * The blurb is deliberately concrete about the next action rather than a shrug,
+ * because the empty state is the first thing anyone sees on this page.
  */
 @Composable
 fun ModulesEmptyState(
@@ -297,12 +292,10 @@ fun ModulesEmptyState(
 }
 
 /**
- * The round action button the page floats over its content.
+ * The round action button the page keeps at the end of its content.
  *
- * It sits in the layout rather than over it, because the page scrolls and a
- * button that follows the scroll would cover whichever row happened to be under
- * it. Being last in the column means it appears exactly where a reader arrives
- * after deciding they want to add something.
+ * It sits in the layout rather than over it: the page scrolls, and a button that
+ * followed the scroll would cover whichever row happened to be under it.
  */
 @Composable
 fun ModulesFab(
@@ -386,53 +379,4 @@ fun TextEntryDialogSimple(
             TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
         },
     )
-}
-
-/**
- * The first choice when adding a module: where is it coming from?
- *
- * Two routes rather than one, because they answer different questions. An
- * address is "someone gave me a link"; a document is "I am writing one, or I
- * have it in my clipboard". Collapsing them into a single field that accepts
- * both would make a mistyped URL look like malformed JSON.
- */
-@Composable
-fun AddModuleChoiceDialog(
-    onDismiss: () -> Unit,
-    onAddress: () -> Unit,
-    onPaste: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.modules_add_choice_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                DialogChoice(stringResource(R.string.modules_add_from_address), onAddress)
-                DialogChoice(stringResource(R.string.modules_add_from_document), onPaste)
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
-        },
-    )
-}
-
-@Composable
-private fun DialogChoice(
-    label: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodyLarge)
-    }
 }

@@ -25,7 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,30 +39,27 @@ import dev.citali.lunartune.constants.ModuleEnabledKey
 import dev.citali.lunartune.modules.AccountState
 import dev.citali.lunartune.modules.NO_ACCOUNT_LABEL
 import dev.citali.lunartune.modules.SourceModule
-import dev.citali.lunartune.modules.remote.CatalogEntry
-import dev.citali.lunartune.modules.remote.InstalledCatalog
-import dev.citali.lunartune.modules.remote.InstalledModule
-import dev.citali.lunartune.modules.remote.RemoteModule
+import dev.citali.lunartune.modules.addon.AddonStore
 import dev.citali.lunartune.utils.rememberPreference
 
 /**
  * The modules this app can play from, in the order they are tried.
  *
- * Built-in modules come first as their own group and carry no remove action: they
- * are compiled into the build, so a delete button would be a lie. Loaded ones can
- * be moved, and the order they are in is the order playback consults them.
+ * Built-in modules come first as their own group and carry no remove action:
+ * they are compiled into the build, so a delete button would be a lie. Added
+ * addons can be moved and removed, and the order they are in is the order
+ * playback consults them.
  */
 @Composable
 fun InstalledTab(
     builtIn: List<SourceModule>,
-    loaded: List<RemoteModule>,
-    brokenLoaded: List<InstalledModule>,
+    added: List<SourceModule>,
     masterEnabled: Boolean,
     moduleStates: Map<String, AccountState>,
     lastStreamVersion: Int,
-    orderRaw: String,
     onOpen: (String) -> Unit,
     onMoved: (String, Int) -> Unit,
+    onRemove: (SourceModule) -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
         if (builtIn.isNotEmpty()) {
@@ -76,59 +72,52 @@ fun InstalledTab(
                 modifier = Modifier.padding(horizontal = 16.dp),
             ) {
                 builtIn.forEach { module ->
-                    val position = loaded.size.let { _ -> builtIn.indexOf(module) }
+                    val position = builtIn.indexOf(module)
                     ModuleRow(
-                        title = module.info.name,
-                        subtitle = moduleSubtitle(
-                            module = module,
-                            state = moduleStates[module.info.id],
-                            lastStreamVersion = lastStreamVersion,
-                            masterEnabled = masterEnabled,
-                        ),
-                        enabledKey = module.info.id,
+                        module = module,
+                        state = moduleStates[module.info.id],
+                        lastStreamVersion = lastStreamVersion,
+                        masterEnabled = masterEnabled,
                         canMoveUp = position > 0,
                         canMoveDown = position < builtIn.lastIndex,
+                        subtitle = moduleSubtitle(module, moduleStates[module.info.id], lastStreamVersion, masterEnabled),
                         onOpen = { onOpen(module.info.id) },
                         onMove = { direction -> onMoved(module.info.id, direction) },
+                        onRemove = null,
                     )
                 }
             }
         }
 
-        if (loaded.isNotEmpty() || brokenLoaded.isNotEmpty()) {
+        if (added.isNotEmpty()) {
             Spacer(Modifier.height(18.dp))
             ModulesGroupLabel(
-                label = stringResource(R.string.modules_loaded_label),
-                count = loaded.size + brokenLoaded.size,
+                label = stringResource(R.string.modules_addons_label),
+                count = added.size,
             )
             Column(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(horizontal = 16.dp),
             ) {
-                loaded.forEach { module ->
-                    val position = builtIn.size + loaded.indexOf(module)
+                added.forEach { module ->
+                    val position = builtIn.size + added.indexOf(module)
                     ModuleRow(
-                        title = module.info.name,
-                        subtitle = moduleSubtitle(
-                            module = module,
-                            state = moduleStates[module.info.id],
-                            lastStreamVersion = lastStreamVersion,
-                            masterEnabled = masterEnabled,
-                        ),
-                        enabledKey = module.info.id,
+                        module = module,
+                        state = moduleStates[module.info.id],
+                        lastStreamVersion = lastStreamVersion,
+                        masterEnabled = masterEnabled,
                         canMoveUp = position > 0,
-                        canMoveDown = position < builtIn.size + loaded.lastIndex,
+                        canMoveDown = position < builtIn.size + added.lastIndex,
+                        subtitle = moduleSubtitle(module, moduleStates[module.info.id], lastStreamVersion, masterEnabled),
                         onOpen = { onOpen(module.info.id) },
                         onMove = { direction -> onMoved(module.info.id, direction) },
+                        onRemove = { onRemove(module) },
                     )
-                }
-                brokenLoaded.forEach { broken ->
-                    BrokenModuleRow(broken)
                 }
             }
         }
 
-        if (builtIn.isEmpty() && loaded.isEmpty() && brokenLoaded.isEmpty()) {
+        if (builtIn.isEmpty() && added.isEmpty()) {
             ModulesEmptyState(
                 title = stringResource(R.string.modules_loaded_empty_title),
                 body = stringResource(R.string.modules_loaded_empty_body),
@@ -159,14 +148,37 @@ private fun moduleSubtitle(
     }
 }
 
+@Composable
+private fun ModulesGroupLabel(
+    label: String,
+    count: Int,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 /**
  * The picture for a module's row.
  *
  * Each shipped module has its own mark, drawn as a vector so it stays sharp at
- * any density and carries no per-density PNGs. A loaded module has no mark
- * unless its document brought one, and a document cannot ship drawables — so it
- * gets its initial on a tinted tile instead of a generic icon that would say
- * nothing about which module it is.
+ * any density. An addon has no mark of its own, and cannot ship one — it is a
+ * server, not a package — so it gets its initial on a tinted tile rather than a
+ * generic icon that would say nothing about which one it is.
  */
 @Composable
 private fun ModuleLogo(
@@ -209,55 +221,33 @@ private fun ModuleLogo(
 }
 
 /** the brand mark for a module that has one, by its id */
-private fun moduleBrandIcon(id: String): Int? =
+internal fun moduleBrandIcon(id: String): Int? =
     when (id) {
         "jiosaavn" -> R.drawable.ic_source_jiosaavn
         "monochrome" -> R.drawable.ic_source_monochrome
         else -> null
     }
 
-@Composable
-private fun ModulesGroupLabel(
-    label: String,
-    count: Int,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 6.dp, bottom = 10.dp),
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = count.toString(),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 /**
  * A module row: what it is, whether it is on, and where it sits in the order.
  *
  * The reorder controls are arrows rather than a drag handle because the list is
- * short and a drag inside a vertical scroll fights the scroll — an arrow is
- * unambiguous and works one-handed.
+ * short and a drag inside a vertical scroll fights the scroll.
  */
 @Composable
 private fun ModuleRow(
-    title: String,
-    subtitle: String,
-    enabledKey: String,
+    module: SourceModule,
+    state: AccountState?,
+    lastStreamVersion: Int,
+    masterEnabled: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
+    subtitle: String,
     onOpen: () -> Unit,
     onMove: (Int) -> Unit,
+    onRemove: (() -> Unit)?,
 ) {
-    val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(enabledKey), false)
+    val (enabled, onEnabledChange) = rememberPreference(ModuleEnabledKey(module.info.id), false)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
@@ -268,11 +258,11 @@ private fun ModuleRow(
                 .clickable(onClick = onOpen)
                 .padding(horizontal = 14.dp, vertical = 14.dp),
     ) {
-        ModuleLogo(id = enabledKey, name = title)
+        ModuleLogo(id = module.info.id, name = module.info.name)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = title,
+                text = module.info.name,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
@@ -318,72 +308,24 @@ private fun MoveArrow(
     )
 }
 
-/** an installed document that no longer parses: shown, explained, removable */
-@Composable
-private fun BrokenModuleRow(module: InstalledModule) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f))
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = module.id,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = module.error ?: stringResource(R.string.remote_modules_failed),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
 /**
- * Catalogs: lists of modules maintained by someone else.
+ * The catalogs tab, which in this build is a starting point rather than a feed.
  *
- * Adding one shows what it offers and nothing more. Installing an entry is a
- * separate press with a confirmation that says what the module claims to do,
- * because "I added a list" and "I installed an audio provider" should never be
- * the same gesture.
+ * BitChord addons are servers, and no public directory of them exists — the
+ * community lists that circulated were GitHub repos whose files have since gone.
+ * So instead of inventing a catalog format nobody publishes, the page offers the
+ * addresses that do exist and the shape an address has to have, and says plainly
+ * that an addon is something you host or are given.
  */
 @Composable
 fun CatalogsTab(
-    catalogs: List<InstalledCatalog>,
-    busy: Boolean,
     onAdd: () -> Unit,
-    onRefresh: (String) -> Unit,
-    onRemove: (String) -> Unit,
-    onInstall: (CatalogEntry) -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 8.dp)) {
-        if (catalogs.isEmpty()) {
-            ModulesEmptyState(
-                title = stringResource(R.string.modules_catalog_empty_title),
-                body = stringResource(R.string.modules_catalog_empty_body),
-            )
-        } else {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                catalogs.forEach { catalog ->
-                    CatalogCard(
-                        catalog = catalog,
-                        busy = busy,
-                        onRefresh = { onRefresh(catalog.url) },
-                        onRemove = { onRemove(catalog.url) },
-                        onInstall = onInstall,
-                    )
-                }
-            }
-        }
+        ModulesEmptyState(
+            title = stringResource(R.string.modules_catalog_empty_title),
+            body = stringResource(R.string.modules_catalog_empty_body),
+        )
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -397,7 +339,7 @@ fun CatalogsTab(
                         .weight(1f)
                         .clip(RoundedCornerShape(18.dp))
                         .background(MaterialTheme.colorScheme.secondaryContainer)
-                        .clickable(enabled = !busy, onClick = onAdd)
+                        .clickable(onClick = onAdd)
                         .padding(vertical = 14.dp),
             ) {
                 Text(
@@ -417,128 +359,14 @@ fun CatalogsTab(
     }
 }
 
-@Composable
-private fun CatalogCard(
-    catalog: InstalledCatalog,
-    busy: Boolean,
-    onRefresh: () -> Unit,
-    onRemove: () -> Unit,
-    onInstall: (CatalogEntry) -> Unit,
-) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(26.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .padding(16.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = catalog.name.ifBlank { catalog.url },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    text =
-                        catalog.error
-                            ?: stringResource(R.string.modules_catalog_entries, catalog.entries.size),
-                    style = MaterialTheme.typography.bodySmall,
-                    color =
-                        if (catalog.error != null) {
-                            MaterialTheme.colorScheme.error
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                )
-                Text(
-                    text = catalog.url,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                text = stringResource(R.string.modules_catalog_refresh),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(enabled = !busy, onClick = onRefresh)
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
-        }
+/** the id an addon's address turns into, for whatever the page needs to key on */
+internal fun addonId(address: String): String = AddonStore.idFor(address)
 
-        if (catalog.entries.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            catalog.entries.forEach { entry ->
-                CatalogEntryRow(entry = entry, onInstall = { onInstall(entry) })
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.modules_catalog_remove),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.error,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(enabled = !busy, onClick = onRemove)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-    }
-}
-
-@Composable
-private fun CatalogEntryRow(
-    entry: CatalogEntry,
-    onInstall: () -> Unit,
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = entry.title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text =
-                    buildString {
-                        if (entry.version.isNotBlank()) append("v${entry.version}")
-                        if (entry.author.isNotBlank()) {
-                            if (isNotEmpty()) append(" · ")
-                            append(entry.author)
-                        }
-                        if (entry.labels.isNotEmpty()) {
-                            if (isNotEmpty()) append(" · ")
-                            append(entry.labels.joinToString(", "))
-                        }
-                    },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = stringResource(R.string.remote_modules_install),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier =
-                Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onInstall)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
-    }
-}
+/**
+ * The mark to show for a module, falling back to the app's own tile.
+ *
+ * The rows draw a letter tile for addons because they can also print the name
+ * beside it; the detail sheet shows the mark on its own, so it needs something
+ * to draw for an addon too.
+ */
+internal fun moduleBrandMark(id: String): Int = moduleBrandIcon(id) ?: R.drawable.ic_source_monochrome
