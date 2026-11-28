@@ -113,10 +113,9 @@ fun ModuleMasterCard(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.add_circle),
+                    painter = painterResource(R.drawable.ic_source_youtube),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(26.dp),
                 )
             }
             Spacer(Modifier.width(14.dp))
@@ -275,10 +274,9 @@ fun ModulesEmptyState(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                painter = painterResource(R.drawable.add_circle),
+                painter = painterResource(R.drawable.ic_source_monochrome),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(56.dp),
             )
         }
         Spacer(Modifier.height(22.dp))

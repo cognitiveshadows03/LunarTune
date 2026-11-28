@@ -159,6 +159,63 @@ private fun moduleSubtitle(
     }
 }
 
+/**
+ * The picture for a module's row.
+ *
+ * Each shipped module has its own mark, drawn as a vector so it stays sharp at
+ * any density and carries no per-density PNGs. A loaded module has no mark
+ * unless its document brought one, and a document cannot ship drawables — so it
+ * gets its initial on a tinted tile instead of a generic icon that would say
+ * nothing about which module it is.
+ */
+@Composable
+private fun ModuleLogo(
+    id: String,
+    name: String,
+    size: Int = 44,
+) {
+    val brand = moduleBrandIcon(id)
+    if (brand != null) {
+        Box(
+            modifier =
+                Modifier
+                    .size(size.dp)
+                    .clip(RoundedCornerShape((size * 0.34f).dp)),
+        ) {
+            Icon(
+                painter = painterResource(brand),
+                contentDescription = null,
+                modifier = Modifier.size(size.dp),
+            )
+        }
+        return
+    }
+    val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
+    Box(
+        modifier =
+            Modifier
+                .size(size.dp)
+                .clip(RoundedCornerShape((size * 0.34f).dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = initial,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
+/** the brand mark for a module that has one, by its id */
+private fun moduleBrandIcon(id: String): Int? =
+    when (id) {
+        "jiosaavn" -> R.drawable.ic_source_jiosaavn
+        "monochrome" -> R.drawable.ic_source_monochrome
+        else -> null
+    }
+
 @Composable
 private fun ModulesGroupLabel(
     label: String,
@@ -211,21 +268,7 @@ private fun ModuleRow(
                 .clickable(onClick = onOpen)
                 .padding(horizontal = 14.dp, vertical = 14.dp),
     ) {
-        Box(
-            modifier =
-                Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.add_circle),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        ModuleLogo(id = enabledKey, name = title)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
