@@ -880,7 +880,7 @@
 
     <!-- Sources page -->
     <string name="sources_page_title">Modules</string>
-    <string name="modules_page_subtitle">External audio providers and playback priority</string>
+    <string name="modules_page_subtitle">Point the app at an addon and it can serve your music.</string>
     <string name="modules_use_title">Use modules</string>
     <string name="modules_use_on">Modules are consulted before YouTube Music, in the order below.</string>
     <string name="modules_use_off">Module playback is off. You can still manage providers.</string>
@@ -900,8 +900,8 @@
     <string name="modules_loaded_empty_title">No modules installed</string>
     <string name="modules_loaded_empty_body">Import a module document or add a direct address to get started.</string>
     <string name="modules_catalog_empty_title">No catalogs yet</string>
-    <string name="modules_catalog_empty_body">A catalog is a list someone else keeps up to date. Add its address and its modules show up here.</string>
-    <string name="modules_catalog_add">Add a catalog</string>
+    <string name="modules_catalog_empty_body">Addons are servers you host or are given: paste the address and the app reads what it offers.</string>
+    <string name="modules_catalog_add">Add an addon</string>
     <string name="modules_catalog_url_label">Catalog address</string>
     <string name="modules_catalog_refresh">Refresh</string>
     <string name="modules_catalog_remove">Remove</string>
@@ -911,7 +911,7 @@
     <string name="modules_move_up">Move up</string>
     <string name="modules_move_down">Move down</string>
     <string name="modules_off_because_master">Waiting for the switch above</string>
-    <string name="modules_catalog_explainer">A catalog only lists modules. Nothing from it is installed until you choose it, and it is checked against the same rules as a document you paste in yourself.</string>
+    <string name="modules_catalog_explainer">An addon address looks like https://example.com/music — anything serving the addon protocol works, including one running on your own machine.</string>
     <string name="modules_import_failed_reason">That module could not be added: %1$s</string>
     <string name="modules_baseline_title">YouTube Music</string>
     <string name="modules_baseline_status">Always behind everything else</string>
@@ -965,8 +965,6 @@
     <string name="year_in_music_conclusion_title">Yours, start to finish.</string>
     <string name="year_in_music_conclusion_body">%1$s minutes across %2$s listening days, all kept on this device.</string>
 
-    <string name="modules_page_subtitle">Point the app at an addon and it can serve your music.</string>
-    <string name="modules_built_in_label">Built in</string>
     <string name="modules_addons_label">Addons</string>
     <string name="modules_add_addon_title">Add an addon</string>
     <string name="modules_add_addon_confirm">Add</string>
@@ -975,8 +973,4 @@
     <string name="modules_addon_failed">Not added: %1$s</string>
     <string name="modules_addon_remove_title">Remove %1$s?</string>
     <string name="modules_addon_remove_body">It stops being used for playback. Anything it stored for itself is removed too.</string>
-    <string name="modules_catalog_empty_title">No catalogs yet</string>
-    <string name="modules_catalog_empty_body">Addons are servers you host or are given: paste the address and the app reads what it offers.</string>
-    <string name="modules_catalog_add">Add an addon</string>
-    <string name="modules_catalog_explainer">An addon address looks like https://example.com/music — anything serving the addon protocol works, including one running on your own machine.</string>
 </resources>
