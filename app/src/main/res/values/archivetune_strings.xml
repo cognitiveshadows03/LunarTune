@@ -575,6 +575,11 @@
     <string name="stats_trend_vs_previous_week">vs previous week</string>
     <string name="stats_trend_vs_previous_month">vs previous month</string>
     <string name="stats_trend_vs_previous_year">vs previous year</string>
+    <string name="stats_trend_more">↑ %1$s more %2$s</string>
+    <string name="stats_trend_less">↓ %1$s less %2$s</string>
+    <string name="stats_replay_highlight_longest_day">LONGEST DAY</string>
+    <string name="stats_replay_highlight_longest_streak">LONGEST STREAK</string>
+    <string name="stats_replay_highlight_listening_since">LISTENING SINCE</string>
     <string name="stats_total_plays">Total Plays</string>
     <string name="stats_unique_songs">Unique Songs</string>
     <string name="stats_unique_artists">Unique Artists</string>

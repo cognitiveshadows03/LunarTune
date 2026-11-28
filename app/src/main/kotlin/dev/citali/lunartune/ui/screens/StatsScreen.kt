@@ -447,9 +447,10 @@ fun StatsScreen(
                     val topArtist = mostPlayedArtists.firstOrNull()
                     ReplayHeroPager(
                         totalTimeListened = listeningSummary.totalTimeListened,
-                        firstEventTimestamp = firstEvent?.event?.timestamp,
                         previousPeriodTimeListened = data.previousPeriodTimeListened,
                         comparisonLabelResId = data.comparisonLabelResId,
+                        comparedYear = data.comparedYear,
+                        replayHighlight = data.replayHighlight,
                         topSong = topSongStat,
                         topSongEntity = topSongEntity,
                         topArtist = topArtist,
@@ -1284,9 +1285,10 @@ private fun ReplayHeader(periodLabel: String, modifier: Modifier = Modifier) {
 @Composable
 private fun ReplayHeroPager(
     totalTimeListened: Long,
-    firstEventTimestamp: java.time.LocalDateTime?,
     previousPeriodTimeListened: Long?,
     comparisonLabelResId: Int?,
+    comparedYear: Int?,
+    replayHighlight: ReplayHighlight?,
     topSong: SongWithStats?,
     topSongEntity: Song?,
     topArtist: Artist?,
@@ -1324,7 +1326,7 @@ private fun ReplayHeroPager(
                 when (page) {
                     0 -> ReplayMinutesCard(
                         totalTimeListened = totalTimeListened,
-                        firstEventTimestamp = firstEventTimestamp,
+                        highlight = replayHighlight,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     1 -> ReplayTopSongCard(
@@ -1350,6 +1352,7 @@ private fun ReplayHeroPager(
             totalTimeListened = totalTimeListened,
             previousPeriodTimeListened = previousPeriodTimeListened,
             comparisonLabelResId = comparisonLabelResId,
+            comparedYear = comparedYear,
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1377,20 +1380,24 @@ private fun ReplayTrendLine(
     totalTimeListened: Long,
     previousPeriodTimeListened: Long?,
     comparisonLabelResId: Int?,
+    comparedYear: Int?,
 ) {
     if (comparisonLabelResId == null) return
 
-    val comparisonLabel = stringResource(comparisonLabelResId)
+    // A year comparison says the year itself — "vs 2025" needs no arithmetic from
+    // the reader, where "vs last year" asks them to work out which one that is.
+    val comparisonLabel = comparedYear?.toString() ?: stringResource(comparisonLabelResId)
     val trendText = when {
         previousPeriodTimeListened == null -> stringResource(R.string.stats_trend_no_comparison)
         previousPeriodTimeListened <= 0L -> stringResource(R.string.stats_trend_no_previous_listening)
         else -> {
-            val percentChange =
-                ((totalTimeListened.toDouble() - previousPeriodTimeListened.toDouble()) /
-                    previousPeriodTimeListened.toDouble() * 100.0).roundToInt()
+            // The difference in time, not a percentage of it. "1h 40m less than
+            // last week" is a thing a person can picture; "↓ 22% vs last week"
+            // needs them to remember what last week was before it means anything.
+            val delta = totalTimeListened - previousPeriodTimeListened
             when {
-                percentChange > 0 -> stringResource(R.string.stats_trend_increase, percentChange, comparisonLabel)
-                percentChange < 0 -> stringResource(R.string.stats_trend_decrease, -percentChange, comparisonLabel)
+                delta > 0 -> stringResource(R.string.stats_trend_more, formatTrendDuration(delta), comparisonLabel)
+                delta < 0 -> stringResource(R.string.stats_trend_less, formatTrendDuration(-delta), comparisonLabel)
                 else -> stringResource(R.string.stats_trend_unchanged, comparisonLabel)
             }
         }
@@ -1403,18 +1410,33 @@ private fun ReplayTrendLine(
     )
 }
 
+/**
+ * A span of listening as a person says it: "1h 40m", "45m", "2m".
+ *
+ * Hours and minutes only — a difference of seconds is never worth the width,
+ * and the line it feeds sits at the foot of a card.
+ */
+private fun formatTrendDuration(millis: Long): String {
+    val minutes = (millis / 60_000L).coerceAtLeast(0L)
+    val hours = minutes / 60
+    val rest = minutes % 60
+    return when {
+        hours <= 0 && rest <= 0 -> "0m"
+        hours <= 0 -> "${rest}m"
+        rest == 0L -> "${hours}h"
+        else -> "${hours}h ${rest}m"
+    }
+}
+
 @Composable
 private fun ReplayMinutesCard(
     totalTimeListened: Long,
-    firstEventTimestamp: java.time.LocalDateTime?,
+    highlight: ReplayHighlight?,
     modifier: Modifier = Modifier,
 ) {
     val scheme = MaterialTheme.colorScheme
     val totalMinutes = totalTimeListened.coerceAtLeast(0L) / 60_000L
     val timeValue = totalMinutes.toString()
-    val memberSince = firstEventTimestamp?.let {
-        DateTimeFormatter.ofPattern("yyyy", Locale.getDefault()).format(it)
-    } ?: "—"
     Surface(
         modifier = modifier.aspectRatio(1.55f),
         shape = RoundedCornerShape(28.dp),
@@ -1451,17 +1473,22 @@ private fun ReplayMinutesCard(
                     maxLines = 1,
                     softWrap = false,
                 )
-                Text(
-                    text = stringResource(R.string.stats_replay_member_since),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = scheme.onPrimaryContainer.copy(alpha = 0.7f),
-                )
-                Text(
-                    text = memberSince,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = scheme.onPrimaryContainer,
-                )
+                // The fact under the total changes with the period; when there is
+                // nothing in the range to describe, the block is left out rather
+                // than filled with a dash.
+                if (highlight != null) {
+                    Text(
+                        text = stringResource(highlight.labelRes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = scheme.onPrimaryContainer.copy(alpha = 0.7f),
+                    )
+                    Text(
+                        text = highlight.value,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = scheme.onPrimaryContainer,
+                    )
+                }
             }
         }
     }

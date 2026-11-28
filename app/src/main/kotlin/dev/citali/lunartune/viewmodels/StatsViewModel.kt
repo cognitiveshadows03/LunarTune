@@ -48,10 +48,13 @@ import moe.rukamori.archivetune.innertube.YouTube
 import dev.citali.lunartune.ui.screens.OptionStats
 import dev.citali.lunartune.utils.reportException
 import java.time.Duration
+import java.time.Instant
+import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 import javax.inject.Inject
 
 sealed interface StatsScreenState {
@@ -95,6 +98,22 @@ enum class CalendarRange(
     TWELVE_MONTHS(12),
 }
 
+/**
+ * The one fact the minutes card reports under the total, chosen by period.
+ *
+ * The card used to show the year the account was opened, under the label
+ * "member since" — a constant dressed as a stat. Every other number on the
+ * page changes with the range, so this one looked broken: switching from a
+ * week to a lifetime left it identical. What belongs there is the thing that
+ * period is actually good at saying.
+ */
+@Immutable
+data class ReplayHighlight(
+    val labelRes: Int,
+    /** already formatted for display — a duration, a day count, a month and year */
+    val value: String,
+)
+
 @Immutable
 data class ListeningCalendarDay(
     val date: LocalDate,
@@ -118,6 +137,16 @@ data class ListeningCalendarData(
     val bestDay: ListeningCalendarDay?,
     /** Longest run of consecutive days with listening inside the window. */
     val longestStreak: Int,
+    /**
+     * The heaviest single day in the window.
+     *
+     * This is the closest thing to "longest session" that the event table can
+     * honestly support: events carry a wall-clock timestamp and a time listened,
+     * but nothing marks where one sitting ends and the next begins. Treating the
+     * heaviest day as the session is a real fact about the week rather than an
+     * invented one, and on a week it is almost always a single sitting anyway.
+     */
+    val longestSession: ListeningCalendarDay? = null,
 )
 
 @Immutable
@@ -135,6 +164,19 @@ data class StatsUiData(
     val listeningCalendar: ListeningCalendarData,
     val previousPeriodTimeListened: Long?,
     @StringRes val comparisonLabelResId: Int?,
+    /** the year being compared against, when the range is a whole year */
+    val comparedYear: Int?,
+    /**
+     * The calendar over the *selected* range rather than the card's own months.
+     *
+     * The calendar card deliberately keeps its own month-long window, which is
+     * right for a grid of months and wrong for a card that has to answer "what
+     * was this week's longest run". This is the same computation over the range
+     * the rest of the page is showing.
+     */
+    val periodCalendar: ListeningCalendarData,
+    /** the fact the minutes card reports under its total, chosen by period */
+    val replayHighlight: ReplayHighlight?,
     val listeningSummary: ListeningSummary,
     val firstEvent: EventWithSong?,
     val isSongListExpanded: Boolean,
@@ -227,6 +269,10 @@ class StatsViewModel
         private fun wallClockTimestamp(date: LocalDate): Long =
             date.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
 
+        /** The inverse of [wallClockTimestamp]: which calendar day a stored stamp falls on. */
+        private fun wallClockDate(timestamp: Long): LocalDate =
+            Instant.ofEpochMilli(timestamp).atZone(ZoneOffset.UTC).toLocalDate()
+
         private fun buildPatternSlots(
             baselineTotals: List<ListeningBySlot>,
             currentTotals: List<ListeningBySlot>,
@@ -267,6 +313,16 @@ class StatsViewModel
                 statToPeriod(selection, t - 1, now)
             }
 
+        /**
+         * The day with the most listening in the window, or null when nothing was played.
+         *
+         * Named for what the card shows rather than what it measures: the heaviest
+         * day stands in for the longest session, because events carry durations but
+         * no session boundaries.
+         */
+        private fun longestSession(activeDays: List<ListeningCalendarDay>): ListeningCalendarDay? =
+            activeDays.maxByOrNull { it.timeListened }
+
         private fun buildListeningCalendar(
             start: LocalDate,
             endInclusive: LocalDate,
@@ -299,6 +355,7 @@ class StatsViewModel
                 activeDays = activeDays.size,
                 bestDay = activeDays.maxByOrNull { it.timeListened },
                 longestStreak = longestStreak,
+                longestSession = longestSession(activeDays),
             )
         }
 
@@ -336,6 +393,19 @@ class StatsViewModel
                                 fromTimestamp = previousStart.toInstant(ZoneOffset.UTC).toEpochMilli(),
                                 toTimestamp = fromTimestamp,
                                 labelResId = labelResId,
+                                comparedYear =
+                                    if (period == StatPeriod.YEAR_1) {
+                                        // Name the year the comparison window ends in. The window
+                                        // runs from two years back to one year back, so eleven of
+                                        // its twelve months fall in the later of the two — naming
+                                        // its start would put a year on screen that most of the
+                                        // compared listening is not from.
+                                        Instant.ofEpochMilli(fromTimestamp)
+                                            .atZone(ZoneOffset.UTC)
+                                            .year
+                                    } else {
+                                        null
+                                    },
                             )
                         } else {
                             null
@@ -510,6 +580,7 @@ class StatsViewModel
                             buckets = buckets,
                             previousPeriodTimeListened = previousTimeListened,
                             comparisonLabelResId = window.comparison?.labelResId,
+                            comparedYear = window.comparison?.comparedYear,
                         )
                     }
                 }
@@ -532,6 +603,95 @@ class StatsViewModel
                             toTimestamp = wallClockTimestamp(endInclusive.plusDays(1)) - 1L,
                         ).map { rows -> buildListeningCalendar(start, endInclusive, rows) }
                 }
+
+        /**
+         * The same calendar over the range the page is showing, for the facts the
+         * minutes card reports. Kept separate from [listeningCalendar] because that
+         * one follows its own month presets, and this one has to follow the period
+         * chips: asking for "this week's longest streak" and getting the longest
+         * streak of the last three months would be worse than showing nothing.
+         */
+        private val periodCalendar =
+            periodPair()
+                .flatMapLatest { (selection, index) ->
+                    val now = LocalDateTime.now()
+                    val fromTimestamp = statToPeriod(selection, index, now)
+                    val toTimestamp = toTimestamp(selection, index, now)
+                    val start = wallClockDate(fromTimestamp)
+                    val endInclusive = wallClockDate(toTimestamp)
+                    database
+                        .listeningByDate(
+                            fromTimestamp = wallClockTimestamp(start) - 1L,
+                            toTimestamp = wallClockTimestamp(endInclusive.plusDays(1)) - 1L,
+                        ).map { rows -> buildListeningCalendar(start, endInclusive, rows) }
+                }
+
+        /**
+         * Chooses the fact the minutes card reports, per period.
+         *
+         * Which fact belongs there is the period's own question. A week is short
+         * enough that its heaviest day is the interesting one; a month or a year
+         * is a consistency story, so the longest run of days says more; over a
+         * lifetime neither is meaningful and the only honest number is when it all
+         * started. Null while there is nothing in the range to describe, so the
+         * card can leave the block out rather than print a placeholder.
+         */
+        private fun resolveHighlight(
+            selection: OptionStats,
+            index: Int,
+            calendar: ListeningCalendarData,
+            openedOn: LocalDate?,
+        ): ReplayHighlight? {
+            val period = if (selection == OptionStats.CONTINUOUS) StatPeriod.entries.getOrNull(index) else null
+            return when (period) {
+                StatPeriod.WEEK_1 ->
+                    calendar.longestSession?.let { day ->
+                        ReplayHighlight(
+                            labelRes = R.string.stats_replay_highlight_longest_day,
+                            value = formatSessionDuration(day.timeListened),
+                        )
+                    }
+
+                StatPeriod.MONTH_1, StatPeriod.MONTH_3, StatPeriod.MONTH_6, StatPeriod.YEAR_1 ->
+                    calendar.longestStreak.takeIf { it > 0 }?.let { days ->
+                        ReplayHighlight(
+                            labelRes = R.string.stats_replay_highlight_longest_streak,
+                            value = formatStreak(days),
+                        )
+                    }
+
+                StatPeriod.ALL ->
+                    openedOn?.let { date ->
+                        ReplayHighlight(
+                            labelRes = R.string.stats_replay_highlight_listening_since,
+                            value = DateTimeFormatter.ofPattern("MMM yyyy", Locale.getDefault()).format(date),
+                        )
+                    }
+
+                else ->
+                    calendar.longestStreak.takeIf { it > 0 }?.let { days ->
+                        ReplayHighlight(
+                            labelRes = R.string.stats_replay_highlight_longest_streak,
+                            value = formatStreak(days),
+                        )
+                    }
+            }
+        }
+
+        /** "2h 15m", or "45m" when it rounds below an hour. */
+        private fun formatSessionDuration(millis: Long): String {
+            val minutes = (millis / 60_000L).coerceAtLeast(0L)
+            val hours = minutes / 60
+            val rest = minutes % 60
+            return when {
+                hours <= 0 -> "${rest}m"
+                rest == 0L -> "${hours}h"
+                else -> "${hours}h ${rest}m"
+            }
+        }
+
+        /** "1 day" rather than "1 days"; the card is the only caller. */
+        private fun formatStreak(days: Int): String = if (days == 1) "1 day" else "$days days"
 
         private val firstEvent =
             database
@@ -572,14 +732,27 @@ class StatsViewModel
                         firstEvent = first,
                         latestEventTimestamp = latest,
                         calendar = calendar,
+                        // filled in by the combine below, which has the period facts
+                        periodCalendar = calendar,
                     )
                 },
-                listeningTrendStats,
-            ) { stats, trend ->
+                combine(listeningTrendStats, periodCalendar, periodSelection) { trend, calendar, selection ->
+                    DerivedListening(trend, calendar, selection)
+                },
+            ) { stats, derived ->
                 stats.copy(
-                    listeningTrendBuckets = trend.buckets,
-                    previousPeriodTimeListened = trend.previousPeriodTimeListened,
-                    comparisonLabelResId = trend.comparisonLabelResId,
+                    listeningTrendBuckets = derived.trend.buckets,
+                    previousPeriodTimeListened = derived.trend.previousPeriodTimeListened,
+                    comparisonLabelResId = derived.trend.comparisonLabelResId,
+                    comparedYear = derived.trend.comparedYear,
+                    periodCalendar = derived.calendar,
+                    replayHighlight =
+                        resolveHighlight(
+                            selection = derived.selection.first,
+                            index = derived.selection.second,
+                            calendar = derived.calendar,
+                            openedOn = stats.firstEvent?.event?.timestamp?.toLocalDate(),
+                        ),
                 )
             }
 
@@ -630,6 +803,9 @@ class StatsViewModel
                                     listeningCalendar = listening.calendar,
                                     previousPeriodTimeListened = listening.previousPeriodTimeListened,
                                     comparisonLabelResId = listening.comparisonLabelResId,
+                                    comparedYear = listening.comparedYear,
+                                    periodCalendar = listening.periodCalendar,
+                                    replayHighlight = listening.replayHighlight,
                                     listeningSummary = summary,
                                     firstEvent = listening.firstEvent,
                                     isSongListExpanded = expanded,
@@ -774,12 +950,23 @@ class StatsViewModel
             val listeningTrendBuckets: List<ListeningBySlot> = emptyList(),
             val previousPeriodTimeListened: Long? = null,
             @StringRes val comparisonLabelResId: Int? = null,
+            val comparedYear: Int? = null,
+            val periodCalendar: ListeningCalendarData,
+            val replayHighlight: ReplayHighlight? = null,
+        )
+
+        /** Everything derived from the selected period, gathered for one combine. */
+        private data class DerivedListening(
+            val trend: ListeningTrendStats,
+            val calendar: ListeningCalendarData,
+            val selection: Pair<OptionStats, Int>,
         )
 
         private data class ListeningTrendStats(
             val buckets: List<ListeningBySlot>,
             val previousPeriodTimeListened: Long?,
             @StringRes val comparisonLabelResId: Int?,
+            val comparedYear: Int? = null,
         )
 
         private data class PeriodWindow(
@@ -792,6 +979,12 @@ class StatsViewModel
             val fromTimestamp: Long,
             val toTimestamp: Long,
             @StringRes val labelResId: Int,
+            /**
+             * The calendar year being compared against, when the comparison is a
+             * whole year. The line prefers "vs 2025" over "vs last year" because a
+             * number does not need the reader to work out which year that was.
+             */
+            val comparedYear: Int? = null,
         )
 
         private companion object {
