@@ -3644,8 +3644,19 @@ private val MenuGroupGap = 7.dp
 /** Corner radius of the frosted backdrop the pills sit on. */
 private val MenuBackdropCorner = 22.dp
 
-/** Faint scrim over the backdrop blur; the pills supply their own contrast. */
-private const val MenuBackdropScrimAlpha = 0.12f
+/**
+ * How solid a pill is over the frost. Low enough that the backdrop's blur
+ * reaches the row, high enough that the label keeps its contrast against a
+ * bright page behind the sheet.
+ */
+private const val MenuPillAlpha = 0.42f
+
+/**
+ * Scrim over the backdrop blur. Kept faint on purpose: the sheet is glass, and
+ * a scrim heavy enough to guarantee contrast is also heavy enough to hide the
+ * blur behind it, which is what it looked like before.
+ */
+private const val MenuBackdropScrimAlpha = 0.06f
 
 /** Inset between the frosted backdrop's edge and the pills sitting on it. */
 private val MenuSheetInset = 6.dp
@@ -3737,7 +3748,11 @@ private fun FrostedTopBarMenu(
     val barColor = MaterialTheme.colorScheme.surfaceContainerHigh
     val sheetShadow = MaterialTheme.colorScheme.scrim
     val motionScheme = MaterialTheme.motionScheme
-    val pillColor = lerp(barColor, MaterialTheme.colorScheme.onSurface, 0.05f)
+    // The pills sit on the glass, not beside it: a translucent fill lets the
+    // backdrop's blur carry through each row, which is what separates them from
+    // the sheet. Painted at the same solid colour as the backdrop they were
+    // indistinguishable from it, and the whole menu read as one grey slab.
+    val pillColor = lerp(barColor, MaterialTheme.colorScheme.onSurface, 0.05f).copy(alpha = MenuPillAlpha)
     val context = LocalContext.current
     val viewModel: HomeViewModel = hiltViewModel()
     val accountImageUrl by viewModel.accountImageUrl.collectAsStateWithLifecycle()
@@ -3820,7 +3835,13 @@ private fun FrostedTopBarMenu(
                                         Modifier.hazeBlur(
                                             input = HazeInput.Sources(hazeState),
                                             style = menuBackdropStyle(),
-                                            performanceMode = HazePerformanceMode.Performance,
+                                            // Full resolution, not Performance. Performance mode
+                                            // renders the blur at half scale (a fixed 0.5 quality
+                                            // fraction), which halves the effect of the radius —
+                                            // this sheet spends most of its life open and still, so
+                                            // the per-frame saving that buys is not worth the frost
+                                            // it costs.
+                                            performanceMode = HazePerformanceMode.Quality,
                                         )
                                     } else {
                                         Modifier.background(barColor.copy(alpha = FrostedFallbackAlpha))
@@ -4102,7 +4123,7 @@ private fun FrostedTopBarMenuRow(
                 .fillMaxWidth()
                 .padding(vertical = MenuPillSpacing / 2)
                 .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = MenuPillAlpha))
                 .clickable(onClick = onClick)
                 .padding(horizontal = 13.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

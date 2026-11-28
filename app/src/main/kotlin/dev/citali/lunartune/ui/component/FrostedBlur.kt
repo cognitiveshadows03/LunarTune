@@ -115,19 +115,31 @@ fun frostedMiniPlayerStyle(
         noiseFactor(0f)
     }
 
+/** The blur radius the top-bar menu's frost is drawn at, in dp. */
+const val FrostedMenuBlurRadius = 22f
+
 /**
- * Frost for the top-bar dropdown menu. Painted over the menu's own opaque
- * container, so when Haze has no source to sample (frost disabled, or the
- * popup window can't be tracked on this device) the blur simply paints
- * nothing and the solid M3 surface remains.
+ * Frost for the top-bar dropdown menu, and for anything else that lays a
+ * glass sheet over a page it has already captured as a source.
+ *
+ * The sheet is only ever as visible as what it has to sample. Drawn over the
+ * app's own flat surface it reads as a slightly greyer panel and nothing
+ * more, which is what it looked like while the home page — the thing behind
+ * the menu — was not on the source stack. The radius is set where the
+ * platform's real glass sits rather than at the minimum that still technically
+ * blurs, so the sheet reads as glass even over a quiet background.
+ *
+ * @param scrim painted *under* the blur; it is the sheet's body, so it must
+ *   stay translucent enough for the blurred page to reach the eye.
  */
 fun frostedTopMenuStyle(
     scrim: Color,
     fallbackScrim: Color,
+    blurRadiusDp: Float = FrostedMenuBlurRadius,
 ): HazeBlurStyle =
     HazeBlurStyle {
         blurEnabled(HazeLiveBlurSupported)
-        blurRadius(18.dp)
+        blurRadius(blurRadiusDp.dp)
         backgroundColor(scrim)
         colorEffects(emptyList())
         fallbackColorEffect(HazeColorEffect.tint(fallbackScrim))

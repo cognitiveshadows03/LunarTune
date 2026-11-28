@@ -151,6 +151,14 @@ import dev.citali.lunartune.models.MediaMetadata
 import dev.citali.lunartune.models.toMediaMetadata
 import dev.citali.lunartune.playback.queues.ListQueue
 import dev.citali.lunartune.playback.queues.YouTubeQueue
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazePerformanceMode
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.citali.lunartune.ui.component.FrostedFallbackAlpha
+import dev.citali.lunartune.ui.component.HazeLiveBlurSupported
+import dev.citali.lunartune.ui.component.frostedTopMenuStyle
 import dev.citali.lunartune.ui.component.ChoiceChipsRow
 import dev.citali.lunartune.ui.component.IconButton
 import dev.citali.lunartune.ui.component.ItemThumbnail
@@ -318,9 +326,19 @@ fun StatsScreen(
     var showDetailedPeriods by remember { mutableStateOf(false) }
     var showAllArtists by remember(selectedOption, indexChips) { mutableStateOf(false) }
 
+    // The replay backdrop is what the period selector's frost has to show
+    // through, so it is captured as a blur source. Without a source the glass
+    // has nothing to sample and falls back to a flat panel.
+    val backdropHaze = rememberHazeState()
+
     Scaffold(modifier = Modifier.fillMaxSize()) { scaffoldPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            ReplayBackground(modifier = Modifier.fillMaxSize())
+            ReplayBackground(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .then(if (HazeLiveBlurSupported) Modifier.hazeSource(backdropHaze) else Modifier),
+            )
             // The list spans the full height and only pads its first item below the header, so
             // scrolling content passes under the header instead of being cut off at a hard edge.
             LazyColumn(
@@ -342,6 +360,7 @@ fun StatsScreen(
                 item(key = "rangeControls", contentType = "controls") {
                     Column(Modifier.animateItem()) {
                         StatsReplayPeriods(
+                            hazeState = backdropHaze,
                             selected = if (selectedOption == OptionStats.CONTINUOUS) indexChips else -1,
                             onSelect = { period ->
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -1865,7 +1884,13 @@ private fun StatMetricCard(
 }
 
 @Composable
-private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed: Boolean, onToggleDetailed: () -> Unit) {
+private fun StatsReplayPeriods(
+    hazeState: dev.chrisbanes.haze.HazeState,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    detailed: Boolean,
+    onToggleDetailed: () -> Unit,
+) {
     val periods = listOf(
         Triple(StatPeriod.WEEK_1.ordinal, R.string.stats_replay_weekly, R.drawable.history),
         Triple(StatPeriod.MONTH_1.ordinal, R.string.stats_replay_monthly, R.drawable.calendar_today),
@@ -1884,58 +1909,91 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
             LocalConfiguration.current.screenWidthDp <= NarrowWindowWidthDp -> 8.dp
             else -> 16.dp
         }
+    // The frost's body. Translucent, so what the blur samples is what the eye
+    // sees; the selected segment adds its own tint on top of it.
+    val glassColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = PeriodGlassAlpha)
+    val fallbackColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = FrostedFallbackAlpha)
+
     Column(Modifier.padding(horizontal = horizontalPadding, vertical = 8.dp)) {
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
-            BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
-                // Each segment spends 4dp on both sides plus the icon and its gap, so the label
-                // has whatever is left. The width is measured once here and the label style is
-                // picked from it, which is what keeps the words whole on a narrow phone without
-                // changing the shape of the control.
-                val iconPx = with(density) { SegmentIconSize.roundToPx() }
-                val labelWidthPx = with(density) {
-                    (
-                        (maxWidth - SegmentGap * (periods.size - 1)) / periods.size -
-                            SegmentInnerPadding * 2 - SegmentIconGap
-                    ).roundToPx() - iconPx
-                }
-                val labelStyle = remember(labelWidthPx, labels, baseLabelStyle) {
-                    fittingLabelStyle(measurer, labels, baseLabelStyle, labelWidthPx)
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SegmentGap)) {
-                    periods.forEachIndexed { index, (value, _, iconRes) ->
-                        val isSelected = selected == value
-                        Surface(
-                            onClick = { onSelect(value) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(16.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        ) {
-                            // Icon beside the label, the way the control has always been drawn:
-                            // the icon and the word read as one unit, and the row of segments is
-                            // one line tall instead of two.
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = SegmentInnerPadding, vertical = 14.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            shape = RoundedCornerShape(22.dp),
+            color = if (HazeLiveBlurSupported) Color.Transparent else fallbackColor,
+        ) {
+            Box(
+                modifier =
+                    if (HazeLiveBlurSupported) {
+                        Modifier.hazeBlur(
+                            input = HazeInput.Sources(hazeState),
+                            style =
+                                frostedTopMenuStyle(
+                                    scrim = glassColor,
+                                    fallbackScrim = fallbackColor,
+                                ),
+                            // The backdrop drifts, but slowly: the blur is only re-rendered
+                            // when the sampled area changes enough to matter, so it does not
+                            // cost a full-screen capture every frame.
+                            performanceMode = HazePerformanceMode.Adaptive,
+                        )
+                    } else {
+                        Modifier
+                    },
+            ) {
+                BoxWithConstraints(Modifier.fillMaxWidth().padding(6.dp)) {
+                    // Each segment spends 4dp on both sides plus the icon and its gap, so the label
+                    // has whatever is left. The width is measured once here and the label style is
+                    // picked from it, which is what keeps the words whole on a narrow phone without
+                    // changing the shape of the control.
+                    val iconPx = with(density) { SegmentIconSize.roundToPx() }
+                    val labelWidthPx = with(density) {
+                        (
+                            (maxWidth - SegmentGap * (periods.size - 1)) / periods.size -
+                                SegmentInnerPadding * 2 - SegmentIconGap
+                        ).roundToPx() - iconPx
+                    }
+                    val labelStyle = remember(labelWidthPx, labels, baseLabelStyle) {
+                        fittingLabelStyle(measurer, labels, baseLabelStyle, labelWidthPx)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(SegmentGap)) {
+                        periods.forEachIndexed { index, (value, _, iconRes) ->
+                            val isSelected = selected == value
+                            Surface(
+                                onClick = { onSelect(value) },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(16.dp),
+                                color =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = PeriodSelectedAlpha)
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                             ) {
-                                Icon(
-                                    painter = painterResource(iconRes),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(SegmentIconSize),
-                                )
-                                Spacer(modifier = Modifier.width(SegmentIconGap))
-                                Text(
-                                    text = labels[index],
-                                    style = labelStyle,
-                                    textAlign = TextAlign.Center,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Clip,
-                                )
+                                // Icon beside the label, the way the control has always been drawn:
+                                // the icon and the word read as one unit, and the row of segments is
+                                // one line tall instead of two.
+                                Row(
+                                    modifier =
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = SegmentInnerPadding, vertical = 14.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        painter = painterResource(iconRes),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SegmentIconSize),
+                                    )
+                                    Spacer(modifier = Modifier.width(SegmentIconGap))
+                                    Text(
+                                        text = labels[index],
+                                        style = labelStyle,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Clip,
+                                    )
+                                }
                             }
                         }
                     }
@@ -1953,6 +2011,12 @@ private fun StatsReplayPeriods(selected: Int, onSelect: (Int) -> Unit, detailed:
  * allowed to sit at their smallest size rather than being shrunk from a comfortable one.
  */
 private const val NarrowWindowWidthDp = 360
+
+/** Body of the period selector's frost: translucent enough for the blur to read. */
+private const val PeriodGlassAlpha = 0.34f
+
+/** The selected segment over the glass — a tint, not a block. */
+private const val PeriodSelectedAlpha = 0.88f
 
 private val SegmentGap = 4.dp
 private val SegmentInnerPadding = 4.dp

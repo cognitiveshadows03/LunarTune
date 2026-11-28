@@ -963,7 +963,7 @@
     <string name="year_in_music_top_albums_footer">The records you kept coming back to</string>
     <string name="year_in_music_conclusion_lead">That was %1$s.</string>
     <string name="year_in_music_conclusion_title">Yours, start to finish.</string>
-    <string name="year_in_music_conclusion_body">%1$s minutes across %2$s listening days, all kept on this device.</string>
+    <string name="year_in_music_conclusion_body">%1$s minutes across %2$s listening days.</string>
 
     <string name="modules_addons_label">Addons</string>
     <string name="modules_add_addon_title">Add an addon</string>
